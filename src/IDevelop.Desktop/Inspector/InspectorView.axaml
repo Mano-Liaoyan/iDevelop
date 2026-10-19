@@ -428,6 +428,27 @@
                           </Button>
                         </WrapPanel>
                       </inspector:InspectorRow>
+                      <!-- A conflict between the task's predecessors that no Merge node takes: the person fixes it in its worktree. -->
+                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsConflictActions}">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                          <Button Classes="action" Command="{Binding OpenConflictCommand}"
+                                  AutomationProperties.AutomationId="OpenConflict"
+                                  AutomationProperties.Name="Open worktree">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                              <TextBlock Text="Open worktree" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes="primary" Command="{Binding MarkResolvedCommand}"
+                                  AutomationProperties.AutomationId="MarkResolved"
+                                  AutomationProperties.Name="Mark resolved">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
+                              <TextBlock Text="Mark resolved" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                        </WrapPanel>
+                      </inspector:InspectorRow>
                       <!-- Retry of a run's task that ended without a result asks first, here, wherever the person chose it. -->
                       <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsRetryButton}">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">

@@ -223,6 +223,39 @@ internal sealed partial class GitRepository
             [.. headers.Where(line => line.StartsWith("parent ", StringComparison.Ordinal)).Select(line => new CommitId(line[7..]))]));
     }
 
+    /// <summary>The bytes of <paramref name="path"/> in <paramref name="commit"/>, or null when the commit has no such file.</summary>
+    public byte[]? FileAt(CommitId commit, string path)
+    {
+        var result = Git(ProjectFolder, GitOperation.Metadata, ["cat-file", "blob", $"{commit.Hex}:{path}"]);
+        return result.ExitCode == 0 ? result.Stdout : null;
+    }
+
+    /// <summary>
+    /// The operation that holds <paramref name="branch"/> in some worktree while its HEAD is detached, as a rebase or a bisect
+    /// does, with that worktree's folder: <c>"rebased"</c> or <c>"bisected"</c>. Null when none holds it.
+    /// </summary>
+    public (string Operation, string Folder)? BranchInProgress(string branch, IEnumerable<GitWorktree> worktrees)
+    {
+        var shortName = branch.StartsWith("refs/heads/", StringComparison.Ordinal) ? branch["refs/heads/".Length..] : branch;
+        foreach (var worktree in worktrees)
+        {
+            var directory = Git(worktree.Path, GitOperation.Metadata, ["rev-parse", "--absolute-git-dir"]);
+            if (directory.ExitCode != 0) continue;
+            var gitDirectory = directory.Text.Trim();
+            string? Read(string name)
+            {
+                var file = Path.Combine(gitDirectory, name);
+                try { return File.Exists(file) ? File.ReadAllText(file).Trim() : null; }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
+            }
+            if (Read(Path.Combine("rebase-merge", "head-name")) == branch || Read(Path.Combine("rebase-apply", "head-name")) == branch)
+                return ("rebased", worktree.Path);
+            if (Read("BISECT_START") is { } bisected && (bisected == shortName || bisected == branch))
+                return ("bisected", worktree.Path);
+        }
+        return null;
+    }
+
     public GitRead<string> ObjectType(string objectId) => ReadText(Git(ProjectFolder, GitOperation.Metadata, ["cat-file", "-t", objectId]), trim: true);
 
     public GitAncestry IsAncestor(CommitId ancestor, CommitId descendant)
@@ -276,6 +309,34 @@ internal sealed partial class GitRepository
         var result = Git(checkout, GitOperation.Worktree, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
         return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
     }
+
+    /// <summary>
+    /// The paths of <paramref name="checkout"/> whose tracked files differ from its HEAD, staged or not. Untracked files are
+    /// no part of them.
+    /// </summary>
+    public GitRead<ImmutableArray<string>> TrackedChanges(string checkout)
+    {
+        var result = Git(checkout, GitOperation.Worktree, ["status", "--porcelain=v1", "-z", "--untracked-files=no", "--ignore-submodules=dirty"]);
+        if (result.ExitCode != 0) return Failure<ImmutableArray<string>>(result);
+        var fields = result.Text.Split('\0');
+        var paths = ImmutableArray.CreateBuilder<string>();
+        for (var index = 0; index < fields.Length; index++)
+        {
+            var entry = fields[index];
+            if (entry.Length < 4) continue;
+            paths.Add(entry[3..]);
+            // A rename or a copy names its source in the next field.
+            if (entry[0] is 'R' or 'C') index++;
+        }
+        return new GitRead<ImmutableArray<string>>.Read([.. paths.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]);
+    }
+
+    /// <summary>
+    /// Moves the branch <paramref name="checkout"/> has checked out to <paramref name="commit"/>, a descendant of its HEAD,
+    /// and its files with it. Git refuses when that would overwrite a change of the person's.
+    /// </summary>
+    public GitResult FastForward(string checkout, CommitId commit) =>
+        Git(checkout, GitOperation.Worktree, ["merge", "--ff-only", "--no-edit", "--no-stat", commit.Hex]);
 
     public GitRead<ImmutableArray<string>> IgnoredFiles(string checkout) =>
         ReadPaths(Git(checkout, GitOperation.Worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]));

@@ -302,7 +302,8 @@ internal sealed class RunApprovals
             intents.Write(chosen);
             _probe?.Invoke("approval.intent.after");
             if (Finish(live, chosen.Inclusions) is { } unfinished) return unfinished;
-            var codeBase = new RunBase(chosen.Head);
+            // The run's finished work merges into the branch HEAD names now, or nowhere from a detached HEAD (#148).
+            var codeBase = new RunBase(chosen.Head) { Branch = live.Base!.Branch };
             // Keep the base before the journal names it, so garbage collection cannot remove it before its first preparation.
             if (!ApprovalPin.Hold(repository, chosen.Run, codeBase.Commit))
                 return new RunApproval.Refused(ApprovalProblem.GitFailed, $"Git could not keep the run base under {ApprovalPin.Name(chosen.Run)}.");
@@ -411,6 +412,7 @@ internal sealed class RunApprovals
             {
                 WorkSpec.Agent => WorkKind.Agent,
                 WorkSpec.Review => WorkKind.Review,
+                WorkSpec.Merge => WorkKind.Merge,
                 _ => WorkKind.Person,
             }, agent?.Access, agent?.Proposes ?? false, task.Execution, task.Conversation, inputs,
             !inputs.Any(input => input.Kind == ConnectionKind.Dependency));

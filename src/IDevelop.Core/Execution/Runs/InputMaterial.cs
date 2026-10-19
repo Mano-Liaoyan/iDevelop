@@ -7,8 +7,16 @@ namespace IDevelop.Execution;
 
 internal static class InputMaterial
 {
-    public static InputRecord Build(RunRecord record, MaterializationPlan.Preparation plan, JoinRecord? join)
-        => Build(record, plan.Inputs, plan.Task, plan.Revision, plan.Bindings, plan.Sources, plan.Review, join);
+    /// <summary>
+    /// The inputs a plan's attempt starts with. A Merge node's attempt takes only the conflict it resolves, and its worktree
+    /// starts at the conflict's commit with the conflict markers.
+    /// </summary>
+    public static InputRecord Build(RunRecord record, MaterializationPlan.Preparation plan, JoinRecord? join) =>
+        RunReducer.MergeOf(record, plan.Cause) is { } conflict
+            ? join is null && plan.Bindings.IsEmpty && plan.Sources.IsEmpty && plan.Review is null
+                ? new(plan.Inputs, plan.Task, plan.Revision, [], new CodeSelection.Root(conflict.Conflicted), "", [], null) { Conflict = conflict }
+                : throw new ArgumentException("A Merge node's attempt takes no results.", nameof(plan))
+            : Build(record, plan.Inputs, plan.Task, plan.Revision, plan.Bindings, plan.Sources, plan.Review, join);
 
     public static InputRecord Build(RunRecord record, InputId inputs, TaskId task, RevisionId revision,
         ImmutableArray<InputBinding> bindings, ImmutableArray<CodeSource> sources, ReviewInput? review, JoinRecord? join = null)

@@ -34,7 +34,7 @@ public readonly partial record struct BlueprintKey(string Id, int Version) : ICo
 /// What a node does. A closed set: a new work needs code, which is one <see cref="WorkSpec"/> case, one value here, and
 /// one implementation of <c>INodeWork</c>. The build fails on an enum switch that misses a value.
 /// </summary>
-public enum WorkKind { Agent, Review, Person }
+public enum WorkKind { Agent, Review, Person, Merge }
 
 public enum BlueprintIcon { Code, TaskList, Ruler, Glasses, PersonAvailable, DocumentSearch }
 
@@ -80,6 +80,20 @@ public abstract record WorkSpec
         public override WorkKind Kind => WorkKind.Person;
 
         public override ImmutableArray<string> Variables => [];
+    }
+
+    /// <summary>
+    /// A run's merge agent. Its step in a run merges its predecessors' code and hands on their reports and artifacts, and
+    /// its agent runs only to resolve a merge conflict: between its own predecessors, between the predecessors of a node
+    /// it takes conflicts for, or between the run's work and the branch the run started from. <paramref name="Template"/>
+    /// starts that agent's session.
+    /// </summary>
+    public sealed record Merge(PromptTemplate Template) : WorkSpec
+    {
+        public override WorkKind Kind => WorkKind.Merge;
+
+        /// <summary>The conflict to resolve: what merges, the conflicting paths, and how to leave them.</summary>
+        public override ImmutableArray<string> Variables => ["conflict"];
     }
 }
 
@@ -197,6 +211,7 @@ public sealed partial record Blueprint
         WorkKind.Agent => [((WorkSpec.Agent)work).Template],
         WorkKind.Review => [((WorkSpec.Review)work).Reviewer, ((WorkSpec.Review)work).Fix],
         WorkKind.Person => [],
+        WorkKind.Merge => [((WorkSpec.Merge)work).Template],
     };
 
     [GeneratedRegex(@"\A[A-Za-z][A-Za-z0-9]*\z")]

@@ -57,6 +57,13 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
                     break;
                 case TreeMerge.Conflicted conflict:
                 {
+                    // A Merge node's agent may have resolved this step: its merge has the resolved tree on the same two parents.
+                    if (RunReducer.Resolution(record, accumulator, parents[step]) is { } resolved)
+                    {
+                        tree = Value(repository.ReadCommit(resolved)).Tree;
+                        if (step < parents.Length - 1) accumulator = resolved;
+                        break;
+                    }
                     var storage = new RunStorage(projectFolder, request.Permit.Workflow, request.Permit.Run);
                     var stderrBytes = Encoding.UTF8.GetBytes(conflict.Stderr);
                     var name = $"join-step-{step}-{Revision.Hash([.. conflict.Stdout, .. stderrBytes]).Sha256[..12]}";
@@ -66,9 +73,26 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
                         .Where(message => message.Type.StartsWith("CONFLICT", StringComparison.Ordinal)).SelectMany(message => message.Paths))
                         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
                     var detail = $"Merge step {step} of {parents.Length - 1} conflicts" + (paths.IsEmpty ? "." : " in " + string.Join(", ", paths) + ".");
+                    // The commit of the merge with its markers, where a Merge node's agent starts to resolve it.
+                    var conflicted = Value(Mutate("join-conflicted-" + step, () => repository.CreateCommit(new(conflict.Tree, [accumulator, parents[step]],
+                        $"Conflicting merge of dependency results\n\nIDP-Run: {request.Permit.Run.Value:D}\nIDP-Task: {request.Task.Value:D}\n",
+                        "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", timestamp))));
+                    // The pin keeps that commit until the run's pins go, so it survives a garbage collection before anyone opens it.
+                    if (record.RunKey is { } runKey)
+                    {
+                        var pin = RunLayout.ConflictedPin(runKey, conflicted);
+                        var current = Value(repository.ReadRef(pin));
+                        if (current != conflicted && Mutate("join-conflicted-pin-" + step, () => repository.MoveRef(new(pin, current, conflicted))) is RefMove.Failed pinFailed)
+                            return Block(request, MaterializationProblem.GitFailed, pinFailed.Detail, new BlockScope.Refs([pin]));
+                    }
+                    var unmarked = MergeMarkers.Unmarked(repository, conflicted, paths);
+                    var merge = new MergeConflict(new MergeTarget.Join(request.Task), accumulator, parents[step], conflicted, paths,
+                        MergeMarkers.DescribeJoin(record, request.Task, request.Sources, parents, step, paths, unmarked))
+                    { Unmarked = unmarked.IsEmpty ? default : unmarked };
                     return new JoinOutcome.Blocked(new(request.Operation, request.Task, null, MaterializationProblem.FanInConflict,
                         request.Inputs, [stdout, stderr], detail, new(request.Sources, step, paths, conflict.Stages, conflict.Messages,
-                            stdout, stderr, repository.Version, GitRepository.MergeSettings, record.Base.Commit)) { Scope = new BlockScope.Operation() });
+                            stdout, stderr, repository.Version, GitRepository.MergeSettings, record.Base.Commit) { Merge = merge })
+                    { Scope = new BlockScope.Operation() });
                 }
                 case TreeMerge.Failed failed:
                     return Block(request, MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Operation());

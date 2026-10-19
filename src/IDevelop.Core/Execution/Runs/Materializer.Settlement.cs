@@ -269,7 +269,22 @@ internal sealed partial class Materializer
         TreeId? indexTree = null;
         CommitId? candidate = null;
         if (index is not null) indexTree = Value(repository.WriteTree(GitRepository.ParseIndex(indexBytes!)));
-        if (prepared.Location.Owner.Branch is not null)
+        if (RunReducer.MergeOf(record, launch.Attempt) is { } conflict)
+        {
+            // A Merge node's agent resolved the conflict once no conflicting file keeps its markers. Its files are the merge, on
+            // the conflict's two parents; with markers left, its turn takes no commit and the conflict stays open.
+            recipe = recipe with
+            {
+                Parents = [conflict.Ours, conflict.Theirs],
+                Message = $"{definition.Title}: merge\n\nIDP-Run: {record.Id.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {launch.Attempt.Value:D}\n",
+            };
+            if (!MergeMarkers.Remain(checkout, conflict.Paths))
+            {
+                candidate = Value(repository.CreateCommit(recipe));
+                Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch), candidate.Value);
+            }
+        }
+        else if (prepared.Location.Owner.Branch is not null)
         {
             if (indexTree is { } staged)
             {

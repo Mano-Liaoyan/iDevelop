@@ -36,10 +36,17 @@ internal sealed partial class WorkflowRunCoordinator
             _ => throw new InvalidOperationException(),
         }, wait);
 
-    /// <summary>Whether a run's task offers Retry: an agent's task whose newest attempt ended without a result.</summary>
+    /// <summary>
+    /// Whether a run's task offers Retry: an agent's task whose newest attempt ended without a result, or a Merge node whose
+    /// attempt ended without resolving the conflict that went to it.
+    /// </summary>
     internal static bool OffersRetry(Workflow snapshot, TaskView? view) =>
-        view is { State: TaskState.Failed, Attempt: not null, Result: null } &&
-        snapshot.Tasks.GetValueOrDefault(view.Task)?.Blueprint.Work is WorkSpec.Agent;
+        view is { State: TaskState.Failed, Attempt: not null } && snapshot.Tasks.GetValueOrDefault(view.Task)?.Blueprint.Work switch
+        {
+            WorkSpec.Agent => view.Result is null,
+            WorkSpec.Merge => view.Merge is not null,
+            _ => false,
+        };
 
     private void RetryCore(RunRecord record, TaskId task, OperationId confirmation, Action<RetryReply> complete)
     {

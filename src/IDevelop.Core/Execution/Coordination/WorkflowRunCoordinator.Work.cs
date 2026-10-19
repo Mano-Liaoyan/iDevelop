@@ -21,6 +21,7 @@ internal sealed partial class WorkflowRunCoordinator
             case RunPhase.Approved when _resumed:
                 Reconcile(record, view);
                 RequestGates(record, view);
+                HandOnMerges(record, view);
                 Dispatch(record, view);
                 record = Complete(record, view);
                 break;
@@ -54,6 +55,8 @@ internal sealed partial class WorkflowRunCoordinator
         ConcludeReviews(record, view);
         var free = _runs.ClientRoots - Slotted.Length;
         free -= Continue(record, view, free);
+        ResolveConflicts(record, view);
+        free = _runs.ClientRoots - Slotted.Length;
         free -= StartReady(record, view, free);
         AdvanceReviews(record, view, free);
     }
@@ -65,8 +68,11 @@ internal sealed partial class WorkflowRunCoordinator
         foreach (var next in view.Tasks.Values)
         {
             if (started >= free) break;
-            // A reserved fix of a review round resumes from its review, which knows its prompt.
+            // A reserved fix of a review round resumes from its review, which knows its prompt. A Merge node's own step
+            // hands on as a request does, and only its attempts that resolve a conflict start here.
             if (next.State != TaskState.Ready || _live.ContainsKey(next.Task) || FixesReview(record, next)) continue;
+            if (record.Revision.Snapshot.Tasks[next.Task].Blueprint.Work is WorkSpec.Merge && (next.Attempt is not { } merge || !RunReducer.Merges(record, merge)))
+                continue;
             Start(record, next);
             started++;
         }
@@ -303,13 +309,16 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// Settles the run as completed once nothing more can start: every task is done or can no longer start (#90), which no
-    /// unresolved block on a task's current attempt or result allows, and nothing is open, unresolved, or in flight.
+    /// unresolved block on a task's current attempt or result allows, and nothing is open, unresolved, or in flight. The
+    /// run's finished work first merges into the branch it started from (#148). A Merge node whose attempt at that merge
+    /// failed holds nothing back, since the person may still merge the work themselves.
     /// </summary>
     private RunRecord Complete(RunRecord record, RunView view)
     {
-        if (_live.Count != 0 || _holds.Count != 0 || !view.Tasks.Values.All(task => task.State == TaskState.Done || task.Dormant) || !Closed(record))
+        if (_live.Count != 0 || _holds.Count != 0 ||
+            !view.Tasks.Values.All(task => task.State == TaskState.Done || task.Dormant || FinalMergeFailed(task)) || !Closed(record))
             return record;
-        return Settle(record, RunOperations.Completed(Address.Run), RunOutcome.Completed);
+        return MergeAndComplete(record);
     }
 
     /// <summary>

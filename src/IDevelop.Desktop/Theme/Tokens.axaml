@@ -59,6 +59,11 @@
       <SolidColorBrush x:Key="KindApprovalStrongBrush" Color="#956D51" />
       <SolidColorBrush x:Key="KindApprovalTileBrush" Color="#956D51" />
       <SolidColorBrush x:Key="KindApprovalStrokeBrush" Color="#956D51" />
+      <SolidColorBrush x:Key="KindMergeBrush" Color="#FF2D55" />
+      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1AFF2D55" />
+      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#E7124D" />
+      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#E7124D" />
+      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#E7124D" />
       <SolidColorBrush x:Key="KindReadOnlyAgentBrush" Color="#8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgent10Brush" Color="#1A8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgentStrongBrush" Color="#6C6C70" />
@@ -162,6 +167,11 @@
       <SolidColorBrush x:Key="KindApprovalStrongBrush" Color="#DBA679" />
       <SolidColorBrush x:Key="KindApprovalTileBrush" Color="#B78A66" />
       <SolidColorBrush x:Key="KindApprovalStrokeBrush" Color="#B78A66" />
+      <SolidColorBrush x:Key="KindMergeBrush" Color="#FF375F" />
+      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1AFF375F" />
+      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#FF8AC4" />
+      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#FF375F" />
+      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#FF375F" />
       <SolidColorBrush x:Key="KindReadOnlyAgentBrush" Color="#8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgent10Brush" Color="#1A8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgentStrongBrush" Color="#AEAEB2" />

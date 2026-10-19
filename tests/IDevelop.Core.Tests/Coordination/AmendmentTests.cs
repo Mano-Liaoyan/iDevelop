@@ -31,7 +31,7 @@ public sealed class AmendmentTests
 
         ```idevelop
         {"status": "proposal",
-         "add": [{"id": "new-1", "type": "type-7", "title": "X", "fields": {"brief": "Build X again."}},
+         "add": [{"id": "new-1", "type": "type-8", "title": "X", "fields": {"brief": "Build X again."}},
                  {"id": "new-2", "type": "type-1", "title": "Y", "fields": {"instructions": "Build Y."}}],
          "connect": [{"from": "planner", "to": "new-1"}, {"from": "new-1", "to": "new-2"}]}
         ```
@@ -145,7 +145,7 @@ public sealed class AmendmentTests
         var projection = Assert.IsType<AmendmentProjection.Apply>(AmendmentProjection.Of(record.Revisions[original].Snapshot, record));
         Assert.Equal(record.Revision.Id, Revision.Capture(Edit(record.Revisions[original].Snapshot, projection.Edit)).Id);
         Assert.Contains("Empty tasks you may fill:\n- None.\n", f.Prompt(A));
-        Assert.Contains("- type-7: Writer. Fields: brief (Brief, required).\n", f.Prompt(A));
+        Assert.Contains("- type-8: Writer. Fields: brief (Brief, required).\n", f.Prompt(A));
         // The planner chooses each new task's agent from the clients ready when its start was planned (#99).
         Assert.Contains("\n\nAgents you may choose:\n- codex (Codex):\n  - gpt-6.1-sol, GPT-6.1-Sol. Reasoning: ", f.Prompt(A));
         Assert.DoesNotContain("- claude-code (Claude Code)", f.Prompt(A));

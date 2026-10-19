@@ -210,6 +210,27 @@
                              AutomationProperties.AutomationId="RunActivity" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <!-- The final merge conflicts and no Merge node takes it: the person fixes it in its worktree. -->
+                  <Button Classes="ghost glyph" Height="32"
+                          Command="{Binding OpenRunConflictCommand}" IsVisible="{Binding ShowsRunConflict}"
+                          ToolTip.Tip="Open worktree&#10;Open the conflict's worktree to fix its files"
+                          AutomationProperties.AutomationId="RunOpenConflict"
+                          AutomationProperties.Name="Open worktree">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                      <TextBlock Classes="label" Text="Open worktree" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="ghost glyph" Height="32"
+                          Command="{Binding MarkRunConflictResolvedCommand}" IsVisible="{Binding ShowsRunConflict}"
+                          ToolTip.Tip="Mark resolved&#10;Commit the worktree's files as the merge"
+                          AutomationProperties.AutomationId="RunMarkResolved"
+                          AutomationProperties.Name="Mark resolved">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
+                      <TextBlock Classes="label" Text="Mark resolved" />
+                    </StackPanel>
+                  </Button>
                   <Button Classes="ghost glyph" Height="32"
                           Command="{Binding Run.ResumeCommand}" IsVisible="{Binding Run.ShowsResume, FallbackValue=False}"
                           ToolTip.Tip="Resume run&#10;Start the run's next tasks in this window"

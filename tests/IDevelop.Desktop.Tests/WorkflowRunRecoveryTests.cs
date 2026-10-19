@@ -35,12 +35,12 @@ public sealed class WorkflowRunRecoveryTests
             .Answer("D", f.Says("D ready."));
         var shell = f.Window();
         shell.StartRun();
-        shell.WaitForCard("D", "Blocked");
+        shell.WaitForCard("D", "Conflict");
         shell.WaitForStatus("Needs attention");
 
         shell.Click(shell.Header(shell.Node("D")));
 
-        Assert.StartsWith("The results it joins conflict.", shell.Text("RunTaskDetail"));
+        Assert.StartsWith("The work it starts from conflicts in settings.txt, and no Merge node takes the conflict.", shell.Text("RunTaskDetail"));
         Assert.Equal(["The results it joins conflict."], shell.TextsOf("RecoveryBlockProblem"));
         Assert.Equal("Stop Workflow ends the run, and finished work stays.", shell.Text("RecoveryNoAction"));
         Assert.False(Shows(shell, "CloseAsStopped"));

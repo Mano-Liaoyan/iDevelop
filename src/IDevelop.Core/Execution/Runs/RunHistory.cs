@@ -192,7 +192,8 @@ internal sealed class RunHistory
     {
         if (record.CurrentResults.GetValueOrDefault(task) is not { } result) return null;
         if (!record.Revisions.TryGetValue(result.Revision, out var revision) || !revision.Snapshot.Tasks.TryGetValue(task, out var definition)) return null;
-        if (definition.Blueprint.Work is WorkSpec.Person) return result;
+        // An approval has no attempt, and a Merge node's attempts resolve conflicts for other nodes, so neither replaces its result.
+        if (definition.Blueprint.Work is WorkSpec.Person or WorkSpec.Merge) return result;
         AttemptId? attempt = RunProjection.LatestAttempts(record).TryGetValue(task, out var latest) ? latest : null;
         if (RunProjection.Replaced(record, result, attempt)) return null;
         return RunProjection.Blocks(record, task, attempt, result).Any() ? null : result;

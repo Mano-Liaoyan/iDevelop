@@ -90,6 +90,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         ShowActivity();
         OnPropertyChanged(nameof(ShowsRunWorkflow));
+        NotifyConflictCommands();
     }
 
     /// <summary>Stops the canvas's run follow its coordinator, as the project does when it closes.</summary>
@@ -145,6 +146,10 @@ public sealed partial class WorkflowCanvasViewModel
             {
                 _ = JoinRunAsync(run, node);
             }
+            else if (AddsMergeNode(run, node))
+            {
+                _ = AddMergeAsync(run, node);
+            }
 
             return;
         }
@@ -163,6 +168,17 @@ public sealed partial class WorkflowCanvasViewModel
         if (Run is not { IsActive: true } run)
         {
             return NewRunRefusal(node);
+        }
+
+        if (AddsMergeNode(run, node))
+        {
+            return Runs.CheckRun(node.Definition) is { } unready ? RunText.Describe(unready) : null;
+        }
+
+        // A Merge node's agent runs only on a conflict that goes to it.
+        if (node.Definition.Blueprint.Work is WorkSpec.Merge)
+        {
+            return RunText.Describe(new StartProblem.MergesInRun());
         }
 
         if (run.View.Tasks.GetValueOrDefault(node.Id) is not { } view || run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is not { } approved)
@@ -187,6 +203,26 @@ public sealed partial class WorkflowCanvasViewModel
             : WorkflowRunText.AsApproved(node.Title, problem);
     }
 
+    /// <summary>
+    /// Whether the node is a Merge node the active run lacks while the run waits on a conflict that no Merge node takes, so
+    /// its Run adds it to the run and the conflict goes to it.
+    /// </summary>
+    private static bool AddsMergeNode(WorkflowRunViewModel run, TaskNodeViewModel node) =>
+        node.Definition.Blueprint.Work is WorkSpec.Merge && run.View.Snapshot?.Tasks.ContainsKey(node.Id) == false && run.WaitsForMergeNode;
+
+    /// <summary>Adds the Merge node to the waiting run, and says why when the run refuses.</summary>
+    internal async Task AddMergeAsync(WorkflowRunViewModel run, TaskNodeViewModel node)
+    {
+        var outcome = await run.AddMergeAsync(Workflow, node.Id);
+        Notice(outcome switch
+        {
+            RunCommand.Unavailable unavailable => unavailable.Message,
+            RunCommand.Refused refused => WorkflowRunText.Problem(refused.Reason),
+            RunCommand.Untaken untaken => WorkflowRunText.Untaken(untaken.Node, untaken.Branches, TitleOf),
+            _ => null,
+        });
+    }
+
     /// <summary>Whether the canvas's active run runs the task as the document now holds it, or as it was when the run started.</summary>
     internal bool RunsAsApproved(TaskNodeViewModel node) => Run is { IsActive: true } run &&
         run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is { } approved && !SameDefinition(approved, node.Definition);
@@ -195,8 +231,9 @@ public sealed partial class WorkflowCanvasViewModel
     /// Why a new run of the node would start nothing: each predecessor without a current result from an earlier run, since a
     /// new run has no results of its own yet, or its configuration.
     /// </summary>
-    private string? NewRunRefusal(TaskNodeViewModel node) =>
-        RunsAfter(node, Incomplete([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
+    private string? NewRunRefusal(TaskNodeViewModel node) => node.Definition.Blueprint.Work is WorkSpec.Merge
+        ? RunText.Describe(new StartProblem.MergesInRun())
+        : RunsAfter(node, Incomplete([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
             .Select(connection => connection.Key.From)]))
         ?? (Runs.CheckRun(node.Definition) is { } problem ? RunText.Describe(problem) : null);
 

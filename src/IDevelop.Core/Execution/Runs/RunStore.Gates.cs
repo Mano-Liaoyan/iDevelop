@@ -16,6 +16,27 @@ internal sealed partial class RunStore
         });
 
     /// <summary>
+    /// Hands on a Merge node's request at once: its result is the merge of its predecessors' code that the request composed,
+    /// with their reports and artifacts, as an approval's is. A repeat returns the recorded result.
+    /// </summary>
+    public RunDecision MergeGate(CoordinatorPermit permit, OperationId operation, GateId gate) =>
+        Transact(permit, operation, Fingerprint("mergeGate", new { gate }), (record, _) =>
+        {
+            if (record is null) return Missing();
+            if (!record.Gates.TryGetValue(gate, out var state)) return Refuse(RunProblem.UnknownInput);
+            var request = state.Request;
+            if (state.Decision is GateDecision.Approved approved) return new Mutation.Existing(record.Receipts[approved.Operation].Event);
+            if (state.Decision is not null || RunReducer.Superseded(record, state)) return new Mutation.Rejected(new(RunProblem.StaleInput, Task: request.Task));
+            var input = record.Inputs[request.Inputs];
+            return new Mutation.Append(new RunEvent.ResultAccepted(new(request.Result, request.Task, request.Revision, request.Inputs,
+                new ResultOrigin.Merged(gate), GateForwarding.Report(record, input), record.CurrentResults.GetValueOrDefault(request.Task)?.Id)
+            {
+                Code = GateForwarding.Code(input),
+                Artifacts = GateForwarding.Artifacts(record, input, request.Result).Artifacts,
+            }, input));
+        });
+
+    /// <summary>
     /// Answers the request the person saw, named by its id and input id. Approval records a human-origin result with what the
     /// inputs forward, in one entry. Send back records the reason. A repeat of the recorded answer returns the original
     /// entry. Any other answer to a request that was answered, replaced, or whose inputs were superseded is refused as

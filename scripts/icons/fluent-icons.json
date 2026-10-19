@@ -6,6 +6,7 @@
     { "key": "IconKindArchitect", "asset": "Ruler", "file": "ic_fluent_ruler_16_filled.svg" },
     { "key": "IconKindReview", "asset": "Glasses", "file": "ic_fluent_glasses_16_filled.svg" },
     { "key": "IconKindApproval", "asset": "Person Available", "file": "ic_fluent_person_available_16_filled.svg" },
+    { "key": "IconKindMerge", "asset": "Merge", "file": "ic_fluent_merge_16_filled.svg" },
     { "key": "IconKindReadOnlyAgent", "asset": "Document Search", "file": "ic_fluent_document_search_16_filled.svg" },
     { "key": "IconStateSucceeded", "asset": "Checkmark Circle", "file": "ic_fluent_checkmark_circle_16_filled.svg" },
     { "key": "IconStateFailed", "asset": "Error Circle", "file": "ic_fluent_error_circle_16_filled.svg" },

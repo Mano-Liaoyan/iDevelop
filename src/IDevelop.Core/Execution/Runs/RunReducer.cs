@@ -288,7 +288,8 @@ internal static partial class RunReducer
                         return Reject(RunProblem.IdentityMismatch);
                     }
 
-                    if (resultTask.Blueprint.Work is WorkSpec.Person && result.Origin is not ResultOrigin.Human)
+                    if (resultTask.Blueprint.Work is WorkSpec.Person && result.Origin is not ResultOrigin.Human ||
+                        resultTask.Blueprint.Work is WorkSpec.Merge && result.Origin is not (ResultOrigin.Merged or ResultOrigin.Carried))
                     {
                         return Reject(RunProblem.UnsupportedResult);
                     }
@@ -355,9 +356,16 @@ internal static partial class RunReducer
 
                             break;
                         case ResultOrigin.Human human:
-                            if (HumanResultProblem(record, accepted, resultTask, human) is { } humanProblem)
+                            if (GateResultProblem(record, accepted, resultTask, human.Request) is { } humanProblem)
                             {
                                 return Reject(humanProblem);
+                            }
+
+                            break;
+                        case ResultOrigin.Merged merged:
+                            if (GateResultProblem(record, accepted, resultTask, merged.Request) is { } mergedProblem)
+                            {
+                                return Reject(mergedProblem);
                             }
 
                             break;
@@ -373,9 +381,10 @@ internal static partial class RunReducer
                         Results = record.Results.Add(result),
                         Inputs = record.Inputs.SetItem(accepted.Inputs.Id, accepted.Inputs)
                     };
-                    if (result.Origin is ResultOrigin.Human approval)
+                    if (result.Origin is ResultOrigin.Human or ResultOrigin.Merged)
                     {
-                        record = Decide(record, approval.Request, new GateDecision.Approved(result.Id, entry.Operation));
+                        var request = result.Origin is ResultOrigin.Human approval ? approval.Request : ((ResultOrigin.Merged)result.Origin).Request;
+                        record = Decide(record, request, new GateDecision.Approved(result.Id, entry.Operation));
                     }
                     break;
                 case RunEvent.GateRequested requested:
@@ -549,6 +558,7 @@ internal static partial class RunReducer
                 other.Link.Attempt == fix.Link.Attempt && other.Link.Round == fix.Link.Round,
             AttemptCause.Retry retry => Previous(attempt.Cause) == retry.Previous,
             AttemptCause.Continue continued => Previous(attempt.Cause) == continued.Previous,
+            AttemptCause.Merge merge => attempt.Cause is AttemptCause.Merge other && other.Conflict.Merges(merge.Conflict.Ours, merge.Conflict.Theirs),
             _ => false,
         });
 
@@ -626,6 +636,11 @@ internal static partial class RunReducer
                 return RunProblem.OutcomeMismatch;
             }
         }
+        if (cause is AttemptCause.Merge merge && MergeProblem(record, task, merge.Conflict) is { } mergeProblem)
+        {
+            return mergeProblem;
+        }
+
         if (cause is AttemptCause.ReviewFix fix && (!record.Attempts.TryGetValue(fix.Link.Attempt, out var review) ||
             review.Task != fix.Link.Review || record.Revisions[review.Revision].Snapshot.SubjectOf(review.Task) != task ||
             !record.TurnClosures.ContainsKey(new(review.Id, fix.Link.Round)) || record.Closures.ContainsKey(review.Id)))
@@ -657,6 +672,12 @@ internal static partial class RunReducer
         if (!record.Revisions.TryGetValue(input.Revision, out var revision) || !revision.Snapshot.Tasks.ContainsKey(input.Task))
         {
             return new(RunProblem.RevisionConflict);
+        }
+
+        // A Merge node's attempt takes only the conflict it resolves.
+        if (input.Conflict is not null)
+        {
+            return MergeInput(record, input) ? null : new(RunProblem.InputConflict);
         }
 
         var incoming = revision.Snapshot.Connections.Where(edge => edge.Key.To == input.Task).ToArray();
@@ -771,7 +792,7 @@ internal static partial class RunValidation
     private static bool Key(LaunchKey key) => key.Attempt.Value != Guid.Empty && key.Turn > 0;
 
     private static bool Input(InputRecord input) => input.Id.Value != Guid.Empty && input.Task.Value != Guid.Empty &&
-        Revision.IsHash(input.Revision.Sha256) &&
+        Revision.IsHash(input.Revision.Sha256) && (input.Conflict is null || MergeConflict(input.Conflict)) &&
         Code(input.Code) && input.Text is not null && !input.Files.IsDefault && input.Files.All(file =>
             file.Source.Value != Guid.Empty && Path(file.RelativePath) && Revision.IsHash(file.Content.Sha256) && file.ByteLength >= 0) &&
         Review(input.Review) && Bindings(input.Bindings);
@@ -792,6 +813,7 @@ internal static partial class RunValidation
             AttemptCause.Continue continued => continued.Previous.Value != Guid.Empty && continued.Confirmation.Value != Guid.Empty,
             AttemptCause.ReviewFix fix => fix.Link.Attempt.Value != Guid.Empty && fix.Link.Review.Value != Guid.Empty &&
                 fix.Link.Round > 0 && fix.Link.Guidance >= 0,
+            AttemptCause.Merge merge => MergeConflict(merge.Conflict),
             _ => false,
         });
 
@@ -811,6 +833,7 @@ internal static partial class RunValidation
         {
             ResultOrigin.Executed executed => executed.Attempt.Value != Guid.Empty,
             ResultOrigin.Human human => human.Request.Value != Guid.Empty,
+            ResultOrigin.Merged merged => merged.Request.Value != Guid.Empty,
             ResultOrigin.Carried carried => carried.Run.Value != Guid.Empty && carried.Result.Value != Guid.Empty,
             ResultOrigin.Reused reused => Checkpoint(reused.Evidence.SourceLog) && Revision.IsHash(reused.Evidence.Definition.Sha256) &&
                 Revision.IsHash(reused.Evidence.Inputs.Sha256) && Revision.IsHash(reused.Evidence.CodeTree.Sha256) &&

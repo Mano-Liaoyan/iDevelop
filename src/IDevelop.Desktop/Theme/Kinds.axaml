@@ -110,6 +110,27 @@
   <Style Selector="PathIcon.stateIcon.kind-approval, PathIcon.kindStrong.kind-approval">
     <Setter Property="Foreground" Value="{DynamicResource KindApprovalStrongBrush}" />
   </Style>
+  <Style Selector="Border.kindTile.kind-merge">
+    <Setter Property="Background" Value="{DynamicResource KindMergeTileBrush}" />
+  </Style>
+  <Style Selector="Border.kindStroke.kind-merge, Border.stateStroke.kind-merge">
+    <Setter Property="BorderBrush" Value="{DynamicResource KindMergeStrokeBrush}" />
+  </Style>
+  <Style Selector=":is(Shape).kindStroke.kind-merge">
+    <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
+  </Style>
+  <Style Selector=":is(Shape).kindFill.kind-merge">
+    <Setter Property="Fill" Value="{DynamicResource KindMergeStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.kindTint.kind-merge, Border.stateTint.kind-merge">
+    <Setter Property="Background" Value="{DynamicResource KindMerge10Brush}" />
+  </Style>
+  <Style Selector="PathIcon.kindIcon.kind-merge">
+    <Setter Property="Data" Value="{StaticResource IconKindMerge}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.kind-merge, PathIcon.kindStrong.kind-merge">
+    <Setter Property="Foreground" Value="{DynamicResource KindMergeStrongBrush}" />
+  </Style>
   <Style Selector="Border.kindTile.kind-readonlyagent">
     <Setter Property="Background" Value="{DynamicResource KindReadOnlyAgentTileBrush}" />
   </Style>

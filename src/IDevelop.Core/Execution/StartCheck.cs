@@ -27,6 +27,9 @@ public abstract record StartProblem
     /// <summary>The node has no agent. A workflow run reaches it and waits for the person.</summary>
     public sealed record RunsInWorkflow : StartProblem;
 
+    /// <summary>A Merge node's agent runs only in a workflow run, on a merge conflict the run meets.</summary>
+    public sealed record MergesInRun : StartProblem;
+
     /// <summary>The review depends on no node that edits the project.</summary>
     public sealed record NoSubject : StartProblem;
 

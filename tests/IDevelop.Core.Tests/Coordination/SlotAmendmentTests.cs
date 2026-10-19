@@ -124,7 +124,7 @@ public sealed class SlotAmendmentTests
 
         ```idevelop
         {"status": "proposal",
-         "add": [{"id": "new-1", "type": "type-7", "title": "Y", "fields": {"brief": "Build Y."}}],
+         "add": [{"id": "new-1", "type": "type-8", "title": "Y", "fields": {"brief": "Build Y."}}],
          "fill": [{"slot": "slot-1", "fields": {"checklist": "Check the tests."}}],
          "connect": [{"from": "planner", "to": "new-1"}]}
         ```

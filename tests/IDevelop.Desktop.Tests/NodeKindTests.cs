@@ -35,7 +35,7 @@ public sealed class NodeKindTests : IDisposable
     public void Each_built_in_has_its_own_kind()
     {
         Assert.Equal(
-            [NodeKind.Implement, NodeKind.Plan, NodeKind.Architect, NodeKind.Review, NodeKind.Approval],
+            [NodeKind.Implement, NodeKind.Plan, NodeKind.Architect, NodeKind.Review, NodeKind.Approval, NodeKind.Merge],
             BuiltInBlueprints.All.Select(blueprint => KindOf(blueprint)));
     }
 
@@ -44,7 +44,7 @@ public sealed class NodeKindTests : IDisposable
     {
         // An Architect's work is a proposing read-only agent, which by work alone would be a Plan.
         Assert.Equal(
-            [NodeKind.Implement, NodeKind.Plan, NodeKind.Architect, NodeKind.Review, NodeKind.Approval],
+            [NodeKind.Implement, NodeKind.Plan, NodeKind.Architect, NodeKind.Review, NodeKind.Approval, NodeKind.Merge],
             BuiltInBlueprints.All.Select(blueprint => KindOf(Derived($"acme.{blueprint.Name.ToLowerInvariant()}", blueprint))));
     }
 
@@ -95,6 +95,7 @@ public sealed class NodeKindTests : IDisposable
                 ("Architect", "IconKindArchitect", "kind-architect"),
                 ("Review", "IconKindReview", "kind-review"),
                 ("Approval", "IconKindApproval", "kind-approval"),
+                ("Merge", "IconKindMerge", "kind-merge"),
                 ("Read-only agent", "IconKindReadOnlyAgent", "kind-readonlyagent"),
             ],
             Enum.GetValues<NodeKind>().Select(NodeKinds.Info).Select(info => (info.Label, info.Icon, info.StyleClass)));
@@ -126,7 +127,7 @@ public sealed class NodeKindTests : IDisposable
         var blueprints = Shell.Open(folder).Window.ViewModel.Canvas!.Blueprints;
 
         Assert.Equal(
-            [(NodeKind.Implement, false), (NodeKind.Plan, false), (NodeKind.Architect, false), (NodeKind.Review, false), (NodeKind.Approval, false), (NodeKind.Architect, true)],
+            [(NodeKind.Implement, false), (NodeKind.Plan, false), (NodeKind.Architect, false), (NodeKind.Review, false), (NodeKind.Approval, false), (NodeKind.Merge, false), (NodeKind.Architect, true)],
             blueprints.Groups.SelectMany(group => group.Entries).Select(entry => (entry.Kind, entry.IsLibrary)));
     }
 }

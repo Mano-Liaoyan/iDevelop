@@ -52,6 +52,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         {
             WorkSpec.Agent agent => (agent.Template.Text, "", agent.Access == AgentAccess.ReadOnly),
             WorkSpec.Review review => (review.Reviewer.Text, review.Fix.Text, true),
+            WorkSpec.Merge merge => (merge.Template.Text, "", false),
             _ => ("", "", false),
         };
         _conversation = ConversationChoices.First(choice => choice.Value == defaults.Conversation);
@@ -254,6 +255,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
                 WorkKind.Agent => new WorkSpec.Agent(_readOnly ? AgentAccess.ReadOnly : AgentAccess.Edit, ((WorkSpec.Agent)_source.Work).Proposes, Parse(_template, "The template")),
                 WorkKind.Review => new WorkSpec.Review(Parse(_template, "The reviewer template"), Parse(_fixTemplate, "The fix template")),
                 WorkKind.Person => new WorkSpec.Person(),
+                WorkKind.Merge => new WorkSpec.Merge(Parse(_template, "The template")),
             };
         }
         catch (FormatException e)

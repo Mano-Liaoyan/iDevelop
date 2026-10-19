@@ -139,7 +139,9 @@ internal sealed partial class Materializer
                 throw new Refusal(new(RunProblem.InputConflict));
             var location = new ExecutionLocation(owner, start);
             step = "worktree";
-            EnsureCheckout(permit, operation, planId, repository, location, record);
+            // A Retry or a Continue of a Merge node's attempt keeps the files the failed attempt left, as every other Retry does.
+            var keeps = cause is AttemptCause.Retry or AttemptCause.Continue && RunReducer.MergeOf(record, cause) is not null;
+            EnsureCheckout(permit, operation, planId, repository, location, record, keeps);
             step = "delivery";
             Deliver(record, input, repository, owner, storage);
             var outbox = definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } ? RunLayout.Outbox(plan.Attempt) : "";
@@ -290,6 +292,8 @@ internal sealed partial class Materializer
     private static string Prompt(TaskDefinition definition, InputRecord input, AttemptId attempt, string? basePrompt,
         PlanningContext? planning = null, ImmutableArray<ArtifactRecord> kept = default)
     {
+        // A Merge node's agent reads the conflict it resolves, and nothing else hands it input.
+        if (input.Conflict is { } conflict) return MergeWork.Prompt(new NodeContext(definition, "") { Conflict = conflict.Description });
         if (basePrompt is null && definition.Blueprint.Work is not WorkSpec.Agent)
             throw new Refusal(new(RunProblem.InvalidData));
         var template = (definition.Blueprint.Work as WorkSpec.Agent)?.Template;

@@ -595,10 +595,10 @@ public sealed class GenerateTests : IDisposable
         const string reply = """
             ```idevelop
             {"status": "proposal",
-             "add": [{"id": "chosen", "type": "type-6", "title": "Chosen", "fields": {"instructions": "A."},
+             "add": [{"id": "chosen", "type": "type-7", "title": "Chosen", "fields": {"instructions": "A."},
                       "agent": {"client": "codex", "model": "gpt-5.5", "reasoning": "low", "reason": "Routine."}},
-                     {"id": "own", "type": "type-6", "title": "Own", "fields": {"instructions": "B."}},
-                     {"id": "unusable", "type": "type-6", "title": "Unusable", "fields": {"instructions": "C."},
+                     {"id": "own", "type": "type-7", "title": "Own", "fields": {"instructions": "B."}},
+                     {"id": "unusable", "type": "type-7", "title": "Unusable", "fields": {"instructions": "C."},
                       "agent": {"client": "pi", "model": "deepseek/deepseek-flash", "reasoning": "low"}},
                      {"id": "plain", "type": "type-1", "title": "Plain", "fields": {"instructions": "D."}}]}
             ```
@@ -637,7 +637,7 @@ public sealed class GenerateTests : IDisposable
         const string reply = """
             ```idevelop
             {"status": "proposal",
-             "add": [{"id": "own", "type": "type-6", "title": "Own", "fields": {"instructions": "B."}}]}
+             "add": [{"id": "own", "type": "type-7", "title": "Own", "fields": {"instructions": "B."}}]}
             ```
             """;
         Install(_fakes, ClientId.ClaudeCode);

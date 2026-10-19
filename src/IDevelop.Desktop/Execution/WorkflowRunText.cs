@@ -157,6 +157,8 @@ internal static class WorkflowRunText
         TaskState.Ready => (NodeState.Idle, "Ready"),
         TaskState.Starting => (NodeState.Running, "Starting"),
         TaskState.Running when !task.Background.IsEmpty => (NodeState.Running, RunText.Background(task.Background)),
+        // A Merge node's agent resolves a conflict that went to it.
+        TaskState.Running when task.Merge is not null => (NodeState.Running, "Merging"),
         TaskState.Running => (NodeState.Running, "Running"),
         TaskState.Settling => (NodeState.Running, "Finishing"),
         TaskState.Waiting when task.Gate is not null => (NodeState.Waiting, "Waiting for approval"),
@@ -168,6 +170,8 @@ internal static class WorkflowRunText
         TaskState.Done => (NodeState.Succeeded, "Succeeded"),
         TaskState.Stale => (NodeState.Interrupted, "Inputs changed"),
         TaskState.Failed when task.Gate is not null => (NodeState.Cancelled, "Closed"),
+        TaskState.Failed when task.Merge is not null && task.End is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } =>
+            (NodeState.Failed, "Not merged"),
         TaskState.Failed => task.End switch
         {
             AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Cancelled } => (NodeState.Cancelled, "Cancelled"),
@@ -176,6 +180,9 @@ internal static class WorkflowRunText
             AttemptEnd.Recovered => (NodeState.Interrupted, "Closed as stopped"),
             _ => (NodeState.Failed, "Failed"),
         },
+        // A conflict between its predecessors goes to a Merge node's agent, or waits for the person when none takes it.
+        TaskState.Blocked when task.MergedBy is { } merge && Conflict(task) is not null => (NodeState.Idle, $"Waits for \"{title(merge)}\""),
+        TaskState.Blocked when Conflict(task) is not null => (NodeState.Failed, "Conflict"),
         TaskState.Blocked => (NodeState.Failed, "Blocked"),
         TaskState.Uncertain => (NodeState.Interrupted, "Uncertain"),
         TaskState.Refused when task.Problem is { } problem && NodeStates.IsSetup(problem) => (NodeState.NeedsSetup, CardText.ShortReason(problem) ?? "Couldn't start"),
@@ -192,6 +199,13 @@ internal static class WorkflowRunText
     {
         TaskState.Pending or TaskState.Ready or TaskState.Unsupported or TaskState.Unrequested when !active => null,
         TaskState.Pending when !task.HeldBy.IsEmpty => Waits(task.HeldBy, title, tasks),
+        TaskState.Blocked when Conflict(task) is { } conflict => task.MergedBy is { } merge
+            ? $"The work it starts from conflicts in {Files(conflict.Paths)}. \"{title(merge)}\" merges it, and it starts once the merge is committed."
+            : $"The work it starts from conflicts in {Files(conflict.Paths)}, and no Merge node takes the conflict. Open the conflict's worktree, " +
+              "fix the files, and mark it resolved, or add a Merge node and run\u00A0it." + Unmarked(conflict),
+        TaskState.Failed when task.Merge is { } merging && task.End is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } =>
+            $"Its agent left conflict markers in {Files(merging.Paths)}, so the merge was not committed. Retry it.",
+        TaskState.Failed when task.Merge is { } failedMerge => $"It did not finish the merge of {Files(failedMerge.Paths)}. Retry it.",
         TaskState.Blocked when task.Block is { } block && block.Task != task.Task => $"The checkout of \"{title(block.Task)}\" holds it. {block.Detail}".Trim(),
         TaskState.Blocked when task.Block is { } block => $"{RecoveryText.Problem(block)} {block.Detail}".Trim(),
         // A run's task starts a new conversation with Retry, which starts a fresh attempt (#92).
@@ -205,6 +219,76 @@ internal static class WorkflowRunText
         TaskState.Unsupported => RunText.Describe(new StartProblem.NoSubject()),
         _ => null,
     };
+
+    /// <summary>The conflict between a blocked task's predecessors, or null when something else blocks it.</summary>
+    private static MergeConflict? Conflict(TaskView task) =>
+        task.Block is { Problem: MaterializationProblem.FanInConflict, Conflict.Merge: { } conflict } ? conflict : null;
+
+    /// <summary>"a.txt", "a.txt and b.txt", or the first two and a count beyond.</summary>
+    public static string Files(IReadOnlyList<string> paths) => paths.Count switch
+    {
+        0 => "its files",
+        1 => paths[0],
+        2 => $"{paths[0]} and {paths[1]}",
+        3 => $"{paths[0]}, {paths[1]}, and {paths[2]}",
+        _ => $"{paths[0]}, {paths[1]}, and {paths.Count - 2} more files",
+    };
+
+    /// <summary>
+    /// Where the conflict's worktree is and what the person does there. <paramref name="shown"/> says whether the system's file
+    /// manager opened it.
+    /// </summary>
+    public static string ConflictOpened(string folder, IReadOnlyList<string> paths, bool shown, MergeConflict? conflict = null) => (shown
+        ? $"The conflict's worktree is open at {folder}. Fix {Files(paths)} there, then choose Mark resolved."
+        : $"The conflict's worktree is at {folder}, and iDevelop could not open it. Open it yourself, fix {Files(paths)}, then choose Mark resolved.") +
+        Unmarked(conflict);
+
+    /// <summary>
+    /// " Check a.txt too: its conflict leaves no markers." for the conflicting files that hold no conflict markers, which
+    /// Mark resolved cannot check, or nothing.
+    /// </summary>
+    internal static string Unmarked(MergeConflict? conflict) => conflict is { Unmarked: { IsDefaultOrEmpty: false } unmarked }
+        ? unmarked.Length == 1
+            ? $" Check {unmarked[0]} too: its conflict leaves no markers."
+            : $" Check {Files(unmarked)} too: their conflicts leave no markers."
+        : "";
+
+    /// <summary>What the person's step on a conflict came to, as the notice says it, or null when it needs no word.</summary>
+    internal static string? Conflict(ConflictReply reply, MergeConflict? conflict = null) => reply switch
+    {
+        ConflictReply.Resolved => "Your merge is committed, and the run goes on from it.",
+        ConflictReply.Unopened => "Open the conflict's worktree first, and fix the files there.",
+        ConflictReply.MarkersRemain markers => markers.Paths.Length == 1
+            ? $"{markers.Paths[0]} still has conflict markers. Fix it, then mark the conflict resolved." + Unmarked(conflict)
+            : $"{Files(markers.Paths)} still have conflict markers. Fix them, then mark the conflict resolved." + Unmarked(conflict),
+        ConflictReply.Failed failed => $"Git could not do this: {failed.Detail}",
+        ConflictReply.Refused { Reason.Problem: RunProblem.StaleInput } => "The conflict no longer waits for you.",
+        ConflictReply.Refused refused => Problem(refused.Reason),
+        ConflictReply.Unavailable unavailable => unavailable.Message,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Why the run's finished work has not merged into the branch it started from yet, as its bar says it: what the person
+    /// can do, or which Merge node merges it.
+    /// </summary>
+    public static string Merging(BranchMergeWait wait, Func<TaskId, string> title)
+    {
+        var branch = MergeMarkers.BranchName(wait.Branch);
+        return wait switch
+        {
+            BranchMergeWait.Uncommitted uncommitted =>
+                $"The run's work waits to merge into {branch}. Commit or stash your changes to {Files(uncommitted.Paths)}, and it merges. iDevelop never touches them.",
+            BranchMergeWait.Busy busy =>
+                $"The run's work waits to merge into {branch}. {branch} is being {busy.Operation} in {busy.Folder}; the run's work merges once it finishes. iDevelop never touches it meanwhile.",
+            BranchMergeWait.Conflict { Node: { } node } conflict => $"\"{title(node)}\" merges the run's work into {branch}, which conflicts in {Files(conflict.Paths)}.",
+            BranchMergeWait.Conflict conflict =>
+                $"The run's work conflicts with {branch} in {Files(conflict.Paths)}. Open the conflict's worktree, fix the files, and mark it resolved, " +
+                "or add a Merge node and run\u00A0it." + Unmarked(conflict.Merge),
+            BranchMergeWait.Problem problem => $"The run's work could not merge into {branch} yet: {problem.Detail}",
+            _ => throw new UnreachableException(),
+        };
+    }
 
     /// <summary>
     /// What a waiting task waits for: "It starts once "A" and "B" hand on a result.", and for the predecessors nobody ran,
@@ -264,6 +348,8 @@ internal static class WorkflowRunText
             TaskState.Waiting when task.Gate is not null || task.Fix is not null || task.Status == AttemptStatus.WaitingForInput => new Attention.Waiting(label),
             TaskState.Stale => new Attention.Problem($"{label}: {Detail(task, title)}"),
             TaskState.Failed when state == NodeState.Failed => new Attention.Problem(Detail(task, title) is { } why ? $"{label}: {why}" : label),
+            // A conflict that a Merge node merges needs nothing of the person.
+            TaskState.Blocked when task.MergedBy is not null && Conflict(task) is not null => null,
             TaskState.Blocked or TaskState.Uncertain or TaskState.SentBack or TaskState.Refused when state != NodeState.NeedsSetup =>
                 new Attention.Problem(Detail(task, title) is { } detail ? $"{label}: {detail}" : label),
             _ => null,
@@ -343,6 +429,15 @@ internal static class WorkflowRunText
     };
 
     /// <summary>Up to three quoted titles in full, and the first two and a count beyond that.</summary>
+    /// <summary>
+    /// What the person learns when a Merge node they ran joined the run but does not take the conflict that waits: the
+    /// conflict's branches do not all connect into it.
+    /// </summary>
+    public static string Untaken(TaskId node, IReadOnlyList<TaskId> branches, Func<TaskId, string> title) => branches.Count == 0
+        ? $"\"{title(node)}\" joined the run, but the conflict's branches don't connect into it, so it does not take the conflict."
+        : $"\"{title(node)}\" joined the run, but it does not take the conflict: {Listed([.. branches.Select(title)])}, whose work conflicts, " +
+          $"don't all connect into it. A Merge node takes the conflict once each of them connects into it.";
+
     private static string Listed(string[] titles)
     {
         var names = titles.Select(title => $"\"{title}\"").ToArray();

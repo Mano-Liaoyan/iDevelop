@@ -237,6 +237,7 @@ public static class RunText
         StartProblem.NoConversation => "This task has no agent to write to.",
         StartProblem.NoReadOnlyMode p => $"This task may only read the project, and {Clients.Name(p.Client)} has no read-only mode. Choose another client.",
         StartProblem.RunsInWorkflow => "An approval has no agent. It waits for you when a workflow run reaches it.",
+        StartProblem.MergesInRun => "A Merge node's agent runs only in a workflow run, when the run meets a merge conflict.",
         StartProblem.NoSubject => "Connect the task to review into this review with a dependency first.",
         StartProblem.SubjectNotDone p => $"Run \"{p.Title}\" first. The review starts once it succeeds.",
         StartProblem.NoChange p =>

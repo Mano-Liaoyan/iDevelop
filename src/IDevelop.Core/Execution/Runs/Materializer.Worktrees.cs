@@ -40,7 +40,7 @@ internal sealed partial class Materializer
     }
 
     private void EnsureCheckout(CoordinatorPermit permit, OperationId operation, OperationId plan, GitRepository repository,
-        ExecutionLocation location, RunRecord record)
+        ExecutionLocation location, RunRecord record, bool keepFiles = false)
     {
         var workflow = permit.Workflow;
         var run = permit.Run;
@@ -101,9 +101,10 @@ internal sealed partial class Materializer
             if (result.ExitCode != 0) throw Fault(MaterializationProblem.UncertainOwnership, result.Stderr, new BlockScope.Ownership());
         }
         // A read-only worktree commits nothing, so each attempt starts exactly at the merge of its predecessors, without
-        // what an earlier attempt left in it. Ignored files, such as delivered inputs, stay.
+        // what an earlier attempt left in it. Ignored files, such as delivered inputs, stay. A Merge node's Retry keeps the
+        // files its failed attempt left, while its worktree is still at the conflict that attempt worked on.
         if (owner.Branch is null && (Value(repository.ResolveCheckoutHead(checkout)) != location.AttemptBase ||
-            Value(repository.Status(checkout)).Length != 0))
+            !keepFiles && Value(repository.Status(checkout)).Length != 0))
         {
             var reset = new GitMutation.ResetCheckout(owner.Task, location.AttemptBase);
             var intended = OperationIds.Derive(operation, "read-only-reset-intent");

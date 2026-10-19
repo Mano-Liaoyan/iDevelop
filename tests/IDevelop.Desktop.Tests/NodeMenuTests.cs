@@ -287,7 +287,7 @@ public sealed class NodeMenuTests : IDisposable
         var choices = shell.Window.GetVisualDescendants().OfType<MenuItem>()
             .Where(item => Avalonia.Automation.AutomationProperties.GetAutomationId(item) == "ReplaceWithItem").ToList();
         Assert.Equal(
-            ["Replace with Implement", "Replace with Plan", "Replace with Architect", "Replace with Review", "Replace with Approval", "Replace with Careful implement"],
+            ["Replace with Implement", "Replace with Plan", "Replace with Architect", "Replace with Review", "Replace with Approval", "Replace with Merge", "Replace with Careful implement"],
             choices.Select(Avalonia.Automation.AutomationProperties.GetName));
         Assert.All(choices, item =>
         {

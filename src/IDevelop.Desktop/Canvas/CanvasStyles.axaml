@@ -184,6 +184,10 @@
     <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource KindApprovalStrokeBrush}" />
   </Style>
+  <Style Selector=":is(nodify|BaseConnection).kind-merge">
+    <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource KindMergeStrokeBrush}" />
+  </Style>
   <Style Selector=":is(nodify|BaseConnection).kind-readonlyagent">
     <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
@@ -241,6 +245,9 @@
   <Style Selector="nodify|PendingConnection.kind-approval">
     <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
   </Style>
+  <Style Selector="nodify|PendingConnection.kind-merge">
+    <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
+  </Style>
   <Style Selector="nodify|PendingConnection.kind-readonlyagent">
     <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
   </Style>
@@ -291,6 +298,9 @@
   </Style>
   <Style Selector="Border.minimapItem.kind-approval">
     <Setter Property="Background" Value="{DynamicResource KindApprovalBrush}" />
+  </Style>
+  <Style Selector="Border.minimapItem.kind-merge">
+    <Setter Property="Background" Value="{DynamicResource KindMergeBrush}" />
   </Style>
   <Style Selector="Border.minimapItem.kind-readonlyagent">
     <Setter Property="Background" Value="{DynamicResource KindReadOnlyAgentBrush}" />

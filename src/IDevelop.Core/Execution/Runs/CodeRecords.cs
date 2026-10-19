@@ -96,7 +96,54 @@ internal sealed record ConfigEntry(string Key, string Value);
 /// <summary>A fan-in conflict as Git reported it, stored and replayed without interpreting the merge.</summary>
 internal sealed record ConflictEvidence(ImmutableArray<CodeSource> Sources, int Step, ImmutableArray<string> Paths,
     ImmutableArray<StageEntry> Stages, ImmutableArray<MergeMessage> Messages, EvidenceFile Stdout, EvidenceFile Stderr, string GitVersion,
-    ImmutableArray<ConfigEntry> MergeConfig, CommitId AttributeSource);
+    ImmutableArray<ConfigEntry> MergeConfig, CommitId AttributeSource)
+{
+    /// <summary>The conflict a Merge node's agent resolves for this merge step.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MergeConflict? Merge { get; init; }
+}
+
+/// <summary>What a merge conflict is in: the merge of a task's predecessors, or the run's final merge into its branch.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(Join), "join")]
+[JsonDerivedType(typeof(Branch), "branch")]
+internal abstract record MergeTarget
+{
+    private MergeTarget() { }
+
+    /// <summary>The merge of <paramref name="Task"/>'s predecessors, which it starts from.</summary>
+    internal sealed record Join([property: JsonPropertyName("task")] TaskId Task) : MergeTarget;
+
+    /// <summary>The run's final merge into <paramref name="Name"/>, the branch it started from.</summary>
+    internal sealed record Branch(string Name) : MergeTarget;
+}
+
+/// <summary>
+/// A merge conflict that a Merge node's agent resolves: merging <paramref name="Theirs"/> into <paramref name="Ours"/>
+/// conflicts in <paramref name="Paths"/>. <paramref name="Conflicted"/> is the commit iDevelop made of the tree Git's merge
+/// left, its conflict markers included, on both parents, where the agent's worktree starts. Resolved, the merge is a
+/// commit of the agent's files on the same two parents. <paramref name="Description"/> is what the agent reads about it.
+/// </summary>
+internal sealed record MergeConflict(MergeTarget Target, CommitId Ours, CommitId Theirs, CommitId Conflicted, ImmutableArray<string> Paths,
+    string Description)
+{
+    /// <summary>
+    /// The conflicting files that hold no conflict markers in <see cref="Conflicted"/>, such as a binary file, a file one side
+    /// deleted, or a renamed one. Nothing checks them for markers, so the person and the agent are told to check them.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ImmutableArray<string> Unmarked { get; init; }
+
+    public bool Equals(MergeConflict? other) => other is not null && Target == other.Target && Ours == other.Ours && Theirs == other.Theirs &&
+        Conflicted == other.Conflicted && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal) && Description == other.Description &&
+        Unmarked.IsDefaultOrEmpty == other.Unmarked.IsDefaultOrEmpty &&
+        (Unmarked.IsDefaultOrEmpty || Unmarked.SequenceEqual(other.Unmarked, StringComparer.Ordinal));
+
+    public override int GetHashCode() => HashCode.Combine(Target, Ours, Theirs, Conflicted);
+
+    /// <summary>Whether this conflict merges <paramref name="theirs"/> into <paramref name="ours"/>.</summary>
+    public bool Merges(CommitId ours, CommitId theirs) => Ours == ours && Theirs == theirs;
+}
 
 internal sealed record MaterializationBlock(OperationId Operation, TaskId Task, AttemptId? Attempt, MaterializationProblem Problem,
     InputId? Inputs, ImmutableArray<EvidenceFile> Evidence, string Detail, ConflictEvidence? Conflict = null)

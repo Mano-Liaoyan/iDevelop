@@ -294,14 +294,21 @@ internal sealed partial class RunStore
             {
                 return Refuse(reservation);
             }
-            var capture = Inputs(record, task, revision, default);
-            if (capture.Rejection is { } rejection)
+            // A Merge node's attempt takes no results from the tasks before it: only the conflict it resolves.
+            ImmutableArray<InputBinding> bindings = [];
+            ImmutableArray<CodeSource> sources = [];
+            ReviewInput? review = null;
+            if (RunReducer.MergeOf(record, cause) is null)
             {
-                return new Mutation.Rejected(rejection);
+                var capture = Inputs(record, task, revision, default);
+                if (capture.Rejection is { } rejection)
+                {
+                    return new Mutation.Rejected(rejection);
+                }
+                bindings = capture.Inputs!.Bindings;
+                sources = InputMaterial.Sources(record, bindings);
+                review = InputMaterial.Review(record.Revisions[revision].Snapshot, task, bindings);
             }
-            var bindings = capture.Inputs!.Bindings;
-            var sources = InputMaterial.Sources(record, bindings);
-            var review = InputMaterial.Review(record.Revisions[revision].Snapshot, task, bindings);
             var proposes = record.Revisions[revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent { Proposes: true };
             var candidate = new MaterializationPlan.Preparation(default, default, task, revision, cause, bindings, sources, review)
             {
@@ -400,7 +407,7 @@ internal sealed partial class RunStore
             }
             if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Join or MaterializationPlan.Refresh } or
                 RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or RunEvent.BlockResolved or
-                RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured))
+                RunEvent.ConflictResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured))
             {
                 return Refuse(RunProblem.InvalidData);
             }

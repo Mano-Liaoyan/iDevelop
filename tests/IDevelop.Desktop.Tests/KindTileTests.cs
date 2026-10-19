@@ -93,11 +93,11 @@ public sealed class KindTileTests
         string[] Hues(ThemeVariant theme)
         {
             var hex = Render(theme, EveryKind());
-            return [.. Enumerable.Range(0, 6).Select(tile => At(hex, tile, 32, 3, 16))];
+            return [.. Enumerable.Range(0, 7).Select(tile => At(hex, tile, 32, 3, 16))];
         }
 
-        Assert.Equal(["#564ADE", "#007EAE", "#B02FC2", "#008575", "#956D51", "#6C6C70"], Hues(ThemeVariant.Light));
-        Assert.Equal(["#6D7CFF", "#1894C2", "#DB34F2", "#009B89", "#B78A66", "#8E8E93"], Hues(ThemeVariant.Dark));
+        Assert.Equal(["#564ADE", "#007EAE", "#B02FC2", "#008575", "#956D51", "#E7124D", "#6C6C70"], Hues(ThemeVariant.Light));
+        Assert.Equal(["#6D7CFF", "#1894C2", "#DB34F2", "#009B89", "#B78A66", "#FF375F", "#8E8E93"], Hues(ThemeVariant.Dark));
     }
 
     [AvaloniaFact]
@@ -106,11 +106,11 @@ public sealed class KindTileTests
         string[] Glyphs(ThemeVariant theme)
         {
             var hex = Render(theme, EveryKind());
-            return [.. Enumerable.Range(0, 6).Select(tile => GlyphBox(hex, tile))];
+            return [.. Enumerable.Range(0, 7).Select(tile => GlyphBox(hex, tile))];
         }
 
         // A 16 unit glyph drawn at 20 px from 6 px in, so a glyph spanning the whole frame would cover pixels 6 to 25.
-        string[] boxes = ["(7,7)-(24,24)", "(8,9)-(23,23)", "(11,7)-(20,24)", "(7,10)-(24,20)", "(8,9)-(24,24)", "(7,7)-(21,24)"];
+        string[] boxes = ["(7,7)-(24,24)", "(8,9)-(23,23)", "(11,7)-(20,24)", "(7,10)-(24,20)", "(8,9)-(24,24)", "(9,11)-(22,21)", "(7,7)-(21,24)"];
         Assert.Equal(boxes, Glyphs(ThemeVariant.Light));
         Assert.Equal(boxes, Glyphs(ThemeVariant.Dark));
         Assert.Equal("#FFFFFF", At(Render(ThemeVariant.Dark, EveryKind()), 0, 32, 8, 16));

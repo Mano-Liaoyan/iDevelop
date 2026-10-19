@@ -28,7 +28,7 @@ public sealed class AgentChoiceTests
         new BlueprintKey("team.careful", 1), "Careful implement", BuiltInBlueprints.Implement.Work, BuiltInBlueprints.Implement.Fields,
         new NodeSettings(Haiku, ConversationMode.MayAsk));
 
-    /// <summary>The types a proposal may add, from <c>type-1</c>: the built-ins, then <see cref="Careful"/> as <c>type-6</c>.</summary>
+    /// <summary>The types a proposal may add, from <c>type-1</c>: the built-ins, then <see cref="Careful"/> as <c>type-7</c>.</summary>
     private static readonly ImmutableArray<Blueprint> Types = [.. BuiltInBlueprints.All, Careful];
 
     /// <summary>
@@ -394,7 +394,7 @@ public sealed class AgentChoiceTests
     private static Proposal AllKinds() => Ready("""
         {"status": "proposal",
          "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."}}],
-         "add": [{"id": "build", "type": "type-1"}, {"id": "check", "type": "type-4"}, {"id": "sign", "type": "type-5"}, {"id": "careful", "type": "type-6"}]}
+         "add": [{"id": "build", "type": "type-1"}, {"id": "check", "type": "type-4"}, {"id": "sign", "type": "type-5"}, {"id": "careful", "type": "type-7"}]}
         """);
 
     private static (string Task, ExecutionSettings? Execution, ConversationMode Conversation)[] Agents(Proposal proposal, Workflow accepted) =>

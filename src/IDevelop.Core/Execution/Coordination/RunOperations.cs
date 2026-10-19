@@ -26,6 +26,7 @@ internal static class RunOperations
         AttemptCause.Continue continued => OperationIds.Derive(continued.Confirmation, $"continue/{continued.Previous.Value:D}"),
         AttemptCause.ReviewFix fix => OperationIds.Derive(Root(run),
             $"fix/{fix.Link.Review.Value:D}/{fix.Link.Attempt.Value:D}/{fix.Link.Round}"),
+        AttemptCause.Merge merge => OperationIds.Derive(Root(run), $"merge/{task.Value:D}/{merge.Conflict.Ours.Hex}/{merge.Conflict.Theirs.Hex}"),
         _ => throw new InvalidOperationException(),
     };
 
@@ -51,6 +52,9 @@ internal static class RunOperations
 
     /// <summary>The person's Run of <paramref name="task"/> in an active run, which adds it to the run once (#90).</summary>
     public static OperationId Request(OperationId confirmation, TaskId task) => OperationIds.Derive(confirmation, "request/" + task.Value.ToString("D"));
+
+    /// <summary>The person's Run of a Merge node that a waiting run lacks, which adds it to the run once (#148).</summary>
+    public static OperationId AddMerge(OperationId confirmation, TaskId task) => OperationIds.Derive(confirmation, "merge-node/" + task.Value.ToString("D"));
 
     public static OperationId ReleasePins(RunId run) => OperationIds.Derive(Root(run), "release-pins");
 

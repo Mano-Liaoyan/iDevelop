@@ -99,8 +99,30 @@ public static class BuiltInBlueprints
         Description = "Waits for you to approve what the tasks before it handed on, or to send it back.",
     };
 
+    /// <summary>
+    /// A run's merge agent. Its step merges the code of the nodes before it and hands on their reports and artifacts, and its
+    /// agent resolves the merge conflicts the run meets, its own and those it takes for other nodes and for the run's final
+    /// merge into the branch it started from.
+    /// </summary>
+    public static Blueprint Merge { get; } = new(
+        new BlueprintKey("idevelop.merge", 1),
+        "Merge",
+        new WorkSpec.Merge(PromptTemplate.Parse(
+            "{{#title}}# {{title}}\n\n{{/title}}" +
+            "Resolve the merge conflict below. The files in this folder hold the merge with Git's conflict markers in each " +
+            "conflicting file. Edit each one so that it keeps what both sides meant, and remove every marker line " +
+            "(<<<<<<<, =======, and >>>>>>>). Do not commit, and do not change files the conflict does not need. iDevelop " +
+            "commits the merge when you finish.\n\n" +
+            "{{conflict}}\n" +
+            "{{#instructions}}\n## Instructions\n\n{{instructions}}\n{{/instructions}}")),
+        [new FieldSpec("instructions", "Instructions", FieldShape.Text, Required: false, "")],
+        new NodeSettings(null, ConversationMode.Autonomous))
+    {
+        Description = "Merges the work of the tasks before it, and resolves the run's merge conflicts with the agent you choose.",
+    };
+
     /// <summary>Every built-in, in the order a palette lists them.</summary>
-    public static ImmutableArray<Blueprint> All { get; } = [Implement, Plan, Architect, Review, Approval];
+    public static ImmutableArray<Blueprint> All { get; } = [Implement, Plan, Architect, Review, Approval, Merge];
 
     public static Blueprint? Find(BlueprintKey key) => All.FirstOrDefault(blueprint => blueprint.Key == key);
 }

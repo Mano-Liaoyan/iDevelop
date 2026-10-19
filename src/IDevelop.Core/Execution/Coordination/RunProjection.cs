@@ -62,10 +62,16 @@ internal static class RunProjection
         foreach (var task in plan.Ready)
             // A review without a subject has nothing to review, so it never starts.
             tasks[task] = !flow.Contains(task) ? new(task, TaskState.Unrequested) { Dormant = dormant.Contains(task) }
-                : new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent or WorkSpec.Person ||
+                : new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent or WorkSpec.Person or WorkSpec.Merge ||
                     snapshot.Tasks[task].Blueprint.Work is WorkSpec.Review && snapshot.SubjectOf(task) is not null ? TaskState.Ready : TaskState.Unsupported);
         foreach (var task in plan.Blocked.Keys)
             tasks[task] = new(task, flow.Contains(task) ? TaskState.Pending : TaskState.Unrequested) { HeldBy = Holders(task), Dormant = dormant.Contains(task) };
+        // A conflict between a task's predecessors goes to a Merge node, or waits for the person when none takes it.
+        foreach (var (task, view) in tasks.ToArray())
+        {
+            if (view.Block is { Problem: MaterializationProblem.FanInConflict, Conflict: { Merge: { } conflict } evidence })
+                tasks[task] = view with { MergedBy = MergeRouting.Node(snapshot, conflict, MergeRouting.Branches(evidence)) };
+        }
         var built = tasks.ToImmutable();
         var slots = live.Values.Count(stage => stage is LiveStage.Starting or LiveStage.Running);
         return new(address, record.Phase, Status(record.Phase, controlled, resumed, built, holds), controlled, resumed, slots, built) { Snapshot = snapshot };
@@ -119,6 +125,7 @@ internal static class RunProjection
         }
         var hold = holds.GetValueOrDefault(task);
         if (record.Revision.Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Person) return GateProjection.Of(record, task, result, hold);
+        if (record.Revision.Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Merge) return Merging(record, task, attempt, result, log, hold);
         if (hold is TaskHold.Unresolved unresolved)
         {
             return new(task, unresolved.Transient ? TaskState.Settling : TaskState.Uncertain)
@@ -175,6 +182,43 @@ internal static class RunProjection
         var resting = log(record.Attempts[id]);
         return Rests(resting) ? new(task, TaskState.Waiting) { Attempt = id, Status = resting!.Status } : new(task, TaskState.Settling) { Attempt = id };
     }
+
+    /// <summary>
+    /// A Merge node. Its newest attempt, which resolves a conflict that went to it, decides while it goes on, and after it
+    /// ended without resolving that conflict while the conflict waits: the node then fails until the person retries it.
+    /// Otherwise its own step decides, which merges its predecessors' code and hands it on at once, as an approval that
+    /// needs no person.
+    /// </summary>
+    private static TaskView? Merging(RunRecord record, TaskId task, AttemptId? attempt, ResultRecord? result,
+        Func<RunAttempt, AttemptRecord?> log, TaskHold? hold)
+    {
+        if (attempt is { } id && RunReducer.MergeOf(record, id) is { } conflict)
+        {
+            if (!record.Closures.TryGetValue(id, out var end))
+                return Attempted(record, task, id, log, hold, Blocks(record, task, id, null).FirstOrDefault()) is { } going
+                    ? going with { Merge = conflict, Result = result?.Id } : null;
+            if (RunReducer.MergeResult(record, id) is null && Waits(record, conflict))
+                return new(task, TaskState.Failed) { Attempt = id, End = end, Merge = conflict, Result = result?.Id };
+        }
+        // A Merge node's request hands on at once, so it never waits for the person, and the person answers none of them.
+        return GateProjection.Of(record, task, result, hold) switch
+        {
+            null => null,
+            { State: TaskState.Waiting } own => own with { State = TaskState.Settling, Gate = null },
+            var own => own with { Gate = null },
+        };
+    }
+
+    /// <summary>
+    /// Whether <paramref name="conflict"/> still waits for a merge: the task whose predecessors conflict is still blocked by
+    /// it, or the run's final merge has not settled.
+    /// </summary>
+    private static bool Waits(RunRecord record, MergeConflict conflict) => conflict.Target switch
+    {
+        MergeTarget.Join join => record.Blocks.Values.Any(state => !state.Resolved && state.Block.Task == join.Task &&
+            state.Block.Conflict?.Merge is { } blocking && blocking.Merges(conflict.Ours, conflict.Theirs)),
+        _ => record.Phase == RunPhase.Approved,
+    };
 
     /// <summary>Whether <paramref name="attempt"/> was reserved after <paramref name="result"/> was accepted, without publishing it.</summary>
     internal static bool Replaced(RunRecord record, ResultRecord result, AttemptId? attempt)

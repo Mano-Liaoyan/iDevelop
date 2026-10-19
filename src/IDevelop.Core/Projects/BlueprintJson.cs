@@ -160,6 +160,7 @@ internal static class BlueprintJson
             Fix = Lines(((WorkSpec.Review)work).Fix.Text),
         },
         WorkKind.Person => new WorkDto { Kind = KindName(WorkKind.Person) },
+        WorkKind.Merge => new WorkDto { Kind = KindName(WorkKind.Merge), Template = Lines(((WorkSpec.Merge)work).Template.Text) },
     };
 
     /// <summary>Each work reads only its own properties, and a property of another work is an error.</summary>
@@ -179,6 +180,7 @@ internal static class BlueprintJson
             WorkKind.Agent => ["access", "proposes", "template"],
             WorkKind.Review => ["reviewer", "fix"],
             WorkKind.Person => [],
+            WorkKind.Merge => ["template"],
         };
         if (takes.FirstOrDefault(name => !present.Contains(name)) is { } missing)
         {
@@ -198,6 +200,7 @@ internal static class BlueprintJson
                 Template(dto.Template!, entry, "template")),
             WorkKind.Review => new WorkSpec.Review(Template(dto.Reviewer!, entry, "reviewer template"), Template(dto.Fix!, entry, "fix template")),
             WorkKind.Person => new WorkSpec.Person(),
+            WorkKind.Merge => new WorkSpec.Merge(Template(dto.Template!, entry, "template")),
         };
     }
 
@@ -238,6 +241,7 @@ internal static class BlueprintJson
         WorkKind.Agent => "agent",
         WorkKind.Review => "review",
         WorkKind.Person => "person",
+        WorkKind.Merge => "merge",
     };
 
     private static string AccessName(AgentAccess access) => access switch

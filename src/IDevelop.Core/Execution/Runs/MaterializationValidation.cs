@@ -19,6 +19,7 @@ internal static partial class RunValidation
             !block.Evidence.IsDefault && block.Evidence.All(Evidence) && block.Detail is not null &&
             (block.Conflict is null || Conflict(block.Conflict)) && Scope(block.Scope),
         RunEvent.BlockResolved resolved => resolved.Block.Value != Guid.Empty && !string.IsNullOrWhiteSpace(resolved.Reason),
+        RunEvent.ConflictResolved resolved => MergeConflict(resolved.Conflict) && Revision.IsCommit(resolved.Merge.Hex),
         _ => false,
     }) ? null : RunProblem.InvalidData;
 
@@ -93,7 +94,18 @@ internal static partial class RunValidation
     private static bool Reference(string reference) => Path(reference) && reference.StartsWith("refs/", StringComparison.Ordinal) &&
         !reference.Contains("..", StringComparison.Ordinal) && !reference.Any(char.IsWhiteSpace);
 
-    private static bool Conflict(ConflictEvidence conflict) => Revision.IsCommit(conflict.AttributeSource.Hex) && !conflict.Sources.IsDefault && conflict.Sources.All(Source) && conflict.Step > 0 &&
+    private static bool MergeConflict(MergeConflict conflict) => Revision.IsCommit(conflict.Ours.Hex) && Revision.IsCommit(conflict.Theirs.Hex) &&
+        Revision.IsCommit(conflict.Conflicted.Hex) && !conflict.Paths.IsDefault && conflict.Paths.All(Path) && conflict.Description is not null &&
+        (conflict.Unmarked.IsDefault || conflict.Unmarked.All(Path)) &&
+        conflict.Target switch
+        {
+            MergeTarget.Join join => join.Task.Value != Guid.Empty,
+            MergeTarget.Branch branch => Reference(branch.Name),
+            _ => false,
+        };
+
+    private static bool Conflict(ConflictEvidence conflict) => (conflict.Merge is null || MergeConflict(conflict.Merge)) &&
+        Revision.IsCommit(conflict.AttributeSource.Hex) && !conflict.Sources.IsDefault && conflict.Sources.All(Source) && conflict.Step > 0 &&
         !conflict.Paths.IsDefault && conflict.Paths.All(Path) && !conflict.Stages.IsDefault && conflict.Stages.All(stage =>
             Path(stage.Path) && stage.Stage is >= 1 and <= 3 && Revision.IsCommit(stage.Object) && !string.IsNullOrWhiteSpace(stage.Mode)) &&
         !conflict.Messages.IsDefault && conflict.Messages.All(message => !message.Paths.IsDefault && message.Paths.All(Path) &&

@@ -170,7 +170,7 @@ public sealed class CarriedResultTests
         f.Answer(C, Copies(f, C, "out-a.txt", "root.txt"));
         await f.Open();
         var (first, _) = await RunNode(f, B, 1);
-        // B's work stays out of the branch, and the branch moves on.
+        // B's work merged into the branch when its run finished (#148), and the branch moves on.
         f.Git.Write("root.txt", "root moved\n");
         f.GitText("add", "root.txt");
         f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Move the base");
@@ -189,7 +189,7 @@ public sealed class CarriedResultTests
         Assert.IsType<CodeSelection.Root>(record.Inputs[carried.Inputs].Code);
         Assert.Equal("", CarriedRefs(f));
         Assert.Equal(("A\n", "root moved\n"), (Copied(f, C, "out-a.txt"), Copied(f, C, "root.txt")));
-        Assert.Null(f.ResultFile(second, C, "out-b.txt"));
+        Assert.Equal(f.ResultFile(first, B, "out-b.txt"), f.ResultFile(second, C, "out-b.txt"));
     }
 
     [Fact]
