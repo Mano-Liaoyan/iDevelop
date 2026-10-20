@@ -95,7 +95,7 @@ internal sealed partial class Materializer
                         .Single(plan => plan.Attempt == original.Id).Sources, joined.Join);
                 VerifyWorktree(repository, completed.Execution.Location, record);
                 ResolveMaintenanceBlocks(permit, operation, "Prepared.");
-                return new Preparation.Ready(completed.Execution, Checkout(repository, completed.Execution.Location.Owner));
+                return new Preparation.Ready(completed.Execution, WorkingFolder(repository, completed.Execution.Location.Owner));
             }
             step = "layout";
             record = AllocateLayout(permit, operation, task, repository, record);
@@ -142,11 +142,13 @@ internal sealed partial class Materializer
             // A Retry or a Continue of a Merge node's attempt keeps the files the failed attempt left, as every other Retry does.
             var keeps = cause is AttemptCause.Retry or AttemptCause.Continue && RunReducer.MergeOf(record, cause) is not null;
             EnsureCheckout(permit, operation, planId, repository, location, record, keeps, cause is AttemptCause.Retry && RunReducer.MergeOf(record, cause) is null);
+            // Git checks out no folder that holds no tracked file.
+            Directory.CreateDirectory(WorkingFolder(repository, owner));
             step = "delivery";
             Deliver(record, input, repository, owner, storage);
             var outbox = definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } ? RunLayout.Outbox(plan.Attempt) : "";
-            if (outbox.Length != 0) Directory.CreateDirectory(RunStorage.SafePath(Checkout(repository, owner), outbox));
-            VerifyOutbox(repository, Checkout(repository, owner), outbox);
+            if (outbox.Length != 0) Directory.CreateDirectory(RunStorage.SafePath(WorkingFolder(repository, owner), outbox));
+            VerifyOutbox(repository, WorkingFolder(repository, owner), outbox);
             step = "prompt";
             var prompt = Prompt(definition, input, plan.Attempt, basePrompt, RunPlanning.Context(record, record.Attempts[plan.Attempt]),
                 RunReducer.FixArtifacts(record, plan.Attempt), Note(record.Attempts[plan.Attempt]));
@@ -156,7 +158,7 @@ internal sealed partial class Materializer
             if (RunReducer.InputProblem(Read(workflow, run), input, true) is { } stale) return new Preparation.Rejected(stale);
             Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution)));
             ResolveMaintenanceBlocks(permit, operation, "Prepared.");
-            return new Preparation.Ready(execution, Checkout(repository, owner));
+            return new Preparation.Ready(execution, WorkingFolder(repository, owner));
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
         catch (MaterializationFailure failed) { return Block(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
@@ -287,6 +289,9 @@ internal sealed partial class Materializer
 
     private static string Checkout(GitRepository repository, WorktreeOwner owner) =>
         Path.GetFullPath(Path.Combine(repository.ProjectFolder, owner.RelativePath));
+
+    /// <summary>The project's folder in the task's worktree, where its agent works and its inputs and outbox are.</summary>
+    private static string WorkingFolder(GitRepository repository, WorktreeOwner owner) => repository.ProjectIn(Checkout(repository, owner));
 
     /// <param name="planning">What a planner's first prompt lists, from <see cref="RunPlanning.Context"/>.</param>
     /// <param name="note">The person's note to the agent with a Retry, which the prompt ends with (#126).</param>

@@ -40,7 +40,7 @@ internal sealed partial class Materializer
 
     private static void Deliver(RunRecord record, InputRecord input, GitRepository repository, WorktreeOwner owner, RunStorage storage)
     {
-        var checkout = Checkout(repository, owner);
+        var checkout = WorkingFolder(repository, owner);
         foreach (var file in input.Files)
         {
             try { RunStorage.Publish(checkout, file.RelativePath, DeliveredBytes(record, file, storage), file.Content, file.ByteLength); }

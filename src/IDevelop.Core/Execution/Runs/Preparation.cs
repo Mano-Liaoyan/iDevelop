@@ -5,6 +5,7 @@ namespace IDevelop.Execution;
 internal abstract record Preparation
 {
     private Preparation() { }
+    /// <param name="Checkout">The project's folder in the task's worktree, where its agent works.</param>
     internal sealed record Ready(PreparedExecution Execution, string Checkout) : Preparation;
     internal sealed record Blocked(MaterializationBlock Block) : Preparation;
     internal sealed record Rejected(RunRejection Reason) : Preparation;

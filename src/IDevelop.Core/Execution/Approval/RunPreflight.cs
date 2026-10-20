@@ -68,7 +68,7 @@ internal abstract record PreflightGit
 
     internal sealed record Ready(string Version) : PreflightGit;
 
-    /// <summary>The folder is not a Git repository's root, or Git failed.</summary>
+    /// <summary>The folder is in no Git work tree, or Git failed.</summary>
     internal sealed record Refused(MaterializationProblem Problem, string Detail) : PreflightGit;
 }
 
@@ -118,7 +118,7 @@ internal abstract record PreflightGap
 {
     private PreflightGap() { }
 
-    /// <summary>The project is not a Git repository's root, or Git failed.</summary>
+    /// <summary>The project is in no Git work tree, or Git failed.</summary>
     internal sealed record Git(MaterializationProblem Problem, string Detail) : PreflightGap;
 
     /// <summary>HEAD names no commit yet, so there is no base to start from.</summary>

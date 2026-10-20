@@ -22,10 +22,12 @@ internal sealed class ApprovalFixture : IAsyncDisposable
     private readonly Dictionary<string, FakeRule[]> _turns = [];
     private readonly List<ProjectRuns> _windows = [];
 
-    public ApprovalFixture(Workflow workflow)
+    /// <param name="folder">The project's folder from the repository's top, or null for the top itself.</param>
+    public ApprovalFixture(Workflow workflow, string? folder = null)
     {
         Git = new();
         Git.Diamond();
+        Project = folder is null ? Git.Folder : Directory.CreateDirectory(Git.PathOf(folder)).FullName;
         Workflow = workflow;
         Evidence = _temp.Create("evidence");
         Fakes = new(_temp.Create("bin")) { LaunchFolder = _temp.Create("launches") };
@@ -35,7 +37,7 @@ internal sealed class ApprovalFixture : IAsyncDisposable
     public Workflow Workflow { get; set; }
     public FakeClients Fakes { get; }
     public string Evidence { get; }
-    public string Project => Git.Folder;
+    public string Project { get; }
     public ProjectRuns Runs { get; private set; } = null!;
 
     /// <summary>Rules installed before the routed turns, such as a turn that resumes a session with the person's reply.</summary>
@@ -129,7 +131,10 @@ internal sealed class ApprovalFixture : IAsyncDisposable
 
     public string GitText(params string[] arguments) => Git.Git(arguments);
 
-    /// <summary>The bytes of <paramref name="file"/> in <paramref name="task"/>'s accepted result, or null when the commit lacks it.</summary>
+    /// <summary>
+    /// The bytes of <paramref name="file"/>, from the repository's top, in <paramref name="task"/>'s accepted result, or null
+    /// when the commit lacks it.
+    /// </summary>
     public string? ResultFile(RunId run, TaskId task, string file)
     {
         var commit = Assert.IsType<CodeOutput.Produced>(Read(run).CurrentResults[task].Code).Code.Commit.Hex;
@@ -144,7 +149,7 @@ internal sealed class ApprovalFixture : IAsyncDisposable
     public void MergeResult(RunId run, TaskId task) =>
         GitText("merge", "-q", "--ff-only", Assert.IsType<CodeOutput.Produced>(Read(run).CurrentResults[task].Code).Code.Commit.Hex);
 
-    public byte[] Index() => File.ReadAllBytes(Path.Combine(Project, ".git", "index"));
+    public byte[] Index() => File.ReadAllBytes(Git.PathOf(".git/index"));
 
     public string Text(string relative) => File.ReadAllText(Git.PathOf(relative));
 

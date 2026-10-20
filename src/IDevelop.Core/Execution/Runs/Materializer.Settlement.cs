@@ -234,7 +234,7 @@ internal sealed partial class Materializer
         var checkout = Checkout(repository, prepared.Location.Owner);
         if (!Value(repository.UnmergedEntries(checkout)).IsEmpty)
             throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.", BlockScope.Checkout.Whole);
-        var tracked = Value(repository.TrackedFiles(checkout, ".idp/inputs", ".idp/outbox", ".worktrees"));
+        var tracked = Value(repository.TrackedFiles(repository.ProjectIn(checkout), ".idp/inputs", ".idp/outbox", ".worktrees"));
         if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked), new BlockScope.Checkout(tracked));
         var tip = CheckoutTip(repository, prepared.Location);
         var head = Value(repository.SymbolicHead(checkout));
@@ -255,7 +255,7 @@ internal sealed partial class Materializer
         if (logged.Rejection is { } rejection) throw Fault(MaterializationProblem.InputUnavailable, rejection.Problem.ToString(), new BlockScope.Operation());
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
             OperationIds.Derive(new OperationId(id.Value), "capture-1"), launch.Attempt,
-            RunStorage.CapturePath(id, "artifacts"), checkout, ref evidence);
+            RunStorage.CapturePath(id, "artifacts"), repository.ProjectIn(checkout), ref evidence);
         var unexplained = UnexplainedRefs(record, repository, prepared, out var sharedRefs);
         var refBytes = Encoding.UTF8.GetBytes(RunJournal.Canonical(sharedRefs));
         var refs = new EvidenceFile(RunStorage.CapturePath(id, "refs.json"), Revision.Hash(refBytes), refBytes.LongLength);

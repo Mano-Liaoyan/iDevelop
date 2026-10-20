@@ -50,7 +50,7 @@ internal sealed partial class Materializer
                         existingJoin.Join);
                 ResolveMaintenanceBlocks(permit, operation, "Prepared.");
                 ResolveEarlierCaptureBlocks(permit, operation, key);
-                return new Preparation.Ready(existing, Checkout(repository, existing.Location.Owner));
+                return new Preparation.Ready(existing, WorkingFolder(repository, existing.Location.Owner));
             }
             var execution = old with { Launch = key, Prompt = prompt, PromptHash = Revision.Hash(prompt) };
             if (changed || refreshPair.Value is MaterializationPlan.Refresh)
@@ -118,7 +118,7 @@ internal sealed partial class Materializer
             Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution)));
             ResolveMaintenanceBlocks(permit, operation, "Prepared.");
             ResolveEarlierCaptureBlocks(permit, operation, key);
-            return new Preparation.Ready(execution, Checkout(repository, execution.Location.Owner));
+            return new Preparation.Ready(execution, WorkingFolder(repository, execution.Location.Owner));
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)

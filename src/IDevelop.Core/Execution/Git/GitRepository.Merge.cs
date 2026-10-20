@@ -22,7 +22,7 @@ internal sealed partial class GitRepository
     public GitRead<ImmutableArray<DateTimeOffset>> CommitterTimestamps(ImmutableArray<CommitId> commits)
     {
         if (commits.IsEmpty) return new GitRead<ImmutableArray<DateTimeOffset>>.Read([]);
-        var result = Git(ProjectFolder, GitOperation.Metadata, ["log", "--no-walk=unsorted", "--format=%H%x09%ct", .. commits.Select(commit => commit.Hex)]);
+        var result = Git(Root, GitOperation.Metadata, ["log", "--no-walk=unsorted", "--format=%H%x09%ct", .. commits.Select(commit => commit.Hex)]);
         if (result.ExitCode != 0) return Failure<ImmutableArray<DateTimeOffset>>(result);
         var lines = result.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length != commits.Length)
@@ -114,7 +114,7 @@ internal sealed partial class GitRepository
                 ["GIT_CONFIG_NOSYSTEM"] = "1",
                 ["GIT_ATTR_NOSYSTEM"] = "1",
             };
-            var result = Git(ProjectFolder, GitOperation.Worktree,
+            var result = Git(Root, GitOperation.Worktree,
                 [.. MergeSettings.SelectMany(setting => new[] { "-c", setting.Key + "=" + setting.Value }),
                     "--attr-source=" + attributeSource.Hex, "merge-tree", "--write-tree", "-z", "--messages",
                     .. mergeBase is { } replayed ? new[] { "--merge-base=" + replayed.Hex } : [], ours.Hex, theirs.Hex], pinnedGitEnvironment: environment);
