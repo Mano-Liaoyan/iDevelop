@@ -415,7 +415,7 @@ public sealed class RunPreflightViewModel : ObservableObject
                 PreflightGap.Task task => new($"{Title(preview, task.Id)}: {RunText.Describe(task.Problem)}", ShowNode(task.Id)),
                 PreflightGap.NoCommit => new("The project has no commit yet. Commit once, then run the workflow.", null),
                 PreflightGap.Git git => new(git.Problem == MaterializationProblem.NotRepositoryRoot
-                    ? $"Workflow runs need the project folder to be a Git repository's root. {git.Detail}" : git.Detail, null),
+                    ? $"Workflow runs need the project folder to be in a Git repository. {git.Detail}" : git.Detail, null),
                 PreflightGap.Submodules submodules => new($"Git could not read the project's submodules. {submodules.Detail}", null),
                 PreflightGap.Records records => new($"A run record of this workflow could not be read. {records.Detail}", null),
                 PreflightGap.After after => new($"{Title(preview, after.Id)}: {WorkflowRunText.RunsAfter(after.Predecessors, task => TitleOf(preview, task))}", ShowNode(after.Id)),

@@ -16,7 +16,7 @@ internal static class RecoveryText
         (MaterializationProblem.UncertainOwnership, BlockScope.Refs) => "A shared ref changed that no task of the run changed.",
         (MaterializationProblem.SubmoduleUnavailable, _) => "A submodule of the checkout cannot be checked out.",
         (MaterializationProblem.JoinRequired, _) => "Its inputs need a join, which this run cannot build.",
-        (MaterializationProblem.NotRepositoryRoot, _) => "The project folder is not the root of its Git repository.",
+        (MaterializationProblem.NotRepositoryRoot, _) => "The project folder is not in a Git repository.",
         (MaterializationProblem.GitFailed, _) => "A Git command failed.",
         (MaterializationProblem.ArtifactCollision, _) => "Two inputs hand on different artifacts with one name.",
         (var problem, _) => WorkflowRunText.Problem(problem),

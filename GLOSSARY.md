@@ -52,7 +52,7 @@ _Avoid_: Stop, Stop Workflow
 A run's place for one task's starting or running client root. A run starts every ready task at once, up to a safety bound of 32 slots. Waiting, gates, settlement, and cleanup take none.
 
 **Node worktree**:
-The Git worktree a node's agent works in during a run, at `.worktrees/<run>/<node>`. An editing node's worktree is on a branch of its own, and each turn ends with one commit there. A read-only node's worktree is detached at the merge of its predecessors and commits nothing. Every attempt of the node, a Retry's included, works in the same worktree ([ADR 0032](docs/adr/0032-each-editing-node-works-in-its-own-worktree-kept-simple.md)).
+The Git worktree a node's agent works in during a run, at `.worktrees/<run>/<node>` in the project folder. For a project below its repository's top, the agent works in the project's folder of that worktree ([ADR 0036](docs/adr/0036-a-project-folder-may-sit-below-its-repository-s-top.md)). An editing node's worktree is on a branch of its own, and each turn ends with one commit there. A read-only node's worktree is detached at the merge of its predecessors and commits nothing. Every attempt of the node, a Retry's included, works in the same worktree ([ADR 0032](docs/adr/0032-each-editing-node-works-in-its-own-worktree-kept-simple.md)).
 _Avoid_: checkout, workspace
 
 **Merge of predecessors**:

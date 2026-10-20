@@ -111,12 +111,29 @@ public sealed class PreflightTests
     }
 
     [Fact]
-    public async Task A_folder_inside_a_repository_is_not_its_root()
+    public async Task A_folder_inside_a_repository_runs_and_names_its_own_changes()
+    {
+        await using var f = new ApprovalFixture(Chain(), "services/api");
+        f.Git.Write("services/api/draft.txt", "draft\n");
+        f.Git.Write("elsewhere.txt", "elsewhere\n");
+        f.Git.Write("services/api/.idp/notes.txt", "notes\n");
+        await f.Open();
+
+        var preview = f.Preflight();
+
+        Assert.IsType<PreflightGit.Ready>(preview.Git);
+        Assert.Empty(preview.Gaps);
+        Assert.True(preview.Confirmable);
+        Assert.Equal<string>(["services/api/draft.txt"], preview.Base!.Changed);
+    }
+
+    [Fact]
+    public async Task A_folder_in_no_repository_is_a_gap()
     {
         await using var f = new ApprovalFixture(Chain());
         await f.Open();
-        var inner = Directory.CreateDirectory(Path.Combine(f.Project, "inner")).FullName;
-        var window = ProjectRuns.Open(inner, await f.Fakes.DiscoverAsync());
+        using var outside = new GitFixture(initialize: false);
+        var window = ProjectRuns.Open(outside.Folder, await f.Fakes.DiscoverAsync());
         await using (window)
         {
             window.GitEnvironment = f.Git.Environment;
@@ -124,7 +141,7 @@ public sealed class PreflightTests
 
             var refused = Assert.IsType<PreflightGit.Refused>(preview.Git);
             Assert.Equal(MaterializationProblem.NotRepositoryRoot, refused.Problem);
-            Assert.Equal(Path.GetFullPath(f.Project), Path.GetFullPath(refused.Detail));
+            Assert.Contains("not a git repository", refused.Detail);
             Assert.Single(preview.Gaps);
             await AssertRefused(f, preview, window);
         }

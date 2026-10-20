@@ -228,27 +228,33 @@ public sealed class PreparationTests
     }
 
     [Fact]
-    public async Task Keys_retain_the_approved_base_and_subdirectory_refusal_allocates_nothing()
+    public async Task Keys_retain_the_approved_base()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), run: new(Guid.Parse("019a9d2e-0000-7000-8000-000000000001")));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Assert.Equal("3940f0a5", f.Read().RunKey);
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef("refs/idp/3940f0a5/base"))?.Hex);
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
-        using var refused = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var sub = Directory.CreateDirectory(Path.Combine(refused.Git.Folder, "sub")).FullName;
+    }
+
+    [Fact]
+    public async Task A_subdirectory_project_works_in_its_own_folder_of_a_worktree_under_it()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var sub = Directory.CreateDirectory(Path.Combine(f.Git.Folder, "sub")).FullName;
         var store = RunStore.Open(sub);
-        Assert.IsType<RunDecision.Created>(store.Approve(W, refused.RunId, refused.Op(), refused.Read().Revision,
-            new(refused.A)));
-        using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, refused.RunId)).Permit;
+        Assert.IsType<RunDecision.Created>(store.Approve(W, f.RunId, f.Op(), f.Read().Revision, new(f.A)));
+        using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, f.RunId)).Permit;
         using var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease;
-        var materializer = Execution.Materializer.Open(sub, store, null, new Clock(), refused.Git.Environment);
-        var blocked = Assert.IsType<Preparation.Blocked>(await materializer.Prepare(lease, refused.Op(), new AttemptCause.Initial()));
-        Assert.Equal("NotRepositoryRoot", blocked.Block.Problem.ToString());
-        Assert.Null(refused.Read().RunKey);
-        Assert.False(Directory.Exists(Path.Combine(refused.Git.Folder, ".worktrees")));
-        Assert.Empty(GitFixture.Read(refused.Git.Open().RefSnapshot("refs/heads/idp/", "refs/idp/")));
-        Assert.Equal("A\n", File.ReadAllText(Path.Combine(refused.Git.Folder, "a.txt")));
+        var materializer = Execution.Materializer.Open(sub, store, null, new Clock(), f.Git.Environment);
+
+        var ready = Assert.IsType<Preparation.Ready>(await materializer.Prepare(lease, f.Op(), new AttemptCause.Initial()));
+
+        var checkout = Path.Combine(sub, ready.Execution.Location.Owner.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.Equal(Path.Combine(checkout, "sub"), ready.Checkout);
+        Assert.True(Directory.Exists(Path.Combine(ready.Checkout, ready.Execution.OutboxPath.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(checkout, "a.txt")));
+        Assert.False(Directory.Exists(Path.Combine(f.Git.Folder, ".worktrees")));
     }
 
     [Fact]

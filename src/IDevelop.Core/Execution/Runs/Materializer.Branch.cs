@@ -95,7 +95,7 @@ internal sealed partial class Materializer
             if (worktrees.FirstOrDefault(worktree => worktree.Branch == branch) is { } checkedOut)
             {
                 ImmutableArray<string> changed = [.. Value(repository.TrackedChanges(checkedOut.Path))
-                    .Where(path => path != ".idp" && !path.StartsWith(".idp/", StringComparison.Ordinal))];
+                    .Where(path => path != repository.Prefix + ".idp" && !path.StartsWith(repository.Prefix + ".idp/", StringComparison.Ordinal))];
                 if (!changed.IsEmpty) return new BranchMerge.Uncommitted(checkedOut.Path, changed);
                 _probe?.Invoke("branch.checked-out");
                 // The folder still has the branch checked out at the tip the merge started from; otherwise nothing moves now.

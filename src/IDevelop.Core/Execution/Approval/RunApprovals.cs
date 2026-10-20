@@ -144,7 +144,8 @@ internal sealed class RunApprovals
         string[] excluded = repository.CheckIgnore(_project, ".worktrees/").ExitCode == 0 ? [".idp"] : Excluded;
         var tree = Value(GitRepository.Snapshot(_project, excluded, _environment, GitLimits.Default));
         var headTree = Value(repository.ReadCommit(head)).Tree;
-        ImmutableArray<string> changed = [.. Value(repository.DiffTreePaths(headTree, tree)).Where(path => !InData(path))];
+        // Git names a changed path from the work tree's top, and an ignored one from the project folder.
+        ImmutableArray<string> changed = [.. Value(repository.DiffTreePaths(headTree, tree)).Where(path => !path.StartsWith(repository.Prefix, StringComparison.Ordinal) || !InData(path[repository.Prefix.Length..]))];
         ImmutableArray<string> ignored = [.. Value(repository.IgnoredEntries(_project)).Where(path => !InData(path.TrimEnd('/'))).Order(StringComparer.Ordinal)];
         ImmutableArray<PreflightSubmodule> submodules = [];
         switch (repository.SubmoduleStatus(_project))

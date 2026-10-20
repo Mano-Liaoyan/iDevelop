@@ -398,17 +398,15 @@ public sealed class GitRepositoryTests
     }
 
     [Fact]
-    public void Open_requires_a_toplevel_and_discovers_linked_worktree_identity()
+    public void Open_finds_the_toplevel_and_discovers_linked_worktree_identity()
     {
         using var f = new GitFixture();
         var a = f.Diamond();
         var repository = f.Open();
         Assert.Equal(f.Git("rev-parse", "--show-toplevel").Trim(), repository.ProjectFolder);
+        Assert.Equal(repository.Root, repository.ProjectFolder);
+        Assert.Equal("", repository.Prefix);
         Assert.Equal(f.Git("rev-parse", "--path-format=absolute", "--git-common-dir").Trim(), repository.CommonDirectory);
-        Directory.CreateDirectory(f.PathOf("sub"));
-        var refused = Assert.IsType<RepositoryOpen.Refused>(GitRepository.Open(f.PathOf("sub"), f.Environment));
-        Assert.Equal(MaterializationProblem.NotRepositoryRoot, refused.Problem);
-        Assert.Contains(repository.ProjectFolder, refused.Detail);
         Assert.Equal(0, repository.AddWorktree(".worktrees/r/t", "idp/r/task/t", a).ExitCode);
         var linked = f.Open(f.PathOf(".worktrees/r/t"));
         Assert.Equal(repository.CommonDirectory, linked.CommonDirectory);
@@ -416,6 +414,34 @@ public sealed class GitRepositoryTests
         Assert.True(File.Exists(f.PathOf(".worktrees/r/t/.git")));
         Assert.Equal(f.Git("rev-parse", "--path-format=absolute", "--git-path", "index").Trim(), Read(repository.IndexPath(f.Folder)));
         Assert.Equal(f.Run(linked.ProjectFolder, "rev-parse", "--path-format=absolute", "--git-path", "index").Text.Trim(), Read(repository.IndexPath(linked.ProjectFolder)));
+    }
+
+    [Fact]
+    public void A_folder_below_the_toplevel_opens_with_its_prefix_and_keeps_its_worktrees_in_itself()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        var project = Directory.CreateDirectory(f.PathOf("services/api")).FullName;
+        var repository = f.Open(project);
+        Assert.Equal(f.Git("rev-parse", "--show-toplevel").Trim(), repository.Root);
+        Assert.Equal("services/api/", repository.Prefix);
+        Assert.Equal(project, repository.ProjectFolder);
+        Assert.Equal(["a.txt", "plan.txt", "root.txt"], Read(repository.TreeFiles(a)).Order(StringComparer.Ordinal));
+
+        Assert.Equal(0, repository.AddWorktree(".worktrees/r/t", "idp/r/task/t", a).ExitCode);
+        Assert.Equal(0, repository.LockWorktree(".worktrees/r/t", "idevelop r/t").ExitCode);
+        var checkout = Path.Combine(project, ".worktrees", "r", "t");
+        Assert.True(File.Exists(Path.Combine(checkout, "a.txt")));
+        Assert.Contains(Read(repository.Worktrees()), worktree =>
+            Path.GetFullPath(worktree.Path) == checkout && worktree.Locked && worktree.LockReason == "idevelop r/t");
+        Assert.Equal(Path.Combine(checkout, "services", "api"), repository.ProjectIn(checkout));
+
+        repository.EnsureExcluded();
+        Directory.CreateDirectory(Path.Combine(checkout, "services", "api", ".idp", "inputs"));
+        File.WriteAllText(Path.Combine(checkout, "services", "api", ".idp", "inputs", "x.md"), "x\n");
+        Assert.Equal(0, repository.CheckIgnore(repository.ProjectIn(checkout), ".idp/inputs/x.md").ExitCode);
+        Assert.Equal(0, repository.CheckIgnore(project, ".worktrees/").ExitCode);
+        Assert.NotEqual(0, repository.CheckIgnore(f.Folder, ".worktrees/").ExitCode);
     }
 
     [Fact]

@@ -53,6 +53,26 @@ public sealed class ApprovalTests
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
     }
 
+    [Fact]
+    public async Task A_project_below_the_repository_s_top_runs_in_its_own_folder_of_each_task_s_worktree()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain(), "services/api"));
+        await f.Open();
+
+        var started = await Start(f, f.Preflight(), Command(10));
+
+        await Completed(started.Coordinator);
+        var run = Assert.Single(f.ApprovedRuns());
+        Assert.Equal("A\n", f.ResultFile(run, A, "services/api/out-a.txt"));
+        Assert.Equal("A\n", f.ResultFile(run, B, "services/api/out-a.txt"));
+        Assert.Equal("B\n", f.ResultFile(run, B, "services/api/out-b.txt"));
+        Assert.Null(f.ResultFile(run, B, "out-b.txt"));
+        Assert.Equal(["A\n", "B\n"], new[] { "services/api/out-a.txt", "services/api/out-b.txt" }.Select(f.Text));
+        Assert.True(Directory.Exists(f.Git.PathOf("services/api/.worktrees")));
+        Assert.False(Directory.Exists(f.Git.PathOf(".worktrees")));
+        Assert.Contains("/services/api/.idp/inputs/", File.ReadAllText(f.Git.PathOf(".git/info/exclude")));
+    }
+
     /// <summary>Staged, unstaged, untracked, and ignored work, as a person leaves a project before Run Workflow.</summary>
     internal static void Uncommitted(ApprovalFixture f)
     {
