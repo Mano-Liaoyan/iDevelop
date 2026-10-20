@@ -451,7 +451,7 @@ public sealed class Workflow
     }
 
     /// <summary>
-    /// The review's subject: its one dependency predecessor that edits the project. Null when the task is not a review or
+    /// The review's subject: its one dependency predecessor that edits the project or merges. Null when the task is not a review or
     /// has none.
     /// </summary>
     public TaskId? SubjectOf(TaskId review) =>
@@ -462,8 +462,8 @@ public sealed class Workflow
                 .FirstOrDefault()
             : null;
 
-    /// <summary>A node whose agent may edit the project, which a review can take as its subject.</summary>
-    public static bool ProducesChange(TaskDefinition task) => task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit };
+    /// <summary>A node that hands on a change of the project, which a review can take as its subject: an editing agent or a Merge node.</summary>
+    public static bool ProducesChange(TaskDefinition task) => task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } or WorkSpec.Merge;
 
     /// <summary>Why a dependency would give a review a second subject, or null.</summary>
     private EditRejection? SecondSubject(ConnectionKey key) =>

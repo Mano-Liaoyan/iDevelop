@@ -82,7 +82,8 @@ internal sealed partial class Materializer
                 if (LeaseProblem(lease, original.Task) is { } mismatch) return new Preparation.Rejected(new(mismatch));
                 if (!RunReducer.Same(original.Cause, cause) ||
                     Prompt(record.Revisions[original.Revision].Snapshot.Tasks[task], record.Inputs[completed.Execution.Inputs],
-                        original.Id, basePrompt, RunPlanning.Context(record, original), RunReducer.FixArtifacts(record, original.Id), Note(original)) != completed.Execution.Prompt)
+                        original.Id, basePrompt, RunPlanning.Context(record, original), RunReducer.FixArtifacts(record, original.Id), Note(original),
+                        RunReducer.Editable(record, original)) != completed.Execution.Prompt)
                     return new Preparation.Rejected(new(RunProblem.OperationConflict));
                 attempt = original.Id;
                 inputs = completed.Execution.Inputs;
@@ -133,7 +134,8 @@ internal sealed partial class Materializer
                 OperationIds.Derive(operation, "reserve"), planId, join)));
             attempt = plan.Attempt;
             var definition = record.Revisions[plan.Revision].Snapshot.Tasks[task];
-            var owner = Owner(record, task, definition);
+            var edits = RunReducer.Editable(record, record.Attempts[plan.Attempt]);
+            var owner = Owner(record, task, edits);
             var input = record.Inputs[plan.Inputs];
             var start = RunReducer.AttemptBase(record, record.Attempts[plan.Attempt], input) ??
                 throw new Refusal(new(RunProblem.InputConflict));
@@ -146,12 +148,12 @@ internal sealed partial class Materializer
             Directory.CreateDirectory(WorkingFolder(repository, owner));
             step = "delivery";
             Deliver(record, input, repository, owner, storage);
-            var outbox = definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } ? RunLayout.Outbox(plan.Attempt) : "";
+            var outbox = edits ? RunLayout.Outbox(plan.Attempt) : "";
             if (outbox.Length != 0) Directory.CreateDirectory(RunStorage.SafePath(WorkingFolder(repository, owner), outbox));
             VerifyOutbox(repository, WorkingFolder(repository, owner), outbox);
             step = "prompt";
             var prompt = Prompt(definition, input, plan.Attempt, basePrompt, RunPlanning.Context(record, record.Attempts[plan.Attempt]),
-                RunReducer.FixArtifacts(record, plan.Attempt), Note(record.Attempts[plan.Attempt]));
+                RunReducer.FixArtifacts(record, plan.Attempt), Note(record.Attempts[plan.Attempt]), edits);
             var execution = new PreparedExecution(new(plan.Attempt, 1), input.Id, location, prompt, Revision.Hash(prompt), outbox);
             step = "prepared";
             // A sibling result may supersede an input while Git and file delivery run.
@@ -170,10 +172,9 @@ internal sealed partial class Materializer
     /// The task's worktree in this run. Each attempt of a task, a Retry's included, works in the worktree its first attempt
     /// got. An editing task's worktree is on a branch of its own, and a read-only task's worktree has none (ADR 0032).
     /// </summary>
-    private static WorktreeOwner Owner(RunRecord record, TaskId task, TaskDefinition definition) =>
+    private static WorktreeOwner Owner(RunRecord record, TaskId task, bool edits) =>
         record.Preparations.Values.FirstOrDefault(prepared => prepared.Location.Owner.Task == task)?.Location.Owner ??
-        new(task, RunLayout.TaskCheckout(record.RunKey!, record.TaskKeys[task]),
-            definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } ? RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[task]) : null);
+        new(task, RunLayout.TaskCheckout(record.RunKey!, record.TaskKeys[task]), edits ? RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[task]) : null);
 
     private GitRepository OpenRepository() => GitRepository.Open(_project, _environment) switch
     {
@@ -296,7 +297,7 @@ internal sealed partial class Materializer
     /// <param name="planning">What a planner's first prompt lists, from <see cref="RunPlanning.Context"/>.</param>
     /// <param name="note">The person's note to the agent with a Retry, which the prompt ends with (#126).</param>
     private static string Prompt(TaskDefinition definition, InputRecord input, AttemptId attempt, string? basePrompt,
-        PlanningContext? planning = null, ImmutableArray<ArtifactRecord> kept = default, string? note = null)
+        PlanningContext? planning, ImmutableArray<ArtifactRecord> kept, string? note, bool edits)
     {
         var ending = note is null ? "" : "\n\n" + RetryNote(note);
         // A Merge node's agent reads the conflict it resolves, and nothing else hands it input.
@@ -307,7 +308,7 @@ internal sealed partial class Materializer
         var prompt = basePrompt ?? AgentWork.Prompt(new NodeContext(definition, input.Text) { Planning = planning });
         if ((basePrompt is not null || template is not null && !template.Text.Contains("{{inputs}}", StringComparison.Ordinal)) && input.Text.Length != 0)
             prompt += "\n\n" + input.Text;
-        if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
+        if (edits)
             prompt += "\n\n" + ArtifactInstructions.For(attempt, kept);
         return prompt + ending;
     }

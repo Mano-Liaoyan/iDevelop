@@ -701,7 +701,7 @@ internal sealed partial class RunStore
 
             var work = record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work;
             // An editing result's code is the commit its last turn's capture made.
-            var edits = work is WorkSpec.Agent { Access: AgentAccess.Edit };
+            var edits = RunReducer.Editable(record, owner);
             if (!edits && work is not (WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review))
             {
                 return Refuse(RunProblem.UnsupportedResult);
@@ -805,7 +805,7 @@ internal sealed partial class RunStore
     private RunRejection? EditedArtifacts(CoordinatorPermit permit, OperationId operation, AttemptId attempt)
     {
         if (Read(permit.Workflow, permit.Run) is not RunRead.Loaded { Record: var record } || !record.Attempts.TryGetValue(attempt, out var owner) ||
-            record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.Edit } ||
+            !RunReducer.Editable(record, owner) ||
             record.Results.Any(result => result.Origin is ResultOrigin.Executed executed && executed.Attempt == attempt))
         {
             return null;

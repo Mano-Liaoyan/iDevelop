@@ -100,7 +100,7 @@ internal sealed partial class WorkflowRunCoordinator
         {
             if (started >= free) return;
             if (Reviewing(record, state) is not { } review || _live.ContainsKey(review.Subject) || _holds.ContainsKey(review.Subject)) continue;
-            if (RunProjection.LatestAttempts(record).GetValueOrDefault(review.Subject) is { } newest && record.ReviewOf(newest) is { } link &&
+            if (RunProjection.LatestAttempts(record).TryGetValue(review.Subject, out var newest) && record.ReviewOf(newest) is { } link &&
                 link.Attempt == review.Attempt && !record.Claims.Keys.Any(key => key.Attempt == newest) && !record.Closures.ContainsKey(newest))
             {
                 StartFix(record, review, newest);
@@ -252,7 +252,7 @@ internal sealed partial class WorkflowRunCoordinator
             // Another choice already replaced the round's fix. While that replacement is open, and once it has ended
             // other than by an interruption that offers the choice again, this choice has nothing left to replace. The
             // replacement and the reviewer's next turn run by now, so the task would otherwise only look busy.
-            if (latest.GetValueOrDefault(owner) is { } newest && Replaces(record.Attempts[newest]) &&
+            if (latest.TryGetValue(owner, out var newest) && Replaces(record.Attempts[newest]) &&
                 (!record.Closures.ContainsKey(newest) || !OffersChoice(record, reviewer, newest)))
             {
                 complete(Refused(RunProblem.ReplacementConflict));

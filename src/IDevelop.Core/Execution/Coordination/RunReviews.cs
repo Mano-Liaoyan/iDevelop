@@ -94,21 +94,43 @@ internal static class RunReviews
     {
         var snapshot = record.Revisions[revision].Snapshot;
         if (snapshot.SubjectOf(review) is not { } id || snapshot.Tasks.GetValueOrDefault(id) is not { } node) return null;
-        var newest = latest ?? RunProjection.LatestAttempts(record).GetValueOrDefault(id);
+        // A Merge node's attempts that resolve a conflict leave no result of their own, so only its fixes count: one that merged
+        // without them, or whose agent only resolved conflicts, has no attempt to read.
+        var newest = latest ?? (RunProjection.LatestAttempts(record).TryGetValue(id, out var found) &&
+            (node.Blueprint.Work is not WorkSpec.Merge || RunReducer.Editable(record, record.Attempts[found])) ? found : null);
         var read = newest is { } attempt && log(record.Attempts[attempt]) is { } logged ? Effective(record, logged) : null;
         var view = new SubjectView(node, read)
         {
             CanResume = read is { SessionId: not null } && (node.Execution is null || node.Execution.Client == read.Requested.Client),
+            Report = record.CurrentResults.GetValueOrDefault(id)?.Report,
         };
-        var produced = record.Results.Where(result => result.Task == id).Select(result => result.Code).OfType<CodeOutput.Produced>().ToList();
-        if (produced.Count == 0 || record.CurrentResults.GetValueOrDefault(id)?.Code is not CodeOutput.Produced current) return view;
+        var changes = record.Results.Where(result => result.Task == id).Select(result => Change(record, result)).OfType<(CommitId Base, CommitId Commit)>().ToList();
+        if (changes.Count == 0 || record.CurrentResults.GetValueOrDefault(id) is not { } currentResult || Change(record, currentResult) is not { } current) return view;
         if (project is null) return view with { Change = "", LatestChange = "" };
         return view with
         {
-            Change = GitTree.Diff(project, produced[0].Code.AttemptBase.Hex, current.Code.Commit.Hex),
-            LatestChange = GitTree.Diff(project, current.Code.AttemptBase.Hex, current.Code.Commit.Hex),
+            Change = GitTree.Diff(project, changes[0].Base.Hex, current.Commit.Hex),
+            LatestChange = GitTree.Diff(project, current.Base.Hex, current.Commit.Hex),
         };
     }
+
+    /// <summary>
+    /// The commit a result's own change starts from and the commit it hands on: an attempt's change, or a Merge node's merge
+    /// of its predecessors from the base they share, else the run's base.
+    /// </summary>
+    private static (CommitId Base, CommitId Commit)? Change(RunRecord record, ResultRecord result) => result.Code switch
+    {
+        CodeOutput.Produced produced => (produced.Code.AttemptBase, produced.Code.Commit),
+        CodeOutput.Forwarded forwarded when result.Origin is ResultOrigin.Merged && record.Inputs.GetValueOrDefault(forwarded.Inputs) is { } inputs =>
+            (inputs.Code switch
+            {
+                CodeSelection.Single single => single.Source.AttemptBase,
+                CodeSelection.Joined joined when joined.Join.Sources.Select(source => source.AttemptBase).Distinct().Count() == 1 =>
+                    joined.Join.Sources[0].AttemptBase,
+                _ => record.Base.Commit,
+            }, inputs.CodeBase),
+        _ => null,
+    };
 
     /// <summary>The review's next step, with its subject read as <see cref="Subject"/> does.</summary>
     public static NodeStep Step(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log, string? project) =>

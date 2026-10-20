@@ -139,7 +139,9 @@ internal static class RunProjection
         }
         var hold = holds.GetValueOrDefault(task);
         if (record.Revision.Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Person) return GateProjection.Of(record, task, result, hold);
-        if (record.Revision.Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Merge) return Merging(record, task, attempt, result, log, hold);
+        // A Merge node's fix of a review round reads as an editing agent's attempt does.
+        if (record.Revision.Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Merge && !(attempt is { } newest && RunReducer.Editable(record, record.Attempts[newest])))
+            return Merging(record, task, attempt, result, log, hold);
         if (hold is TaskHold.Unresolved unresolved)
         {
             return new(task, unresolved.Transient ? TaskState.Settling : TaskState.Uncertain)

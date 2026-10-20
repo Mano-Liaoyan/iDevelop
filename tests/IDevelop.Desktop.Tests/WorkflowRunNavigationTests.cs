@@ -135,6 +135,39 @@ public sealed class WorkflowRunNavigationTests
     }
 
     [AvaloniaFact]
+    public void Needs_attention_on_the_run_bar_selects_the_task_that_keeps_the_run_from_going_on()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
+        f.Answer("A", FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-1")).Exit(1));
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForStatus("Needs attention");
+        shell.WaitForCard("A", "Failed");
+        var attention = shell.Find<Button>("RunAttention");
+        shell.Click(shell.Header(shell.Node("B")));
+        Assert.True(attention.IsHitTestVisible);
+
+        shell.Click(attention);
+
+        Assert.Equal("A", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
+        Assert.Equal("Failed", shell.InView<TextBlock>("RunTaskStatus").Text);
+    }
+
+    [AvaloniaFact]
+    public void The_run_bar_s_status_selects_nothing_while_the_run_goes_on()
+    {
+        using var f = Gated(gate: "a-turn");
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("A", "Running");
+
+        Assert.False(shell.Find<Button>("RunAttention").IsHitTestVisible);
+        Assert.False(shell.Window.ViewModel.Canvas!.ShowRunAttentionCommand.CanExecute(null));
+        f.Open("a-turn");
+        shell.WaitForCard("Approve", "Waiting for approval");
+    }
+
+    [AvaloniaFact]
     public void A_second_window_shows_the_request_but_only_the_controlling_window_answers_it()
     {
         using var f = Gated();
