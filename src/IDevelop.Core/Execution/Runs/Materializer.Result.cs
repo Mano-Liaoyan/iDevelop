@@ -49,7 +49,7 @@ internal sealed partial class Materializer
             if (RunReducer.Merges(record, attempt))
                 return record.Closures.GetValueOrDefault(attempt) is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded }
                     ? new Acceptance.Merged(RunReducer.MergeResult(record, attempt)) : new Acceptance.Rejected(new(RunProblem.OutcomeMismatch));
-            if (record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
+            if (RunReducer.Editable(record, owner))
             {
                 switch (CommitResult(lease, OperationIds.Derive(operation, "commit"), attempt))
                 {
@@ -95,7 +95,7 @@ internal sealed partial class Materializer
             var record = Read(permit.Workflow, permit.Run);
             if (!record.Attempts.TryGetValue(attempt, out var writer)) return new ResultCommit.Rejected(new(RunProblem.UnknownAttempt));
             if (LeaseProblem(lease, writer.Task) is { } mismatch) return new ResultCommit.Rejected(new(mismatch));
-            if (record.Revisions[writer.Revision].Snapshot.Tasks[task].Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.Edit })
+            if (!RunReducer.Editable(record, writer))
                 return new ResultCommit.Rejected(new(RunProblem.UnsupportedResult));
             if (record.Closures.GetValueOrDefault(attempt) is not AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded })
                 return new ResultCommit.Rejected(new(RunProblem.OutcomeMismatch));

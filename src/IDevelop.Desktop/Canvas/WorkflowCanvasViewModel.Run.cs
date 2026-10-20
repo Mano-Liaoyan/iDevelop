@@ -16,6 +16,7 @@ public sealed partial class WorkflowCanvasViewModel
     private RunPreflightViewModel? _preflight;
     private RelayCommand? _runWorkflow;
     private RelayCommand? _dismissRun;
+    private RelayCommand? _showRunAttention;
     private bool _standaloneRunning;
 
     /// <summary>The workflow's run in this window: the one it started, or the active one it found when the project opened.</summary>
@@ -43,6 +44,20 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>Run Workflow shows until a run of this workflow is active; then the run's own controls take its place.</summary>
     public bool ShowsRunWorkflow => Run is not { IsActive: true };
+
+    /// <summary>The run needs attention, so its status pill selects the first task that keeps it from going on.</summary>
+    public bool ShowsRunAttention => Run is { View.Status: RunStatus.NeedsAttention } && AttentionNode() is not null;
+
+    /// <summary>Selects the first task, in the outline's order, that keeps the run from going on, and shows it in the inspector.</summary>
+    public ICommand ShowRunAttentionCommand => _showRunAttention ??= new RelayCommand(() =>
+    {
+        if (AttentionNode() is { } node) Select(node);
+    }, () => ShowsRunAttention);
+
+    private TaskNodeViewModel? AttentionNode() => Outline.FirstOrDefault(node => node.RunTask is
+    {
+        State: TaskState.Failed or TaskState.Stale or TaskState.Blocked or TaskState.Uncertain or TaskState.Refused or TaskState.Unsupported or TaskState.SentBack,
+    });
 
     /// <summary>Raised when the coordinator that the canvas's run goes through changes, so an open conversation can follow it.</summary>
     internal event EventHandler? RunRouteChanged;
@@ -91,6 +106,8 @@ public sealed partial class WorkflowCanvasViewModel
 
         ShowActivity();
         OnPropertyChanged(nameof(ShowsRunWorkflow));
+        OnPropertyChanged(nameof(ShowsRunAttention));
+        _showRunAttention?.NotifyCanExecuteChanged();
         NotifyConflictCommands();
     }
 

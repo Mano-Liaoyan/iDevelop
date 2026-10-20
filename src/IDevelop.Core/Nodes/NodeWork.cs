@@ -93,6 +93,9 @@ public sealed record SubjectView(TaskDefinition Node, AttemptRecord? Latest)
 
     /// <summary>A fix round can resume the latest attempt's session: it has one, and the subject still uses that client.</summary>
     public bool CanResume { get; init; }
+
+    /// <summary>The subject's current report, which a Merge node that merged without its agent has without an attempt.</summary>
+    public string? Report { get; init; }
 }
 
 /// <summary>

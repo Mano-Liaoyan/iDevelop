@@ -289,7 +289,7 @@ internal static partial class RunReducer
                     }
 
                     if (resultTask.Blueprint.Work is WorkSpec.Person && result.Origin is not ResultOrigin.Human ||
-                        resultTask.Blueprint.Work is WorkSpec.Merge && result.Origin is not (ResultOrigin.Merged or ResultOrigin.Carried))
+                        resultTask.Blueprint.Work is WorkSpec.Merge && result.Origin is not (ResultOrigin.Merged or ResultOrigin.Carried or ResultOrigin.Executed))
                     {
                         return Reject(RunProblem.UnsupportedResult);
                     }

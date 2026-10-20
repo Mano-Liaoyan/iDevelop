@@ -190,16 +190,23 @@
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <StackPanel VerticalAlignment="Center" Spacing="2">
                   <WrapPanel ItemSpacing="8" LineSpacing="2">
-                    <Border Classes="pill" HorizontalAlignment="Left"
-                            Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
-                            Classes.complete="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}, FallbackValue=False}"
-                            Classes.problem="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}, FallbackValue=False}"
-                            Classes.waiting="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}, FallbackValue=False}">
-                      <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Theme="{StaticResource Glyph}" />
-                        <TextBlock Text="{Binding Run.StatusLabel}" AutomationProperties.AutomationId="RunStatus" />
-                      </StackPanel>
-                    </Border>
+                    <!-- While the run needs attention, the pill selects the task that keeps it from going on. -->
+                    <Button Classes="ghost" Padding="2" Command="{Binding ShowRunAttentionCommand}"
+                            IsHitTestVisible="{Binding ShowsRunAttention}" Focusable="{Binding ShowsRunAttention}"
+                            ToolTip.Tip="Show the task that needs attention"
+                            AutomationProperties.AutomationId="RunAttention"
+                            AutomationProperties.Name="Show the task that needs attention">
+                      <Border Classes="pill" HorizontalAlignment="Left"
+                              Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
+                              Classes.complete="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}, FallbackValue=False}"
+                              Classes.problem="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}, FallbackValue=False}"
+                              Classes.waiting="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}, FallbackValue=False}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Theme="{StaticResource Glyph}" />
+                          <TextBlock Text="{Binding Run.StatusLabel}" AutomationProperties.AutomationId="RunStatus" />
+                        </StackPanel>
+                      </Border>
+                    </Button>
                     <TextBlock Classes="caption" Text="{Binding Run.Progress}" VerticalAlignment="Center"
                                AutomationProperties.AutomationId="RunProgress" />
                   </WrapPanel>

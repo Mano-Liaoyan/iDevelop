@@ -182,8 +182,13 @@ internal static partial class RunReducer
     /// without a result, where its first attempt started. Its worktree's branch is there.
     /// </summary>
     internal static CommitId? Earlier(RunRecord record, TaskId task) =>
-        record.Results.LastOrDefault(result => result.Task == task && result.Code is CodeOutput.Produced)?.Code is CodeOutput.Produced output
-            ? output.Code.Commit : First(record, task);
+        record.Results.LastOrDefault(result => result.Task == task && (result.Code is CodeOutput.Produced || result.Origin is ResultOrigin.Merged)) switch
+        {
+            { Code: CodeOutput.Produced output } => output.Code.Commit,
+            // A Merge node's fix starts at the merge its own step handed on.
+            { Code: CodeOutput.Forwarded forwarded } => record.Inputs[forwarded.Inputs].CodeBase,
+            _ => First(record, task),
+        };
 
     /// <summary>
     /// Whether an editing task's Retry starts somewhere other than where its worktree's branch is: its inputs' code merges
@@ -202,8 +207,17 @@ internal static partial class RunReducer
             .OrderBy(prepared => record.Receipts.Values.Single(entry => entry.Event is RunEvent.Prepared e &&
                 e.Execution.Launch == prepared.Launch).Sequence).FirstOrDefault()?.Location.AttemptBase;
 
+    /// <summary>
+    /// Whether the attempt edits the project on its task's branch: an editing agent's, or a Merge node's that fixes a review
+    /// round of its merge rather than resolving a conflict.
+    /// </summary>
     internal static bool Editable(RunRecord record, RunAttempt attempt) =>
-        record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit };
+        record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Blueprint.Work switch
+        {
+            WorkSpec.Agent { Access: AgentAccess.Edit } => true,
+            WorkSpec.Merge => MergeOf(record, attempt.Cause) is null,
+            _ => false,
+        };
 
     internal static RunProblem? PlanProblem(RunRecord record, MaterializationPlan plan, bool recorded = false)
     {
@@ -239,7 +253,8 @@ internal static partial class RunReducer
                 if (preparation.Cause is AttemptCause.Retry) return null;
                 var prior = Previous(preparation.Cause) ?? (preparation.Cause is AttemptCause.ReviewFix ?
                     record.Receipts.Values.OrderByDescending(entry => entry.Sequence).Select(entry => entry.Event).OfType<RunEvent.Reserved>()
-                        .FirstOrDefault(reserved => reserved.Attempt.Task == preparation.Task)?.Attempt.Id : null);
+                        // A Merge node's attempt that resolved a conflict took no inputs to compare with.
+                        .FirstOrDefault(reserved => reserved.Attempt.Task == preparation.Task && MergeOf(record, reserved.Attempt.Cause) is null)?.Attempt.Id : null);
                 if (prior is { } previous && record.Plans.Values.OfType<MaterializationPlan.Preparation>().FirstOrDefault(p => p.Attempt == previous) is { } old &&
                     !Same(old.Sources, preparation.Sources))
                 {
@@ -362,10 +377,11 @@ internal static partial class RunReducer
     private static RunProblem? ResultCodeProblem(RunRecord record, RunEvent.ResultAccepted accepted, TaskDefinition task)
     {
         var result = accepted.Result;
-        if (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
+        if (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } || task.Blueprint.Work is WorkSpec.Merge && result.Origin is ResultOrigin.Executed)
         {
-            if (result.Origin is not ResultOrigin.Executed executed) return RunProblem.UnsupportedResult;
-            var attempt = record.Attempts[executed.Attempt];
+            if (result.Origin is not ResultOrigin.Executed executed || !record.Attempts.TryGetValue(executed.Attempt, out var attempt) ||
+                !Editable(record, attempt))
+                return RunProblem.UnsupportedResult;
             // The commit the attempt's last turn ended with is its code, once it is the task branch's tip.
             var final = record.Claims.Keys.Where(key => key.Attempt == attempt.Id).OrderBy(key => key.Turn).LastOrDefault();
             if (final.Attempt != attempt.Id || ResultCapture(record, final) is not { } capture || AttemptPlan(record, attempt.Id) is not { } plan)

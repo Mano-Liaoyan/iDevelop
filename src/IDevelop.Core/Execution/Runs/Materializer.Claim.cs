@@ -86,7 +86,8 @@ internal sealed partial class Materializer
             var attempt = record.Attempts[claim.Key.Attempt];
             if (attempt.Task != task || !RunReducer.Same(attempt.Cause, cause) ||
                 Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[task], record.Inputs[prepared.Execution.Inputs],
-                    attempt.Id, basePrompt, RunPlanning.Context(record, attempt), RunReducer.FixArtifacts(record, attempt.Id), Note(attempt)) != prepared.Execution.Prompt)
+                    attempt.Id, basePrompt, RunPlanning.Context(record, attempt), RunReducer.FixArtifacts(record, attempt.Id), Note(attempt),
+                    RunReducer.Editable(record, attempt)) != prepared.Execution.Prompt)
                 return new ClaimCheck.Rejected(new(RunProblem.OperationConflict));
             return new ClaimCheck.Existing(claim);
         }
@@ -103,7 +104,7 @@ internal sealed partial class Materializer
             var prepared = record.Preparations[launch];
             var previous = record.Preparations[new(launch.Attempt, launch.Turn - 1)];
             var expected = prepared.Inputs == previous.Inputs ? prompt : Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task],
-                record.Inputs[prepared.Inputs], attempt.Id, prompt);
+                record.Inputs[prepared.Inputs], attempt.Id, prompt, null, default, null, RunReducer.Editable(record, attempt));
             if (prepared.Prompt != expected) return new ClaimCheck.Rejected(new(RunProblem.OperationConflict));
             return new ClaimCheck.Existing(claim);
         }

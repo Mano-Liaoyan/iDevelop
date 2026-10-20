@@ -144,8 +144,10 @@ public sealed class ReviewWork : IConverses
         {
             text.Append(choice == FixChoice.Retry
                     ? "You retry this fix round in a fresh session. This is the ticket you worked on, and your change so far.\n\n"
-                    : "Your earlier session could not continue, so this one starts fresh. This is the ticket you worked on, and your change so far.\n\n")
-                .Append("## The ticket\n\n").Append(AgentWork.Ticket(subject.Node)).Append("\n\n")
+                    : subject.Latest is null
+                        ? "You fix the merge of the tasks before you in a fresh session. This is the ticket, and the merged change so far.\n\n"
+                        : "Your earlier session could not continue, so this one starts fresh. This is the ticket you worked on, and your change so far.\n\n")
+                .Append("## The ticket\n\n").Append(Ticket(subject.Node)).Append("\n\n")
                 .Append("## Your change so far\n\n").Append(Fenced(subject.Change)).Append("\n\n");
         }
         else if (choice == FixChoice.Continue)
@@ -192,12 +194,19 @@ public sealed class ReviewWork : IConverses
         {
             "title" => node.Title,
             "inputs" => "",
-            "ticket" => AgentWork.Ticket(subject.Node),
-            "report" => subject.Latest?.Result ?? "",
+            "ticket" => Ticket(subject.Node),
+            "report" => subject.Latest?.Result ?? subject.Report ?? "",
             "change" => Fenced(change),
             "findings" => findings,
             _ => node.Field(name),
         });
+
+    /// <summary>What the subject was asked to do: an agent's rendered template, or a Merge node's merge with its instructions.</summary>
+    private static string Ticket(TaskDefinition subject) => subject.Blueprint.Work is WorkSpec.Merge
+        ? $"# {subject.Title}\n\nMerge the work of the tasks before this one into one change." +
+            (subject.Fields.GetValueOrDefault("instructions") is { } instructions && !string.IsNullOrWhiteSpace(instructions)
+                ? $"\n\n## Instructions\n\n{instructions.Trim()}" : "")
+        : AgentWork.Ticket(subject);
 
     /// <summary>Each finding that stands, with the change that would settle it and the implementer's earlier answer.</summary>
     private static string Findings(ReviewLedger ledger) => string.Join("\n\n", ledger.Standing.Select(finding =>

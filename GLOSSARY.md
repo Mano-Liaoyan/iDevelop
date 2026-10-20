@@ -89,6 +89,10 @@ _Avoid_: outdated. A Stale answer is a different thing: an answer to a gate requ
 
 ### Reviews
 
+**Subject**:
+The one task a review reviews and sends its fix rounds to: its dependency predecessor that changes the project, an editing agent or a Merge node.
+_Avoid_: reviewee, target
+
 **Interrupted fix**:
 A review's fix round that closing iDevelop interrupted, or that a crash or a kill lost and the person then closed as stopped. It never starts again by itself and waits for the person's Continue fix or Retry fix.
 _Avoid_: failed fix

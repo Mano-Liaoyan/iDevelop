@@ -41,7 +41,7 @@ internal sealed partial class Materializer
             if (record.Preparations.TryGetValue(key, out var existing))
             {
                 var expectedPrompt = existing.Inputs == old.Inputs ? prompt : Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[task],
-                    record.Inputs[existing.Inputs], attempt.Id, prompt);
+                    record.Inputs[existing.Inputs], attempt.Id, prompt, null, default, null, RunReducer.Editable(record, attempt));
                 if (existing.Prompt != expectedPrompt) return new Preparation.Rejected(new(RunProblem.OperationConflict));
                 if (record.Inputs[existing.Inputs].Code is CodeSelection.Joined existingJoin)
                     VerifyJoin(record, repository, task, existing.Inputs,
@@ -112,7 +112,7 @@ internal sealed partial class Materializer
                 }
                 var location = old.Location with { AttemptBase = input.CodeBase };
                 Mutate("refresh-delivery", () => Deliver(record, input, repository, location.Owner, storage));
-                var refreshedPrompt = Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[task], input, attempt.Id, prompt);
+                var refreshedPrompt = Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[task], input, attempt.Id, prompt, null, default, null, RunReducer.Editable(record, attempt));
                 execution = execution with { Inputs = input.Id, Location = location, Prompt = refreshedPrompt, PromptHash = Revision.Hash(refreshedPrompt) };
             }
             Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution)));

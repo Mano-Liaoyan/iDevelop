@@ -302,6 +302,24 @@ public class WorkflowTests
     }
 
     [Fact]
+    public void A_review_after_a_merge_node_takes_the_merge_node_as_its_subject()
+    {
+        var merge = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000077"));
+        var reviewer = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000066"));
+        var workflow = ThreeTasks()
+            .Must(new PlaceNode(merge, BuiltInBlueprints.Merge, new CanvasPoint(700, 400)) { Title = "Merge" })
+            .Must(new PlaceNode(reviewer, BuiltInBlueprints.Review, new CanvasPoint(1000, 400)) { Title = "Check" })
+            .Must(new Connect(new ConnectionKey(Design, merge), ConnectionKind.Dependency))
+            .Must(new Connect(new ConnectionKey(Build, merge), ConnectionKind.Dependency))
+            .Must(new Connect(new ConnectionKey(merge, reviewer), ConnectionKind.Dependency));
+
+        Assert.Equal(merge, workflow.SubjectOf(reviewer));
+        Assert.Equal(
+            new EditRejection.SecondSubject(reviewer, merge),
+            workflow.Rejection(new Connect(new ConnectionKey(Build, reviewer), ConnectionKind.Dependency)));
+    }
+
+    [Fact]
     public void An_approval_waits_for_the_person_and_passes_its_inputs_on_once_approved()
     {
         var node = new IDevelop.Nodes.NodeContext(new TaskDefinition(Design, BuiltInBlueprints.Approval), "The plan is ready.");
