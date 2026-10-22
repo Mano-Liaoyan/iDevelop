@@ -2,7 +2,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using IDevelop.Desktop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.WorkflowRunFixture;
