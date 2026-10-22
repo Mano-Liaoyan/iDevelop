@@ -1,5 +1,4 @@
 using IDevelop.Core.Tests.Git;
-using IDevelop.Core.Tests.Runs;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
