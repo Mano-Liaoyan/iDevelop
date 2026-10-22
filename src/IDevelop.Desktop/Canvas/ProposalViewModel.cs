@@ -179,8 +179,9 @@ public sealed class ProposalViewModel : ObservableObject
         if (run is not null)
         {
             _latest = run.Revision;
-            _run = _run is { } shown && !_stale ? run with { Revision = shown.Revision } : run;
-            _stale = false;
+            var adopts = _stale && _run is { } stale && run.Revision != stale.Revision;
+            _run = _run is { } shown && !adopts ? run with { Revision = shown.Revision } : run;
+            _stale &= !adopts;
         }
 
         OnPropertyChanged(nameof(IntoRun));
