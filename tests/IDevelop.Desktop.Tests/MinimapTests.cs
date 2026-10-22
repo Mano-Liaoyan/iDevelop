@@ -6,7 +6,6 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
-using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
