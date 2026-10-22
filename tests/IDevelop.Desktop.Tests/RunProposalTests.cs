@@ -162,4 +162,44 @@ public sealed class RunProposalTests
         first.Click(first.InView<Button>("AcceptProposal"));
         first.WaitForStatus("Completed");
     }
+
+    [AvaloniaFact]
+    public void A_workflow_with_other_edits_keeps_them_and_says_the_run_took_the_proposal_without_it()
+    {
+        using var f = Planned();
+        var shell = f.Window();
+        ShowProposal(shell);
+        var canvas = shell.Window.ViewModel.Canvas!;
+        Assert.IsType<EditResult.Applied>(canvas.Document.Apply(new WorkflowEdit.EditTitle(B, "Ship it")));
+
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+
+        shell.WaitForStatus("Completed");
+        Assert.True(Amended(f));
+        Assert.DoesNotContain(canvas.Workflow.Tasks.Values, task => task.Title == "Export API");
+        Assert.Equal("The run took the proposal. Added 1 task there, but the workflow has other changes, so it stays as it is.",
+            shell.Window.ViewModel.Status);
+    }
+
+    [AvaloniaFact]
+    public void A_dismissed_proposal_stays_closed_in_a_window_opened_afterwards()
+    {
+        using var f = Planned();
+        // Ship waits for its gate, so the run is still going when the later window opens it.
+        f.Answer("Ship", f.Says("Shipped.", gate: "ship"));
+        var shell = f.Window();
+        ShowProposal(shell);
+        shell.Click(shell.InView<Button>("DismissProposal"));
+        shell.WaitForCard("Ship", "Running");
+
+        var later = f.Window();
+        later.WaitUntil(() => later.WorkflowRun is not null, "the later window shows the run");
+        later.Click(later.Header(later.Node("Plan")));
+        later.Render();
+
+        Assert.False(later.Has<StackPanel>("Proposal"));
+        Assert.NotEqual(NodeRole.Proposing, Node(later, "Plan").Role);
+        f.Open("ship");
+        shell.WaitForStatus("Completed");
+    }
 }

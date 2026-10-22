@@ -27,7 +27,7 @@ public sealed partial class TaskNodeViewModel
         [nameof(ShowsRunState)] = [nameof(ShowsAcceptAndFinish)],
     };
 
-    private RelayCommand _acceptAndFinish = null!;
+    private RelayCommand? _acceptAndFinish;
     private ProposalViewModel? _watchedProposal;
     private AttemptViewModel? _lastRun;
     private bool _showsToolCalls;
@@ -110,7 +110,7 @@ public sealed partial class TaskNodeViewModel
         (proposal.IntoRun ? RunTask is { State: TaskState.Waiting, Status: AttemptStatus.WaitingForInput } : StandaloneWaiting);
 
     /// <summary>Accepts the proposal, and once it is accepted, marks the planner done.</summary>
-    public ICommand AcceptAndFinishCommand => _acceptAndFinish;
+    public ICommand AcceptAndFinishCommand => _acceptAndFinish!;
 
     /// <summary>Selects the node, as clicking it in the connection inspector does.</summary>
     public ICommand SelectCommand { get; private set; } = null!;
@@ -145,7 +145,7 @@ public sealed partial class TaskNodeViewModel
                 OnPropertyChanged(dependent);
             }
 
-            _acceptAndFinish.NotifyCanExecuteChanged();
+            _acceptAndFinish?.NotifyCanExecuteChanged();
         }
     }
 
@@ -163,7 +163,7 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    private void OnAcceptChanged(object? sender, EventArgs e) => _acceptAndFinish.NotifyCanExecuteChanged();
+    private void OnAcceptChanged(object? sender, EventArgs e) => _acceptAndFinish?.NotifyCanExecuteChanged();
 
     // The notice keeps what Accept added, so only a refused Mark Done replaces it.
     private void AcceptAndFinish()
@@ -172,6 +172,12 @@ public sealed partial class TaskNodeViewModel
         if (proposal.IntoRun)
         {
             _ = proposal.AcceptIntoRunAsync(finish: true);
+            return;
+        }
+
+        // A run's planner that Accept no longer amends the run of has no finish of its own here.
+        if (proposal.FromRun)
+        {
             return;
         }
 

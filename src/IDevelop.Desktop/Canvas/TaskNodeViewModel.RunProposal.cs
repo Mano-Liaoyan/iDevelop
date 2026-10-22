@@ -40,11 +40,6 @@ public sealed partial class TaskNodeViewModel
 
     private void ShowRunProposal(RunProposal? proposal)
     {
-        if (proposal is null && _runProposal is null)
-        {
-            return;
-        }
-
         _runProposal = proposal;
         var shown = Proposal;
         ShowProposal();
@@ -54,10 +49,14 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    /// <summary>The run's proposal while the run shows the planner, which an accepted one closes; else null.</summary>
-    private (ProposalRead Read, AttemptId Attempt, RunSource Source, bool Accepted)? RunProposalShown =>
+    /// <summary>
+    /// The run's proposal while the run shows the planner, and whether it is closed: an amendment took it, or the person
+    /// marked the planner done without accepting it, as Dismiss does, which a reopened window remembers so; else null.
+    /// </summary>
+    private (ProposalRead Read, AttemptId Attempt, RunSource Source, bool Closed)? RunProposalShown =>
         RunTask is not null && _runProposal is { } proposal && _canvas.Run is { } run
             ? (proposal.Read, proposal.Log.Id, new RunSource(run.Address, proposal.Revision, new(proposal.Log.Id, proposal.Log.Turns.Count),
-                proposal.Log is { Status: AttemptStatus.WaitingForInput, Pending: Pending.Proposal }), proposal.Accepted)
+                proposal.Log is { Status: AttemptStatus.WaitingForInput, Pending: Pending.Proposal }),
+                proposal.Accepted || proposal.Log.Status == AttemptStatus.Succeeded)
             : null;
 }

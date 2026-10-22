@@ -502,7 +502,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         if (RunProposalShown is { } run)
         {
             var held = _proposal is { } open && open.Identity.Equals(ProposalViewModel.IdentityOf(run.Read, run.Attempt)) ? open : null;
-            var inRun = run.Accepted ? null : held ?? new ProposalViewModel(_canvas, run.Read, run.Attempt, run.Source);
+            var inRun = run.Closed ? null : held ?? new ProposalViewModel(_canvas, run.Read, run.Attempt, run.Source);
             if (inRun is not null && _canvas.IsClosed(inRun))
             {
                 inRun = null;
@@ -510,6 +510,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
             inRun?.ShowRun(run.Source);
             Proposal = inRun;
+            // Stop or the run's end moves Accept off the run, and Accept and Finish with it.
+            OnPropertyChanged(nameof(ShowsAcceptAndFinish));
+            _acceptAndFinish?.NotifyCanExecuteChanged();
             return;
         }
 

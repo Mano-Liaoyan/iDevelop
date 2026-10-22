@@ -101,6 +101,7 @@ public sealed class ProposalViewModel : ObservableObject
     private readonly RelayCommand _accept;
     private readonly RelayCommand _dismiss;
     private RunSource? _run;
+    private RevisionId? _latest;
     private bool _amending;
     private string? _problem;
     private IReadOnlyList<string> _connections = [];
@@ -164,16 +165,28 @@ public sealed class ProposalViewModel : ObservableObject
     /// <summary>The proposal came from a run's planner that waits on it.</summary>
     internal bool PlannerWaits => _run is { Waits: true };
 
-    /// <summary>The proposal reread from the run, against its newer revision, or the run's phase changed.</summary>
+    /// <summary>The proposal came from a run's planner.</summary>
+    internal bool FromRun => _run is not null;
+
+    /// <summary>
+    /// The proposal reread from the run, or the run's phase changed. Accept keeps naming the revision the person first saw
+    /// it against, so a run that another amendment moved refuses it, and the view then takes the newer one.
+    /// </summary>
     internal void ShowRun(RunSource? run)
     {
-        _run = run ?? _run;
+        if (run is not null)
+        {
+            _latest = run.Revision;
+            _run = _run is { } shown ? run with { Revision = shown.Revision } : run;
+        }
+
         OnPropertyChanged(nameof(IntoRun));
         OnPropertyChanged(nameof(AcceptLabel));
         OnPropertyChanged(nameof(AcceptTip));
         OnPropertyChanged(nameof(DismissTip));
         OnPropertyChanged(nameof(RunNote));
         Refresh();
+        _dismiss.NotifyCanExecuteChanged();
     }
 
     public IReadOnlyList<ProposalItemViewModel> Items { get; }
@@ -448,6 +461,14 @@ public sealed class ProposalViewModel : ObservableObject
         {
             var outcome = await WorkflowRunViewModel.Retrying(() => coordinator.Amend(address, amendment),
                 result => result is RunCommand.Refused refused && WorkflowRunText.Transient(refused.Reason));
+            if (outcome is RunCommand.Refused { Reason.Problem: RunProblem.RevisionConflict } && _latest is { } latest && latest != source.Revision)
+            {
+                _run = source with { Revision = latest };
+                Refresh();
+                _canvas.Notice("The run changed since this proposal showed. Check it again, then accept it.");
+                return;
+            }
+
             if (outcome is not RunCommand.Accepted)
             {
                 _canvas.Notice(outcome switch
@@ -459,8 +480,13 @@ public sealed class ProposalViewModel : ObservableObject
                 return;
             }
 
-            await _canvas.FollowRunAsync(coordinator);
+            var followed = await _canvas.FollowRunAsync(coordinator);
             var notice = AcceptedNotice(proposal.Nodes.Count(node => chosen.Contains(node.Id)), proposal.Fills.Count(fill => chosen.Contains(fill.Slot)));
+            if (!followed)
+            {
+                notice = $"The run took the proposal. {notice[..^1]} there, but the workflow has other changes, so it stays as it is.";
+            }
+
             _canvas.CloseProposal(this);
             _canvas.Notice(finish || source.Waits ? await FinishAsync(coordinator, address, proposal.Planner, source.Turn) ?? notice : notice);
         }

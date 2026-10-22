@@ -248,9 +248,9 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>
     /// Brings the document up to the run's amendments, as one edit that Undo can reverse, while it holds a revision of the
-    /// run's amendment chain (#84). Otherwise it applies nothing, and the run goes on as amended.
+    /// run's amendment chain (#84). Otherwise it applies nothing, and the run goes on as amended. Returns false then.
     /// </summary>
-    internal async Task FollowRunAsync(WorkflowRunCoordinator coordinator)
+    internal async Task<bool> FollowRunAsync(WorkflowRunCoordinator coordinator)
     {
         var document = Workflow;
         var follow = await Task.Run(() => coordinator.Follow(document));
@@ -259,10 +259,12 @@ public sealed partial class WorkflowCanvasViewModel
             follow = coordinator.Follow(Workflow);
         }
 
-        if (follow is AmendmentProjection.Apply apply)
+        return follow switch
         {
-            Edit(apply.Edit);
-        }
+            AmendmentProjection.Apply apply => Edit(apply.Edit) is EditResult.Applied,
+            AmendmentProjection.Current => true,
+            _ => false,
+        };
     }
 
     /// <summary>Whether the canvas's active run runs the task as the document now holds it, or as it was when the run started.</summary>

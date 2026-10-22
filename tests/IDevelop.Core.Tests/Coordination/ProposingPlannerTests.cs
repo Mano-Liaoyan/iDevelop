@@ -30,8 +30,16 @@ public sealed class ProposingPlannerTests
 
         Assert.Equal(AttemptStatus.WaitingForInput, waiting.Tasks[A].Status);
         Assert.Equal(TaskState.Pending, waiting.Tasks[B].State);
-        var (_, log, proposal) = Proposed(f);
+        var (attempt, log, proposal) = Proposed(f);
         Assert.IsType<Pending.Proposal>(log.Pending);
+        // A run's log written before planners waited lacks the request's flag, and its planner still handed on.
+        var folder = f.Preparation.Store.AttemptFolder(W, f.Preparation.RunId, A, attempt.Id);
+        var earlier = Directory.CreateTempSubdirectory().FullName;
+        var events = File.ReadAllText(Path.Combine(folder, "events.jsonl"));
+        Assert.Contains("\"waitsOnProposal\":true,", events);
+        File.WriteAllText(Path.Combine(earlier, "events.jsonl"), events.Replace("\"waitsOnProposal\":true,", ""));
+        Assert.Equal(AttemptStatus.Succeeded, AttemptEvidence.Read(earlier).Record!.Status);
+        Directory.Delete(earlier, recursive: true);
         var done = await f.Coordinator.MarkDone(f.Address, A, new(proposal.Attempt, proposal.Turn)).WaitAsync(Bound);
         Assert.Equal(CommandOutcome.Applied, done.Outcome);
         await f.UntilStatus(RunStatus.Completed);
