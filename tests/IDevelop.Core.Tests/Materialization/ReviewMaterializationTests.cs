@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using IDevelop.Core.Tests.Git;
 using IDevelop.Execution;
-using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;

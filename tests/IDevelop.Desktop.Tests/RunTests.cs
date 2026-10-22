@@ -5,7 +5,6 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.VisualTree;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;

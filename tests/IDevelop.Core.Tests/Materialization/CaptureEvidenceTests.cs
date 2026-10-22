@@ -1,5 +1,3 @@
-using System.Text;
-using System.Text.Json;
 using IDevelop.Execution;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
@@ -38,7 +36,4 @@ public sealed class CaptureEvidenceTests
         Assert.Equal("B ready.\n", Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(),
             ready.Execution.Launch.Attempt)).Result.Report);
     }
-
-    private static byte[] Read(RunStorage storage, EvidenceFile file) =>
-        RunStorage.Read(storage.Folder, file.RelativePath, file.Content, file.ByteLength);
 }

@@ -1,4 +1,3 @@
-using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -386,8 +385,8 @@ internal sealed partial class WorkflowRunCoordinator
         _live[task] = new(LiveStage.Settling);
         Background(async () =>
         {
-            var closing = await _runs.CloseResting(_permit!, RunOperations.Cancel(stop, attempt), attempt, new RestingEnd.Cancel(), scheduled: true,
-                halted: Halted).ConfigureAwait(false);
+            var closing = await _runs.CloseResting(_permit!, RunOperations.Cancel(stop, attempt), attempt, new RestingEnd.Cancel())
+                .ConfigureAwait(false);
             return closing switch
             {
                 RestingClose.Closed closed => closed.Attempt.Release() is Release.Held held ? new TaskHold.Refused(held.Reason, null, Transient(held.Reason.Problem)) : null,

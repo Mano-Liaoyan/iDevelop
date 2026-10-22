@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Security.Cryptography;
 using IDevelop.Execution;
 using IDevelop.TestSupport;

@@ -129,7 +129,7 @@ internal sealed partial class WorkflowRunCoordinator
         Background(async () =>
         {
             var closing = await _runs.CloseResting(_permit!, OperationIds.Derive(operation, "review/conclude"), review.Attempt,
-                new RestingEnd.Conclude(failure), scheduled: true, halted: Halted).ConfigureAwait(false);
+                new RestingEnd.Conclude(failure)).ConfigureAwait(false);
             switch (closing)
             {
                 case RestingClose.Closed closed:

@@ -56,7 +56,7 @@ public sealed partial class WorkflowCanvasViewModel
         _history = history;
         foreach (var node in Nodes)
         {
-            node.ShowStanding(TaskStanding.Of(history, workflow, node.Id));
+            node.ShowStanding(TaskStanding.Of(history, node.Id));
             node.OnHistoryChanged();
         }
 

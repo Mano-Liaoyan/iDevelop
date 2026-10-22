@@ -7,7 +7,6 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Theme;
-using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;

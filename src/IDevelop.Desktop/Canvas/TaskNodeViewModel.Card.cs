@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 

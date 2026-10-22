@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Execution;
 using IDevelop.Execution;

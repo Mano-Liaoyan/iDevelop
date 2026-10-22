@@ -12,7 +12,6 @@ using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
-using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.TestSupport.FakeAgents;
 
 namespace IDevelop.Desktop.Tests;

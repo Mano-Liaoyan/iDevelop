@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Text;
-using System.Text.Json;
 
 namespace IDevelop.Execution;
 
@@ -256,7 +255,7 @@ internal sealed partial class Materializer
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
             OperationIds.Derive(new OperationId(id.Value), "capture-1"), launch.Attempt,
             RunStorage.CapturePath(id, "artifacts"), repository.ProjectIn(checkout), ref evidence);
-        var unexplained = UnexplainedRefs(record, repository, prepared, out var sharedRefs);
+        var unexplained = UnexplainedRefs(record, repository, out var sharedRefs);
         var refBytes = Encoding.UTF8.GetBytes(RunJournal.Canonical(sharedRefs));
         var refs = new EvidenceFile(RunStorage.CapturePath(id, "refs.json"), Revision.Hash(refBytes), refBytes.LongLength);
         RunStorage.Publish(storage.Folder, refs.RelativePath, refBytes, refs.Content, refs.ByteLength);
@@ -302,8 +301,7 @@ internal sealed partial class Materializer
     /// The run's shared refs the journal does not explain at the capture. <paramref name="after"/> is the live snapshot of
     /// those refs that the capture records as its evidence. Each run ref is judged by the journal alone.
     /// </summary>
-    private ImmutableArray<string> UnexplainedRefs(RunRecord record, GitRepository repository, PreparedExecution prepared,
-        out SortedDictionary<string, CommitId> after)
+    private ImmutableArray<string> UnexplainedRefs(RunRecord record, GitRepository repository, out SortedDictionary<string, CommitId> after)
     {
         // The budget runs on the materializer's clock, as the journal's retries do.
         var started = _clock.GetTimestamp();

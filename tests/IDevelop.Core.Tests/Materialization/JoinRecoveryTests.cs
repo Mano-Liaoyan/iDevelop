@@ -1,6 +1,5 @@
 using IDevelop.Core.Tests.Git;
 using IDevelop.Execution;
-using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 using static IDevelop.Core.Tests.Materialization.JoinTests;
 using Crash = IDevelop.Core.Tests.Materialization.PreparationFixture.Crash;

@@ -393,7 +393,7 @@ internal sealed partial class WorkflowRunCoordinator
     /// <param name="scheduled">The run finishes a closure whose request is in the log, rather than the person's command itself.</param>
     private async Task<Closing> CloseResting(TaskId task, AttemptId attempt, RestingEnd end, OperationId operation, OperationId turn, bool scheduled)
     {
-        var closing = await _runs.CloseResting(_permit!, operation, attempt, end, scheduled: scheduled, halted: Halted).ConfigureAwait(false);
+        var closing = await _runs.CloseResting(_permit!, operation, attempt, end).ConfigureAwait(false);
         switch (closing)
         {
             case RestingClose.Closed closed:

@@ -1,5 +1,4 @@
 using IDevelop.Desktop.Canvas;
-using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;

@@ -1,4 +1,3 @@
-using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Execution;

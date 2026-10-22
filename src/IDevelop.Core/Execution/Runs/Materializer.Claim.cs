@@ -94,7 +94,7 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new ClaimCheck.Rejected(refused.Reason); }
     }
 
-    public ClaimCheck? ClaimedLaunch(CoordinatorPermit permit, OperationId operation, LaunchKey launch, string prompt)
+    public ClaimCheck? ClaimedLaunch(CoordinatorPermit permit, LaunchKey launch, string prompt)
     {
         try
         {

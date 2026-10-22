@@ -132,7 +132,7 @@ public sealed partial class ProjectRuns
             ClaimCheck? LookupClaim() => intent switch
             {
                 TurnIntent.First first => materializer.ClaimedLaunch(permit, first.Operation, first.Task, first.Cause, first.BasePrompt),
-                TurnIntent.Next next => materializer.ClaimedLaunch(permit, next.Operation, next.Launch, next.Prompt),
+                TurnIntent.Next next => materializer.ClaimedLaunch(permit, next.Launch, next.Prompt),
                 _ => throw new InvalidOperationException(),
             };
             var lookup = LookupClaim();

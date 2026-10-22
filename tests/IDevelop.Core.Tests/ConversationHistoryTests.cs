@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
