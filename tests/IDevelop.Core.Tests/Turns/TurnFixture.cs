@@ -207,15 +207,8 @@ internal sealed class TurnFixture : IAsyncDisposable
         Assert.Equal(2, control.Launches);
     }
 
-    /// <summary>
-    /// Closes every project this fixture opened and lets go of the leases of settled turns the test never released, which
-    /// keep their run.lock open past closing; Windows will not delete an open file (#165).
-    /// </summary>
-    public async Task Close()
-    {
-        foreach (var runs in _opened) await runs.DisposeAsync();
-        foreach (var lease in _opened.SelectMany(runs => runs.OwnedLeases())) lease.Dispose();
-    }
+    /// <summary>Closes every project this fixture opened and lets go of the leases its unreleased turns keep (#165).</summary>
+    public Task Close() => CloseAll(_opened);
 
     public async ValueTask DisposeAsync()
     {

@@ -15,6 +15,7 @@ namespace IDevelop.Core.Tests.Coordination;
 internal sealed class RunConversationFixture : IAsyncDisposable
 {
     private readonly TempFolder _temp = new();
+    private readonly List<ProjectRuns> _opened = [];
     private readonly HostQuestions? _questions;
     private readonly Dictionary<TaskId, FakeRule[]> _turns = [];
     private readonly List<(string Prompt, TaskId Task)> _routes = [];
@@ -150,6 +151,7 @@ internal sealed class RunConversationFixture : IAsyncDisposable
     public ProjectRuns OpenRuns(ClientDirectory clients)
     {
         var runs = ProjectRuns.Open(Preparation.Git.Folder, clients, _questions);
+        _opened.Add(runs);
         runs.Store = Preparation.Store;
         runs.GitEnvironment = Preparation.Git.Environment;
         runs.MaterializerClock = new PreparationFixture.Clock();
@@ -201,7 +203,7 @@ internal sealed class RunConversationFixture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (Runs is not null) await Runs.DisposeAsync();
+        await CloseAll(_opened);
         Fakes.Dispose();
         Preparation.Dispose();
         _temp.Dispose();

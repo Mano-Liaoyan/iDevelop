@@ -21,11 +21,7 @@ public sealed partial class ProjectRuns
 
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
 
-    /// <summary>
-    /// The leases of the turns this project still owns. A settled turn keeps its lease past closing until its receipt, so a
-    /// test that never releases one lets go of it here before it deletes the project, which Windows refuses while the lease's
-    /// run.lock is open (#165).
-    /// </summary>
+    /// <summary>The leases of the turns this project still owns, including settled turns kept past closing until their receipt.</summary>
     internal RunLease[] OwnedLeases()
     {
         lock (_gate) return [.. _owned.Values.Select(owner => owner.Lease)];

@@ -140,7 +140,7 @@ public sealed class ConcurrencyTests
     public async Task Below_the_bound_starts_follow_task_order_and_a_root_exit_starts_the_next()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(B), Agent(C), Agent(D)]));
-        f.Answer(B, Waits(B, Path.Combine(f.Evidence, "b"))).Answer(C, Waits(C, Path.Combine(f.Evidence, "c"))).Answer(D, Writes(D, "d.txt", "D\n"));
+        f.Answer(B, Waits(B, Path.Combine(f.Evidence, "b-go"))).Answer(C, Waits(C, Path.Combine(f.Evidence, "c-go"))).Answer(D, Writes(D, "d.txt", "D\n"));
         await f.Open();
         f.Runs.ClientRoots = 2;
         using var slots = new SlotWatch(f.Coordinator);
@@ -151,9 +151,9 @@ public sealed class ConcurrencyTests
         Assert.Equal(TaskState.Ready, (await f.Decided()).Tasks[D].State);
         Assert.Equal(0, f.Launches(D));
 
-        File.WriteAllText(Path.Combine(f.Evidence, "b"), "open");
+        File.WriteAllText(Path.Combine(f.Evidence, "b-go"), "open");
         await f.Until(view => view.Tasks[B].State == TaskState.Done && view.Tasks[D].State == TaskState.Done);
-        File.WriteAllText(Path.Combine(f.Evidence, "c"), "open");
+        File.WriteAllText(Path.Combine(f.Evidence, "c-go"), "open");
         await f.UntilStatus(RunStatus.Completed);
 
         Assert.Equal(2, slots.Most);

@@ -21,6 +21,7 @@ internal sealed class ApprovalFixture : IAsyncDisposable
     private readonly TempFolder _temp = new();
     private readonly Dictionary<string, FakeRule[]> _turns = [];
     private readonly List<ProjectRuns> _windows = [];
+    private readonly List<ProjectRuns> _opened = [];
 
     /// <param name="folder">The project's folder from the repository's top, or null for the top itself.</param>
     public ApprovalFixture(Workflow workflow, string? folder = null)
@@ -85,6 +86,7 @@ internal sealed class ApprovalFixture : IAsyncDisposable
         runs.LeaveTimeout = TimeSpan.FromSeconds(5);
         runs.CoordinatorRetry = TimeSpan.FromMilliseconds(50);
         _windows.Add(runs);
+        _opened.Add(runs);
         return runs;
     }
 
@@ -155,7 +157,7 @@ internal sealed class ApprovalFixture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var window in _windows) await window.DisposeAsync();
+        await CloseAll(_opened);
         Fakes.Dispose();
         Git.Dispose();
         _temp.Dispose();
