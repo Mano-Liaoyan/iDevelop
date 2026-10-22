@@ -461,10 +461,15 @@ public sealed class ProposalViewModel : ObservableObject
         {
             var outcome = await WorkflowRunViewModel.Retrying(() => coordinator.Amend(address, amendment),
                 result => result is RunCommand.Refused refused && WorkflowRunText.Transient(refused.Reason));
-            if (outcome is RunCommand.Refused { Reason.Problem: RunProblem.RevisionConflict } && _latest is { } latest && latest != source.Revision)
+            // The proposal's next reread of the run brings the newer revision, if it has not yet.
+            if (outcome is RunCommand.Refused { Reason.Problem: RunProblem.RevisionConflict })
             {
-                _run = source with { Revision = latest };
-                Refresh();
+                if (_latest is { } latest && latest != source.Revision)
+                {
+                    _run = source with { Revision = latest };
+                    Refresh();
+                }
+
                 _canvas.Notice("The run changed since this proposal showed. Check it again, then accept it.");
                 return;
             }

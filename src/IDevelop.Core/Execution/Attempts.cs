@@ -334,6 +334,9 @@ public sealed record AttemptRecord
     /// <summary>A run's planner, whose turn that ends with a proposal waits for the person (#84).</summary>
     internal bool WaitsOnProposal { get; }
 
+    /// <summary>The person marked the attempt done while it waited, which leaves a run planner's open proposal declined (#84).</summary>
+    internal bool MarkedDone { get; init; }
+
     /// <summary>The attempt whose session this one resumes. Its session id is <see cref="SessionId"/>, only once the reducer found it plain.</summary>
     public AttemptId? Continues { get; }
 
@@ -537,7 +540,7 @@ internal static partial class AttemptReducer
         (AttemptEvent.HandedToTerminal handoff, _) => record with { Terminal = new TerminalHandoff(handoff.At, handoff.Folder, handoff.Command) },
         (AttemptEvent.TurnRequested turn, { Status: AttemptStatus.WaitingForInput or AttemptStatus.InReview }) =>
             NextTurn(record with { Status = AttemptStatus.Running, Pending = null }, turn),
-        (AttemptEvent.MarkedDone done, { Status: AttemptStatus.WaitingForInput }) => Settle(record, AttemptStatus.Succeeded, null, done.At),
+        (AttemptEvent.MarkedDone done, { Status: AttemptStatus.WaitingForInput }) => Settle(record, AttemptStatus.Succeeded, null, done.At) with { MarkedDone = true },
         (AttemptEvent.CancelRequested cancel, { Status: AttemptStatus.WaitingForInput or AttemptStatus.InReview }) => Settle(record, AttemptStatus.Cancelled, null, cancel.At),
         (AttemptEvent.Concluded concluded, { Status: AttemptStatus.InReview }) =>
             Settle(record, concluded.Failure is null ? AttemptStatus.Succeeded : AttemptStatus.Failed, concluded.Failure, concluded.At),

@@ -57,6 +57,6 @@ public sealed partial class TaskNodeViewModel
         RunTask is not null && _runProposal is { } proposal && _canvas.Run is { } run
             ? (proposal.Read, proposal.Log.Id, new RunSource(run.Address, proposal.Revision, new(proposal.Log.Id, proposal.Log.Turns.Count),
                 proposal.Log is { Status: AttemptStatus.WaitingForInput, Pending: Pending.Proposal }),
-                proposal.Accepted || proposal.Log.Status == AttemptStatus.Succeeded)
+                proposal.Accepted || proposal.Log.MarkedDone)
             : null;
 }
