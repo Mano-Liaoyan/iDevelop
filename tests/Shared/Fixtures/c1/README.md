@@ -1,6 +1,6 @@
 # C1 protocol excerpts
 
-Static excerpts from the D0 raw evidence in `.git/d0-evidence/clients/results/raw` of the source checkout. Line numbers are one-based physical raw-log positions. Only fields used by the adapters remain. Project paths become `/project`; usage, signatures, installation/environment identifiers, account details and catalogs are omitted. The original phase 3 fixtures are unchanged.
+Static excerpts from the D0 raw evidence in `.git/d0-evidence/clients/results/raw` of the source checkout. Line numbers are one-based physical raw-log positions. Only fields used by the adapters remain. Project paths become `/project`; usage, signatures, installation/environment identifiers, account details and catalogs are omitted.
 
 | Fixture | Raw log | Lines |
 | --- | --- | --- |

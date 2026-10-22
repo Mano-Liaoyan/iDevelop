@@ -8,7 +8,7 @@ A user describes the work in the Generate sheet and chooses a planner agent. iDe
 - `generate-sheet` opens the modal sheet, which offers only ready clients that have a read-only mode and keeps `Generate` off while the description is blank.
 - `generate-submit` places a Plan task titled by the description's first line, with the whole description as its goal and Chat as its conversation, and runs it.
 - `generate-progress` labels the toolbar button `Planning…` while the planner runs and `Review Proposal` while its proposal is open.
-- `generate-accept` adds the proposed tasks through `Accept and Finish` or `Accept`, with the planner's agent while `New tasks use the planner's agent` is ticked.
+- `generate-accept` adds the proposed tasks through `Accept and Finish` or `Accept`, each with the agent the planner chose for it, or the planner's agent while `Fall back to the planner's agent` is ticked and the planner gave it no usable choice.
 
 ## How to get to it (user POV)
 

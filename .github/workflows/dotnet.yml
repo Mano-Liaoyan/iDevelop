@@ -1,5 +1,4 @@
-# Builds and tests on Windows and macOS on GitHub, only for a release tag that Gitea's push mirror pushes here, or
-# when started by hand. Linux builds every push on Gitea (.gitea/workflows/build.yml).
+# Builds and tests on Windows and macOS, only for a release tag or when started by hand.
 name: Build and test (Windows, macOS)
 
 on:
