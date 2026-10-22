@@ -1,6 +1,4 @@
-using System.Collections.Immutable;
 using IDevelop.Execution;
-using IDevelop.Projects;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 
