@@ -10,14 +10,8 @@ public sealed partial class ProjectRuns
     /// its task lease. A duplicate returns the same handle while it holds the lease. Each step finds its earlier effect
     /// first, so a rerun with the same operation converges after a crash, a fault, or a refused journal write.
     /// </summary>
-    /// <param name="scheduled">
-    /// The run's own work closes the attempt, such as a stop or a review's conclusion, so it waits for the repository's lock
-    /// as long as the run's other steps do, behind any person's command that waits. A person's Mark done or Cancel keeps the
-    /// default wait and goes ahead of the run's work.
-    /// </param>
-    /// <param name="halted">Whether the run's coordinator halted, which ends the closure's wait for the repository's lock.</param>
     internal Task<RestingClose> CloseResting(CoordinatorPermit permit, OperationId operation, AttemptId attempt, RestingEnd end,
-        CancellationToken wait = default, bool scheduled = false, Func<bool>? halted = null)
+        CancellationToken wait = default)
     {
         Task<RestingClose> command;
         lock (_gate)
@@ -34,14 +28,13 @@ public sealed partial class ProjectRuns
                     return closing.WaitAsync(wait);
                 _commands.Remove(key);
             }
-            command = Task.Run(() => CloseRestingCore(permit, operation, attempt, end, scheduled, halted));
+            command = Task.Run(() => CloseRestingCore(permit, operation, attempt, end));
             _commands.Add(key, new(intent, command));
         }
         return command.WaitAsync(wait);
     }
 
-    private RestingClose CloseRestingCore(CoordinatorPermit permit, OperationId operation, AttemptId attemptId, RestingEnd end, bool scheduled,
-        Func<bool>? halted)
+    private RestingClose CloseRestingCore(CoordinatorPermit permit, OperationId operation, AttemptId attemptId, RestingEnd end)
     {
         var store = TurnStore;
         RunLease? lease = null;
