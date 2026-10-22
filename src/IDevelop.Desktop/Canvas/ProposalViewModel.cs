@@ -164,9 +164,6 @@ public sealed class ProposalViewModel : ObservableObject
         : _canvas.Run is { View.Phase: RunPhase.StopRequested } or { View.Status: RunStatus.Stopped } ? "The run has stopped, so Accept changes only the workflow for its next run."
         : "The run has ended, so Accept changes only the workflow for its next run.";
 
-    /// <summary>The proposal came from a run's planner that waits on it.</summary>
-    internal bool PlannerWaits => _run is { Waits: true };
-
     /// <summary>The proposal came from a run's planner.</summary>
     internal bool FromRun => _run is not null;
 
