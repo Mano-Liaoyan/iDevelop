@@ -22,6 +22,9 @@ public sealed partial class ProjectRuns
 
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
 
+    /// <summary>What the clients offer now, which a planner's retry records for its prompt to list, as its first start does.</summary>
+    internal ImmutableArray<AgentOffer> AgentOffers => PlanningContext.Offers(_clients.Current);
+
     /// <summary>A workflow turn's client now does this work in the background, which the turn waits for (#113).</summary>
     internal event Action<ExecutionAddress, ImmutableArray<BackgroundTask>>? TurnBackgroundChanged;
 
