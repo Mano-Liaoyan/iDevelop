@@ -6,7 +6,7 @@ A user runs the shown workflow from `Run Workflow` beside `Generate`, without se
 
 - `run-preflight` opens the preflight without a selection, lists the tasks, agents, and inputs, and starts nothing on `Cancel`.
 - `run-gap` lists what keeps the workflow from starting, keeps `Start run` off, and `Show` selects the named task.
-- `run-base` offers HEAD or a snapshot of uncommitted work, and says that ignored files never reach a task.
+- `run-base` names the branch's HEAD as the run's base, lists in `PreflightChanged` the uncommitted paths the agents will not see, and says that ignored files never reach a task.
 - `run-start` approves one run, shows `WorkflowRunBar` with `Running`, and hides `Run Workflow` while the run is active.
 - `run-cards` shows each task's state in the run on its card and in the inspector's `RunTaskStatus`, and hides the task's own `Run` and composer.
 - `run-conversation` opens a run task's conversation from its card's attention glyph or `Open conversation`, and a reply goes through the run.
