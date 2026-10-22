@@ -26,6 +26,7 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
 
     private static readonly Dictionary<TaskId, string> Names = new() { [A] = "A", [B] = "B", [C] = "C", [D] = "D", [X] = "X" };
     private readonly TempFolder _temp = new();
+    private readonly List<ProjectRuns> _opened = [];
     private readonly Dictionary<string, FakeRule[]> _turns = [];
 
     /// <param name="node">The node whose Run starts the run, or null for a run of every root, as Run Workflow approves.</param>
@@ -149,6 +150,7 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
     public ProjectRuns OpenRuns(ClientDirectory clients)
     {
         var runs = ProjectRuns.Open(Preparation.Git.Folder, clients);
+        _opened.Add(runs);
         runs.Store = Preparation.Store;
         runs.GitEnvironment = Preparation.Git.Environment;
         runs.MaterializerClock = new PreparationFixture.Clock();
@@ -246,7 +248,7 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (Runs is not null) await Runs.DisposeAsync();
+        await CloseAll(_opened);
         Fakes.Dispose();
         Preparation.Dispose();
         _temp.Dispose();

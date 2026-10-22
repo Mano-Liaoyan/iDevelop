@@ -8,6 +8,15 @@ namespace IDevelop.Desktop.Tests;
 [Collection(ProcessCollection.Name)]
 public sealed class WorkflowRunFixtureTests
 {
+    // On a file system that ignores case, as Windows and macOS do, gate "a" and task A's folder were one path, and opening
+    // the gate threw UnauthorizedAccessException (#165).
+    [AvaloniaFact]
+    public void A_gate_and_a_task_s_folder_never_differ_only_by_case()
+    {
+        using var f = new WorkflowRunFixture(Task(TestTasks.Design, "A", 105));
+        Assert.False(string.Equals(f.Gate("a"), f.Folder("A"), StringComparison.OrdinalIgnoreCase), f.Gate("a"));
+    }
+
     // A settled run releases its retention pins with Git after its bar says Completed. A teardown that deleted the project
     // under that Git failed with "Directory not empty" under load (#86).
     [AvaloniaFact]

@@ -23,6 +23,17 @@ internal sealed class RunFixtures : IDisposable
 
     public static readonly TaskId T = new(Guid.Parse("00000000-0000-0000-0000-000000000002"));
 
+    /// <summary>
+    /// Closes each project window in <paramref name="opened"/>, then lets go of the leases of settled turns nobody released,
+    /// which keep their run.lock open past closing until their receipt; Windows will not delete an open file (#165).
+    /// </summary>
+    public static async Task CloseAll(IEnumerable<ProjectRuns> opened)
+    {
+        var windows = opened.ToArray();
+        foreach (var runs in windows) await runs.DisposeAsync();
+        foreach (var lease in windows.SelectMany(runs => runs.OwnedLeases())) lease.Dispose();
+    }
+
     public static readonly TaskId U = new(Guid.Parse("00000000-0000-0000-0000-000000000003"));
 
     public static readonly TaskId C = new(Guid.Parse("00000000-0000-0000-0000-000000000004"));

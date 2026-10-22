@@ -15,6 +15,7 @@ namespace IDevelop.Core.Tests.Coordination;
 internal sealed class RunConversationFixture : IAsyncDisposable
 {
     private readonly TempFolder _temp = new();
+    private readonly List<ProjectRuns> _opened = [];
     private readonly HostQuestions? _questions;
     private readonly Dictionary<TaskId, FakeRule[]> _turns = [];
     private readonly List<(string Prompt, TaskId Task)> _routes = [];
@@ -25,6 +26,7 @@ internal sealed class RunConversationFixture : IAsyncDisposable
         _questions = questions;
         Preparation = new(workflow, CoordinatorFixture.PlanCommit);
         Evidence = _temp.Create("evidence");
+        Gates = Directory.CreateDirectory(Path.Combine(Evidence, "gates")).FullName;
         Fakes = new(_temp.Create("bin")) { LaunchFolder = _temp.Create("launches") };
     }
 
@@ -32,6 +34,13 @@ internal sealed class RunConversationFixture : IAsyncDisposable
     public PreparationFixture Preparation { get; }
     public FakeClients Fakes { get; }
     public string Evidence { get; }
+
+    /// <summary>
+    /// Where gate files go: apart from the task folders in <see cref="Evidence"/>, so gate "x" and task X's folder are two
+    /// paths on a file system that ignores case, as Windows and macOS do (#165).
+    /// </summary>
+    public string Gates { get; }
+
     public ProjectRuns Runs { get; private set; } = null!;
     public ClientDirectory Clients { get; private set; } = null!;
     public WorkflowRunCoordinator Coordinator { get; private set; } = null!;
@@ -56,7 +65,7 @@ internal sealed class RunConversationFixture : IAsyncDisposable
         return (gate is null ? rule : rule.WaitForFile(gate)).Print(FakeAgents.ReplyLines(Client, text));
     }
 
-    public string Gate(string name) => Path.Combine(Evidence, name);
+    public string Gate(string name) => Path.Combine(Gates, name);
 
     public void Open(string gate) => File.WriteAllText(Gate(gate), "go");
 
@@ -142,6 +151,7 @@ internal sealed class RunConversationFixture : IAsyncDisposable
     public ProjectRuns OpenRuns(ClientDirectory clients)
     {
         var runs = ProjectRuns.Open(Preparation.Git.Folder, clients, _questions);
+        _opened.Add(runs);
         runs.Store = Preparation.Store;
         runs.GitEnvironment = Preparation.Git.Environment;
         runs.MaterializerClock = new PreparationFixture.Clock();
@@ -193,7 +203,7 @@ internal sealed class RunConversationFixture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (Runs is not null) await Runs.DisposeAsync();
+        await CloseAll(_opened);
         Fakes.Dispose();
         Preparation.Dispose();
         _temp.Dispose();
