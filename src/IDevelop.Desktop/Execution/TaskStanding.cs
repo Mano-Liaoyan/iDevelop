@@ -47,8 +47,8 @@ internal abstract record TaskStanding
         public override int GetHashCode() => Holders.Count;
     }
 
-    /// <summary>What <paramref name="history"/> says of <paramref name="task"/> in <paramref name="workflow"/>, or null when it says nothing.</summary>
-    public static TaskStanding? Of(RunHistory history, Workflow workflow, TaskId task)
+    /// <summary>What <paramref name="history"/> says of <paramref name="task"/>, or null when it says nothing.</summary>
+    public static TaskStanding? Of(RunHistory history, TaskId task)
     {
         switch (history[task])
         {
