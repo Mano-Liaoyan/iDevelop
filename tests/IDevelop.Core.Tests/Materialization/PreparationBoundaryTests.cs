@@ -1,7 +1,5 @@
 using System.Text;
 using IDevelop.Execution;
-using IDevelop.TestSupport;
-using IDevelop.Projects;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
