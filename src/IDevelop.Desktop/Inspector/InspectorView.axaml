@@ -970,6 +970,11 @@
                                 <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource DestructiveTextBrush}"
                                            AutomationProperties.AutomationId="ProposalProblem" />
                               </inspector:InspectorRow>
+                              <!-- A run's planner's proposal once Accept no longer amends its run (#84). -->
+                              <inspector:InspectorRow Layout="Full" IsShown="{Binding RunNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding RunNote}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                           AutomationProperties.AutomationId="ProposalRunNote" />
+                              </inspector:InspectorRow>
                             </StackPanel>
                           </DataTemplate>
                         </ContentControl.ContentTemplate>
@@ -989,13 +994,13 @@
                           </Button>
                           <Button Classes.primary="{Binding !ShowsAcceptAndFinish}" Classes.action="{Binding ShowsAcceptAndFinish}"
                                   Command="{Binding Proposal.AcceptCommand}"
-                                  ToolTip.Tip="Adds and fills the chosen tasks in one change"
+                                  ToolTip.Tip="{Binding Proposal.AcceptTip, FallbackValue={x:Null}}"
                                   AutomationProperties.AutomationId="AcceptProposal"
-                                  AutomationProperties.Name="Accept">
-                            <TextBlock Text="Accept" />
+                                  AutomationProperties.Name="{Binding Proposal.AcceptLabel, FallbackValue=Accept}">
+                            <TextBlock Text="{Binding Proposal.AcceptLabel, FallbackValue=Accept}" />
                           </Button>
                           <Button Classes="action" Command="{Binding Proposal.DismissCommand}"
-                                  ToolTip.Tip="Hides the proposal until the planner proposes again"
+                                  ToolTip.Tip="{Binding Proposal.DismissTip, FallbackValue={x:Null}}"
                                   AutomationProperties.AutomationId="DismissProposal"
                                   AutomationProperties.Name="Dismiss">
                             <TextBlock Text="Dismiss" />

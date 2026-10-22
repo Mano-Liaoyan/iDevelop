@@ -20,7 +20,7 @@ The same record says, at its line 123, that "The workflow is complete before it 
 
 ## Consequences
 
-- Once a planner's result hands on, a slot it reaches may have its start planned before the person accepts the proposal. Its fill then drops out, and the slot runs as it was.
-- No ticket yet owns accepting a run planner's proposal in the app. E3g.1 shows proposals only from standalone attempts, so no app flow calls `Amend` yet. When one does, its proposal panel should show a fill as started once its slot's start is planned.
+- Once a planner's result hands on, a slot it reaches may have its start planned before the person accepts the proposal. Its fill then drops out, and the slot runs as it was. A planner that ends its turn with a proposal waits for the person, so this happens only once the person marks it done before accepting ([ADR 0038](0038-a-run-s-planner-waits-on-its-proposal-and-the-person-accepts-it-into-the-run.md)).
+- The app's review of a run planner's proposal calls `Amend`, and shows a fill as started once its slot has an attempt or is ready to start.
 
 Source: pull request [#78](https://github.com/Mano-Liaoyan/iDevelop/pull/78) (E3d.2), its Decisions 8 to 11, its review fixes, and its open question on started tasks, and pull request [#80](https://github.com/Mano-Liaoyan/iDevelop/pull/80) (E3g.1), its open question on run planners.

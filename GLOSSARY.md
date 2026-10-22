@@ -139,7 +139,7 @@ A task after a planner whose fields are all blank, which the planner's proposal 
 _Avoid_: client slot, which is a run's place for a running client
 
 **Amendment**:
-A recorded change to an approved run's workflow, from a run planner's proposal that the person accepted. It only adds tasks and connections and fills tasks that have not started, and a task counts as started once the plan of its start is recorded. An edit of the workflow document changes no run.
+A recorded change to an approved run's workflow, from a run planner's proposal that the person accepted. It only adds tasks and connections and fills tasks that have not started, and a task counts as started once the plan of its start is recorded. An edit of the workflow document changes no run. A run's planner waits on its proposal until the person accepts or dismisses it ([ADR 0038](docs/adr/0038-a-run-s-planner-waits-on-its-proposal-and-the-person-accepts-it-into-the-run.md)).
 _Avoid_: edit, which changes only the document
 
 ### Agents

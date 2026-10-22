@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows.Input;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Execution;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
@@ -103,9 +104,10 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>
     /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the
-    /// inspector offers both in one button.
+    /// inspector offers both in one button. A Chat planner in the canvas's run takes it while Accept amends that run (#84).
     /// </summary>
-    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && StandaloneWaiting && Proposal is { HasItems: true };
+    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && Proposal is { HasItems: true } proposal &&
+        (proposal.IntoRun ? RunTask is { State: TaskState.Waiting, Status: AttemptStatus.WaitingForInput } : StandaloneWaiting);
 
     /// <summary>Accepts the proposal, and once it is accepted, marks the planner done.</summary>
     public ICommand AcceptAndFinishCommand => _acceptAndFinish;
@@ -120,7 +122,7 @@ public sealed partial class TaskNodeViewModel
         SelectCommand = new RelayCommand(() => _canvas.Inspect(this));
         _acceptAndFinish = new RelayCommand(
             AcceptAndFinish,
-            () => ShowsAcceptAndFinish && Proposal!.AcceptCommand.CanExecute(null) && _markDone.CanExecute(null));
+            () => ShowsAcceptAndFinish && Proposal!.AcceptCommand.CanExecute(null) && (Proposal.IntoRun || _markDone.CanExecute(null)));
         PropertyChanged += OnInspectedChanged;
     }
 
@@ -167,6 +169,12 @@ public sealed partial class TaskNodeViewModel
     private void AcceptAndFinish()
     {
         var proposal = Proposal!;
+        if (proposal.IntoRun)
+        {
+            _ = proposal.AcceptIntoRunAsync(finish: true);
+            return;
+        }
+
         proposal.AcceptCommand.Execute(null);
         if (!ReferenceEquals(Proposal, proposal) && _canvas.Runs.MarkDone(Id) is { } problem)
         {

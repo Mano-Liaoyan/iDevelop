@@ -202,6 +202,7 @@ public static class RunText
         Pending.UnreadableBlock unreadable =>
             $"The agent ended with a block iDevelop could not read. {unreadable.Problem} Reply, or mark the task done.",
         Pending.Approval => "Approve what the tasks before it handed on, or send it back.",
+        Pending.Proposal => "The planner proposes changes. Accept or dismiss them in its Proposal section, or write back.",
         _ => throw new UnreachableException(),
     };
 

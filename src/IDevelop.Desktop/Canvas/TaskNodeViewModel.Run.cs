@@ -208,6 +208,7 @@ public sealed partial class TaskNodeViewModel
         ShowGate();
         ShowPanels();
         _ = ReadRunReviewAsync();
+        _ = ReadRunProposalAsync();
         foreach (var property in RunDependents)
         {
             OnPropertyChanged(property);

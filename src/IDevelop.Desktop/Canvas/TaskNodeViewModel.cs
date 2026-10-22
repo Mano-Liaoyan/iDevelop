@@ -494,10 +494,32 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     /// <summary>
     /// Shows the latest proposal of the task's session, unless it is closed: from its latest attempt, or else from the
     /// attempts that one continues, newest first. The attempt is read again only when it changed, and an open proposal
-    /// keeps the person's choices and checks them against the workflow again.
+    /// keeps the person's choices and checks them against the workflow again. While the canvas's run shows a planner, its
+    /// proposal there comes first, until an amendment took it (#84).
     /// </summary>
     internal void ShowProposal()
     {
+        if (RunProposalShown is { } run)
+        {
+            var held = _proposal is { } open && open.Identity.Equals(ProposalViewModel.IdentityOf(run.Read, run.Attempt)) ? open : null;
+            var inRun = run.Accepted ? null : held ?? new ProposalViewModel(_canvas, run.Read, run.Attempt, run.Source);
+            if (inRun is not null && _canvas.IsClosed(inRun))
+            {
+                inRun = null;
+            }
+
+            inRun?.ShowRun(run.Source);
+            Proposal = inRun;
+            return;
+        }
+
+        // A planner that the canvas's run started shows only what it proposed there, never a proposal of its own earlier run.
+        if (IsPlanner && RunTask is { Attempt: not null })
+        {
+            Proposal = null;
+            return;
+        }
+
         if (!ReferenceEquals(_proposed, _attempt))
         {
             _proposed = _attempt;

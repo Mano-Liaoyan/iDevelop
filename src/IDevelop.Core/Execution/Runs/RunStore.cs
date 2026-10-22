@@ -984,7 +984,8 @@ internal sealed partial class RunStore
                 return Refuse(RunProblem.EvidenceMismatch);
             }
 
-            var read = OwnedEvidence(record, planner, checkpoint);
+            // The log up to the turn's closure, since a planner marked done after its proposal has a longer log (#84).
+            var read = OwnedEvidence(record, planner, checkpoint, prefix: true);
             if (read.Rejection is not null || read.Record is null)
             {
                 return Refuse(RunProblem.EvidenceMismatch);
@@ -1118,9 +1119,11 @@ internal sealed partial class RunStore
         return (new(id, task, revision, bindings.ToImmutable(), new CodeSelection.Root(record.Base.Commit), "", [], null), null);
     }
 
-    private AttemptEvidence OwnedEvidence(RunRecord record, RunAttempt attempt, LogCheckpoint checkpoint)
+    /// <param name="prefix">Reads the log's first bytes up to <paramref name="checkpoint"/>, which may have grown since.</param>
+    private AttemptEvidence OwnedEvidence(RunRecord record, RunAttempt attempt, LogCheckpoint checkpoint, bool prefix = false)
     {
-        var read = AttemptEvidence.Read(AttemptFolder(record.Workflow, record.Id, attempt.Task, attempt.Id), checkpoint);
+        var folder = AttemptFolder(record.Workflow, record.Id, attempt.Task, attempt.Id);
+        var read = prefix ? AttemptEvidence.ReadPrefix(folder, checkpoint) : AttemptEvidence.Read(folder, checkpoint);
         if (read.Rejection is not null)
         {
             return read;

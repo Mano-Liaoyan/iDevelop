@@ -297,6 +297,7 @@ public sealed record AttemptRecord
         WorkingFolder = requested.WorkingFolder;
         Conversation = requested.Conversation ?? ConversationMode.Autonomous;
         Planning = requested.Planning;
+        InRun = requested.RunBinding is not null;
         ReadOnly = requested.ReadOnly;
         Subject = requested.Subject;
         Fix = requested.Fix;
@@ -322,6 +323,9 @@ public sealed record AttemptRecord
 
     /// <summary>The handles the planner's prompt listed, which its proposals name. Null for a node that proposes nothing.</summary>
     public PlanningHandles? Planning { get; }
+
+    /// <summary>A workflow run owns the attempt.</summary>
+    internal bool InRun { get; }
 
     /// <summary>The attempt whose session this one resumes. Its session id is <see cref="SessionId"/>, only once the reducer found it plain.</summary>
     public AttemptId? Continues { get; }
@@ -726,7 +730,7 @@ internal static partial class AttemptReducer
                 : EndTurn(record, turn, detail) with { Status = AttemptStatus.InReview, Result = FinalText(record) };
         }
 
-        if (status == AttemptStatus.Succeeded && AgentWork.AfterTurn(record.Conversation, FinalText(record)) is { } pending)
+        if (status == AttemptStatus.Succeeded && AgentWork.AfterTurn(record.Conversation, FinalText(record), record is { InRun: true, Planning: not null }) is { } pending)
         {
             return record.SessionId is null
                 ? EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed,

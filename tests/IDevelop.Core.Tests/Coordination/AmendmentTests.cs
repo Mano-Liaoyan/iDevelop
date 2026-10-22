@@ -55,6 +55,20 @@ public sealed class AmendmentTests
         return (attempt, log, proposal);
     }
 
+    /// <summary>
+    /// Marks <paramref name="planner"/> done once it waits on its proposal, as the person does in its conversation, so the
+    /// tasks after it go on while the proposal stays open (#84).
+    /// </summary>
+    internal static async Task HandOn(CoordinatorFixture f, TaskId planner)
+    {
+        await f.Until(view => view.Tasks[planner] is { State: TaskState.Waiting, Status: AttemptStatus.WaitingForInput });
+        var record = f.Read();
+        var attempt = record.Attempts.Values.Single(attempt => attempt.Task == planner);
+        var log = AttemptEvidence.Read(f.Preparation.Store.AttemptFolder(W, f.Preparation.RunId, planner, attempt.Id)).Record!;
+        var done = await f.Coordinator.MarkDone(f.Address, planner, new(log.Id, log.Turns.Count)).WaitAsync(Bound);
+        Assert.Equal(CommandOutcome.Applied, done.Outcome);
+    }
+
     /// <summary>Blocks the second preparation, B's, after its reservation and before its preparation is recorded.</summary>
     private static (TaskCompletionSource Reached, TaskCompletionSource Release) HoldSecondPreparation(CoordinatorFixture f) =>
         HoldSecond(f, "journal.prepared.before");
@@ -84,6 +98,7 @@ public sealed class AmendmentTests
         var original = f.Read().Revision.Id;
         var (reached, release) = HoldSecondPreparation(f);
         await f.Resume();
+        await HandOn(f, A);
         await reached.Task.WaitAsync(Bound);
         await f.Until(view => view.Tasks[A].State == TaskState.Done);
         var (_, _, proposal) = Proposed(f);
@@ -114,6 +129,7 @@ public sealed class AmendmentTests
         var original = f.Read().Revision.Id;
         var (reached, release) = HoldSecondPreparation(f);
         await f.Resume();
+        await HandOn(f, A);
         await reached.Task.WaitAsync(Bound);
         await f.Until(view => view.Tasks[A].State == TaskState.Done);
         var reservedB = f.Read().Attempts.Values.Single(attempt => attempt.Task == B);
@@ -160,6 +176,7 @@ public sealed class AmendmentTests
         await f.Open();
 
         await f.Resume();
+        await HandOn(f, A);
         await f.Until(view => view.Tasks[A].State == TaskState.Done && view.Tasks[B].State == TaskState.Done);
 
         Assert.Equal(1, f.Launches(A));
@@ -180,6 +197,7 @@ public sealed class AmendmentTests
         var original = f.Read().Revision.Id;
         var (reached, release) = HoldSecondPreparation(f);
         await f.Resume();
+        await HandOn(f, A);
         await reached.Task.WaitAsync(Bound);
         await f.Until(view => view.Tasks[A].State == TaskState.Done);
         var (_, _, proposal) = Proposed(f);

@@ -102,6 +102,11 @@ public sealed partial class WorkflowCanvasViewModel
         {
             node.ShowRunTask(run?.View.Tasks.GetValueOrDefault(node.Id), run?.IsActive ?? false, adopted, Name);
             node.NotifyRunCommands();
+            // An open proposal follows the run's phase, and its revision once another proposal amended the run.
+            if (node.Proposal is { } proposal && node.RunTask is not null)
+            {
+                _ = node.ReadRunProposalAsync();
+            }
         }
 
         ShowActivity();
@@ -239,6 +244,25 @@ public sealed partial class WorkflowCanvasViewModel
             RunCommand.Untaken untaken => WorkflowRunText.Untaken(untaken.Node, untaken.Branches, TitleOf),
             _ => null,
         });
+    }
+
+    /// <summary>
+    /// Brings the document up to the run's amendments, as one edit that Undo can reverse, while it holds a revision of the
+    /// run's amendment chain (#84). Otherwise it applies nothing, and the run goes on as amended.
+    /// </summary>
+    internal async Task FollowRunAsync(WorkflowRunCoordinator coordinator)
+    {
+        var document = Workflow;
+        var follow = await Task.Run(() => coordinator.Follow(document));
+        if (!ReferenceEquals(document, Workflow))
+        {
+            follow = coordinator.Follow(Workflow);
+        }
+
+        if (follow is AmendmentProjection.Apply apply)
+        {
+            Edit(apply.Edit);
+        }
     }
 
     /// <summary>Whether the canvas's active run runs the task as the document now holds it, or as it was when the run started.</summary>

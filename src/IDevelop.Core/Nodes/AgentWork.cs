@@ -59,7 +59,13 @@ public sealed class AgentWork : IConverses
     /// Why the node waits after a turn that succeeded with no message of the person's waiting, or null when it is done.
     /// Pure, so folding the same log always settles the attempt the same way.
     /// </summary>
-    internal static Pending? AfterTurn(ConversationMode mode, string? finalText) => mode switch
+    /// <param name="holdsProposal">
+    /// The attempt is a run's planner, so a turn that ends with a proposal waits in every mode, and nothing after the
+    /// planner starts before the person accepts or dismisses it (#84).
+    /// </param>
+    internal static Pending? AfterTurn(ConversationMode mode, string? finalText, bool holdsProposal = false) =>
+        mode != ConversationMode.Chat && holdsProposal && ResultBlock.Read(finalText) is ResultBlock.Readable { Status: "proposal" } ? new Pending.Proposal()
+        : mode switch
     {
         ConversationMode.Autonomous => null,
         ConversationMode.Chat => new Pending.Reply(),
