@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -12,7 +11,6 @@ using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Theme;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
-using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.Desktop.Tests.ConversationFixtures;
 
