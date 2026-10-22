@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using IDevelop.Nodes;
 using IDevelop.Projects;
@@ -20,6 +21,11 @@ public sealed partial class ProjectRuns
 
 
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
+
+    /// <summary>A workflow turn's client now does this work in the background, which the turn waits for (#113).</summary>
+    internal event Action<ExecutionAddress, ImmutableArray<BackgroundTask>>? TurnBackgroundChanged;
+
+    private void NotifyBackground(ExecutionAddress address, ImmutableArray<BackgroundTask> tasks) => TurnBackgroundChanged?.Invoke(address, tasks);
 
     /// <summary>The leases of the turns this project still owns, including settled turns kept past closing until their receipt.</summary>
     internal RunLease[] OwnedLeases()
