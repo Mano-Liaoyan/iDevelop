@@ -3,7 +3,6 @@ using System.Collections.Immutable;
 using System.Text.Json;
 using IDevelop.Execution;
 using IDevelop.Nodes;
-using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeAgents;
