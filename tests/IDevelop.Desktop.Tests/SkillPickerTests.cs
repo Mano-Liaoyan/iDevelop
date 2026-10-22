@@ -6,7 +6,6 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
