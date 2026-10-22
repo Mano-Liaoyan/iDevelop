@@ -64,6 +64,7 @@ public sealed class RunProposalTests
         ShowProposal(shell);
 
         Assert.Equal(NodeRole.Proposing, Node(shell, "Plan").Role);
+        Assert.Equal("Proposal · 1 task", shell.CardText("Plan", "CardStatus"));
         Assert.Equal(TaskState.Pending, shell.WorkflowRun!.View.Tasks[B].State);
         Assert.True(shell.WorkflowRun.IsWaitingForPerson);
         Assert.Equal(("Export API", "Codex · GPT-5.5 · low", "Routine.", null), Assert.Single(Review(shell)));

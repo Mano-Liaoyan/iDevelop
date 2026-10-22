@@ -82,6 +82,7 @@ public sealed partial class TaskNodeViewModel
             case nameof(Role):
                 OnPropertyChanged(nameof(ShowsAgent));
                 OnPropertyChanged(nameof(Subtitle));
+                OnPropertyChanged(nameof(SubtitleChoices));
                 OnPropertyChanged(nameof(IsUnderReview));
                 break;
             case nameof(Proposal) or nameof(StatusLabel):
