@@ -1,6 +1,6 @@
 # Development environment
 
-The agents that develop iDevelop use [Matt Pocock's skills](https://github.com/mattpocock/skills), installed as the `mattpocock-skills` Claude Code plugin. The project's issue tracker is GitHub Issues. The project replaced its earlier PStack setup with these skills on 2026-10-08.
+The agents that develop iDevelop use [Matt Pocock's skills](https://github.com/mattpocock/skills), installed as the `mattpocock-skills` Claude Code plugin. The project's issue tracker is GitHub Issues.
 
 ## Install the skills
 
