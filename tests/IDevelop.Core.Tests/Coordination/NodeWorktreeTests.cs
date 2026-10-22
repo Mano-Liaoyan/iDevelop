@@ -1,5 +1,4 @@
 using IDevelop.Execution;
-using IDevelop.Nodes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Coordination.CoordinatorFixture;
