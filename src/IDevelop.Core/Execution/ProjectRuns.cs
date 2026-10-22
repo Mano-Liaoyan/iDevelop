@@ -28,6 +28,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly string _attempts;
     private readonly HashSet<AttemptId> _started = [];
     private readonly Dictionary<TaskId, ActiveRun> _active = [];
+
+    private sealed record PublishedAttempt(AttemptRecord Record, long LogRevision);
+
+    private readonly Dictionary<TaskId, PublishedAttempt> _published = [];
+
     private readonly Lock _advancing = new();
     private long _launches;
     private Task? _leaving;

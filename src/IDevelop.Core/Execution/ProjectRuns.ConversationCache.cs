@@ -19,9 +19,6 @@ public sealed partial class ProjectRuns
 
     // Each run journal as last read, by its path and length. A journal only grows, so the same length is the same record.
     private readonly Dictionary<string, (long Length, RunRecord Record)> _journals = [];
-    private sealed record PublishedAttempt(AttemptRecord Record, long LogRevision);
-
-    private readonly Dictionary<TaskId, PublishedAttempt> _published = [];
 
     /// <summary>
     /// The history of one of the task's attempts, standalone or run-owned, with this window's live text while it runs it.
