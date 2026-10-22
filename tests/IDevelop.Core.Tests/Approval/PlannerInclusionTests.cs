@@ -3,7 +3,6 @@ using IDevelop.Execution;
 using IDevelop.Nodes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using static IDevelop.Core.Tests.Approval.ApprovalFixture;
 using static IDevelop.Core.Tests.Approval.ApprovalTests;
 using static IDevelop.Core.Tests.Approval.ChangedContentTests;
 using static IDevelop.Core.Tests.Coordination.CoordinatorFixture;
