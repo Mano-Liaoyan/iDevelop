@@ -1,4 +1,3 @@
-using System.Text;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
