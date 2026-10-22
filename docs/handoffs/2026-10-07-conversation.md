@@ -110,7 +110,7 @@ The [workspace session](2026-10-07-workspace-sessions.md) owns conversation view
 
 ## Changed artifacts
 
-- `src/IDevelop.Core/Execution/ClientPolicy.cs`, `TurnProtocol.cs`, `Clients/ClaudeProtocol.cs`, and `Clients/CodexProtocol.cs` hold the policy and the per-turn protocols.
+- `src/IDevelop.Core/Execution/Clients/ClientPolicy.cs`, `Clients/TurnProtocol.cs`, `Clients/ClaudeProtocol.cs`, and `Clients/CodexProtocol.cs` hold the policy and the per-turn protocols.
 - `src/IDevelop.Core/Execution/ConversationContract.cs`, `ConversationHistory.cs`, `ConversationPager.cs`, and `ProjectRuns.Conversation.cs` hold the session contract and history paging. `ProjectRuns.cs` and `ProjectRuns.ActiveRun.cs` hold the drain and the published records.
 - `src/IDevelop.Desktop/Conversation/` holds `MarkdownView`, `ConversationLinkRouter`, the view, its view model, and attention.
 - `Directory.Packages.props` pins Markdig 1.4.0, and `THIRD-PARTY-NOTICES.md` carries its license.
