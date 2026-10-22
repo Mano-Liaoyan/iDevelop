@@ -102,6 +102,8 @@ public sealed class ProposalViewModel : ObservableObject
     private readonly RelayCommand _dismiss;
     private RunSource? _run;
     private RevisionId? _latest;
+    // The run refused an acceptance as stale before a reread brought the newer revision, so the next one takes it.
+    private bool _stale;
     private bool _amending;
     private string? _problem;
     private IReadOnlyList<string> _connections = [];
@@ -177,7 +179,8 @@ public sealed class ProposalViewModel : ObservableObject
         if (run is not null)
         {
             _latest = run.Revision;
-            _run = _run is { } shown ? run with { Revision = shown.Revision } : run;
+            _run = _run is { } shown && !_stale ? run with { Revision = shown.Revision } : run;
+            _stale = false;
         }
 
         OnPropertyChanged(nameof(IntoRun));
@@ -468,6 +471,10 @@ public sealed class ProposalViewModel : ObservableObject
                 {
                     _run = source with { Revision = latest };
                     Refresh();
+                }
+                else
+                {
+                    _stale = true;
                 }
 
                 _canvas.Notice("The run changed since this proposal showed. Check it again, then accept it.");
