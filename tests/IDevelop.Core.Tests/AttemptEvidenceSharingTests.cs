@@ -1,7 +1,6 @@
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.AttemptEvents;
-using static IDevelop.TestSupport.TestTasks;
 
 namespace IDevelop.Core.Tests;
 
