@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!--
+      A test project's run ends with an error after 30 minutes, so a run that slows to a crawl without one test hanging
+      fails instead of blocking (#165). On Linux the slowest project, IDevelop.Desktop.Tests, takes about 9 minutes.
+    -->
+    <TestSessionTimeout>1800000</TestSessionTimeout>
+  </RunConfiguration>
+</RunSettings>

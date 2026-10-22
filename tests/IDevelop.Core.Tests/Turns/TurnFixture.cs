@@ -12,6 +12,7 @@ internal sealed class TurnFixture : IAsyncDisposable
 {
     public static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
     private readonly TempFolder _temp = new();
+    private readonly List<ProjectRuns> _opened = [];
     public PreparationFixture Preparation { get; }
     public FakeClients Fakes { get; }
     public ProjectRuns Runs { get; private set; } = null!;
@@ -64,6 +65,7 @@ internal sealed class TurnFixture : IAsyncDisposable
     public ProjectRuns OpenRuns(ClientDirectory clients)
     {
         var runs = ProjectRuns.Open(Preparation.Git.Folder, clients);
+        _opened.Add(runs);
         runs.Store = Preparation.Store;
         runs.GitEnvironment = Preparation.Git.Environment;
         runs.MaterializerClock = new PreparationFixture.Clock();
@@ -205,9 +207,19 @@ internal sealed class TurnFixture : IAsyncDisposable
         Assert.Equal(2, control.Launches);
     }
 
+    /// <summary>
+    /// Closes every project this fixture opened and lets go of the leases of settled turns the test never released, which
+    /// keep their run.lock open past closing; Windows will not delete an open file (#165).
+    /// </summary>
+    public async Task Close()
+    {
+        foreach (var runs in _opened) await runs.DisposeAsync();
+        foreach (var lease in _opened.SelectMany(runs => runs.OwnedLeases())) lease.Dispose();
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if (Runs is not null) await Runs.DisposeAsync();
+        await Close();
         Fakes.Dispose();
         Preparation.Dispose();
         _temp.Dispose();

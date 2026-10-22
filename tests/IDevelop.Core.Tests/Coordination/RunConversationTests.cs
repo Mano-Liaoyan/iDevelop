@@ -15,6 +15,19 @@ public sealed class RunConversationTests
     private static async Task<SendResult> Send(IConversationSession session, string text, bool stopTurn = false) =>
         await session.SendAsync(session.Snapshot.Current!.Value, text, stopTurn, default).WaitAsync(Bound);
 
+    // On a file system that ignores case, as Windows and macOS do, gate "x" and task X's folder were one path, and opening
+    // the gate threw UnauthorizedAccessException (#165).
+    [Fact]
+    public async Task A_gate_and_a_task_s_folder_never_differ_only_by_case()
+    {
+        await using var f = new RunConversationFixture(Chat(A, B, C, D, X));
+        foreach (var task in new[] { A, B, C, D, X })
+        {
+            var gate = f.Gate(Name(task).ToLowerInvariant());
+            Assert.False(string.Equals(gate, f.Folder(task), StringComparison.OrdinalIgnoreCase), gate);
+        }
+    }
+
     [Fact]
     public async Task A_fix_round_that_resumed_its_session_reads_on_in_the_run_s_conversation_without_a_new_attempt_marker()
     {

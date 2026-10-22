@@ -43,6 +43,18 @@ public sealed class TurnRunnerTests
         Assert.IsType<LeaseTake.Taken>(f.Preparation.Permit.TakeTask(T)).Lease.Dispose();
     }
 
+    // A settled turn keeps its lease past closing until its receipt, and Windows will not delete the open run.lock, so the
+    // fixture lets go of a lease the test never released before it deletes the project (#165).
+    [Fact]
+    public async Task Closing_the_fixture_lets_go_of_a_settled_turn_s_lease()
+    {
+        await using var f = new TurnFixture();
+        await f.Open();
+        await f.Settled(await f.Start());
+        await f.Close();
+        Assert.IsType<LeaseTake.Taken>(f.Preparation.Permit.TakeTask(T)).Lease.Dispose();
+    }
+
     [Theory]
     [InlineData("concurrent")]
     [InlineData("started")]

@@ -5,5 +5,7 @@
     <VSTestBlameHang>true</VSTestBlameHang>
     <VSTestBlameHangTimeout>5m</VSTestBlameHangTimeout>
     <VSTestBlameHangDumpType>mini</VSTestBlameHangDumpType>
+    <!-- A project's whole run ends with an error after 30 minutes, for a run that slows to a crawl without one test hanging (#165). -->
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)test.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 </Project>

@@ -29,6 +29,7 @@ internal sealed class WorkflowRunFixture : IDisposable
         WorkflowRunViewModel.RetryDelay = TimeSpan.FromMilliseconds(100);
         Project = _temp.Seed(edits);
         Evidence = _temp.Create("evidence");
+        Gates = Directory.CreateDirectory(Path.Combine(Evidence, "gates")).FullName;
         Fakes = new FakeClients(_temp.Create("bin"));
         var config = Path.Combine(_temp.Create("git"), "config");
         File.WriteAllText(config, "[maintenance]\n\tauto = false\n");
@@ -52,6 +53,12 @@ internal sealed class WorkflowRunFixture : IDisposable
     public string Other() => _temp.Create("other");
 
     public string Evidence { get; }
+
+    /// <summary>
+    /// Where gate files go: apart from the task folders in <see cref="Evidence"/>, so gate "a" and task A's folder are two
+    /// paths on a file system that ignores case, as Windows and macOS do (#165).
+    /// </summary>
+    public string Gates { get; }
 
     public FakeClients Fakes { get; }
 
@@ -132,7 +139,7 @@ internal sealed class WorkflowRunFixture : IDisposable
 
     public string Gate(string name)
     {
-        var path = Path.Combine(Evidence, name);
+        var path = Path.Combine(Gates, name);
         if (!_gates.Contains(path))
         {
             _gates.Add(path);

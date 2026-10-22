@@ -20,6 +20,17 @@ public sealed partial class ProjectRuns
 
 
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
+
+    /// <summary>
+    /// The leases of the turns this project still owns. A settled turn keeps its lease past closing until its receipt, so a
+    /// test that never releases one lets go of it here before it deletes the project, which Windows refuses while the lease's
+    /// run.lock is open (#165).
+    /// </summary>
+    internal RunLease[] OwnedLeases()
+    {
+        lock (_gate) return [.. _owned.Values.Select(owner => owner.Lease)];
+    }
+
     /// <summary>
     /// A materializer whose steps wait for the repository's mutation lock as a run's own <paramref name="scheduled"/> work,
     /// for <see cref="MutationPatience"/> and behind any person's command that waits, or as a person's command, for
