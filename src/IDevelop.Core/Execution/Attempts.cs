@@ -133,6 +133,13 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public PlanningHandles? Planning { get; init; }
 
+        /// <summary>
+        /// True for a run's planner, whose turn that ends with a proposal waits for the person (#84). Null in other attempts
+        /// and in logs written before, whose planners handed on at once.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? WaitsOnProposal { get; init; }
+
         /// <summary>The project's files as a Git tree before the first turn started. Null outside Git and in older logs.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Tree { get; init; }
@@ -297,6 +304,7 @@ public sealed record AttemptRecord
         WorkingFolder = requested.WorkingFolder;
         Conversation = requested.Conversation ?? ConversationMode.Autonomous;
         Planning = requested.Planning;
+        WaitsOnProposal = requested.WaitsOnProposal == true;
         ReadOnly = requested.ReadOnly;
         Subject = requested.Subject;
         Fix = requested.Fix;
@@ -322,6 +330,12 @@ public sealed record AttemptRecord
 
     /// <summary>The handles the planner's prompt listed, which its proposals name. Null for a node that proposes nothing.</summary>
     public PlanningHandles? Planning { get; }
+
+    /// <summary>A run's planner, whose turn that ends with a proposal waits for the person (#84).</summary>
+    internal bool WaitsOnProposal { get; }
+
+    /// <summary>The person marked the attempt done while it waited, which leaves a run planner's open proposal declined (#84).</summary>
+    internal bool MarkedDone { get; init; }
 
     /// <summary>The attempt whose session this one resumes. Its session id is <see cref="SessionId"/>, only once the reducer found it plain.</summary>
     public AttemptId? Continues { get; }
@@ -526,7 +540,7 @@ internal static partial class AttemptReducer
         (AttemptEvent.HandedToTerminal handoff, _) => record with { Terminal = new TerminalHandoff(handoff.At, handoff.Folder, handoff.Command) },
         (AttemptEvent.TurnRequested turn, { Status: AttemptStatus.WaitingForInput or AttemptStatus.InReview }) =>
             NextTurn(record with { Status = AttemptStatus.Running, Pending = null }, turn),
-        (AttemptEvent.MarkedDone done, { Status: AttemptStatus.WaitingForInput }) => Settle(record, AttemptStatus.Succeeded, null, done.At),
+        (AttemptEvent.MarkedDone done, { Status: AttemptStatus.WaitingForInput }) => Settle(record, AttemptStatus.Succeeded, null, done.At) with { MarkedDone = true },
         (AttemptEvent.CancelRequested cancel, { Status: AttemptStatus.WaitingForInput or AttemptStatus.InReview }) => Settle(record, AttemptStatus.Cancelled, null, cancel.At),
         (AttemptEvent.Concluded concluded, { Status: AttemptStatus.InReview }) =>
             Settle(record, concluded.Failure is null ? AttemptStatus.Succeeded : AttemptStatus.Failed, concluded.Failure, concluded.At),
@@ -726,7 +740,9 @@ internal static partial class AttemptReducer
                 : EndTurn(record, turn, detail) with { Status = AttemptStatus.InReview, Result = FinalText(record) };
         }
 
-        if (status == AttemptStatus.Succeeded && AgentWork.AfterTurn(record.Conversation, FinalText(record)) is { } pending)
+        if (status == AttemptStatus.Succeeded && AgentWork.AfterTurn(record.Conversation, FinalText(record), record.WaitsOnProposal) is { } pending &&
+            // A planner whose client reported no session cannot wait, so it hands on its proposal as it did before.
+            !(pending is Pending.Proposal && record.SessionId is null))
         {
             return record.SessionId is null
                 ? EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed,

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows.Input;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Execution;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
@@ -26,7 +27,7 @@ public sealed partial class TaskNodeViewModel
         [nameof(ShowsRunState)] = [nameof(ShowsAcceptAndFinish)],
     };
 
-    private RelayCommand _acceptAndFinish = null!;
+    private RelayCommand? _acceptAndFinish;
     private ProposalViewModel? _watchedProposal;
     private AttemptViewModel? _lastRun;
     private bool _showsToolCalls;
@@ -103,12 +104,13 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>
     /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the
-    /// inspector offers both in one button.
+    /// inspector offers both in one button. A Chat planner in the canvas's run takes it while Accept amends that run (#84).
     /// </summary>
-    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && StandaloneWaiting && Proposal is { HasItems: true };
+    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && Proposal is { HasItems: true } proposal &&
+        (proposal.IntoRun ? RunTask is { State: TaskState.Waiting, Status: AttemptStatus.WaitingForInput } : StandaloneWaiting);
 
     /// <summary>Accepts the proposal, and once it is accepted, marks the planner done.</summary>
-    public ICommand AcceptAndFinishCommand => _acceptAndFinish;
+    public ICommand AcceptAndFinishCommand => _acceptAndFinish!;
 
     /// <summary>Selects the node, as clicking it in the connection inspector does.</summary>
     public ICommand SelectCommand { get; private set; } = null!;
@@ -120,7 +122,7 @@ public sealed partial class TaskNodeViewModel
         SelectCommand = new RelayCommand(() => _canvas.Inspect(this));
         _acceptAndFinish = new RelayCommand(
             AcceptAndFinish,
-            () => ShowsAcceptAndFinish && Proposal!.AcceptCommand.CanExecute(null) && _markDone.CanExecute(null));
+            () => ShowsAcceptAndFinish && Proposal!.AcceptCommand.CanExecute(null) && (Proposal.IntoRun || _markDone.CanExecute(null)));
         PropertyChanged += OnInspectedChanged;
     }
 
@@ -143,7 +145,7 @@ public sealed partial class TaskNodeViewModel
                 OnPropertyChanged(dependent);
             }
 
-            _acceptAndFinish.NotifyCanExecuteChanged();
+            _acceptAndFinish?.NotifyCanExecuteChanged();
         }
     }
 
@@ -161,12 +163,24 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    private void OnAcceptChanged(object? sender, EventArgs e) => _acceptAndFinish.NotifyCanExecuteChanged();
+    private void OnAcceptChanged(object? sender, EventArgs e) => _acceptAndFinish?.NotifyCanExecuteChanged();
 
     // The notice keeps what Accept added, so only a refused Mark Done replaces it.
     private void AcceptAndFinish()
     {
         var proposal = Proposal!;
+        if (proposal.IntoRun)
+        {
+            _ = proposal.AcceptIntoRunAsync(finish: true);
+            return;
+        }
+
+        // A run's planner that Accept no longer amends the run of has no finish of its own here.
+        if (proposal.FromRun)
+        {
+            return;
+        }
+
         proposal.AcceptCommand.Execute(null);
         if (!ReferenceEquals(Proposal, proposal) && _canvas.Runs.MarkDone(Id) is { } problem)
         {

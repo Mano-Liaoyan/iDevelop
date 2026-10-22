@@ -17,7 +17,7 @@ A planner that runs inside a workflow run now proposes a client, a model, a reas
 
 ## Consequences
 
-- No view accepts a run planner's proposal yet. Issue [#84](https://github.com/Mano-Liaoyan/iDevelop/issues/84) builds it, and the owner noted there that it must show the picked agents and let the person change them.
+- A run planner's review in the app shows the picked agents and lets the person change them, as Generate's does ([ADR 0038](0038-a-run-s-planner-waits-on-its-proposal-and-the-person-accepts-it-into-the-run.md)).
 - A run's journal written before this decision has no offers on its plans, and its planners keep the contract they read.
 
 Source: pull request [#115](https://github.com/Mano-Liaoyan/iDevelop/pull/115), its Decisions, and the owner's answers on issue #99 on 2026-10-12.

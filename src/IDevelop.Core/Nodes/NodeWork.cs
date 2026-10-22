@@ -19,6 +19,9 @@ public abstract record Pending
 
     /// <summary>An approval waits for the person to approve or send back.</summary>
     public sealed record Approval : Pending;
+
+    /// <summary>A run's planner ended its turn with a proposal, so the tasks after it wait until the person accepts or dismisses it (#84).</summary>
+    public sealed record Proposal : Pending;
 }
 
 /// <summary>What a node does next.</summary>

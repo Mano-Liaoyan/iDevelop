@@ -50,6 +50,7 @@ public sealed class SlotAmendmentTests
         var original = f.Read().Revision.Id;
         var (reached, release) = HoldSecond(f, "journal.reserve.before");
         await f.Resume();
+        await HandOn(f, A);
         await reached.Task.WaitAsync(Bound);
         Assert.Contains(f.Read().Plans.Values, plan => plan is MaterializationPlan.Preparation { Task: var task } && task == C);
         var (_, _, proposal) = Proposed(f);
@@ -75,6 +76,7 @@ public sealed class SlotAmendmentTests
         var original = f.Read().Revision.Id;
         var (reached, release) = HoldSecond(f, "journal.plan.before");
         await f.Resume();
+        await HandOn(f, A);
         await reached.Task.WaitAsync(Bound);
         var (_, _, proposal) = Proposed(f);
 
@@ -103,6 +105,7 @@ public sealed class SlotAmendmentTests
         var original = f.Read().Revision.Id;
         var (reached, release) = HoldSecond(f, "journal.reserve.before");
         await f.Resume();
+        await HandOn(f, A);
         await reached.Task.WaitAsync(Bound);
         var (_, _, proposal) = Proposed(f);
 
@@ -144,6 +147,7 @@ public sealed class SlotAmendmentTests
         await f.Open();
         var original = f.Read().Revision.Id;
         await f.Resume();
+        await HandOn(f, A);
         var request = (await f.Until(view => view.Tasks[G] is { State: TaskState.Waiting, Gate: not null })).Tasks[G].Gate!.Request;
         var (_, _, proposal) = Proposed(f);
         var added = proposal.Nodes.Single().Id;
