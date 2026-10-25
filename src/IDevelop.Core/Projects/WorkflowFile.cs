@@ -50,6 +50,7 @@ internal static class WorkflowFile
                 Fields = task.Blueprint.Fields.ToDictionary(field => field.Key, string?[]? (field) => BlueprintJson.Lines(task.Field(field.Key))),
                 Execution = BlueprintJson.Execution(task.Execution),
                 Conversation = BlueprintJson.ConversationName(task.Conversation),
+                RoundLimit = task.RoundLimit == TaskDefinition.DefaultRoundLimit ? null : task.RoundLimit,
             })],
             Connections = [.. workflow.Connections.Select(connection => new ConnectionDto
             {
@@ -143,6 +144,10 @@ internal static class WorkflowFile
                     BlueprintJson.Conversation(task.Conversation, entry)),
             };
             workflow = Replay(workflow, place, path, $"task {id}");
+            if (task.RoundLimit is { } limit)
+            {
+                workflow = Replay(workflow, new WorkflowEdit.SetRoundLimit(id, limit), path, $"task {id}");
+            }
         }
 
         if (blueprints.Keys.Where(key => !workflow.Blueprints.ContainsKey(key)).Select(key => (BlueprintKey?)key).FirstOrDefault() is { } unused)
@@ -294,6 +299,9 @@ internal static class WorkflowFile
         public required Dictionary<string, string?[]?> Fields { get; init; }
         public required ExecutionDto? Execution { get; init; }
         public required string Conversation { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? RoundLimit { get; init; }
     }
 
     private sealed class FileDtoV2

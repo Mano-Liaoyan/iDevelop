@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using IDevelop.Core.Tests.Git;
 using IDevelop.Engine;
 using IDevelop.Execution;
@@ -69,6 +70,25 @@ internal sealed class EngineFixture : IAsyncDisposable
             .WithField("goal", $"Plan {title}.")!;
         Workflow = Workflow.Must(TestNodes.Place(node, new CanvasPoint(0, 0)));
         return node.Id;
+    }
+
+    public TaskId Review(string title)
+    {
+        var node = new TaskDefinition(NextId(), BuiltInBlueprints.Review) { Title = title, Execution = Agy };
+        Workflow = Workflow.Must(TestNodes.Place(node, new CanvasPoint(0, 0)));
+        return node.Id;
+    }
+
+    /// <summary>Steps that run <paramref name="turns"/> one per call, in order, so the fresh turns of one node can differ.</summary>
+    public FakeRule Turns(string name, params FakeRule[] turns)
+    {
+        var folder = Directory.CreateDirectory(File(name)).FullName;
+        foreach (var (index, turn) in turns.Index())
+        {
+            System.IO.File.WriteAllText(Path.Combine(folder, $"{index + 1}.json"), new JsonArray([.. turn.Steps.Select(step => step.DeepClone())]).ToJsonString());
+        }
+
+        return On().Scripted(folder);
     }
 
     public TaskId Merge(string title)

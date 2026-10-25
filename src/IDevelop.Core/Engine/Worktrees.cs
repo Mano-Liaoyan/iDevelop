@@ -30,6 +30,7 @@ internal sealed class GitFailure(string message) : InvalidOperationException(mes
 internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IReadOnlyDictionary<string, string> environment)
 {
     private const string Identity = "iDevelop <idevelop@localhost>";
+    private const int DiffLimit = 200_000;
 
     private GitRepository? _repository;
 
@@ -105,6 +106,17 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
         var start = Fold(repository, head, inputs);
         Run(repository.ResetCheckout(checkout, start.Commit));
         return start.Result;
+    });
+
+    /// <summary>
+    /// The change <paramref name="commit"/> made, as a diff from the merge of <paramref name="inputs"/>, or for a root node from
+    /// where it left the branch's HEAD. A reviewer reads at most <see cref="DiffLimit"/> characters of it.
+    /// </summary>
+    public string Change(IReadOnlyList<CommitId> inputs, CommitId commit) => Locked(repository =>
+    {
+        var start = inputs.Count > 0 ? Fold(repository, null, inputs).Commit.Hex : Git(repository, "merge-base", "HEAD", commit.Hex).Trim();
+        var diff = Git(repository, "diff", "--no-color", "--no-ext-diff", "--no-textconv", start, commit.Hex);
+        return diff.Length <= DiffLimit ? diff : $"{diff[..DiffLimit]}\n… The diff goes on. Run git diff {start} {commit.Hex} to read all of it.";
     });
 
     /// <summary>The conflicting files in the node's worktree, whose HEAD is a conflict's merge, that still hold Git's conflict markers.</summary>
@@ -200,6 +212,11 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
         using var held = repository.TakeMutationLock(TimeSpan.FromSeconds(30)) ?? throw new GitFailure("Another program kept the repository busy.");
         return step(repository);
     }
+
+    private string Git(GitRepository repository, params string[] arguments) =>
+        GitRepository.Run(arguments, repository.Root, GitOperation.Metadata, GitLimits.Default, environment) is { ExitCode: 0 } result
+            ? result.Text
+            : throw new GitFailure($"git {arguments[0]} failed.");
 
     private static void Run(GitResult result)
     {

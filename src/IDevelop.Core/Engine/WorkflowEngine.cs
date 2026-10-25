@@ -8,10 +8,12 @@ namespace IDevelop.Engine;
 /// <summary>
 /// Runs one workflow's nodes and routes their results. Every ready node starts at once, where ready means every dependency
 /// predecessor is completed and current. A node's completion starts each successor that is ready and has no current
-/// result, in a fresh session given the predecessors' latest results. A person's message and a send back continue the
-/// node's own session. When a node starts a turn, every running node after it stops and goes stale, and it runs again once
-/// its inputs are complete. When the person edits a running node's basis, the node stops, goes stale, and waits for their
-/// Run. Each node's state is its log replayed, whether a turn runs, and its current basis, so nothing else is stored.
+/// result, in a fresh session given the predecessors' latest results. A person's message continues the node's own session.
+/// A review's reject and an approval's send back go along the feedback edge: they continue each predecessor's session, and
+/// the reviewer or approver runs again once the new results complete. A reviewer that sent its round limit of rejects
+/// waits for the person instead of reviewing again. When a node starts a turn, every running node after it stops and goes
+/// stale, and it runs again once its inputs are complete. When the person edits a running node's basis, the node stops,
+/// goes stale, and waits for their Run. Each node's state is its log replayed, whether a turn runs, and its current basis, so nothing else is stored.
 /// A node that edits the project works in its own worktree, which a fresh session resets to the merge of its predecessors'
 /// commits, and its completed turn is one commit there. A node that only reads runs in the project folder and hands on
 /// the commits it was given.
@@ -154,14 +156,17 @@ public sealed class WorkflowEngine : IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    /// <summary>Accepts what a waiting node offers as its result: an Approval node's inputs, or a Chat node's last reply.</summary>
+    /// <summary>
+    /// Accepts what a waiting node offers as its result: an Approval node's inputs, a reviewer's inputs at its round limit,
+    /// or a Chat node's last reply.
+    /// </summary>
     /// <exception cref="InvalidOperationException">The node waits for nothing the person can approve.</exception>
     public Task Approve(TaskId node)
     {
         Change(() =>
         {
             var log = Log(node);
-            if (Waiting(node) is not { Why: NodeState.Approval or NodeState.Reply } waiting || log.Record.SessionBasis is not { } basis)
+            if (Waiting(node) is not { Why: NodeState.Approval or NodeState.Reply or NodeState.RoundLimit } waiting || log.Record.SessionBasis is not { } basis)
             {
                 throw new InvalidOperationException("The node waits for no approval.");
             }
@@ -230,15 +235,15 @@ public sealed class WorkflowEngine : IAsyncDisposable
     }
 
     /// <summary>
-    /// Sends an Approval node's inputs back with the person's note, which continues each predecessor's own session. The
-    /// Approval node asks again once they complete.
+    /// Sends the inputs of an Approval node, or of a reviewer at its round limit, back with the person's note along the
+    /// feedback edge. The node runs again once its predecessors complete.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The node is no Approval node that waits.</exception>
+    /// <exception cref="InvalidOperationException">The node waits for no approval, or a predecessor runs.</exception>
     public Task SendBack(TaskId node, string note)
     {
         Change(() =>
         {
-            if (_workflow.Tasks[node].Blueprint.Work is not WorkSpec.Person || Waiting(node) is null)
+            if (Waiting(node) is not { } waiting || _workflow.Tasks[node].Blueprint.Work is not WorkSpec.Person && waiting.Why != NodeState.RoundLimit)
             {
                 throw new InvalidOperationException("The node waits for no approval.");
             }
@@ -249,11 +254,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             }
 
             Log(node).Append(new NodeEntry.PersonMessage(note));
-            Log(node).Append(new NodeEntry.Stopped());
-            foreach (var predecessor in Predecessors(_workflow, node).Where(id => Log(id).Record.Session is not null))
-            {
-                Continue(predecessor, note);
-            }
+            Feedback(node, note);
         });
         return Task.CompletedTask;
     }
@@ -275,7 +276,12 @@ public sealed class WorkflowEngine : IAsyncDisposable
     {
         if (Refusal(id) is { } reason) throw new InvalidOperationException(reason);
         var basis = BasisIn(_workflow, id);
-        if (Edits(_workflow.Tasks[id]))
+        var node = _workflow.Tasks[id];
+        if (Log(id).Record is { End: NodeEntry.Feedback, Rounds: var rounds } && rounds >= node.RoundLimit && node.Blueprint.Work is not WorkSpec.Person)
+        {
+            Settle(id, basis, new NodeEntry.Waiting(NodeState.RoundLimit, Inputs(id)));
+        }
+        else if (Edits(node))
         {
             Begin(id, basis, () => _worktrees.Reset(id, InputCommits(id)));
         }
@@ -409,6 +415,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             WorktreeStart.Conflict? again = null;
             log.Append(live.Halt != Halt.None ? new NodeEntry.Stopped() : outcome switch
             {
+                TurnOutcome.Done done when node.Blueprint.Work is WorkSpec.Review review => Judge(id, review, done.Report, basis),
                 TurnOutcome.Done done => Finish(node, id, done.Report, basis, out again),
                 TurnOutcome.Waits waits => new NodeEntry.Waiting(waits.Why, waits.Text),
                 TurnOutcome.Failed failed => new NodeEntry.Failed(failed.Reason),
@@ -434,6 +441,10 @@ public sealed class WorkflowEngine : IAsyncDisposable
             {
                 Route(id);
             }
+            else if (log.Record.End is NodeEntry.Feedback feedback && _workflow.Tasks.ContainsKey(id))
+            {
+                Return(id, feedback.Text);
+            }
             else if (live.Halt == Halt.Upstream && _workflow.Tasks.ContainsKey(id) && Refusal(id) is null)
             {
                 // The upstream completed before this turn ended, so its routing passed this node by.
@@ -453,6 +464,40 @@ public sealed class WorkflowEngine : IAsyncDisposable
             }
         }
     }
+
+    /// <summary>Ends the node's turn by sending <paramref name="text"/> back along the feedback edge.</summary>
+    private void Feedback(TaskId id, string text)
+    {
+        Log(id).Append(new NodeEntry.Feedback(text));
+        Return(id, text);
+    }
+
+    /// <summary>Continues each predecessor's session with <paramref name="text"/>. Its new result reruns the node by routing.</summary>
+    private void Return(TaskId id, string text)
+    {
+        foreach (var predecessor in Predecessors(_workflow, id).Where(p => Log(p).Record.Session is not null && !_live.ContainsKey(p)))
+        {
+            Continue(predecessor, text);
+        }
+    }
+
+    /// <summary>
+    /// How a reviewer's turn ends: an approval completes it with its report, a reject sends its findings back in its fix
+    /// template, and a verdict that cannot be read waits for the person.
+    /// </summary>
+    private NodeEntry Judge(TaskId id, WorkSpec.Review review, string text, Basis basis) => ReviewLedger.ReadVerdict(text) switch
+    {
+        ({ Approves: true }, _) => new NodeEntry.Completed(new NodeResult(NewId(), text, null, basis)),
+        ({ } verdict, _) => new NodeEntry.Feedback(Render(id, review.Fix, Findings(verdict))),
+        (_, var problem) => new NodeEntry.Waiting($"iDevelop could not read the verdict. {problem}", text),
+    };
+
+    /// <summary>Each finding under a heading with its id, severity, and location, then its text and the change that would settle it.</summary>
+    private static string Findings(Verdict verdict) => string.Join("\n\n", verdict.Findings.Select(finding =>
+    {
+        var detail = string.Join(", ", new[] { finding.Severity, finding.Location }.OfType<string>());
+        return $"### Finding {finding.Id}{(detail.Length > 0 ? $" ({detail})" : "")}\n\n{finding.Text}\n\nThe change that would settle it: {finding.Change}";
+    }));
 
     private void StopDescendants(TaskId id)
     {
@@ -507,6 +552,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             { Open: true } => new NodeState.InputRequired(NodeState.Interrupted),
             { End: NodeEntry.Waiting waiting } => new NodeState.InputRequired(waiting.Why),
             { End: NodeEntry.Failed failed } => new NodeState.Failed(failed.Reason),
+            { End: NodeEntry.Feedback } => new NodeState.Idle(),
             { End: NodeEntry.Stopped, TurnBasis: { } turn } when turn != BasisIn(_workflow, id) => new NodeState.Stale(),
             { History: [.., var latest] } => latest.Basis == BasisIn(_workflow, id) ? new NodeState.Completed() : new NodeState.Stale(),
             _ => new NodeState.Idle(),
@@ -543,6 +589,11 @@ public sealed class WorkflowEngine : IAsyncDisposable
             });
         }
 
+        if (node.Blueprint.Work is WorkSpec.Review review)
+        {
+            return $"{Render(id, review.Reviewer, "").TrimEnd()}\n\n{BuiltInBlueprints.VerdictFormat}\n";
+        }
+
         if (node.Blueprint.Work is not WorkSpec.Agent { Template: var template })
         {
             return inputs;
@@ -557,9 +608,43 @@ public sealed class WorkflowEngine : IAsyncDisposable
         .Select(p => Log(p).Record.History.LastOrDefault() is { } result ? $"### {Title(p)}\n\n{result.Report.TrimEnd()}" : null)
         .OfType<string>());
 
+    /// <summary>
+    /// A review template with its subject's ticket, latest report, and change, each predecessor's in turn, and
+    /// <paramref name="findings"/>.
+    /// </summary>
+    private string Render(TaskId id, PromptTemplate template, string findings)
+    {
+        var node = _workflow.Tasks[id];
+        string Each(Func<TaskId, string> part) => string.Join("\n\n", Predecessors(_workflow, id).Select(part));
+        return template.Render(name => name switch
+        {
+            "title" => node.Title,
+            "inputs" => Inputs(id),
+            "ticket" => Each(subject => BasisIn(_workflow, subject).Instruction.Trim()),
+            "report" => Each(subject => Log(subject).Record.History.LastOrDefault()?.Report.Trim() ?? ""),
+            "change" => Each(Diff),
+            "findings" => findings,
+            _ => node.Field(name),
+        });
+    }
+
+    /// <summary>The change of the node's latest commit, from the merge of the commits it started from.</summary>
+    private string Diff(TaskId id)
+    {
+        if (Log(id).Record.History.LastOrDefault() is not { Commit: { } commit }) return "It changed no file.";
+        try
+        {
+            return $"```diff\n{_worktrees.Change(InputCommits(id), new CommitId(commit))}```";
+        }
+        catch (GitFailure e)
+        {
+            return $"iDevelop could not read the change. {e.Message}";
+        }
+    }
+
     private IAgent? AgentOf(TaskDefinition node) => node.Blueprint.Work switch
     {
-        WorkSpec.Agent or WorkSpec.Merge => _cli,
+        WorkSpec.Agent or WorkSpec.Review or WorkSpec.Merge => _cli,
         WorkSpec.Person => PersonAgent.Instance,
         _ => null,
     };

@@ -20,6 +20,7 @@ namespace IDevelop.Engine;
 [JsonDerivedType(typeof(Stopped), "stopped")]
 [JsonDerivedType(typeof(MessageDropped), "messageDropped")]
 [JsonDerivedType(typeof(Conflicted), "conflicted")]
+[JsonDerivedType(typeof(Feedback), "feedback")]
 internal abstract record NodeEntry
 {
     private NodeEntry() { }
@@ -49,11 +50,18 @@ internal abstract record NodeEntry
     /// commit resolves it on the conflict's parents.
     /// </summary>
     public sealed record Conflicted(string Description) : NodeEntry;
+
+    /// <summary>
+    /// The turn ended by sending <paramref name="Text"/>, a reviewer's findings or the person's note, back along the feedback
+    /// edge to the node's predecessors, which continue their sessions with it.
+    /// </summary>
+    public sealed record Feedback(string Text) : NodeEntry;
 }
 
 /// <summary>
 /// A node's log folded: its results, its session and the basis that session started on, the basis of its last turn, how
-/// that turn ended, whether it has no end yet, and whether the session resolves a conflict.
+/// that turn ended, whether it has no end yet, whether the session resolves a conflict, and how many rounds of feedback it
+/// sent since it last completed or waited for the person.
 /// </summary>
 internal sealed record NodeRecord(ImmutableList<NodeResult> History, string? Session, Basis? SessionBasis, Basis? TurnBasis, NodeEntry? End, bool Open)
 {
@@ -61,13 +69,17 @@ internal sealed record NodeRecord(ImmutableList<NodeResult> History, string? Ses
 
     public bool Resolving { get; init; }
 
+    public int Rounds { get; init; }
+
     public NodeRecord Apply(NodeEntry entry) => entry switch
     {
         NodeEntry.TurnStarted { Session: null } start => this with { Session = null, SessionBasis = start.Basis, TurnBasis = start.Basis, Open = true, Resolving = false },
         NodeEntry.TurnStarted start => this with { TurnBasis = start.Basis, Open = true },
         NodeEntry.Agent { Event: AgentEvent.SessionStarted started } => this with { Session = started.SessionId },
-        NodeEntry.Completed completed => this with { History = History.Add(completed.Result), End = entry, Open = false, Resolving = false },
-        NodeEntry.Waiting or NodeEntry.Failed or NodeEntry.Stopped => this with { End = entry, Open = false },
+        NodeEntry.Completed completed => this with { History = History.Add(completed.Result), End = entry, Open = false, Resolving = false, Rounds = 0 },
+        NodeEntry.Waiting => this with { End = entry, Open = false, Rounds = 0 },
+        NodeEntry.Feedback => this with { End = entry, Open = false, Rounds = Rounds + 1 },
+        NodeEntry.Failed or NodeEntry.Stopped => this with { End = entry, Open = false },
         NodeEntry.Conflicted => this with { Resolving = true },
         _ => this,
     };
