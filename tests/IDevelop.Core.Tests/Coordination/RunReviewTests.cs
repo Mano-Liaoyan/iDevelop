@@ -188,61 +188,177 @@ public sealed class RunReviewTests
         Assert.Equal(TaskState.Done, done.Tasks[R].State);
     }
 
-    [Fact]
-    public async Task A_review_after_a_merge_node_reviews_the_merge_and_its_fix_round_goes_to_the_merge_nodes_agent()
+    /// <summary>
+    /// A review of a Merge node whose fix prompt starts with the implementer's ticket, such as "Build A.", so each
+    /// implementer's fix round goes to its own script.
+    /// </summary>
+    private static TaskDefinition MergeReviewer(TaskId task) => new(task, new Blueprint(new("example.merge-review", 1), "Review",
+        new WorkSpec.Review(PromptTemplate.Parse("Review the change.\n\n{{ticket}}\n\n{{report}}\n\n{{change}}"),
+            PromptTemplate.Parse("{{ticket}}\n\nFix the findings.\n\n{{findings}}")), [], new(null, ConversationMode.Autonomous)))
     {
-        // A and B write separate files, D merges them, the review checks the merge, and X approves it.
-        var merge = MergeNodeTests.Merger(D, "D");
-        await using var f = new RunConversationFixture(Graph([RunConversationFixture.Agent(A, ConversationMode.Autonomous),
-            RunConversationFixture.Agent(B, ConversationMode.Autonomous), merge, Reviewer(R),
-            new TaskDefinition(G, BuiltInBlueprints.Approval) { Title = "Gate" }], (A, D), (B, D), (D, R), (R, G)));
-        f.Route("Review the change.", R).Route("The implementer answered", R).Route("You fix the merge", D)
-            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"))
-            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"))
-            .Answer(D, Writes(f, D, 1, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]"""), session: "session-d"))
-            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve));
+        Title = "Review",
+        Execution = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" },
+    };
+
+    /// <summary><c>A → D, B → D, D → Review → Approval</c>: two implementers, their merge, its review, and a person's approval.</summary>
+    private static Workflow MergedReview() => Graph([RunConversationFixture.Agent(A, ConversationMode.Autonomous),
+            RunConversationFixture.Agent(B, ConversationMode.Autonomous), MergeNodeTests.Merger(D, "D"), MergeReviewer(R),
+            new TaskDefinition(G, BuiltInBlueprints.Approval) { Title = "Gate" }], (A, D), (B, D), (D, R), (R, G));
+
+    /// <summary>A verdict that asks for changes with each finding at its location.</summary>
+    private static string ChangesAt(params (string Id, string Location, string Text)[] findings) =>
+        $$"""{"status": "verdict", "verdict": "changes", "findings": [{{string.Join(", ", findings.Select(finding =>
+            $$"""{"id": "{{finding.Id}}", "severity": "high", "location": "{{finding.Location}}", "text": "{{finding.Text}}", "change": "Change it."}"""))}}]}""";
+
+    private static IEnumerable<AttemptCause> Causes(RunRecord record, TaskId task) =>
+        record.Attempts.Values.Where(attempt => attempt.Task == task).Select(attempt => attempt.Cause);
+
+    [Fact]
+    public async Task A_review_after_a_merge_node_sends_a_finding_to_the_implementer_that_touched_its_file_then_reviews_the_new_merge()
+    {
+        // A writes calc.txt and B writes b.txt, D merges them, and the review's finding on calc.txt goes to A alone.
+        await using var f = new RunConversationFixture(MergedReview());
+        f.Route("Review the change.", R).Route("The implementers answered", R)
+            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n", session: "session-b"))
+            .Answer(R, Reads(f, 1, ChangesAt(("1", "calc.txt:1", "add subtracts."))), Reads(f, 2, Approve));
         await f.Open();
         await f.Resume();
         await Approved(f);
         await f.UntilStatus(RunStatus.Completed);
 
-        // The reviewer read the merge of A's and B's work, with both reports.
-        Assert.Contains("# D\n\nMerge the work of the tasks before this one into one change.", f.Prompt(R, 1));
-        Assert.Contains("A ready.", f.Prompt(R, 1));
-        Assert.Contains("+a - b", f.Prompt(R, 1));
-        Assert.Contains("+B", f.Prompt(R, 1));
-        // The merge itself needed no agent; the fix round was the Merge node's only launch, in a fresh session.
-        Assert.Equal((1, 2), (f.Launches(D), f.Launches(R)));
-        var fix = f.Prompt(D, 1);
-        Assert.StartsWith("You fix the merge of the tasks before you in a fresh session.", fix);
-        Assert.Contains("Fix the findings.\n\n### Finding 1\n\nadd subtracts.", fix);
-        Assert.Null(f.Resumed(D, 1));
-        Assert.Contains("-a - b\n+a + b", f.Prompt(R, 2));
-        Assert.Equal(["a - b\n", "a + b\n"], Enumerable.Range(1, 2).Select(turn => File.ReadAllText(Path.Combine(f.Evidence, $"review-{turn}.calc.txt"))));
-        Assert.Equal("B\n", File.ReadAllText(Path.Combine(f.Checkout(D), "b.txt")));
+        // A fixed its finding in its own session; B and the Merge node's agent never ran again.
+        Assert.Equal((2, 1, 0, 2), (f.Launches(A), f.Launches(B), f.Launches(D), f.Launches(R)));
+        var fix = f.Prompt(A, 2);
+        Assert.StartsWith("Build A.\n\nFix the findings.\n\n### Finding 1\n\nadd subtracts.", fix);
+        Assert.Equal("session-1", f.Resumed(A, 2));
         var record = f.Read();
-        Assert.Equal(["Merged", "Executed"], record.Results.Where(result => result.Task == D).Select(result => result.Origin.GetType().Name));
+        Assert.DoesNotContain(record.Attempts.Values, attempt => attempt.Task == D);
+        Assert.Equal(new ReviewLink(R, f.Attempt(R), 1, 0), Assert.IsType<AttemptCause.ReviewFix>(Assert.Single(Causes(record, A), cause => cause is AttemptCause.ReviewFix)).Link);
+        Assert.DoesNotContain(Causes(record, B), cause => cause is AttemptCause.ReviewFix);
+
+        // D merged again by its own step, and the reviewer read the new merge with A's report.
+        Assert.Equal(["Merged", "Merged"], record.Results.Where(result => result.Task == D).Select(result => result.Origin.GetType().Name));
+        var second = f.Prompt(R, 2);
+        Assert.StartsWith("The implementers answered your findings of round 1, and \"D\" merged their work again.", second);
+        Assert.Contains("### A", second);
+        Assert.Contains("-a - b\n+a + b", second);
+        Assert.DoesNotContain("+B", second);
+        Assert.Equal(["a - b\n", "a + b\n"], Enumerable.Range(1, 2).Select(turn => File.ReadAllText(Path.Combine(f.Evidence, $"review-{turn}.calc.txt"))));
         Assert.Equal(D, f.Log(R).Record!.Subject);
+        Assert.Equal([FindingState.Resolved], ReviewLedger.Fold(f.Log(R).Record!).Findings.Select(finding => finding.State));
     }
 
     [Fact]
-    public async Task A_fix_round_for_a_merge_node_whose_agent_resolved_a_conflict_is_refused_and_the_run_asks_for_attention()
+    public async Task A_finding_on_a_file_no_implementer_touched_goes_to_every_implementer_and_each_sees_only_its_findings()
     {
-        // A and B conflict, so D's agent resolves the merge in its detached worktree, which takes no task branch for a fix.
-        var merge = MergeNodeTests.Merger(D, "D");
-        await using var f = new RunConversationFixture(Graph([RunConversationFixture.Agent(A, ConversationMode.Autonomous),
-            RunConversationFixture.Agent(B, ConversationMode.Autonomous), merge, Reviewer(R)], (A, D), (B, D), (D, R)));
-        f.Route("Review the change.", R).Route("You fix the merge", D)
-            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"))
-            .Answer(B, Writes(f, B, 1, "calc.txt", "B\n", "B ready.\n"))
-            .Answer(D, Writes(f, D, 1, "calc.txt", "a - b\nB\n", "Merged.\n"))
-            .Answer(R, Reads(f, 1, Changes1));
+        await using var f = new RunConversationFixture(MergedReview());
+        f.Route("Review the change.", R).Route("The implementers answered", R)
+            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}, {"id": "2", "answer": "fixed", "note": "Noted in calc."}]""")))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n", session: "session-b"),
+                Writes(f, B, 2, "b.txt", "B\nB2\n", Answers("""[{"id": "2", "answer": "disputed", "note": "Nothing of mine."}]"""), session: "session-b"))
+            .Answer(R, Reads(f, 1, ChangesAt(("1", "calc.txt:1", "add subtracts."), ("2", "docs/notes.md:3", "notes are missing."))), Reads(f, 2, Approve));
         await f.Open();
         await f.Resume();
+        await Approved(f);
+        await f.UntilStatus(RunStatus.Completed);
 
-        var stuck = await f.Until(view => view.Tasks[D].State == TaskState.Refused);
-        Assert.Equal(RunStatus.NeedsAttention, stuck.Status);
-        Assert.Equal((TaskState.Waiting, 1, 1), (stuck.Tasks[R].State, f.Launches(D), f.Launches(R)));
+        Assert.Equal((2, 2, 0, 2), (f.Launches(A), f.Launches(B), f.Launches(D), f.Launches(R)));
+        // A gets the finding on its file and the one on a file nobody touched; B gets only the latter.
+        Assert.Contains("### Finding 1", f.Prompt(A, 2));
+        Assert.Contains("### Finding 2", f.Prompt(A, 2));
+        Assert.StartsWith("Build B.\n\nFix the findings.\n\n### Finding 2\n\nnotes are missing.", f.Prompt(B, 2));
+        Assert.DoesNotContain("### Finding 1", f.Prompt(B, 2));
+        Assert.Equal(("session-1", "session-b"), (f.Resumed(A, 2), f.Resumed(B, 2)));
+
+        // The reviewer reads both reports and the merge of both fixes, and the ledger holds both sides of finding 2.
+        var second = f.Prompt(R, 2);
+        Assert.Contains("### A", second);
+        Assert.Contains("### B", second);
+        Assert.Contains("+a + b", second);
+        Assert.Contains("+B2", second);
+        var review = f.Log(R).Record!;
+        var report = review.Turns[1].Report!;
+        var answers = ReviewLedger.Answers(report.Text);
+        Assert.Equal([("1", false), ("2", true)], answers.Select(answer => (answer.Id, answer.Disputes)));
+        Assert.Equal("A: Noted in calc.\nB: Nothing of mine.", answers[1].Note);
+        Assert.Equal(1, f.Read().Results.Count(result => result.Task == D && result.Supersedes is not null));
+    }
+
+    [Fact]
+    public async Task A_finding_on_a_file_both_implementers_touched_goes_to_both_and_the_merge_nodes_agent_resolves_only_the_new_conflict()
+    {
+        // A and B both write calc.txt, so D's agent resolves their conflict. The finding on calc.txt goes to both, and their
+        // fixes conflict again, which D's agent resolves before the reviewer's next round. D's agent gets no finding.
+        await using var f = new RunConversationFixture(MergedReview());
+        f.Route("Review the change.", R).Route("The implementers answered", R)
+            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(B, Writes(f, B, 1, "calc.txt", "B\n", "B ready.\n", session: "session-b"),
+                Writes(f, B, 2, "b.txt", "B\n", Answers("""[{"id": "1", "answer": "fixed", "note": "Moved B out."}]"""), session: "session-b"))
+            .Answer(D, Writes(f, D, 1, "calc.txt", "a - b\nB\n", "Merged.\n", session: "session-d"),
+                Writes(f, D, 2, "calc.txt", "a + b\nB\n", "Merged again.\n", session: "session-d"))
+            .Answer(R, Reads(f, 1, ChangesAt(("1", "./calc.txt:1", "add subtracts."))), Reads(f, 2, Approve));
+        await f.Open();
+        await f.Resume();
+        await Approved(f);
+        await f.UntilStatus(RunStatus.Completed);
+
+        Assert.Equal((2, 2, 2, 2), (f.Launches(A), f.Launches(B), f.Launches(D), f.Launches(R)));
+        Assert.Contains("### Finding 1", f.Prompt(A, 2));
+        Assert.Contains("### Finding 1", f.Prompt(B, 2));
+        Assert.StartsWith("Build D.", f.Prompt(D, 2));
+        Assert.DoesNotContain("Finding 1", f.Prompt(D, 2));
+        var record = f.Read();
+        Assert.All(Causes(record, D), cause => Assert.IsType<AttemptCause.Merge>(cause));
+        Assert.Equal(["a - b\nB\n", "a + b\nB\n"], Enumerable.Range(1, 2).Select(turn => File.ReadAllText(Path.Combine(f.Evidence, $"review-{turn}.calc.txt"))));
+    }
+
+    /// <summary>A fix turn of <paramref name="task"/> that writes a file, marks that it did, and never ends.</summary>
+    private static FakeRule Stalls(RunConversationFixture f, TaskId task, string session) => FakeRule.On()
+        .RecordArguments(Path.Combine(f.Evidence, $"{Name(task)}-2.args")).Print(FakeAgents.SessionLine(ClientId.Codex, session))
+        .Write("keep.txt", "keep\n").Write(Path.Combine(f.Evidence, $"{Name(task)}-fix-wrote"), "yes").WaitForFile(f.Gate("never"));
+
+    [Fact]
+    public async Task Each_interrupted_fix_behind_a_merge_node_waits_for_its_own_Continue_fix_or_Retry_fix()
+    {
+        await using var f = new RunConversationFixture(MergedReview());
+        f.Route("Review the change.", R).Route("The implementers answered", R).Route("Closing iDevelop interrupted", A).Route("You retry this fix round", B)
+            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"), Stalls(f, A, "session-1"),
+                Writes(f, A, 3, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n", session: "session-b"), Stalls(f, B, "session-b"),
+                Writes(f, B, 3, "b.txt", "B\nB2\n", Answers("""[{"id": "1", "answer": "disputed", "note": "Not mine."}]"""), session: "session-b2"))
+            .Answer(R, Reads(f, 1, ChangesAt(("1", "", "add subtracts."))), Reads(f, 2, Approve));
+        await f.Open();
+        await f.Resume();
+        await TurnFixture.WaitUntilAsync(() => File.Exists(Path.Combine(f.Evidence, "A-fix-wrote")) && File.Exists(Path.Combine(f.Evidence, "B-fix-wrote")));
+        await f.Reopen();
+        await f.Resume();
+
+        // Both fixes were interrupted. The review offers A's choice first, then B's once A's replacement ended.
+        var first = (await f.Until(view => view.Resumed && view.Tasks[R].Fix is not null)).Tasks[R].Fix!;
+        Assert.Equal((A, 1), (first.Task, first.Round));
+        var continued = Assert.IsType<FixReply.Reserved>(await f.Coordinator.ContinueFix(f.Address, R, new(Guid.NewGuid()), fix: first.Fix).WaitAsync(Bound));
+        var second = (await f.Until(view => view.Tasks[R].Fix is { Task: var task } && task == B)).Tasks[R].Fix!;
+        // A late choice for A's replaced fix hears that it was replaced, and does not take B's.
+        Assert.Equal(RunProblem.ReplacementConflict, Assert.IsType<FixReply.Refused>(
+            await f.Coordinator.RetryFix(f.Address, R, new(Guid.NewGuid()), fix: first.Fix).WaitAsync(Bound)).Reason.Problem);
+        var retried = Assert.IsType<FixReply.Reserved>(await f.Coordinator.RetryFix(f.Address, R, new(Guid.NewGuid()), fix: second.Fix).WaitAsync(Bound));
+        await Approved(f);
+        await f.UntilStatus(RunStatus.Completed);
+
+        var record = f.Read();
+        Assert.IsType<AttemptCause.Continue>(record.Attempts[continued.Attempt].Cause);
+        Assert.Equal(A, record.Attempts[continued.Attempt].Task);
+        Assert.IsType<AttemptCause.Retry>(record.Attempts[retried.Attempt].Cause);
+        Assert.Equal(B, record.Attempts[retried.Attempt].Task);
+        Assert.Equal(new ReviewLink(R, f.Attempt(R), 1, 0), record.ReviewOf(retried.Attempt));
+        Assert.Equal("session-1", f.Resumed(A, 3));
+        Assert.Null(f.Resumed(B, 3));
+        Assert.StartsWith("You retry this fix round in a fresh session.", f.Prompt(B, 3));
+        Assert.Equal((3, 3, 0, 2), (f.Launches(A), f.Launches(B), f.Launches(D), f.Launches(R)));
     }
 
     [Fact]

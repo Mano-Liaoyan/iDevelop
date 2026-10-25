@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Execution;
 using IDevelop.Workflows;
 
@@ -40,7 +41,14 @@ public abstract record NodeStep
     /// subject's latest session when <paramref name="Resumes"/> is true, and otherwise starts a fresh one. The prompt
     /// carries the review's guidance notes up to <paramref name="Guidance"/>.
     /// </summary>
-    public sealed record FixRound(string Prompt, int Round, int Guidance, bool Resumes) : NodeStep;
+    public sealed record FixRound(string Prompt, int Round, int Guidance, bool Resumes) : NodeStep
+    {
+        /// <summary>
+        /// The implementer behind a Merge node that this fix round goes to, or null when it goes to the review's subject
+        /// (ADR 0041).
+        /// </summary>
+        public TaskId? Implementer { get; init; }
+    }
 
     /// <summary>Nothing to do until the review's subject settles its fix round.</summary>
     public sealed record WaitForSubject : NodeStep;
@@ -105,6 +113,21 @@ public sealed record SubjectView(TaskDefinition Node, AttemptRecord? Latest)
 
     /// <summary>The subject's current report, which a Merge node that merged without its agent has without an attempt.</summary>
     public string? Report { get; init; }
+
+    /// <summary>
+    /// For a Merge node, the implementers behind it that its review sends findings to, each read as a subject is, in task
+    /// order (ADR 0041). Empty for any other subject.
+    /// </summary>
+    public ImmutableArray<SubjectView> Implementers { get; init; } = [];
+
+    /// <summary>
+    /// An implementer's files, from the repository's top, that its change touched when the review's latest verdict was
+    /// given, or null when they could not be read.
+    /// </summary>
+    public ImmutableHashSet<string>? Touched { get; init; }
+
+    /// <summary>A Merge node's current merge takes in its predecessors' current work, so a reviewer can read it.</summary>
+    public bool Merged { get; init; }
 }
 
 /// <summary>

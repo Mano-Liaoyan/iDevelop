@@ -48,7 +48,7 @@ internal static class RunProjection
             // round repeats an earlier round names both, so the person can guide it on.
             if (view is { State: TaskState.Waiting, Status: AttemptStatus.InReview, Attempt: { } review } &&
                 log(record.Attempts[review]) is { Status: AttemptStatus.InReview } reviewer)
-                progress[task] = view with { Fix = RunReviews.Recovery(record, reviewer, log), Repeat = RunReviews.Repeated(record, reviewer, log) };
+                progress[task] = view with { Fix = RunReviews.Recovery(record, reviewer, log, address.Project), Repeat = RunReviews.Repeated(record, reviewer, log, address.Project) };
         }
         var predecessors = RunScope.Predecessors(snapshot);
         // A result that went out of date runs again by itself, as a Retry does, once every task before it is done, and
@@ -140,7 +140,7 @@ internal static class RunProjection
         }
         var hold = holds.GetValueOrDefault(task);
         if (record.Revision.Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Person) return GateProjection.Of(record, task, result, hold);
-        // A Merge node's fix of a review round reads as an editing agent's attempt does.
+        // A Merge node's fix of a review round, in a journal an earlier build wrote, reads as an editing agent's attempt does.
         if (record.Revision.Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Merge && !(attempt is { } newest && RunReducer.Editable(record, record.Attempts[newest])))
             return Merging(record, task, attempt, result, log, hold);
         if (hold is TaskHold.Unresolved unresolved)

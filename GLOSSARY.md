@@ -90,8 +90,12 @@ _Avoid_: outdated. A Stale answer is a different thing: an answer to a gate requ
 ### Reviews
 
 **Subject**:
-The one task a review reviews and sends its fix rounds to: its dependency predecessor that changes the project, an editing agent or a Merge node.
+The one task a review reviews: its dependency predecessor that changes the project, an editing agent or a Merge node.
 _Avoid_: reviewee, target
+
+**Implementer**:
+A task a review sends its fix rounds to: its subject when that is an editing agent, and for a Merge node, each editing agent behind it, through any Merge node before it. A finding goes to the one implementer whose change touched its file, and to every implementer when several or none did ([ADR 0041](docs/adr/0041-a-review-after-a-merge-node-sends-each-finding-to-the-implementer-whose-change-touched-its-file.md)).
+_Avoid_: fixer
 
 **Interrupted fix**:
 A review's fix round that closing iDevelop interrupted, or that a crash or a kill lost and the person then closed as stopped. It never starts again by itself and waits for the person's Continue fix or Retry fix.
@@ -102,7 +106,7 @@ The person's choice to go on with an interrupted fix: a Continue in the fix's ow
 _Avoid_: Resume, which never chooses a fix
 
 **Retry fix**:
-The person's choice to redo an interrupted fix round: a Retry in a fresh client session, in the subject's worktree with its files as they are.
+The person's choice to redo an interrupted fix round: a Retry in a fresh client session, in the implementer's worktree with its files as they are.
 _Avoid_: Retry alone, which names a new attempt of any task
 
 ### Approval and gates
@@ -148,7 +152,7 @@ _Avoid_: edit, which changes only the document
 An abstraction of an agent: the model and effort it chooses, its system prompt, its instructions and skills, its conversation with a person, the input it reads from earlier agents or a person, and the output it leaves for later agents and the person. The owner set this on 2026-10-18 ([ADR 0031](docs/adr/0031-a-node-is-an-abstraction-of-an-agent.md)).
 
 **Merge node**:
-A built-in node whose agent resolves a run's merge conflicts: between its own predecessors, between the predecessors of a node whose conflicting branches connect into it, or in the final merge. Between nodes, its own step merges its predecessors' code and hands it on with their reports and artifacts, as an approval that needs no person does. Its own step runs its agent only on a conflict, each one in a worktree at Git's merge with its markers, and iDevelop commits the agent's files on both parents. Its Retry continues from the files the failed attempt left ([ADR 0033](docs/adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)). A review after a Merge node reviews the merge, and its fix rounds go to the Merge node's agent ([ADR 0037](docs/adr/0037-a-review-after-a-merge-node-reviews-the-merge-and-its-fixes-go-to-the-merge-agent.md)).
+A built-in node whose agent resolves a run's merge conflicts: between its own predecessors, between the predecessors of a node whose conflicting branches connect into it, or in the final merge. Between nodes, its own step merges its predecessors' code and hands it on with their reports and artifacts, as an approval that needs no person does. Its own step runs its agent only on a conflict, each one in a worktree at Git's merge with its markers, and iDevelop commits the agent's files on both parents. Its Retry continues from the files the failed attempt left ([ADR 0033](docs/adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)). A review after a Merge node reviews the merge ([ADR 0037](docs/adr/0037-a-review-after-a-merge-node-reviews-the-merge.md)), and its fix rounds go to the implementers behind it, after which the Merge node merges again ([ADR 0041](docs/adr/0041-a-review-after-a-merge-node-sends-each-finding-to-the-implementer-whose-change-touched-its-file.md)).
 _Avoid_: merge agent, which the issues use for its agent alone
 
 **Mark resolved**:

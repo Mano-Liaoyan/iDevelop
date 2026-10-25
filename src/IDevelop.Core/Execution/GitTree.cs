@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace IDevelop.Execution;
 
 /// <summary>
@@ -34,6 +36,21 @@ internal static class GitTree
         return diff.Length <= DiffLimit
             ? diff
             : $"{diff[..DiffLimit]}\n… The diff goes on. Run git diff {from} {to} in the project to read all of it.";
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string Folder, string From, string To), ImmutableHashSet<string>> Touched = new();
+
+    /// <summary>
+    /// The paths, from the repository's top, that differ between two commits, a rename counting as both of its paths, or null
+    /// when Git fails. Two commits always differ in the same paths, so the answer is kept.
+    /// </summary>
+    public static ImmutableHashSet<string>? ChangedFiles(string folder, string from, string to)
+    {
+        if (Touched.TryGetValue((folder, from, to), out var known)) return known;
+        var result = GitRepository.Run(["diff", "--name-only", "-z", "--no-renames", "--no-ext-diff", from, to], folder, GitOperation.Metadata, Limits, Environment);
+        if (result.ExitCode != 0) return null;
+        var files = result.Text.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToImmutableHashSet(StringComparer.Ordinal);
+        return Touched.GetOrAdd((folder, from, to), files);
     }
 
     /// <summary>The tree a commit records, or null when it is not a commit in the folder's repository.</summary>

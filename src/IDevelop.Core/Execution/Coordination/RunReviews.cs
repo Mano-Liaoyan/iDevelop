@@ -1,12 +1,17 @@
+using System.Collections.Immutable;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
 /// <summary>Closing iDevelop interrupted this review's fix round, which waits for the person's Continue fix or Retry fix.</summary>
-/// <param name="Fix">The interrupted fix attempt of the review's subject.</param>
+/// <param name="Fix">The interrupted fix attempt.</param>
 /// <param name="ContinueUnavailable">Why Continue fix cannot resume the fix's session, or null when it can.</param>
-internal sealed record FixRecovery(AttemptId Fix, int Round, string? ContinueUnavailable);
+internal sealed record FixRecovery(AttemptId Fix, int Round, string? ContinueUnavailable)
+{
+    /// <summary>The task the interrupted fix belongs to: the review's subject, or an implementer behind a Merge node (ADR 0041).</summary>
+    public TaskId Task { get; init; }
+}
 
 /// <summary>
 /// Round <paramref name="Round"/> of this review repeats the positions of round <paramref name="Earlier"/>, so the review
@@ -95,15 +100,49 @@ internal static class RunReviews
     /// project folder, Git reads its whole change, from its first result's base to its current result, and the current
     /// result's own change.
     /// </summary>
+    /// <param name="latest">The attempt to read as a task's latest instead of its newest, as a fix's prompt was built before it.</param>
+    /// <param name="folder">Where Git reads which files each implementer behind a Merge node touched, which it reads even
+    /// without <paramref name="project"/>.</param>
     public static SubjectView? Subject(RunRecord record, TaskId review, RevisionId revision, Func<RunAttempt, AttemptRecord?> log,
-        string? project, AttemptId? latest = null)
+        string? project, (TaskId Task, AttemptId? Attempt)? latest = null, string? folder = null, AttemptId? reviewer = null)
     {
         var snapshot = record.Revisions[revision].Snapshot;
         if (snapshot.SubjectOf(review) is not { } id || snapshot.Tasks.GetValueOrDefault(id) is not { } node) return null;
-        // A Merge node's attempts that resolve a conflict leave no result of their own, so only its fixes count: one that merged
-        // without them, or whose agent only resolved conflicts, has no attempt to read.
-        var newest = latest ?? (RunProjection.LatestAttempts(record).TryGetValue(id, out var found) &&
-            (node.Blueprint.Work is not WorkSpec.Merge || RunReducer.Editable(record, record.Attempts[found])) ? found : null);
+        if (node.Blueprint.Work is not WorkSpec.Merge) return Read(record, node, log, project, latest is { } own && own.Task == id ? own : null);
+        // A Merge node's review reads its implementers, each as a subject is, and the files each one's change touched when the
+        // reviewer's latest turn ended, so a round's routing stays the same while its fixes run (ADR 0041).
+        var cutoff = reviewer is { } attempt ? record.Receipts.Values.Where(entry => entry.Event is RunEvent.TurnClosed closed && closed.Key.Attempt == attempt)
+            .Select(entry => entry.Sequence).DefaultIfEmpty(long.MaxValue).Max() : long.MaxValue;
+        var where = folder ?? project;
+        var implementers = snapshot.ImplementersOf(review).Where(snapshot.Tasks.ContainsKey).Select(task =>
+            Read(record, snapshot.Tasks[task], log, project, latest is { } own && own.Task == task ? own : null) with
+            {
+                Touched = where is null ? null : Touched(record, task, cutoff, where),
+            }).ToImmutableArray();
+        var merge = record.CurrentResults.GetValueOrDefault(id);
+        var view = new SubjectView(node, null)
+        {
+            Report = merge?.Report,
+            Implementers = implementers,
+            Merged = merge is not null && !record.StaleResults.Contains(merge.Id),
+        };
+        var merges = record.Results.Where(result => result.Task == id).Select(result => Change(record, result)).OfType<(CommitId Base, CommitId Commit)>().ToList();
+        if (merges.Count == 0 || merge is null || Change(record, merge) is not { } current) return view;
+        if (project is null) return view with { Change = "", LatestChange = "" };
+        // The change in a round is the new merge's since the merge before it, which the reviewer read.
+        return view with
+        {
+            Change = GitTree.Diff(project, merges[0].Base.Hex, current.Commit.Hex),
+            LatestChange = GitTree.Diff(project, merges.Count > 1 ? merges[^2].Commit.Hex : current.Base.Hex, current.Commit.Hex),
+        };
+    }
+
+    /// <summary>An editing agent as a review reads it: its latest attempt, its report, and its changes.</summary>
+    private static SubjectView Read(RunRecord record, TaskDefinition node, Func<RunAttempt, AttemptRecord?> log, string? project,
+        (TaskId Task, AttemptId? Attempt)? latest)
+    {
+        var id = node.Id;
+        var newest = latest is { } given ? given.Attempt : RunProjection.LatestAttempts(record).TryGetValue(id, out var found) ? found : null;
         var read = newest is { } attempt && log(record.Attempts[attempt]) is { } logged ? Effective(record, logged) : null;
         var view = new SubjectView(node, read)
         {
@@ -118,6 +157,18 @@ internal static class RunReviews
             Change = GitTree.Diff(project, changes[0].Base.Hex, current.Commit.Hex),
             LatestChange = GitTree.Diff(project, current.Base.Hex, current.Commit.Hex),
         };
+    }
+
+    /// <summary>
+    /// The files <paramref name="task"/>'s change touched, from its first result's base to its newest result accepted before
+    /// <paramref name="cutoff"/>, or null when Git cannot read them. A task without such a result touched none.
+    /// </summary>
+    private static ImmutableHashSet<string>? Touched(RunRecord record, TaskId task, long cutoff, string folder)
+    {
+        var changes = record.Receipts.Values.Where(entry => entry.Sequence < cutoff && entry.Event is RunEvent.ResultAccepted accepted && accepted.Result.Task == task)
+            .OrderBy(entry => entry.Sequence).Select(entry => Change(record, ((RunEvent.ResultAccepted)entry.Event).Result))
+            .OfType<(CommitId Base, CommitId Commit)>().ToList();
+        return changes.Count == 0 ? ImmutableHashSet<string>.Empty : GitTree.ChangedFiles(folder, changes[0].Base.Hex, changes[^1].Commit.Hex);
     }
 
     /// <summary>
@@ -139,17 +190,25 @@ internal static class RunReviews
         _ => null,
     };
 
-    /// <summary>The review's next step, with its subject read as <see cref="Subject"/> does.</summary>
-    public static NodeStep Step(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log, string? project) =>
-        ReviewWork.Instance.Next(Context(record, review.Id, log, project), review);
+    /// <summary>
+    /// The review's next step, with its subject read as <see cref="Subject"/> does. <paramref name="folder"/> is where the
+    /// files of the implementers behind a Merge node are read without <paramref name="project"/>.
+    /// </summary>
+    public static NodeStep Step(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log, string? project, string? folder = null) =>
+        ReviewWork.Instance.Next(Context(record, review.Id, log, project, folder), review);
 
-    private static NodeContext Context(RunRecord record, AttemptId review, Func<RunAttempt, AttemptRecord?> log, string? project,
-        AttemptId? latest = null)
+    /// <summary>Every fix round the review's step starts now: one per implementer behind a Merge node that has none yet, or the subject's.</summary>
+    public static ImmutableArray<NodeStep.FixRound> Rounds(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log, string? project,
+        string folder) =>
+        ReviewWork.Instance.Rounds(Context(record, review.Id, log, project, folder), review);
+
+    private static NodeContext Context(RunRecord record, AttemptId review, Func<RunAttempt, AttemptRecord?> log, string? project, string? folder,
+        (TaskId Task, AttemptId? Attempt)? latest = null)
     {
         var reviewer = record.Attempts[review];
         return new(record.Revisions[reviewer.Revision].Snapshot.Tasks[reviewer.Task], "")
         {
-            Subject = Subject(record, reviewer.Task, reviewer.Revision, log, project, latest),
+            Subject = Subject(record, reviewer.Task, reviewer.Revision, log, project, latest, folder, review),
         };
     }
 
@@ -158,20 +217,20 @@ internal static class RunReviews
     /// fix with the guidance its link counts, or the person's Continue fix or Retry fix of an interrupted one.
     /// </summary>
     public static string FixPrompt(RunRecord record, AttemptRecord review, AttemptId attempt, Func<RunAttempt, AttemptRecord?> log, string project) =>
-        FixPrompt(record, review, Previous(record, attempt), record.Attempts[attempt].Cause,
+        FixPrompt(record, review, record.Attempts[attempt].Task, Previous(record, attempt), record.Attempts[attempt].Cause,
             record.ReviewOf(attempt) ?? throw new ArgumentException("The attempt fixes no review round.", nameof(attempt)),
             record.Attempts[attempt].Cause is AttemptCause.ReviewFix && FixSession(record, attempt, log) is not null, log, project);
 
     /// <summary>The prompt of the person's Continue fix or Retry fix of <paramref name="fix"/>, before its attempt is reserved.</summary>
     public static string ReplacementPrompt(RunRecord record, AttemptRecord review, AttemptId fix, AttemptCause cause,
         Func<RunAttempt, AttemptRecord?> log, string project) =>
-        FixPrompt(record, review, fix, cause, record.ReviewOf(fix) ?? throw new ArgumentException("The attempt fixes no review round.", nameof(fix)),
-            false, log, project);
+        FixPrompt(record, review, record.Attempts[fix].Task, fix, cause,
+            record.ReviewOf(fix) ?? throw new ArgumentException("The attempt fixes no review round.", nameof(fix)), false, log, project);
 
-    private static string FixPrompt(RunRecord record, AttemptRecord review, AttemptId? latest, AttemptCause cause, ReviewLink link, bool resumes,
-        Func<RunAttempt, AttemptRecord?> log, string project)
+    private static string FixPrompt(RunRecord record, AttemptRecord review, TaskId task, AttemptId? latest, AttemptCause cause, ReviewLink link,
+        bool resumes, Func<RunAttempt, AttemptRecord?> log, string project)
     {
-        var context = Context(record, review.Id, log, project, latest);
+        var context = Context(record, review.Id, log, project, project, (task, latest));
         // A round's fix resumes the session it can; the person's Continue fix always resumes, and Retry fix never does.
         var (choice, resumed) = cause switch
         {
@@ -180,20 +239,21 @@ internal static class RunReviews
             AttemptCause.Retry => (FixChoice.Retry, false),
             _ => throw new ArgumentException("The attempt fixes no review round.", nameof(cause)),
         };
-        return ReviewWork.Instance.Round(context, review, link.Guidance, resumed, choice).Prompt;
+        return ReviewWork.Instance.Round(context, review, link.Guidance, resumed, choice, task).Prompt;
     }
 
     /// <summary>The interrupted fix round that waits for the person's choice, or null.</summary>
-    public static FixRecovery? Recovery(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log)
+    public static FixRecovery? Recovery(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log, string? folder)
     {
-        if (Step(record, review, log, null) is not NodeStep.ChooseFix choose ||
-            Context(record, review.Id, log, null).Subject?.Latest is not { } fix) return null;
-        return new(fix.Id, choose.Round, ContinueUnavailable(record, fix));
+        var context = Context(record, review.Id, log, null, folder);
+        if (ReviewWork.Instance.Next(context, review) is not NodeStep.ChooseFix choose ||
+            ReviewWork.Instance.Interrupted(context, review) is not { } fix) return null;
+        return new(fix.Id, choose.Round, ContinueUnavailable(record, fix)) { Task = record.Attempts[fix.Id].Task };
     }
 
     /// <summary>The repeating round whose review waits for the person's guidance, or null.</summary>
-    public static RepeatedRound? Repeated(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log) =>
-        Step(record, review, log, null) is NodeStep.WaitForGuidance wait ? new(wait.Round, wait.Earlier) : null;
+    public static RepeatedRound? Repeated(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log, string? folder) =>
+        Step(record, review, log, null, folder) is NodeStep.WaitForGuidance wait ? new(wait.Round, wait.Earlier) : null;
 
     /// <summary>Why Continue fix cannot resume <paramref name="fix"/>'s session, or null.</summary>
     public static string? ContinueUnavailable(RunRecord record, AttemptRecord fix) =>

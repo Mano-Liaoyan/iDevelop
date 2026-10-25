@@ -259,9 +259,10 @@ public sealed partial class TaskNodeViewModel
     /// <summary>How the review's fix round ended, by a closed app or a person's closure after a crash, and what each choice can do.</summary>
     private string FixDetail(FixRecovery fix)
     {
-        var subject = _canvas.Workflow.SubjectOf(Id);
-        var end = subject is { } owner && _canvas.Run?.View.Tasks.GetValueOrDefault(owner) is { } view && view.Attempt == fix.Fix ? view.End : null;
-        return WorkflowRunText.FixChoice(fix, subject is { } id ? TitleOf(id) : "the task", end);
+        // The fix belongs to the review's subject, or to an implementer behind its Merge node (ADR 0041).
+        var owner = fix.Task;
+        var end = _canvas.Run?.View.Tasks.GetValueOrDefault(owner) is { } view && view.Attempt == fix.Fix ? view.End : null;
+        return WorkflowRunText.FixChoice(fix, _canvas.Workflow.Tasks.ContainsKey(owner) ? TitleOf(owner) : "the task", end);
     }
 
     /// <summary>
@@ -285,7 +286,8 @@ public sealed partial class TaskNodeViewModel
         try
         {
             reply = await WorkflowRunViewModel.Retrying(
-                () => choice == FixChoice.Continue ? coordinator.ContinueFix(address, Id, confirmation) : coordinator.RetryFix(address, Id, confirmation),
+                () => choice == FixChoice.Continue
+                    ? coordinator.ContinueFix(address, Id, confirmation, fix: fix.Fix) : coordinator.RetryFix(address, Id, confirmation, fix: fix.Fix),
                 outcome => outcome is FixReply.Refused refused && WorkflowRunText.Transient(refused.Reason));
         }
         finally

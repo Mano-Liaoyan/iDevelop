@@ -651,7 +651,7 @@ internal static partial class RunReducer
         }
 
         if (cause is AttemptCause.ReviewFix fix && (!record.Attempts.TryGetValue(fix.Link.Attempt, out var review) ||
-            review.Task != fix.Link.Review || record.Revisions[review.Revision].Snapshot.SubjectOf(review.Task) != task ||
+            review.Task != fix.Link.Review || !Fixes(record.Revisions[review.Revision].Snapshot, review.Task, task) ||
             !record.TurnClosures.ContainsKey(new(review.Id, fix.Link.Round)) || record.Closures.ContainsKey(review.Id)))
         {
             return RunProblem.InvalidClaim;
@@ -659,6 +659,13 @@ internal static partial class RunReducer
 
         return null;
     }
+
+    /// <summary>
+    /// Whether <paramref name="task"/> takes fix rounds of <paramref name="review"/>: one of its implementers (ADR 0041), or
+    /// its subject itself, as a Merge node did in a journal an earlier build wrote.
+    /// </summary>
+    private static bool Fixes(Workflow snapshot, TaskId review, TaskId task) =>
+        snapshot.SubjectOf(review) == task || snapshot.ImplementersOf(review).Contains(task);
 
     internal static bool Same<T>(T left, T right) => RunJournal.Canonical(left) == RunJournal.Canonical(right);
 

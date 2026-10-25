@@ -17,15 +17,18 @@ internal static class RunOperations
     /// <summary>
     /// The first turn of an attempt of <paramref name="task"/> with <paramref name="cause"/>. A retry or a continuation
     /// derives from the person's confirmation, and a review fix from its review, round, and reviewer attempt, so whoever
-    /// reserves such an attempt and every later window resume it under the same operation.
+    /// reserves such an attempt and every later window resume it under the same operation. A fix of an implementer behind
+    /// the review's Merge node, which <paramref name="snapshot"/> tells, names its task too, since every implementer of the
+    /// round takes one (ADR 0041).
     /// </summary>
-    public static OperationId First(RunId run, TaskId task, AttemptCause cause) => cause switch
+    public static OperationId First(RunId run, TaskId task, AttemptCause cause, Workflow? snapshot = null) => cause switch
     {
         AttemptCause.Initial => Initial(run, task),
         AttemptCause.Retry retry => OperationIds.Derive(retry.Confirmation, $"retry/{retry.Previous.Value:D}"),
         AttemptCause.Continue continued => OperationIds.Derive(continued.Confirmation, $"continue/{continued.Previous.Value:D}"),
         AttemptCause.ReviewFix fix => OperationIds.Derive(Root(run),
-            $"fix/{fix.Link.Review.Value:D}/{fix.Link.Attempt.Value:D}/{fix.Link.Round}"),
+            $"fix/{fix.Link.Review.Value:D}/{fix.Link.Attempt.Value:D}/{fix.Link.Round}" +
+            (snapshot?.SubjectOf(fix.Link.Review) is { } subject && subject != task ? $"/{task.Value:D}" : "")),
         AttemptCause.Merge merge => OperationIds.Derive(Root(run), $"merge/{task.Value:D}/{merge.Conflict.Ours.Hex}/{merge.Conflict.Theirs.Hex}"),
         _ => throw new InvalidOperationException(),
     };
@@ -35,7 +38,8 @@ internal static class RunOperations
     /// turn the one a continuation must use, so every window derives the same one.
     /// </summary>
     public static OperationId Turn(RunRecord record, LaunchKey launch) => launch.Turn == 1
-        ? First(record.Id, record.Attempts[launch.Attempt].Task, record.Attempts[launch.Attempt].Cause)
+        ? First(record.Id, record.Attempts[launch.Attempt].Task, record.Attempts[launch.Attempt].Cause,
+            record.Revisions[record.Attempts[launch.Attempt].Revision].Snapshot)
         : OperationIds.Derive(Root(record.Id), $"turn/{launch.Attempt.Value:D}/{launch.Turn}");
 
     public static OperationId CloseAttempt(OperationId turn) => OperationIds.Derive(turn, "coordinator/close-attempt");

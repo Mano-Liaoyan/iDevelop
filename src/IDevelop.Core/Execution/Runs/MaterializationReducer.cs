@@ -209,7 +209,7 @@ internal static partial class RunReducer
 
     /// <summary>
     /// Whether the attempt edits the project on its task's branch: an editing agent's, or a Merge node's that fixes a review
-    /// round of its merge rather than resolving a conflict.
+    /// round of its merge rather than resolving a conflict, as a journal an earlier build wrote holds (ADR 0041).
     /// </summary>
     internal static bool Editable(RunRecord record, RunAttempt attempt) =>
         record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Blueprint.Work switch
