@@ -150,7 +150,7 @@ public class ClientDefinitionTests
         var agy = Launch(ClientId.Antigravity, "gemini-3.8-flash", "low", prompt);
 
         Assert.Equal(
-            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "acceptEdits", "--permission-prompts", "none"],
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "bypassPermissions", "--permission-prompts", "none"],
             claude.Arguments.ToArray());
         Assert.Equal(
             ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],
@@ -176,7 +176,7 @@ public class ClientDefinitionTests
         var agy = Resume(ClientId.Antigravity, "gemini-3.8-flash", "low");
 
         Assert.Equal(
-            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "acceptEdits", "--resume", session, "--permission-prompts", "none"],
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "bypassPermissions", "--resume", session, "--permission-prompts", "none"],
             claude.Arguments.ToArray());
         Assert.Equal(
             ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],

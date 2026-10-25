@@ -6,21 +6,21 @@ namespace IDevelop.Core.Tests;
 public class ClientPolicyTests
 {
     [Fact]
-    public void The_effective_policy_preserves_native_access_and_declines_every_permission_request()
+    public void The_effective_policy_bypasses_permissions_for_an_editing_Claude_Code_node_and_keeps_native_access_otherwise()
     {
         (ClientId Client, bool ReadOnly, ConversationMode Mode, bool Reviewer, HostQuestions Host,
             NativePolicy Native, QuestionHandling Questions, PermissionPrompts Prompts, bool LiveQuestions)[] rows =
         [
-            (ClientId.ClaudeCode, false, ConversationMode.Autonomous, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("acceptEdits"), QuestionHandling.Decline, PermissionPrompts.None, false),
+            (ClientId.ClaudeCode, false, ConversationMode.Autonomous, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Decline, PermissionPrompts.None, false),
             (ClientId.ClaudeCode, true, ConversationMode.Autonomous, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None, false),
             (ClientId.ClaudeCode, false, ConversationMode.Autonomous, true, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None, false),
             (ClientId.ClaudeCode, false, ConversationMode.MayAsk, true, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None, false),
             (ClientId.ClaudeCode, false, ConversationMode.Chat, true, HostQuestions.Bounded.Recommended, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None, false),
-            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("acceptEdits"), QuestionHandling.Surface, PermissionPrompts.Host, true),
-            (ClientId.ClaudeCode, false, ConversationMode.Chat, false, HostQuestions.Bounded.Recommended, new NativePolicy.Claude("acceptEdits"), QuestionHandling.Surface, PermissionPrompts.Host, true),
+            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Surface, PermissionPrompts.Host, true),
+            (ClientId.ClaudeCode, false, ConversationMode.Chat, false, HostQuestions.Bounded.Recommended, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Surface, PermissionPrompts.Host, true),
             (ClientId.ClaudeCode, true, ConversationMode.MayAsk, false, HostQuestions.Bounded.Recommended, new NativePolicy.Claude("plan"), QuestionHandling.Surface, PermissionPrompts.Host, true),
             (ClientId.ClaudeCode, true, ConversationMode.Chat, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("plan"), QuestionHandling.Surface, PermissionPrompts.Host, true),
-            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, new HostQuestions.Disabled(), new NativePolicy.Claude("acceptEdits"), QuestionHandling.Decline, PermissionPrompts.None, false),
+            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, new HostQuestions.Disabled(), new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Decline, PermissionPrompts.None, false),
             (ClientId.ClaudeCode, true, ConversationMode.Chat, false, new HostQuestions.Disabled(), new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None, false),
             (ClientId.Codex, false, ConversationMode.Chat, false, HostQuestions.Bounded.Recommended, new NativePolicy.Codex("workspace-write"), QuestionHandling.Decline, PermissionPrompts.None, false),
             (ClientId.Codex, true, ConversationMode.MayAsk, false, new HostQuestions.DeferImmediately(), new NativePolicy.Codex("read-only"), QuestionHandling.Decline, PermissionPrompts.None, false),
@@ -44,6 +44,12 @@ public class ClientPolicyTests
         }
 
         Assert.Equal("Permission requests are declined.", ClientPolicy.For(ClientId.ClaudeCode, true, ConversationMode.MayAsk, false,
+            new HostQuestions.DeferImmediately()).Capabilities.Limitations);
+        Assert.Equal("Live questions are disabled. Permission requests are declined.", ClientPolicy.For(ClientId.ClaudeCode, false, ConversationMode.Autonomous, true,
+            new HostQuestions.DeferImmediately()).Capabilities.Limitations);
+        Assert.Equal("Every tool runs without asking for permission.", ClientPolicy.For(ClientId.ClaudeCode, false, ConversationMode.MayAsk, false,
+            new HostQuestions.DeferImmediately()).Capabilities.Limitations);
+        Assert.Equal("Live questions are disabled. Every tool runs without asking for permission.", ClientPolicy.For(ClientId.ClaudeCode, false, ConversationMode.Autonomous, false,
             new HostQuestions.DeferImmediately()).Capabilities.Limitations);
         Assert.Equal("Questions arrive as text. Permission requests are declined.", ClientPolicy.For(ClientId.Codex, false, ConversationMode.Chat, false,
             HostQuestions.Bounded.Recommended).Capabilities.Limitations);

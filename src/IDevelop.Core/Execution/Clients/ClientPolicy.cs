@@ -40,16 +40,15 @@ internal static class ClientPolicy
         var reads = readOnly || reviewer;
         NativePolicy native = client switch
         {
-            ClientId.ClaudeCode => new NativePolicy.Claude(reads ? "plan" : "acceptEdits"),
+            ClientId.ClaudeCode => new NativePolicy.Claude(reads ? "plan" : "bypassPermissions"),
             ClientId.Codex => new NativePolicy.Codex(reads ? "read-only" : "workspace-write"),
             ClientId.Pi => new NativePolicy.Pi(),
             ClientId.Antigravity => new NativePolicy.Antigravity(reads ? "plan" : "accept-edits"),
         };
         var limitations = client switch
         {
-            ClientId.ClaudeCode => surfaces
-                ? "Permission requests are declined."
-                : "Live questions are disabled. Permission requests are declined.",
+            ClientId.ClaudeCode => (surfaces ? "" : "Live questions are disabled. ")
+                + (reads ? "Permission requests are declined." : "Every tool runs without asking for permission."),
             ClientId.Codex => "Questions arrive as text. Permission requests are declined.",
             ClientId.Pi => reads
                 ? "Pi has no read-only mode, so this task cannot start. Questions arrive as text. Pi has no permission system."

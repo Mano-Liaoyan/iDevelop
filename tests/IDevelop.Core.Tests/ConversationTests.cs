@@ -29,7 +29,7 @@ public sealed class ConversationTests : IDisposable
     private static readonly Dictionary<ClientId, string[]> ResumeArguments = new()
     {
         [ClientId.ClaudeCode] =
-            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-haiku-4-5", "--effort", "high", "--permission-mode", "acceptEdits", "--resume", Session, "--permission-prompts", "none"],
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-haiku-4-5", "--effort", "high", "--permission-mode", "bypassPermissions", "--resume", Session, "--permission-prompts", "none"],
         [ClientId.Codex] =
         ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],
         [ClientId.Pi] = ["-p", "--mode", "json", "--model", "deepseek/deepseek-v4-pro", "--thinking", "high", "--session-id", Session],

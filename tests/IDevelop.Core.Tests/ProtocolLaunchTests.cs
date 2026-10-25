@@ -6,9 +6,9 @@ namespace IDevelop.Core.Tests;
 
 public sealed class ProtocolLaunchTests
 {
-    private static readonly string[] ClaudeEditNone = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "m", "--effort", "high", "--permission-mode", "acceptEdits", "--resume", "session-1", "--permission-prompts", "none"];
+    private static readonly string[] ClaudeEditNone = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "m", "--effort", "high", "--permission-mode", "bypassPermissions", "--resume", "session-1", "--permission-prompts", "none"];
     private static readonly string[] ClaudePlanNone = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "m", "--effort", "high", "--permission-mode", "plan", "--resume", "session-1", "--permission-prompts", "none"];
-    private static readonly string[] ClaudeEditHost = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "m", "--effort", "high", "--permission-mode", "acceptEdits", "--resume", "session-1", "--permission-prompt-tool", "stdio"];
+    private static readonly string[] ClaudeEditHost = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "m", "--effort", "high", "--permission-mode", "bypassPermissions", "--resume", "session-1", "--permission-prompt-tool", "stdio"];
     private static readonly string[] ClaudePlanHost = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "m", "--effort", "high", "--permission-mode", "plan", "--resume", "session-1", "--permission-prompt-tool", "stdio"];
     private static readonly string[] Codex = ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"];
     private static readonly string[] Pi = ["-p", "--mode", "json", "--model", "m", "--thinking", "high", "--session-id", "session-1"];
@@ -61,7 +61,7 @@ public sealed class ProtocolLaunchTests
     [Fact]
     public void Fresh_turns_without_effort_have_literal_arguments_and_one_shot_input()
     {
-        Assert.Equal(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "m", "--permission-mode", "acceptEdits", "--permission-prompts", "none"],
+        Assert.Equal(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "m", "--permission-mode", "bypassPermissions", "--permission-prompts", "none"],
             Clients.Get(ClientId.ClaudeCode).Launch(new LaunchRequest("m", null, "banana")).Arguments.ToArray());
         Assert.Equal(["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],
             Clients.Get(ClientId.Codex).Launch(new LaunchRequest("m", null, "banana")).Arguments.ToArray());
