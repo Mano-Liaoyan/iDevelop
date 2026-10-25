@@ -187,6 +187,8 @@ internal static class WorkflowRunText
         TaskState.Blocked => (NodeState.Failed, "Blocked"),
         TaskState.Uncertain => (NodeState.Interrupted, "Uncertain"),
         TaskState.Refused when task.Problem is { } problem && NodeStates.IsSetup(problem) => (NodeState.NeedsSetup, CardText.ShortReason(problem) ?? "Couldn't start"),
+        // Its agent finished, and the run refused a step after it, such as accepting its result.
+        TaskState.Refused when Finished(task) => (NodeState.Failed, "Not accepted"),
         TaskState.Refused => (NodeState.Failed, "Couldn't start"),
         TaskState.Unsupported => (NodeState.Idle, "Nothing to review"),
         TaskState.SentBack => (NodeState.Failed, "Sent back"),
@@ -214,6 +216,8 @@ internal static class WorkflowRunText
         // A run's task starts a new conversation with Retry, which starts a fresh attempt (#92).
         TaskState.Refused when task.Problem is StartProblem.SessionFolderMoved moved => $"{RunText.Describe(moved)} Retry starts a new attempt.",
         TaskState.Refused when task.Problem is { } problem => RunText.Describe(problem),
+        TaskState.Refused when Finished(task) && task.Refusal is { } refused =>
+            $"Its agent finished, but the run could not accept its result: {Lower(Problem(refused))}" + (active ? " Retry runs it again." : ""),
         TaskState.Refused when task.Refusal is { Problem: RunProblem.StaleInput } => "Its inputs changed before it started.",
         TaskState.Refused when task.Refusal is { } refusal => Problem(refusal),
         TaskState.Uncertain => "Its turn's end was not recorded, so the run never starts it again by itself.",
@@ -386,6 +390,13 @@ internal static class WorkflowRunText
         return fix.ContinueUnavailable is { } why ? $"{what} {why}" : $"{what} Continue the fix in its session, or retry it in a fresh one.";
     }
 
+    /// <summary>Whether a refused task's attempt had closed as succeeded, so the run refused a step after its agent finished.</summary>
+    private static bool Finished(TaskView task) => task.End is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded };
+
+    /// <summary>The sentence to follow a colon: its first letter in lower case, except for iDevelop's name.</summary>
+    private static string Lower(string sentence) => sentence.Length > 0 && char.IsUpper(sentence[0]) && !sentence.StartsWith("iDevelop", StringComparison.Ordinal)
+        ? char.ToLowerInvariant(sentence[0]) + sentence[1..] : sentence;
+
     /// <summary>One sentence for each reason the run refused a command.</summary>
     public static string Problem(RunRejection rejection) => rejection.Problem switch
     {
@@ -403,6 +414,24 @@ internal static class WorkflowRunText
         RunProblem.NotApproved => "The run has no approval yet.",
         RunProblem.UnresolvedOwnership or RunProblem.UnclosedAttempts or RunProblem.SettlementPending or RunProblem.NotSettled =>
             "A task's last turn is not settled yet.",
+        RunProblem.InvalidData or RunProblem.UnsupportedSchema or RunProblem.UnsupportedEvent or RunProblem.SequenceGap or RunProblem.IncompleteTail or
+            RunProblem.RevisionMismatch => "The run's records are damaged or were written by another version of iDevelop.",
+        RunProblem.EarlierFormat => "The run's records are from an earlier version of iDevelop.",
+        RunProblem.OperationConflict or RunProblem.StartConflict or RunProblem.ReplacementConflict =>
+            "The run's records already hold another step for this task.",
+        RunProblem.RevisionConflict => "The run's workflow changed since this was asked.",
+        RunProblem.StartedTaskChanged => "The task changed after the run started it.",
+        RunProblem.MissingDependencyResult => "A task before it has no result in the run yet.",
+        RunProblem.InputConflict or RunProblem.UnknownInput => "Its inputs do not match what the run recorded.",
+        RunProblem.UnknownAttempt or RunProblem.UnknownResult => "The run has no record of this attempt or its result.",
+        RunProblem.InvalidClaim => "The run has no record of this turn's start.",
+        RunProblem.OutcomeMismatch => "How its attempt ended does not match what the run recorded.",
+        RunProblem.EvidenceMismatch => "Its attempt's log no longer matches what the run recorded.",
+        RunProblem.RecoveryEvidenceInsufficient => "The run has too little evidence to close this turn.",
+        RunProblem.ConfirmationRequired => "This needs your confirmation first.",
+        RunProblem.UnsupportedResult => "The run does not take this kind of result from this node.",
+        RunProblem.SessionUnavailable => "The agent's earlier session is not available.",
+        RunProblem.NotRequested => "Nobody ran this task in the run.",
         _ => "The run could not do this now.",
     };
 

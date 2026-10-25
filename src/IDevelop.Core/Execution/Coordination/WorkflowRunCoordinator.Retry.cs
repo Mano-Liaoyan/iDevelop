@@ -41,10 +41,12 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// Whether a run's task offers Retry: an agent's task that is done (#125), or whose newest attempt ended without a result
-    /// and fixed no review round, or a Merge node whose attempt ended without resolving the conflict that went to it.
+    /// and fixed no review round, such as one whose result the run refused to accept, or a Merge node whose attempt ended
+    /// without resolving the conflict that went to it.
     /// </summary>
     internal static bool OffersRetry(Workflow snapshot, TaskView? view) =>
-        view is { State: TaskState.Failed or TaskState.Done, Attempt: not null } && snapshot.Tasks.GetValueOrDefault(view.Task)?.Blueprint.Work switch
+        view is { State: TaskState.Failed or TaskState.Done, Attempt: not null } or { State: TaskState.Refused, Attempt: not null, End: not null } &&
+        snapshot.Tasks.GetValueOrDefault(view.Task)?.Blueprint.Work switch
         {
             WorkSpec.Agent => view.State == TaskState.Done || !view.Fixes,
             WorkSpec.Merge => view is { State: TaskState.Failed, Merge: not null },
@@ -89,6 +91,9 @@ internal sealed partial class WorkflowRunCoordinator
         }
         var previous = view.Attempt!.Value;
         var cause = new AttemptCause.Retry(previous, confirmation) { Note = note };
+        // The ended attempt's settled turn whose disposition the run refused still holds the task's lease. The retry
+        // replaces that attempt, so its lease goes, and its durable record stays as it is.
+        if (_handles.Remove(task, out var refused)) refused.Lease.Dispose();
         _live[task] = new(LiveStage.Settling);
         Background(() => Reserve(task, cause), reply =>
         {

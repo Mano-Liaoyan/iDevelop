@@ -25,6 +25,30 @@ public sealed class WorkflowRunTextTests
     }
 
     [Fact]
+    public void Every_reason_the_run_refuses_has_its_own_sentence()
+    {
+        Assert.All(Enum.GetValues<RunProblem>(), problem =>
+            Assert.NotEqual("The run could not do this now.", WorkflowRunText.Problem(new RunRejection(problem))));
+    }
+
+    [Fact]
+    public void A_refused_task_whose_attempt_ended_says_its_agent_finished_and_the_run_refused_its_result()
+    {
+        var view = new TaskView(Task, TaskState.Refused)
+        {
+            Attempt = new AttemptId(Guid.NewGuid()), Refusal = new RunRejection(RunProblem.OutcomeMismatch),
+            End = new AttemptEnd.Logged(TerminalAttemptOutcome.Succeeded, new LogCheckpoint(1, new Digest(new string('0', 64)))),
+        };
+
+        Assert.Equal((NodeState.Failed, "Not accepted"), WorkflowRunText.Of(view, Title));
+        Assert.Equal("Its agent finished, but the run could not accept its result: how its attempt ended does not match what the run " +
+            "recorded. Retry runs it again.", WorkflowRunText.Detail(view, Title));
+        Assert.Equal("Its agent finished, but the run could not accept its result: how its attempt ended does not match what the run " +
+            "recorded.", WorkflowRunText.Detail(view, Title, active: false));
+        Assert.Equal((NodeState.Failed, "Couldn't start"), WorkflowRunText.Of(view with { End = null }, Title));
+    }
+
+    [Fact]
     public void A_run_s_Pi_task_whose_folder_moved_points_to_Retry()
     {
         var view = new TaskView(Task, TaskState.Refused) { Problem = new StartProblem.SessionFolderMoved(ClientId.Pi) };
