@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -12,8 +13,15 @@ namespace IDevelop.Execution;
 /// </summary>
 internal sealed partial class WorkflowRunCoordinator
 {
-    /// <summary>A review attempt that rests between its reviewer's turns, with its log read once.</summary>
-    private sealed record RestingReview(TaskId Task, AttemptId Attempt, LaunchKey Last, AttemptRecord Log, TaskId Subject);
+    /// <summary>
+    /// A review attempt that rests between its reviewer's turns, with its log read once. <paramref name="Fixers"/> are the
+    /// tasks that take its fix rounds: its subject, or the implementers behind a Merge node (ADR 0041).
+    /// </summary>
+    private sealed record RestingReview(TaskId Task, AttemptId Attempt, LaunchKey Last, AttemptRecord Log, TaskId Subject, ImmutableArray<TaskId> Fixers)
+    {
+        /// <summary>Whether any task that takes the review's fix rounds is busy in this window.</summary>
+        public bool Busy(Func<TaskId, bool> busy) => Fixers.Any(busy);
+    }
 
     /// <summary>The task's review attempt that rests in review and that this window neither works on nor holds back, or null.</summary>
     private RestingReview? Reviewing(RunRecord record, TaskView? view)
@@ -21,8 +29,9 @@ internal sealed partial class WorkflowRunCoordinator
         if (view is not { State: TaskState.Waiting, Status: AttemptStatus.InReview, Attempt: { } attempt } || _live.ContainsKey(view.Task) ||
             _holds.ContainsKey(view.Task) || RunProjection.LastLaunch(record, attempt) is not { } last)
             return null;
-        var subject = record.Revisions[record.Attempts[attempt].Revision].Snapshot.SubjectOf(view.Task);
-        return subject is { } id && Log(record.Attempts[attempt]) is { Status: AttemptStatus.InReview } log ? new(view.Task, attempt, last, log, id) : null;
+        var snapshot = record.Revisions[record.Attempts[attempt].Revision].Snapshot;
+        return snapshot.SubjectOf(view.Task) is { } id && Log(record.Attempts[attempt]) is { Status: AttemptStatus.InReview } log
+            ? new(view.Task, attempt, last, log, id, snapshot.ImplementersOf(view.Task)) : null;
     }
 
     /// <summary>Whether a ready task's reserved attempt fixes a review round, which only the review's step resumes.</summary>
@@ -75,8 +84,8 @@ internal sealed partial class WorkflowRunCoordinator
     {
         foreach (var state in view.Tasks.Values)
         {
-            if (Reviewing(record, state) is not { } review || _live.ContainsKey(review.Subject)) continue;
-            switch (RunReviews.Step(record, review.Log, Log, null))
+            if (Reviewing(record, state) is not { } review || review.Busy(_live.ContainsKey)) continue;
+            switch (RunReviews.Step(record, review.Log, Log, null, Address.Project))
             {
                 case NodeStep.Finish:
                     Conclude(record, review, null);
@@ -89,33 +98,41 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// Starts the next reviewer turn or fix round of each resting review that has one, in task order, up to
-    /// <paramref name="free"/> of them. A reserved fix that was never claimed resumes with its recorded cause. A subject
-    /// takes one fix round at a time, so a second review of it waits.
+    /// Starts the next reviewer turn or fix rounds of each resting review that has them, in task order, up to
+    /// <paramref name="free"/> of them. A reserved fix that was never claimed resumes with its recorded cause. A task
+    /// takes one fix round at a time, so a second review of it waits. A review of a Merge node starts one fix round for
+    /// each implementer its findings go to (ADR 0041).
     /// </summary>
     private void AdvanceReviews(RunRecord record, RunView view, int free)
     {
         var started = 0;
+        var latest = RunProjection.LatestAttempts(record);
         foreach (var state in view.Tasks.Values)
         {
             if (started >= free) return;
-            if (Reviewing(record, state) is not { } review || _live.ContainsKey(review.Subject) || _holds.ContainsKey(review.Subject)) continue;
-            if (RunProjection.LatestAttempts(record).TryGetValue(review.Subject, out var newest) && record.ReviewOf(newest) is { } link &&
-                link.Attempt == review.Attempt && !record.Claims.Keys.Any(key => key.Attempt == newest) && !record.Closures.ContainsKey(newest))
+            if (Reviewing(record, state) is not { } review || review.Busy(task => _live.ContainsKey(task) || _holds.ContainsKey(task))) continue;
+            var reserved = review.Fixers.Where(task => latest.TryGetValue(task, out var newest) && record.ReviewOf(newest) is { } link &&
+                link.Attempt == review.Attempt && !record.Claims.Keys.Any(key => key.Attempt == newest) && !record.Closures.ContainsKey(newest)).ToArray();
+            foreach (var task in reserved)
             {
-                StartFix(record, review, newest);
+                if (started >= free) return;
+                StartFix(record, review, latest[task]);
                 started++;
-                continue;
             }
-            switch (RunReviews.Step(record, review.Log, Log, null))
+            if (reserved.Length > 0) continue;
+            switch (RunReviews.Step(record, review.Log, Log, null, Address.Project))
             {
                 case NodeStep.RunTurn:
                     StartReviewTurn(record, review);
                     started++;
                     break;
                 case NodeStep.FixRound:
-                    StartFixRound(record, review);
-                    started++;
+                    foreach (var round in RunReviews.Rounds(record, review.Log, Log, null, Address.Project))
+                    {
+                        if (started >= free) return;
+                        StartFixRound(record, review, round.Implementer ?? review.Subject);
+                        started++;
+                    }
                     break;
             }
         }
@@ -167,29 +184,33 @@ internal sealed partial class WorkflowRunCoordinator
             start => Started(task, start, record.Revision.Id), error => StartFaulted(task, error));
     }
 
-    /// <summary>A new attempt of the subject for the review's latest round, as <see cref="AttemptCause.ReviewFix"/>.</summary>
-    private void StartFixRound(RunRecord record, RestingReview review)
+    /// <summary>
+    /// A new attempt of <paramref name="subject"/>, the review's subject or an implementer behind its Merge node, for the
+    /// review's latest round, as <see cref="AttemptCause.ReviewFix"/>.
+    /// </summary>
+    private void StartFixRound(RunRecord record, RestingReview review, TaskId subject)
     {
-        var subject = review.Subject;
         _live[subject] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.fix");
         Background(() =>
         {
-            if (RunReviews.Step(record, review.Log, Log, Address.Project) is not NodeStep.FixRound fix)
+            if (RunReviews.Rounds(record, review.Log, Log, Address.Project, Address.Project)
+                    .FirstOrDefault(round => (round.Implementer ?? review.Subject) == subject) is not { } fix)
                 return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim)));
             var cause = new AttemptCause.ReviewFix(new ReviewLink(review.Task, review.Attempt, fix.Round, fix.Guidance));
-            return StartTurn(new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause, fix.Prompt));
+            return StartTurn(new TurnIntent.First(RunOperations.First(Address.Run, subject, cause, record.Revision.Snapshot), subject, cause, fix.Prompt));
         }, start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 
     /// <summary>Resumes a reserved fix of the review with its own cause and operation, and its prompt rebuilt from them.</summary>
     private void StartFix(RunRecord record, RestingReview review, AttemptId attempt)
     {
-        var subject = review.Subject;
+        var subject = record.Attempts[attempt].Task;
         var cause = record.Attempts[attempt].Cause;
         _live[subject] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.fix");
-        Background(() => StartTurn(new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause,
+        var snapshot = record.Revisions[record.Attempts[attempt].Revision].Snapshot;
+        Background(() => StartTurn(new TurnIntent.First(RunOperations.First(Address.Run, subject, cause, snapshot), subject, cause,
                 RunReviews.FixPrompt(record, review.Log, attempt, Log, Address.Project))),
             start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
@@ -207,24 +228,26 @@ internal sealed partial class WorkflowRunCoordinator
     /// once and starts beside the run's other clients, or once a slot is free at the run's bound. Repeating the confirmation
     /// returns the same attempt.
     /// </summary>
-    internal Task<FixReply> ContinueFix(RunAddress address, TaskId review, OperationId confirmation, CancellationToken wait = default) =>
-        Recover(address, review, FixChoice.Continue, confirmation, wait);
+    /// <param name="fix">The interrupted fix the person chose for, as the run showed it. Without it, the choice is for the
+    /// one the run shows now.</param>
+    internal Task<FixReply> ContinueFix(RunAddress address, TaskId review, OperationId confirmation, CancellationToken wait = default, AttemptId? fix = null) =>
+        Recover(address, review, FixChoice.Continue, confirmation, fix, wait);
 
     /// <summary>
     /// Retry fix: the interrupted round starts again in a fresh session, in the subject's worktree with its files as they are.
     /// </summary>
-    internal Task<FixReply> RetryFix(RunAddress address, TaskId review, OperationId confirmation, CancellationToken wait = default) =>
-        Recover(address, review, FixChoice.Retry, confirmation, wait);
+    internal Task<FixReply> RetryFix(RunAddress address, TaskId review, OperationId confirmation, CancellationToken wait = default, AttemptId? fix = null) =>
+        Recover(address, review, FixChoice.Retry, confirmation, fix, wait);
 
-    private Task<FixReply> Recover(RunAddress address, TaskId task, FixChoice choice, OperationId confirmation, CancellationToken wait) =>
-        Converse<FixReply>(address, (record, complete) => RecoverCore(record, task, choice, confirmation, complete), command => command switch
+    private Task<FixReply> Recover(RunAddress address, TaskId task, FixChoice choice, OperationId confirmation, AttemptId? fix, CancellationToken wait) =>
+        Converse<FixReply>(address, (record, complete) => RecoverCore(record, task, choice, confirmation, fix, complete), command => command switch
         {
             RunCommand.Unavailable unavailable => new FixReply.Unavailable(unavailable.Message),
             RunCommand.Refused refused => new FixReply.Refused(refused.Reason),
             _ => throw new InvalidOperationException(),
         }, wait);
 
-    private void RecoverCore(RunRecord record, TaskId task, FixChoice choice, OperationId confirmation, Action<FixReply> complete)
+    private void RecoverCore(RunRecord record, TaskId task, FixChoice choice, OperationId confirmation, AttemptId? chosen, Action<FixReply> complete)
     {
         FixReply Refused(RunProblem problem) => new FixReply.Refused(new(problem, Task: task));
         if (record.Phase != RunPhase.Approved)
@@ -239,24 +262,32 @@ internal sealed partial class WorkflowRunCoordinator
         }
         AttemptCause Cause(AttemptId fix) => choice == FixChoice.Continue ? new AttemptCause.Continue(fix, confirmation) : new AttemptCause.Retry(fix, confirmation);
         var latest = RunProjection.LatestAttempts(record);
-        if (record.Revision.Snapshot.SubjectOf(task) is { } owner && latest.GetValueOrDefault(task) is { } reviewer)
+        if (record.Revision.Snapshot.SubjectOf(task) is not null && latest.GetValueOrDefault(task) is { } reviewer)
         {
-            bool Replaces(RunAttempt attempt) => attempt.Task == owner && RunReducer.Previous(attempt.Cause) is not null && record.ReviewOf(attempt.Id)?.Attempt == reviewer;
+            var fixers = record.Revision.Snapshot.ImplementersOf(task);
+            bool Replaces(RunAttempt attempt) => fixers.Contains(attempt.Task) && RunReducer.Previous(attempt.Cause) is not null &&
+                record.ReviewOf(attempt.Id)?.Attempt == reviewer;
             // A confirmation is one choice: it converges on its replacement while that is open, and never makes another.
-            if (record.Attempts.Values.FirstOrDefault(attempt => Replaces(attempt) && Confirmation(attempt.Cause) == confirmation) is { } chosen)
+            if (record.Attempts.Values.FirstOrDefault(attempt => Replaces(attempt) && Confirmation(attempt.Cause) == confirmation) is { } replacement)
             {
-                complete(!record.Closures.ContainsKey(chosen.Id) && RunReducer.Same(chosen.Cause, Cause(RunReducer.Previous(chosen.Cause)!.Value))
-                    ? new FixReply.Reserved(chosen.Id) : Refused(RunProblem.ReplacementConflict));
+                complete(!record.Closures.ContainsKey(replacement.Id) && RunReducer.Same(replacement.Cause, Cause(RunReducer.Previous(replacement.Cause)!.Value))
+                    ? new FixReply.Reserved(replacement.Id) : Refused(RunProblem.ReplacementConflict));
                 return;
             }
-            // Another choice already replaced the round's fix. While that replacement is open, and once it has ended
-            // other than by an interruption that offers the choice again, this choice has nothing left to replace. The
-            // replacement and the reviewer's next turn run by now, so the task would otherwise only look busy.
-            if (latest.TryGetValue(owner, out var newest) && Replaces(record.Attempts[newest]) &&
-                (!record.Closures.ContainsKey(newest) || !OffersChoice(record, reviewer, newest)))
+            // Another choice already replaced the chosen fix: the one the person named, else every fix the review shows no
+            // choice for. While that replacement is open, and once it has ended other than by an interruption that offers
+            // the choice again, this choice has nothing left to replace. The replacement and the reviewer's next turn run by
+            // now, so the task would otherwise only look busy.
+            var owners = chosen is { } named && record.Attempts.TryGetValue(named, out var target) ? [target.Task]
+                : OfferedFix(record, reviewer) is null ? fixers : [];
+            foreach (var owner in owners)
             {
-                complete(Refused(RunProblem.ReplacementConflict));
-                return;
+                if (latest.TryGetValue(owner, out var newest) && Replaces(record.Attempts[newest]) &&
+                    (!record.Closures.ContainsKey(newest) || !OffersChoice(record, reviewer, newest)))
+                {
+                    complete(Refused(RunProblem.ReplacementConflict));
+                    return;
+                }
             }
         }
         if (Reviewing(record, Project(record).Tasks.GetValueOrDefault(task)) is not { } review)
@@ -264,15 +295,15 @@ internal sealed partial class WorkflowRunCoordinator
             complete(Refused(_live.ContainsKey(task) ? RunProblem.TaskBusy : RunProblem.InvalidClaim));
             return;
         }
-        var subject = review.Subject;
+        if (RunReviews.Recovery(record, review.Log, Log, Address.Project) is not { } recovery)
+        {
+            complete(Refused(review.Busy(_live.ContainsKey) ? RunProblem.TaskBusy : RunProblem.InvalidClaim));
+            return;
+        }
+        var subject = recovery.Task;
         if (_live.ContainsKey(subject))
         {
             complete(Refused(RunProblem.TaskBusy));
-            return;
-        }
-        if (RunReviews.Recovery(record, review.Log, Log) is not { } recovery)
-        {
-            complete(Refused(RunProblem.InvalidClaim));
             return;
         }
         if (choice == FixChoice.Continue && recovery.ContinueUnavailable is not null)
@@ -282,7 +313,7 @@ internal sealed partial class WorkflowRunCoordinator
         }
         var cause = Cause(recovery.Fix);
         _live[subject] = new(LiveStage.Settling);
-        Background(() => Replace(record, review, recovery.Fix, cause), reply =>
+        Background(() => Replace(record, review, subject, recovery.Fix, cause), reply =>
         {
             _live.Remove(subject);
             complete(reply);
@@ -298,9 +329,11 @@ internal sealed partial class WorkflowRunCoordinator
     /// Whether the review, resting between its reviewer's turns, offers Continue fix or Retry fix for <paramref name="fix"/>,
     /// as after closing iDevelop interrupted it. A reviewer turn that runs offers no choice.
     /// </summary>
-    private bool OffersChoice(RunRecord record, AttemptId review, AttemptId fix) =>
-        Log(record.Attempts[review]) is { Status: AttemptStatus.InReview } reviewer && RunReviews.Recovery(record, reviewer, Log) is { } recovery &&
-        recovery.Fix == fix;
+    private bool OffersChoice(RunRecord record, AttemptId review, AttemptId fix) => OfferedFix(record, review) == fix;
+
+    /// <summary>The fix the review, resting between its reviewer's turns, offers Continue fix or Retry fix for, or null.</summary>
+    private AttemptId? OfferedFix(RunRecord record, AttemptId review) =>
+        Log(record.Attempts[review]) is { Status: AttemptStatus.InReview } reviewer ? RunReviews.Recovery(record, reviewer, Log, Address.Project)?.Fix : null;
 
     private static OperationId? Confirmation(AttemptCause cause) => cause switch
     {
@@ -314,15 +347,15 @@ internal sealed partial class WorkflowRunCoordinator
     /// in the subject's worktree with its files as they are. Its operation derives from the confirmation, so a repeat after
     /// a crash or a refusal converges on the same records.
     /// </summary>
-    private async Task<FixReply> Replace(RunRecord record, RestingReview review, AttemptId fix, AttemptCause cause)
+    private async Task<FixReply> Replace(RunRecord record, RestingReview review, TaskId subject, AttemptId fix, AttemptCause cause)
     {
-        if (_permit!.TakeTask(review.Subject) is not LeaseTake.Taken taken) return new FixReply.Refused(new(RunProblem.TaskBusy));
+        if (_permit!.TakeTask(subject) is not LeaseTake.Taken taken) return new FixReply.Refused(new(RunProblem.TaskBusy));
         using var lease = taken.Lease;
         var materializer = Commanded();
         FixReply Refused(RunRejection reason) => new FixReply.Refused(reason);
         // The prompt reads the review's records as the reserved attempt will, before the attempt exists.
         var prompt = RunReviews.ReplacementPrompt(record, review.Log, fix, cause, Log, Address.Project);
-        return await materializer.Prepare(lease, RunOperations.First(Address.Run, review.Subject, cause), cause, prompt).ConfigureAwait(false) switch
+        return await materializer.Prepare(lease, RunOperations.First(Address.Run, subject, cause, record.Revision.Snapshot), cause, prompt).ConfigureAwait(false) switch
         {
             Preparation.Ready ready => new FixReply.Reserved(ready.Execution.Launch.Attempt),
             Preparation.Blocked blocked => new FixReply.Blocked(blocked.Block),

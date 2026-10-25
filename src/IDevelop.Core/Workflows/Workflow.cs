@@ -462,6 +462,30 @@ public sealed class Workflow
                 .FirstOrDefault()
             : null;
 
+    /// <summary>
+    /// The tasks a review sends its findings to, in task order: its subject when that is an editing agent, and when it is a
+    /// Merge node, the editing agents behind it, through any Merge node before it (ADR 0041). Empty without a subject.
+    /// </summary>
+    public ImmutableArray<TaskId> ImplementersOf(TaskId review)
+    {
+        if (SubjectOf(review) is not { } subject) return [];
+        if (Tasks[subject].Blueprint.Work is not WorkSpec.Merge) return [subject];
+        var found = new SortedSet<TaskId>();
+        var seen = new HashSet<TaskId> { subject };
+        var queue = new Queue<TaskId>([subject]);
+        while (queue.TryDequeue(out var merge))
+        {
+            foreach (var from in Connections.Where(connection => connection.Key.To == merge && connection.Value == ConnectionKind.Dependency)
+                .Select(connection => connection.Key.From))
+            {
+                if (!seen.Add(from) || !ProducesChange(Tasks[from])) continue;
+                if (Tasks[from].Blueprint.Work is WorkSpec.Merge) queue.Enqueue(from);
+                else found.Add(from);
+            }
+        }
+        return [.. found];
+    }
+
     /// <summary>A node that hands on a change of the project, which a review can take as its subject: an editing agent or a Merge node.</summary>
     public static bool ProducesChange(TaskDefinition task) => task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } or WorkSpec.Merge;
 
