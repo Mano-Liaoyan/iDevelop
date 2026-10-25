@@ -14,7 +14,8 @@ internal sealed partial class WorkflowRunCoordinator
     internal const string StoppingMessage = "The workflow is stopping, so its tasks take no more messages.";
     internal const string EndedMessage = "The workflow run has ended, so its tasks take no more messages.";
     internal const string NotStartedMessage = "This task has not started in the run yet.";
-    internal const string HeldMessage = "The run holds this task back. Resume the run to try its next step again.";
+    internal const string HeldMessage = "The run holds this task back. Its inspector says what it needs.";
+    internal const string HeldRetryMessage = "The run holds this task back. Retry it from its card or inspector.";
     internal const string ClosedMessage = "This task's attempt in the run has ended.";
     internal const string BusyMessage = "The task is busy. Try again in a moment.";
     internal const string NotWaitingMessage = "The task must finish its turn and wait for input.";
@@ -219,7 +220,7 @@ internal sealed partial class WorkflowRunCoordinator
         var view = Project(record).Tasks.GetValueOrDefault(task);
         if (Resting(record, view) is not { } resting)
         {
-            complete(Refused(Unrested(view)));
+            complete(Refused(Unrested(view, record.Revision.Snapshot)));
             return;
         }
         if (expected != resting.Turn)
@@ -246,15 +247,18 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>Why a task that does not rest between turns takes no message now.</summary>
-    private static string Unrested(TaskView? view) => view?.State switch
+    private static string Unrested(TaskView? view, Workflow snapshot) => view?.State switch
     {
         null or TaskState.Pending or TaskState.Ready or TaskState.Unrequested => NotStartedMessage,
         TaskState.Starting => StartingMessage,
         TaskState.Running or TaskState.Settling => EndingMessage,
         TaskState.Waiting => NotWaitingMessage,
-        TaskState.Blocked or TaskState.Refused or TaskState.Uncertain => HeldMessage,
+        TaskState.Blocked or TaskState.Refused or TaskState.Uncertain => Held(view!, snapshot),
         _ => ClosedMessage,
     };
+
+    /// <summary>Why a task the run holds back takes no message: its Retry tries again when it offers one, and its inspector says what it needs otherwise.</summary>
+    internal static string Held(TaskView view, Workflow? snapshot) => snapshot is not null && OffersRetry(snapshot, view) ? HeldRetryMessage : HeldMessage;
 
     /// <summary>
     /// Writes the person's message to the resting attempt's log under the task's lease. Nothing else of this window touches

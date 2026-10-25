@@ -218,8 +218,10 @@ internal static class WorkflowRunText
         TaskState.Refused when task.Problem is { } problem => RunText.Describe(problem),
         TaskState.Refused when Finished(task) && task.Refusal is { } refused =>
             $"Its agent finished, but the run could not accept its result: {Lower(Problem(refused))}" + (active ? " Retry runs it again." : ""),
+        // After a restart the run's records say only that its agent finished and no result was accepted.
+        TaskState.Refused when Finished(task) => "Its agent finished, but the run did not accept its\u00A0result.",
         TaskState.Refused when task.Refusal is { Problem: RunProblem.StaleInput } => "Its inputs changed before it started.",
-        TaskState.Refused when task.Refusal is { } refusal => Problem(refusal),
+        TaskState.Refused when task.Refusal is { } refusal => Problem(refusal) + (active && !Transient(refusal) && refusal.Problem != RunProblem.StorageUnavailable ? " Retry tries it again." : ""),
         TaskState.Uncertain => "Its turn's end was not recorded, so the run never starts it again by itself.",
         TaskState.Failed when task.End is AttemptEnd.Recovered { Reason: var reason } => reason,
         TaskState.Stale => "A task before it handed on a newer result after this one finished. Stop Workflow ends the run, and finished work stays.",

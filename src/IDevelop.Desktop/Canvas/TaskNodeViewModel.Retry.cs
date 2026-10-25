@@ -14,7 +14,7 @@ namespace IDevelop.Desktop.Canvas;
 public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RetryDependents =
-        [nameof(ShowsRetry), nameof(ShowsRetryButton), nameof(ConfirmingRetry), nameof(RetryConfirmation), nameof(RetryNote)];
+        [nameof(ShowsRetry), nameof(ShowsRetryButton), nameof(ConfirmingRetry), nameof(RetryConfirmation), nameof(RetryNote), nameof(TakesRetryNote)];
 
     private readonly Dictionary<(AttemptId, string), OperationId> _retries = [];
     private string _retryNote = "";
@@ -38,10 +38,18 @@ public sealed partial class TaskNodeViewModel
     public bool ConfirmingRetry => ShowsRetry && _confirmingRetry;
 
     /// <summary>What Retry does, which the person confirms. A done task's Retry warns that the tasks after it go out of date (ADR 0034).</summary>
-    public string RetryConfirmation => RunTask is { State: TaskState.Done }
-        ? $"Retry runs \"{Title}\" again in a fresh session, with the newest work of the tasks before it. The tasks after it go out of " +
-          "date and run again once it has a new result."
-        : $"Retry runs \"{Title}\" again in a fresh session, with the files its last attempt left. The tasks after it run once it has a result.";
+    public string RetryConfirmation => RunTask switch
+    {
+        { State: TaskState.Done } => $"Retry runs \"{Title}\" again in a fresh session, with the newest work of the tasks before it. The tasks " +
+            "after it go out of date and run again once it has a new result.",
+        // The run refused a step before an attempt ended, such as its start, so Retry tries that step again.
+        var task when WorkflowRunCoordinator.RetriesRefusedStep(task) =>
+            $"Retry tries again to start \"{Title}\", or the step the run refused. The tasks after it run once it has a result.",
+        _ => $"Retry runs \"{Title}\" again in a fresh session, with the files its last attempt left. The tasks after it run once it has a result.",
+    };
+
+    /// <summary>The confirmation takes a note to the agent: Retry starts a new attempt, whose first prompt the note ends.</summary>
+    public bool TakesRetryNote => ConfirmingRetry && !WorkflowRunCoordinator.RetriesRefusedStep(RunTask);
 
     /// <summary>
     /// The person's optional note to the agent, which ends its first prompt. When the task feeds a sent-back Approval node,
@@ -120,12 +128,14 @@ public sealed partial class TaskNodeViewModel
     /// </summary>
     private async Task RetryAsync()
     {
-        if (RunTask is not { Attempt: { } previous } || _canvas.Run is not { } run)
+        if (RunTask is not { } task || task.Attempt is null && !WorkflowRunCoordinator.RetriesRefusedStep(task) || _canvas.Run is not { } run)
         {
             return;
         }
 
-        var note = RetryNote.Trim();
+        // A step refused before any attempt was reserved retries under one confirmation of its own.
+        var previous = task.Attempt ?? default;
+        var note = TakesRetryNote ? RetryNote.Trim() : "";
         var confirmation = _retries.TryGetValue((previous, note), out var known) ? known : _retries[(previous, note)] = new OperationId(Guid.NewGuid());
         var (coordinator, address) = (run.Coordinator, run.Address);
         _retrying = true;
@@ -141,7 +151,7 @@ public sealed partial class TaskNodeViewModel
             _retrying = false;
         }
 
-        if (reply is RetryReply.Reserved)
+        if (reply is RetryReply.Reserved or RetryReply.Restarted)
         {
             _confirmingRetry = false;
             RetryNote = "";
