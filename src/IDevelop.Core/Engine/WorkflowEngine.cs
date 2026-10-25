@@ -253,6 +253,12 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 if (_live.ContainsKey(predecessor)) throw new InvalidOperationException($"{Title(predecessor)} is running.");
             }
 
+            // A send back is never lost: a predecessor without a session must be able to start one with the note.
+            foreach (var predecessor in Targets(node).Where(p => Log(p).Record.Session is null))
+            {
+                if (Refusal(predecessor) is { } reason) throw new InvalidOperationException($"{Title(predecessor)} cannot run. {reason}");
+            }
+
             Log(node).Append(new NodeEntry.PersonMessage(note));
             Feedback(node, note);
         });
@@ -272,30 +278,32 @@ public sealed class WorkflowEngine : IAsyncDisposable
         await all;
     }
 
-    private void StartFresh(TaskId id)
+    /// <summary>
+    /// Starts a fresh session of the node, with <paramref name="feedback"/> after its prompt when a feedback edge found no
+    /// session to continue. <paramref name="round"/> says that routing starts it for the next round of its feedback loop.
+    /// </summary>
+    private void StartFresh(TaskId id, string? feedback = null, bool round = false)
     {
         if (Refusal(id) is { } reason) throw new InvalidOperationException(reason);
         var basis = BasisIn(_workflow, id);
-        var node = _workflow.Tasks[id];
-        if (Log(id).Record is { End: NodeEntry.Feedback, Rounds: var rounds } && rounds >= node.RoundLimit && node.Blueprint.Work is not WorkSpec.Person)
+        if (Edits(_workflow.Tasks[id]))
         {
-            Settle(id, basis, new NodeEntry.Waiting(NodeState.RoundLimit, Inputs(id)));
-        }
-        else if (Edits(node))
-        {
-            Begin(id, basis, () => _worktrees.Reset(id, InputCommits(id)));
+            Begin(id, basis, () => _worktrees.Reset(id, InputCommits(id)), feedback, round);
         }
         else
         {
-            Start(id, basis, Prompt(id, null), session: null);
+            Start(id, basis, WithFeedback(Prompt(id, null), feedback), session: null, round: round);
         }
     }
+
+    private static string WithFeedback(string prompt, string? feedback) =>
+        feedback is null ? prompt : $"{prompt.TrimEnd()}\n\n## Feedback on your earlier result\n\n{feedback}\n";
 
     /// <summary>
     /// Starts an editing node's fresh turn once <paramref name="prepare"/> readied its worktree. A conflict goes to a Merge
     /// node's agent, or waits for the person. A failure fails only this node, so routing goes on to the others.
     /// </summary>
-    private void Begin(TaskId id, Basis basis, Func<WorktreeStart> prepare)
+    private void Begin(TaskId id, Basis basis, Func<WorktreeStart> prepare, string? feedback = null, bool round = false)
     {
         var node = _workflow.Tasks[id];
         WorktreeStart start;
@@ -312,13 +320,13 @@ public sealed class WorkflowEngine : IAsyncDisposable
         switch (start)
         {
             case WorktreeStart.Conflict conflict when node.Blueprint.Work is WorkSpec.Merge:
-                Start(id, basis, Prompt(id, conflict), session: null, conflict);
+                Start(id, basis, WithFeedback(Prompt(id, conflict), feedback), session: null, conflict, round);
                 break;
             case WorktreeStart.Conflict conflict:
                 Settle(id, basis, new NodeEntry.Conflicted(conflict.Description), new NodeEntry.Waiting(NodeState.Conflict, conflict.Description));
                 break;
             default:
-                Start(id, basis, Prompt(id, null), session: null);
+                Start(id, basis, WithFeedback(Prompt(id, null), feedback), session: null, round: round);
                 break;
         }
     }
@@ -382,13 +390,13 @@ public sealed class WorkflowEngine : IAsyncDisposable
         Start(id, basis, text, session);
     }
 
-    private void Start(TaskId id, Basis basis, string prompt, string? session, WorktreeStart.Conflict? conflict = null)
+    private void Start(TaskId id, Basis basis, string prompt, string? session, WorktreeStart.Conflict? conflict = null, bool round = false)
     {
         var node = _workflow.Tasks[id];
         var agent = AgentOf(node) ?? throw new InvalidOperationException("This node kind does not run yet.");
         StopDescendants(id);
         var log = Log(id);
-        log.Append(new NodeEntry.TurnStarted(basis, session));
+        log.Append(new NodeEntry.TurnStarted(basis, session) { Round = round });
         if (conflict is not null) log.Append(new NodeEntry.Conflicted(conflict.Description));
         var folder = Edits(node) ? _worktrees.Folder(id) : _project;
         var live = new Live();
@@ -422,6 +430,12 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 _ => new NodeEntry.Stopped(),
             });
             var continues = live.Halt is Halt.None or Halt.Message && log.Record.Session is not null && _workflow.Tasks.ContainsKey(id);
+            if (log.Record.End is NodeEntry.Feedback feedback && _workflow.Tasks.ContainsKey(id))
+            {
+                // The findings go back even when the person's message continues the reviewer's session.
+                Return(id, feedback.Text);
+            }
+
             if (again is not null && continues)
             {
                 // A Merge node's next conflict among its inputs is another turn of its session.
@@ -441,10 +455,6 @@ public sealed class WorkflowEngine : IAsyncDisposable
             {
                 Route(id);
             }
-            else if (log.Record.End is NodeEntry.Feedback feedback && _workflow.Tasks.ContainsKey(id))
-            {
-                Return(id, feedback.Text);
-            }
             else if (live.Halt == Halt.Upstream && _workflow.Tasks.ContainsKey(id) && Refusal(id) is null)
             {
                 // The upstream completed before this turn ended, so its routing passed this node by.
@@ -453,14 +463,24 @@ public sealed class WorkflowEngine : IAsyncDisposable
         });
     }
 
-    /// <summary>Hands a new result on: each successor that is ready and has no current result starts fresh.</summary>
+    /// <summary>
+    /// Hands a new result on: each successor that is ready and has no current result starts fresh. A successor whose
+    /// feedback this result answers in its session runs its next round, or waits for the person at its round limit.
+    /// </summary>
     private void Route(TaskId id)
     {
         foreach (var next in Successors(id))
         {
-            if (StateOf(next) is not (NodeState.Running or NodeState.Completed) && Refusal(next) is null)
+            if (StateOf(next) is NodeState.Running or NodeState.Completed || Refusal(next) is not null) continue;
+            var node = _workflow.Tasks[next];
+            var round = Log(next).Record.End is NodeEntry.Feedback && Log(id).Record.Continued;
+            if (round && Log(next).Record.Rounds >= node.RoundLimit && node.Blueprint.Work is not WorkSpec.Person)
             {
-                StartFresh(next);
+                Settle(next, BasisIn(_workflow, next), new NodeEntry.Waiting(NodeState.RoundLimit, Inputs(next)));
+            }
+            else
+            {
+                StartFresh(next, round: round);
             }
         }
     }
@@ -472,13 +492,44 @@ public sealed class WorkflowEngine : IAsyncDisposable
         Return(id, text);
     }
 
-    /// <summary>Continues each predecessor's session with <paramref name="text"/>. Its new result reruns the node by routing.</summary>
+    /// <summary>
+    /// Sends <paramref name="text"/> to each of <see cref="Targets"/>: it continues the predecessor's session, or starts a
+    /// fresh one when it has none. A predecessor edited since its session started stays stale for the person's Run. Their
+    /// new results rerun the node by routing.
+    /// </summary>
     private void Return(TaskId id, string text)
     {
-        foreach (var predecessor in Predecessors(_workflow, id).Where(p => Log(p).Record.Session is not null && !_live.ContainsKey(p)))
+        foreach (var predecessor in Targets(id).Where(p => !_live.ContainsKey(p)))
         {
-            Continue(predecessor, text);
+            var record = Log(predecessor).Record;
+            if (record.Session is null)
+            {
+                if (Refusal(predecessor) is null) StartFresh(predecessor, feedback: text);
+            }
+            else if (record.SessionBasis == BasisIn(_workflow, predecessor))
+            {
+                Continue(predecessor, text);
+            }
         }
+    }
+
+    /// <summary>The predecessors feedback goes to: each one that is not downstream of another, whose new result reruns it.</summary>
+    private List<TaskId> Targets(TaskId id)
+    {
+        var predecessors = Predecessors(_workflow, id).ToList();
+        return [.. predecessors.Where(p => !predecessors.Any(other => other != p && Upstream(p).Contains(other)))];
+    }
+
+    private HashSet<TaskId> Upstream(TaskId id)
+    {
+        var seen = new HashSet<TaskId>();
+        var queue = new Queue<TaskId>(Predecessors(_workflow, id));
+        while (queue.TryDequeue(out var next))
+        {
+            if (seen.Add(next)) foreach (var before in Predecessors(_workflow, next)) queue.Enqueue(before);
+        }
+
+        return seen;
     }
 
     /// <summary>
@@ -528,6 +579,11 @@ public sealed class WorkflowEngine : IAsyncDisposable
         }
 
         if (AgentOf(node) is not { } agent) return "This node kind does not run yet.";
+        if (node.Blueprint.Work is WorkSpec.Review && node.Conversation == ConversationMode.Chat)
+        {
+            return "A review ends each turn with its verdict, so it cannot chat. Choose Autonomous or May ask.";
+        }
+
         return agent.Problem(node) ?? (Edits(node) ? _worktrees.Problem : null);
     }
 

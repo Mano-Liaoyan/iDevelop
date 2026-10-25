@@ -26,7 +26,11 @@ internal abstract record NodeEntry
     private NodeEntry() { }
 
     /// <summary>A turn starts on <paramref name="Basis"/>. <paramref name="Session"/> is the session it continues, or null for a fresh one.</summary>
-    public sealed record TurnStarted(Basis Basis, string? Session) : NodeEntry;
+    public sealed record TurnStarted(Basis Basis, string? Session) : NodeEntry
+    {
+        /// <summary>Routing started this fresh turn for the next round of the node's feedback loop.</summary>
+        public bool Round { get; init; }
+    }
 
     public sealed record Agent(AgentEvent Event) : NodeEntry;
 
@@ -69,17 +73,25 @@ internal sealed record NodeRecord(ImmutableList<NodeResult> History, string? Ses
 
     public bool Resolving { get; init; }
 
+    /// <summary>The rounds of feedback in the node's current loop. Any turn but routing's next round starts a new loop.</summary>
     public int Rounds { get; init; }
+
+    /// <summary>The node's last turn continued its session rather than starting a fresh one.</summary>
+    public bool Continued { get; init; }
 
     public NodeRecord Apply(NodeEntry entry) => entry switch
     {
-        NodeEntry.TurnStarted { Session: null } start => this with { Session = null, SessionBasis = start.Basis, TurnBasis = start.Basis, Open = true, Resolving = false },
-        NodeEntry.TurnStarted start => this with { TurnBasis = start.Basis, Open = true },
+        NodeEntry.TurnStarted { Session: null } start => this with
+        {
+            Session = null, SessionBasis = start.Basis, TurnBasis = start.Basis, Open = true, Resolving = false, Rounds = start.Round ? Rounds : 0, Continued = false,
+        },
+        NodeEntry.TurnStarted start => this with { TurnBasis = start.Basis, Open = true, Rounds = 0, Continued = true },
         NodeEntry.Agent { Event: AgentEvent.SessionStarted started } => this with { Session = started.SessionId },
         NodeEntry.Completed completed => this with { History = History.Add(completed.Result), End = entry, Open = false, Resolving = false, Rounds = 0 },
         NodeEntry.Waiting => this with { End = entry, Open = false, Rounds = 0 },
         NodeEntry.Feedback => this with { End = entry, Open = false, Rounds = Rounds + 1 },
-        NodeEntry.Failed or NodeEntry.Stopped => this with { End = entry, Open = false },
+        NodeEntry.Stopped => this with { End = entry, Open = false, Rounds = 0 },
+        NodeEntry.Failed => this with { End = entry, Open = false },
         NodeEntry.Conflicted => this with { Resolving = true },
         _ => this,
     };
