@@ -576,6 +576,44 @@ public sealed class RunReviewTests
     }
 
     [Fact]
+    public async Task A_round_that_repeats_an_earlier_round_waits_for_the_person_across_a_restart_and_guidance_resumes_the_next_round()
+    {
+        // Round 1 and round 2 both end with finding 1 fixed and the reviewer keeping it, so round 2 repeats round 1.
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")),
+                Writes(f, A, 3, "calc.txt", "a + b # sum\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It still adds."}]""")))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Changes1), Reads(f, 3, Approve))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        await f.Open();
+        await f.Resume();
+
+        var waiting = await f.Until(view => view.Tasks[R].Repeat is not null);
+        Assert.Equal(new RepeatedRound(2, 1), waiting.Tasks[R].Repeat);
+        Assert.Equal((TaskState.Waiting, AttemptStatus.InReview), (waiting.Tasks[R].State, waiting.Tasks[R].Status));
+        await f.Decided();
+        Assert.Equal((3, 2, 0), (f.Launches(A), f.Launches(R), f.Launches(B)));
+
+        // The wait holds no process: a restart reads it back from the run's records, and the run still waits.
+        await f.Reopen();
+        await f.Resume();
+        var reopened = await f.Until(view => view.Tasks[R].Repeat is not null);
+        Assert.Equal(new RepeatedRound(2, 1), reopened.Tasks[R].Repeat);
+        await f.Decided();
+        Assert.Equal((3, 2, 0), (f.Launches(A), f.Launches(R), f.Launches(B)));
+
+        using (var session = f.Session(R))
+            Assert.IsType<SendResult.Guided>(await session.SendAsync(new TurnKey(f.Attempt(R), 2), "Keep add on one line.", false, default).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Completed);
+
+        Assert.Equal((3, 3, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
+        Assert.Contains("Round 2 repeats the positions of round 1.", f.Prompt(R, 3));
+        Assert.Contains("## Guidance from the person\n\nKeep add on one line.", f.Prompt(R, 3));
+        Assert.Null(f.View.Tasks[R].Repeat);
+    }
+
+    [Fact]
     public async Task A_verdict_is_asked_for_once_more_and_a_fix_round_that_fails_fails_the_review()
     {
         await using var f = new RunConversationFixture(Reviewed());

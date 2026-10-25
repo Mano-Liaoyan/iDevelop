@@ -251,6 +251,8 @@ public static class RunText
             $"Closing iDevelop interrupted fix round {p.Round} of \"{p.Subject}\". Continue the fix in its session, or retry it in a fresh one.",
         StartProblem.FixInterrupted p =>
             $"Closing iDevelop interrupted fix round {p.Round} of \"{p.Subject}\". Its session cannot go on, so retry the fix in a fresh session.",
+        StartProblem.RoundRepeated p =>
+            $"Round {p.Round} of \"{p.Review}\" repeats the positions of round {p.Earlier}, so the review waits for you. Send guidance to both agents to go on, or cancel the review.",
         StartProblem.NoFixChoice p => $"\"{p.Review}\" has no interrupted fix round to continue or retry.",
         StartProblem.SessionFolderMoved p =>
             $"{Clients.Name(p.Client)} can't continue this conversation after the project folder moved, so it needs a new conversation.",

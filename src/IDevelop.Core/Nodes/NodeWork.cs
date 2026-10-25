@@ -51,6 +51,12 @@ public abstract record NodeStep
     /// </summary>
     public sealed record ChooseFix(int Round) : NodeStep;
 
+    /// <summary>
+    /// Round <paramref name="Round"/> repeats the positions of round <paramref name="Earlier"/>, so the review starts nothing
+    /// until the person sends guidance, which reaches both agents in their next message.
+    /// </summary>
+    public sealed record WaitForGuidance(int Round, int Earlier) : NodeStep;
+
     public sealed record WaitForPerson(Pending Pending) : NodeStep;
 
     /// <summary>The node is done. <paramref name="Report"/> is what it hands on.</summary>

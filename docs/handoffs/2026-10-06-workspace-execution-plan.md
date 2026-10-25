@@ -77,7 +77,7 @@ All seven saved nodes use Autonomous conversation mode. The four logs have no qu
 
 Private prompts, conversation text, account details, repository URLs, and session identifiers are excluded from this record. Local sanitized summaries remain under `.git/` and are not product fixtures.
 
-The [node model record](2026-10-04-node-model.md) establishes continuing client sessions, typed pending questions, review loops without a round limit, and accepted planner proposals. The [redesign record](2026-10-05-node-system-redesign.md) establishes compact cards, generated Fluent icons, and the existing inspector structure. These are foundations to preserve, not evidence that the user's new acceptance cases already pass.
+The [node model record](2026-10-04-node-model.md) establishes continuing client sessions, typed pending questions, review loops, and accepted planner proposals. The [redesign record](2026-10-05-node-system-redesign.md) establishes compact cards, generated Fluent icons, and the existing inspector structure. These are foundations to preserve, not evidence that the user's new acceptance cases already pass.
 
 ### Design references
 
@@ -186,7 +186,7 @@ D0 settled the conversation comparison in the Interaction bullet. Conversation u
 These choices require a design gate before E3:
 
 - Run approval. Bind attempts and inputs to the approved revision. Preserve the previously accepted rule that a planner proposal during a run may add nodes or fill only unstarted nodes. A proposed explicit run amendment records and approves that new revision without changing running attempts. Do not silently ban these proposals under an oversimplified immutable-run rule.
-- Retries. Proposed initial default is no automatic retry of a failed or cancelled attempt. Manual retry records a new attempt. Transport retry, task retry, and a review fix round are distinct. The user-confirmed review loop still has no round limit.
+- Retries. Proposed initial default is no automatic retry of a failed or cancelled attempt. Manual retry records a new attempt. Transport retry, task retry, and a review fix round are distinct.
 - Concurrency. Expose a bounded run setting before parallel launches. The initial value requires a measured client probe. No unmeasured throughput promise or arbitrary universal limit belongs in this plan.
 - Recovery. Duplicate completion delivery must converge. A launch with an uncertain outcome requires reconciliation before replacement. A restart must not infer success from a missing process or replay an external action blindly.
 - Interaction. Compare a bottom conversation dock with a main-area conversation view in a later prototype. D0 produces a capability table for each installed client and its exact version and launch mode. Scratch probes record a reply stream, a question, a permission request where supported, allow and deny responses, a stale response, queued or live input, Stop and send, resume, and cancellation. Unsupported cases are explicit results, not failed promises of universal parity. C1 adds only the normalized event cases the selected protocols need and keeps old attempt logs readable. Existing repository fixtures and synthetic cancellation and continuation logs provide compatibility evidence. Do not commit the user's demo transcripts as fixtures.

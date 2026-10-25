@@ -56,6 +56,7 @@ public sealed partial class ProjectRuns
                 NodeStep.RunTurn turn => ReviewTurn(node, review, turn),
                 NodeStep.FixRound fix => StartFix(review, subject!, fix),
                 NodeStep.ChooseFix choose => AwaitChoice(review.Task, subject!, choose),
+                NodeStep.WaitForGuidance wait => AwaitGuidance(node, wait),
                 var step => throw new UnreachableException($"A review does not take {step.GetType().Name}."),
             };
         }
@@ -211,6 +212,15 @@ public sealed partial class ProjectRuns
         }
     }
 
+    /// <summary>Says that the review waits for the person's guidance after a round that repeats an earlier one, and starts nothing.</summary>
+    private bool AwaitGuidance(TaskDefinition review, NodeStep.WaitForGuidance wait)
+    {
+        lock (_gate)
+        {
+            return Stall(review.Id, new StartProblem.RoundRepeated(review.Title, wait.Round, wait.Earlier));
+        }
+    }
+
     /// <summary>
     /// Goes on with a fix round that closing iDevelop interrupted: <see cref="FixChoice.Continue"/> resumes the interrupted
     /// fix's session, and <see cref="FixChoice.Retry"/> starts the round in a fresh one. Both keep the review, the round, and
@@ -330,6 +340,8 @@ public sealed partial class ProjectRuns
             if (appended)
             {
                 NotifyChanged(task.Id);
+                // Guidance resumes a review that waits for it after a repeating round.
+                ThreadPool.QueueUserWorkItem(_ => Advance());
                 return new SendResult.Guided();
             }
 

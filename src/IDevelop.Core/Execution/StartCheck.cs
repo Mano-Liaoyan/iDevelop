@@ -61,6 +61,12 @@ public abstract record StartProblem
     /// </summary>
     public sealed record FixInterrupted(string Subject, int Round, bool CanContinue) : StartProblem;
 
+    /// <summary>
+    /// Round <paramref name="Round"/> of <paramref name="Review"/> repeats the positions of round <paramref name="Earlier"/>,
+    /// so the review waits until the person sends guidance, which resumes it.
+    /// </summary>
+    public sealed record RoundRepeated(string Review, int Round, int Earlier) : StartProblem;
+
     /// <summary>The review has no interrupted fix round to continue or retry, or another choice already started it.</summary>
     public sealed record NoFixChoice(string Review) : StartProblem;
 

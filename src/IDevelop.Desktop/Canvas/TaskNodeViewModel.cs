@@ -288,12 +288,13 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     /// <summary>
     /// Why this task cannot start now, shown under the Run button before any click: a fix round of its own that closing
-    /// iDevelop interrupted, which its Continue fix and Retry fix answer, else the tasks before it that have no results
-    /// yet, or what keeps it from starting in a workflow run as configured (#90).
+    /// iDevelop interrupted, which its Continue fix and Retry fix answer, or a repeating review round, which guidance
+    /// answers, else the tasks before it that have no results yet, or what keeps it from starting in a workflow run as
+    /// configured (#90).
     /// </summary>
     public string? StartProblem => WorkflowRunText.Unbroken(IsRunOwned && !JoinsRun ? RunOwnedProblem
         : RunsHere ? null
-        : _problem is StartProblem.FixInterrupted interrupted ? RunText.Describe(interrupted)
+        : _problem is IDevelop.Execution.StartProblem.FixInterrupted or IDevelop.Execution.StartProblem.RoundRepeated ? RunText.Describe(_problem)
         : RunRefusal);
 
     /// <summary>

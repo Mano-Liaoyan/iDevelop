@@ -94,6 +94,19 @@ public sealed class WorkflowRunTextTests
     }
 
     [Fact]
+    public void A_review_whose_round_repeats_an_earlier_round_waits_for_the_person_s_guidance()
+    {
+        var repeated = new TaskView(Task, TaskState.Waiting) { Status = AttemptStatus.InReview, Repeat = new RepeatedRound(3, 1) };
+
+        Assert.Equal((NodeState.Waiting, "Waiting for you"), WorkflowRunText.Of(repeated, Title));
+        Assert.Equal(new Attention.Waiting("Waiting for you"), WorkflowRunText.Needs(repeated, Title));
+        Assert.Equal("Round 3 repeats the positions of round 1, so the review waits for you. Send guidance to both agents to go on, or cancel the review.",
+            WorkflowRunText.Detail(repeated, Title));
+        Assert.Equal("Round 3 of \"Review\" repeats the positions of round 1, so the review waits for you. Send guidance to both agents to go on, or cancel the review.",
+            RunText.Describe(new StartProblem.RoundRepeated("Review", 3, 1)));
+    }
+
+    [Fact]
     public void A_fix_round_says_how_it_ended_and_why_it_cannot_continue()
     {
         var fix = new FixRecovery(new(Guid.NewGuid()), 2, null);

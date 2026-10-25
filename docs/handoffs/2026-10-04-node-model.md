@@ -38,7 +38,7 @@ After reading the proposal on 2026-10-04, the user kept the defaults for three q
 - Changing one node's fields, template, or work means deriving a blueprint first.
 - The Approval node stays in the first release.
 
-The user changed the review loop. The proposal started both agents in fresh sessions each round and paused for the user when a round repeated an earlier one. The user wants the implement node to do its work and tell the reviewer what it changed. The reviewer judges and says what is wrong. The implement node fixes it and hands it back. They go back and forth until both agree. Each agent keeps its own session, the loop has no round limit, and the user does not have to stop it.
+The user changed the review loop. The proposal started both agents in fresh sessions each round and paused for the user when a round repeated an earlier one. The user wants the implement node to do its work and tell the reviewer what it changed. The reviewer judges and says what is wrong. The implement node fixes it and hands it back. They go back and forth until both agree. Each agent keeps its own session. On 2026-10-25 the owner decided that a round that repeats an earlier round waits for the person ([ADR 0040](../adr/0040-a-review-round-that-repeats-an-earlier-round-waits-for-the-person.md)).
 
 ## Design
 
@@ -101,13 +101,13 @@ The implement node runs first, as any node does. Then the review node starts a b
 
 Each fix round is a **Continue** of the implement node, a new attempt whose first turn resumes the implementer's session. Each review round is a new turn in the review node's own session. Neither agent reads the other's transcript. Each reads its own history plus the other side's short message, so a round adds one message to each session. Small tickets keep both sessions small.
 
-The loop ends when the two agents agree. The reviewer approves with no open finding, and the implementer's last reply disputes nothing. There is no round limit, and the user does not have to stop it. iDevelop keeps agreement reachable:
+The loop ends when the two agents agree. The reviewer approves with no open finding, and the implementer's last reply disputes nothing. iDevelop keeps agreement reachable:
 
 - Every finding names the change that would settle it.
 - A disputed finding goes back to the reviewer, who withdraws it or answers the reason.
-- If a round repeats the positions of an earlier round, iDevelop says so to both agents in their next message and asks the reviewer for the exact change that would settle each open finding.
+- If a round repeats the positions of an earlier round, the review waits for the person's guidance ([ADR 0040](../adr/0040-a-review-round-that-repeats-an-earlier-round-waits-for-the-person.md)). Then iDevelop says so to both agents in their next message and asks the reviewer for the exact change that would settle each open finding.
 
-The user can add guidance at any time, which reaches both agents in their next message, and can cancel the review as any run can be cancelled. The loop does not need either to end.
+The user can add guidance at any time, which reaches both agents in their next message, and can cancel the review as any run can be cancelled.
 
 iDevelop folds a findings ledger from the verdicts and replies. The card shows the round and the open findings. The inspector lists each finding with both sides' latest words. The ledger is a record and a view, and the agents talk through their sessions. If a session cannot resume, for example after the user changed the node's client, the next turn starts a fresh session with the ticket and the ledger.
 

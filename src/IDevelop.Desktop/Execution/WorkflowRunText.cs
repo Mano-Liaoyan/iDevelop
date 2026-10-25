@@ -164,6 +164,7 @@ internal static class WorkflowRunText
         TaskState.Settling => (NodeState.Running, "Finishing"),
         TaskState.Waiting when task.Gate is not null => (NodeState.Waiting, "Waiting for approval"),
         TaskState.Waiting when task.Fix is not null => (NodeState.Waiting, "Fix interrupted"),
+        TaskState.Waiting when task.Repeat is not null => (NodeState.Waiting, "Waiting for you"),
         TaskState.Waiting when task.Status == AttemptStatus.InReview => (NodeState.InReview, "In review"),
         TaskState.Waiting when task.Status == AttemptStatus.WaitingForInput => (NodeState.Waiting, "Waiting for you"),
         TaskState.Waiting => (NodeState.Waiting, "Reply queued"),
@@ -222,6 +223,8 @@ internal static class WorkflowRunText
         TaskState.Refused when Finished(task) => "Its agent finished, but the run did not accept its\u00A0result.",
         TaskState.Refused when task.Refusal is { Problem: RunProblem.StaleInput } => "Its inputs changed before it started.",
         TaskState.Refused when task.Refusal is { } refusal => Problem(refusal) + (active && !Transient(refusal) && refusal.Problem != RunProblem.StorageUnavailable ? " Retry tries it again." : ""),
+        // A review loop that stopped making progress waits for the person (ADR 0040). The Findings show both sides.
+        TaskState.Waiting when task.Repeat is { } repeat => Repeated(repeat),
         TaskState.Uncertain => "Its turn's end was not recorded, so the run never starts it again by itself.",
         TaskState.Failed when task.End is AttemptEnd.Recovered { Reason: var reason } => reason,
         TaskState.Stale => "A task before it handed on a newer result after this one finished. Stop Workflow ends the run, and finished work stays.",
@@ -355,7 +358,7 @@ internal static class WorkflowRunText
         var (state, label) = Of(task, title);
         return task.State switch
         {
-            TaskState.Waiting when task.Gate is not null || task.Fix is not null || task.Status == AttemptStatus.WaitingForInput => new Attention.Waiting(label),
+            TaskState.Waiting when task.Gate is not null || task.Fix is not null || task.Repeat is not null || task.Status == AttemptStatus.WaitingForInput => new Attention.Waiting(label),
             TaskState.Stale => new Attention.Problem($"{label}: {Detail(task, title)}"),
             TaskState.Failed when state == NodeState.Failed => new Attention.Problem(Detail(task, title) is { } why ? $"{label}: {why}" : label),
             // A conflict that a Merge node merges needs nothing of the person.
@@ -391,6 +394,11 @@ internal static class WorkflowRunText
             : $"Closing iDevelop interrupted fix round {fix.Round} of \"{subject}\".";
         return fix.ContinueUnavailable is { } why ? $"{what} {why}" : $"{what} Continue the fix in its session, or retry it in a fresh one.";
     }
+
+    /// <summary>Why a review waits after a round that repeats an earlier round, and how the person goes on.</summary>
+    private static string Repeated(RepeatedRound repeat) =>
+        $"Round {repeat.Round} repeats the positions of round {repeat.Earlier}, so the review waits for you. " +
+        "Send guidance to both agents to go on, or cancel the\u00A0review.";
 
     /// <summary>Whether a refused task's attempt had closed as succeeded, so the run refused a step after its agent finished.</summary>
     private static bool Finished(TaskView task) => task.End is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded };
