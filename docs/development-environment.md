@@ -21,7 +21,7 @@ codex plugin add mattpocock-skills@mattpocock
 
 ## Follow the workflow
 
-- Plan large work as a map issue with child tickets (`/wayfinder`), or turn a settled plan into tickets (`/to-tickets`). The workflow execution program is map issue [#54](https://github.com/Mano-Liaoyan/iDevelop/issues/54).
+- Plan large work as a map issue with child tickets (`/wayfinder`), or turn a settled plan into tickets (`/to-tickets`). Execution v2 is map issue [#179](https://github.com/Mano-Liaoyan/iDevelop/issues/179).
 - Build a ticket with `/implement`, which works test-first at the agreed seams and ends with `/code-review`. Use `/tdd` for a single behavior and `/diagnosing-bugs` for a defect.
 - Settle vocabulary and design decisions with `/grill-with-docs` or `/domain-modeling`. They write `GLOSSARY.md` and architecture decision records under `docs/adr/`, creating them when the first term or decision is resolved.
 - Write pull request descriptions with `/pr`. Hand a long session to a fresh agent with `/handoff`.

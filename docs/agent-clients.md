@@ -38,6 +38,19 @@ These observations come from running each client on Windows on 2026-10-04, first
 - `agy models` prints `<id><TAB><name>` lines. An ID ends with its effort level only when the name ends with the same level in parentheses, such as `gemini-3.8-flash-high` and `Gemini 3.8 Flash (High)`. A model without a level, such as `claude-opus-4-6-thinking`, takes no `--effort`. On 2026-10-03, the bare ID `gemini-3.8-flash` with a separate `--effort high` or `--effort low` reached the matching backend variant.
 - On 2026-10-03, with `--output-format stream-json`, the `init` event reported the requested model ID, and `--log-file` recorded the backend label. The `json` output reported no model.
 
+## Process control on Windows
+
+The first real runs through iDevelop, on Windows on 2026-10-04, drove each client through the Release window and a scratch harness:
+
+- All four clients ran a task to success with the requested model and reasoning level, and wrote the requested file. Pi reported the level it used.
+- A Pi model whose provider was signed out was refused with its sign-in reason, and nothing launched.
+- `Process.Kill(entireProcessTree: true)` missed Git Bash's inner `bash.exe` and `sleep.exe` under Pi. A Job Object per client, without `JOB_OBJECT_LIMIT_BREAKAWAY_OK`, stops the whole tree: Stop ended Codex's tree of 10 processes and Pi's Git Bash tree, and killing iDevelop stopped the client through its job. Codex ran its sandboxed PowerShell command inside the job.
+- A tool that asks to break away from the job fails with "Access is denied". No client asked in these runs, but Claude Code and Antigravity CLI ran no shell command there.
+- A project folder could plant `node` for an npm `.cmd` shim, because `cmd.exe` searches the current folder before PATH. Every child therefore gets `NoDefaultCurrentDirectoryInExePath=1`, which also reaches the agent's own commands, so a bare `build.cmd` from the project folder fails and `.\build.cmd` works.
+- A `.cmd` client for a project on a UNC path runs in `C:\Windows`, so iDevelop refuses that start and says why.
+- A child's PATH drops an entry that is not fully qualified, which includes a quoted entry such as `"C:\Program Files\Tool"` that `cmd.exe` still searches.
+- DeepSeek through Pi once declined to run a bare `sleep 300` and finished at once, so a check that needs a long command words it as a build step.
+
 ## Sessions
 
 A person's message resumes the client's own session in a new process. `scripts/probe-clients.mjs` ran each client on Linux on 2026-10-04. Each one resumed its session in a new process with the id it reported itself, including after its first turn was stopped mid tool call. No resumed turn reported a different id. The Claude Code, Pi, and Antigravity CLI rows pass these arguments after the ones above. Codex resumes with `thread/resume` over `codex app-server`, as the table says.
@@ -94,3 +107,5 @@ When the listing fails, a turn of a node with a choice still starts, as the owne
 - Whether `agy models` fails for a signed-out account, which iDevelop treats as the readiness signal.
 - Whether each client's terminal command opens its interactive interface on the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there. No probe opened an interactive interface.
 - Real client runs on macOS, and the login shell's PATH on macOS and Linux. On Linux on 2026-10-05, `scripts/probe-clients.mjs` and a scratch harness that drives `ProjectRuns` ran all four real clients, but the harness inherited a full PATH. The release workflow runs the fake client on macOS.
+- On macOS and Linux, `Process.Kill(entireProcessTree: true)` misses a descendant whose parent already exited, because .NET cannot list the children of an exited process there. A turn's process group covers it ([ADR 0001](adr/0001-unix-workflow-turns-lead-their-own-session.md)).
+- Whether each provider's plan permits unattended turns started by iDevelop is each provider's policy, as the [provider access reference](provider-access.md) records.

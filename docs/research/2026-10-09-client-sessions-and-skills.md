@@ -26,7 +26,7 @@ Installed versions on this Linux machine on 2026-10-09:
 | Pi | 1.1.0 | 1.0.1, and 1.0.4 in D0 |
 | Antigravity CLI | 1.3.2 | 1.2.16, and 1.3.0 in D0 |
 
-In this note, "resume" always means a client's own session resume, such as `claude --resume`. The [glossary](../../GLOSSARY.md)'s Resume is a run permission, and this note never uses the word that way.
+In this note, "resume" always means a client's own session resume, such as `claude --resume`.
 
 ## Summary
 
@@ -44,7 +44,7 @@ Every client's resume already continues its own session. None of them copies the
 
 ## What iDevelop does today
 
-- Each turn is one client process. `LaunchPlan.Resuming` sends the person's message alone, with the session id ([`StartCheck.cs`](../../src/IDevelop.Core/Execution/StartCheck.cs)). No iDevelop prompt copies earlier messages into a resumed turn. A Retry fix is the exception: it starts a fresh session on purpose, and its prompt carries the ticket and the change so far ([ADR 0013](../adr/0013-an-interrupted-fix-waits-for-the-person-s-choice.md)).
+- Each turn is one client process. `LaunchPlan.Resuming` sends the person's message alone, with the session id ([`StartCheck.cs`](../../src/IDevelop.Core/Execution/StartCheck.cs)). No iDevelop prompt copies earlier messages into a resumed turn.
 - The launches:
   - Claude Code: `--resume <id>` ([`ClaudeCode.cs`](../../src/IDevelop.Core/Execution/Clients/ClaudeCode.cs)).
   - Codex: `thread/resume` with `threadId` and `excludeTurns: true`, then one `turn/start` ([`CodexProtocol.cs`](../../src/IDevelop.Core/Execution/Clients/CodexProtocol.cs)).
@@ -165,11 +165,7 @@ All four clients can keep one process across turns. Keeping one would be an addi
 **Records this would change.** These are product decisions for the owner:
 
 - The [node model record](../handoffs/2026-10-04-node-model.md#interaction-resumes-the-clients-own-session) says "A turn is one client process … No process runs between turns, so a waiting node costs nothing and survives quitting iDevelop". [Product direction](../product-direction.md#nodes-have-types-that-users-define) says "a conversation resumes the client's own session, so no process runs while a node waits". [context.md](../context.md#working-decisions) says "a node that waits for the person holds no process and no lock". The glossary defines a Turn as "one client process within an attempt".
-- E3's design v5 expects "Managed roots `0` while waiting" in its waiting-reply behavior test (comment on [#54](https://github.com/Mano-Liaoyan/iDevelop/issues/54)).
-- The glossary's client slot takes nothing while a task waits. [ADR 0010](../adr/0010-a-reply-is-saved-at-once-and-runs-when-the-slot-is-free.md) starts a reply's turn when the run's one client slot is free. An idle live process either holds the slot, so one waiting chat blocks the run, or iDevelop keeps idle processes outside the slot.
 - The `.idp/attempts/<task-id>/run.lock` lock is held per turn. A live process would hold it while the node waits, unless the lock moves to the session host.
-- [ADR 0015](../adr/0015-a-start-that-launched-nothing-may-be-asked-again-with-a-new-intent.md) lets a start that "recorded and launched nothing" take a new intent. In a live session a turn launches nothing, so the rule would turn on whether the message was delivered.
-- [ADR 0013](../adr/0013-an-interrupted-fix-waits-for-the-person-s-choice.md)'s Continue fix already relies on the client's resume after a close, so it does not change.
 
 **A cheaper first step** (inference): iDevelop could keep the process per turn and change what the person sees and what a message starts. For example, a message to a resting task could continue the same attempt instead of starting a new one, or the conversation could show one continuous thread with no "New attempt" marker when the session is the same. The Pi folder fix applies either way. Only the owner can say which of these the request means.
 
@@ -289,7 +285,7 @@ Each item below needs the owner's approval to run a real client.
 These are product decisions, and the research made none of them:
 
 1. Whether "one live session" means a client process kept alive while a node waits, which changes the records listed in [What one live session per attempt would need](#what-one-live-session-per-attempt-would-need), or one continuous attempt and conversation over the existing per-turn resume.
-2. Whether an idle live process holds the run's client slot and the task's run lock, and how long it may stay idle before iDevelop closes it and falls back to resume.
+2. How long an idle live process may stay idle before iDevelop closes it and falls back to resume.
 3. Whether a node's skill choice is stored per client, and what an Antigravity CLI node offers while no per-run control is confirmed.
 
 ## Probe results (2026-10-09)

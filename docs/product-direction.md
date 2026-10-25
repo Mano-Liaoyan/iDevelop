@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-22. A node is an abstraction of an agent ([ADR 0031](adr/0031-a-node-is-an-abstraction-of-an-agent.md)). The desktop app uses C# and Avalonia, follows PlanWeave's look, and runs single nodes and whole workflows with Claude Code, Codex, Pi, or Antigravity CLI. The node model and editor redesign are built. The user approved the [workspace and execution plan](handoffs/2026-10-06-workspace-execution-plan.md) on 2026-10-06, and of its slices the [D0 design validation](handoffs/2026-10-06-d0-design-validation.md), U1, W1, C1, E1, E3, and N1 are built. G1, confirmed GitHub publication, remains, and map issue [#54](https://github.com/Mano-Liaoyan/iDevelop/issues/54) tracks what is left of workflow execution. Team synchronization remains a first-release requirement. No canvas target in [Verification of the selected implementation](#verification-of-the-selected-implementation) has been measured in iDevelop. C1 measured its Markdown view and message limits on Linux. The [delivery order](#delivery-order) sequences the work.
+Updated: 2026-10-25. A node is an abstraction of an agent ([ADR 0031](adr/0031-a-node-is-an-abstraction-of-an-agent.md)). The desktop app uses C# and Avalonia, follows PlanWeave's look, and runs single nodes and whole workflows with Claude Code, Codex, Pi, or Antigravity CLI. The node model and editor redesign are built. The user approved the workspace milestone on 2026-10-06, and of its slices the [D0 design validation](handoffs/2026-10-06-d0-design-validation.md), U1, W1, C1, and N1 are built. Execution v2 rebuilds workflow execution as a small engine ([ADR 0042](adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md)), which map issue [#179](https://github.com/Mano-Liaoyan/iDevelop/issues/179) tracks. G1, confirmed GitHub publication, remains. Team synchronization remains a first-release requirement. No canvas target in [Verification of the selected implementation](#verification-of-the-selected-implementation) has been measured in iDevelop. C1 measured its Markdown view and message limits on Linux. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -29,7 +29,7 @@ The user wants these capabilities:
 - Make the node editor work like n8n, Unreal Engine Blueprints, and Godot, with a UI in Apple's design style, as recorded in [The node editor follows Apple's design](#the-node-editor-follows-apples-design).
 - Give nodes types that users define and save as blueprints, as recorded in [Nodes have types that users define](#nodes-have-types-that-users-define).
 - Provide Run Workflow without requiring a selected starting node. Start successors automatically after all required predecessors finish, and deliver predecessor content explicitly.
-- Run any single node. When it finishes, each node directly after it starts automatically once all of that node's predecessors are complete, and nothing starts merely because it comes later. The user asked for this on 2026-10-09 in issue #90. A result from an earlier run counts as complete while it is still current. The user decided this the same day.
+- Run any single node. When it finishes, each node directly after it starts automatically once all of that node's predecessors are complete, and nothing starts merely because it comes later. The user asked for this on 2026-10-09 in issue #90. A node's latest result counts as complete while it is not stale.
 - Keep multiple projects open, with multiple workflows per project. Workflow rows initially hide their node references.
 - Preserve the current compact canvas. New and generated nodes start collapsed. Each node and the canvas provide expansion controls. Expanded nodes expose frequent execution settings, agent interaction, attention requests, and result links.
 - Provide a chat-quality agent view with Markdown and conversation history. Keep the inspector as the complete settings editor and improve its Godot-inspired alignment, grouping, and field icons.
@@ -50,8 +50,8 @@ The proposed domain has the following objects:
 | Workflow | Editable graph of nodes, groups, and connections. |
 | Node | An agent: its model and effort, system prompt, instructions, skills, conversation, input, and output. |
 | Connection | A typed relationship between nodes. |
-| Run | An approved, immutable workflow version and its execution history. |
-| Attempt | One execution of one node's agent, with the actual client, model, configuration, and output. |
+| Result | A node's report and optional commit, with the basis it was built from: its inputs, instruction, and model. |
+| Attempt | One fresh session of one node's agent, with the actual client, model, configuration, and output. |
 | Runner | The machine and process authorized to execute attempts. |
 | Artifact | An output file, test output, handoff, issue, or pull request. |
 | Approval | Who approved which graph revision, and under which policy. |
@@ -72,29 +72,27 @@ The investigation did not establish an enforced human approval state or native G
 
 Two teammates open the same project. One describes a change. iDevelop generates a draft graph and shows the proposed agents and dependencies. Both teammates can edit it. The interface shows who is present and makes concurrent edits visible.
 
-Before execution, iDevelop validates the graph and resolves available runner capabilities. It checks dependency cycles, missing inputs, supported model settings, permissions, and authentication readiness. Review applies to a specific execution configuration. A relevant edit invalidates that review. Moving a node on the canvas does not.
+Before a node starts, iDevelop checks that it can run: its client is ready, its model settings are supported, and its predecessors are complete. A node that cannot run says why. An edit of a node's instruction, model, or edges makes its result stale. Moving a node on the canvas does not.
 
-An authorized teammate starts the approved version. Ready nodes run on assigned machines. Each node's agent receives its predecessors' output as its input.
+A teammate starts the workflow. Every ready node starts at once on its machine, and each node's agent receives its predecessors' latest results as its input.
 
-Completed implementation reaches its configured test and review gates. A pull request can wait for human review while unrelated branches continue. A rejected review creates a new implementation attempt with the feedback attached. The final session document explains what happened and what remains.
+Completed implementation reaches its review and approval nodes. A pull request can wait for human review while unrelated branches continue. A rejected review sends its findings along a feedback edge, and the implementer continues in its own session. The final session document explains what happened and what remains.
 
 ```mermaid
 flowchart LR
     Request[User request] --> Draft[Shared draft graph]
-    Draft --> Review[Review resolved configuration]
-    Review --> Run[Approved run version]
-    Run --> A[Agent task A]
-    Run --> B[Agent task B]
+    Draft --> Review[Reviewed workflow]
+    Review --> A[Agent node A]
+    Review --> B[Agent node B]
     A --> Test[Tests]
     B --> Test
     Test --> PR[Pull request]
     PR --> Human[Human review]
     Human --> Done[Accepted result]
-    Human -. Changes requested .-> Retry[New implementation attempt]
-    Retry --> Test
+    Human -. Send back .-> A
 ```
 
-The feedback arrows describe new attempts. They do not introduce a cycle into the dependency graph for a single run version.
+The feedback arrow is a feedback edge: the note continues the predecessor's session. It does not introduce a cycle into the dependency graph.
 
 ## Nodes have types that users define
 
@@ -106,19 +104,19 @@ On 2026-10-04 the user asked for typed nodes and confirmed these requirements:
 - Blueprints live in a personal library in the user's folder and in a project library under `.idp/blueprints/`.
 - Node types build on interfaces. A node that needs a capability, such as interaction, implements that capability's interface.
 - iDevelop does not depend on PStack or any other skill library. A user's own commands and skills work inside a node.
-- A review is a back-and-forth between the implementer and the reviewer, each in its own continuing session, until both agree. A round that repeats an earlier round waits for the person's guidance ([ADR 0040](adr/0040-a-review-round-that-repeats-an-earlier-round-waits-for-the-person.md)). Small tickets keep each session small.
+- A review is a back-and-forth between the implementer and the reviewer until both agree. The implementer continues its session with the findings, and the reviewer reviews each new result in a fresh session. After its round limit, 3 by default, the reviewer waits for the person's guidance ([ADR 0040](adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)). Small tickets keep each session small.
 - The user can answer, guide, and correct an agent that asks how to proceed. Some nodes never ask. A live terminal is not required.
 - A planner usually creates the implement nodes. Nodes may also exist already, be drawn empty and filled later, or have no planner. The long-term goal is to talk to one agent and get the whole workflow.
 
-The [node model record](handoffs/2026-10-04-node-model.md) holds the design, which the user accepted on 2026-10-04 with a change to the review loop. A node type is a blueprint over one of four works: an agent, a review loop, a person, or a merge ([ADR 0033](adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)). Review becomes a node, and every planner proposes graph edits that the user approves. A conversation resumes the client's own session, so no process runs while a node waits.
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design, which the user accepted on 2026-10-04 with a change to the review loop. A node type is a blueprint. In code a node is a `CliAgent`, which runs a coding client, or a `PersonAgent`, which approves or sends back. Review and Merge are blueprints that a `CliAgent` runs, each a prompt template and an output format ([ADR 0042](adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md)). Every planner proposes graph edits that the user approves. A conversation resumes the client's own session, so no process runs while a node waits.
 
 ## Connections have explicit meanings
 
 A dependency means that the predecessor must meet a named completion condition before the successor becomes ready. A context connection shares information without blocking execution. The [node model](handoffs/2026-10-04-node-model.md#review-is-a-node-and-connections-express-flow) replaced the review connection with a review node, and format 3 stores only dependency and context connections.
 
-Dependencies use all required predecessors by default. Optional or alternative paths need explicit conditions. Failure blocks affected dependents and shows the causal task. It does not stop unrelated work automatically. Retry limits and human escalation prevent endless retries of a failed attempt. A review loop ends when the implementer and the reviewer agree, as the user decided on 2026-10-04, and waits for the person after a round that repeats an earlier round, as the owner decided on 2026-10-25.
+Dependencies use all required predecessors by default. Optional or alternative paths need explicit conditions. Failure blocks affected dependents and shows the causal task. It does not stop unrelated work automatically. Retry limits and human escalation prevent endless retries of a failed attempt. A review loop ends when the implementer and the reviewer agree, as the user decided on 2026-10-04, and waits for the person after its round limit ([ADR 0040](adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)).
 
-Task readiness is derived from dependencies, required inputs, approvals, runner availability, and quota constraints. Attempt status is recorded separately as queued, running, waiting for input, succeeded, failed, cancelled, or interrupted. A disconnected runner has an unknown outcome until reconciliation establishes what happened. The interface should say why a task is waiting rather than present a generic spinner.
+A node is ready when its predecessors are all completed and none of their results is stale. Its state is Idle, Running, Input required, Completed, Failed, or Stale, and Input required says why. The interface should say why a task is waiting rather than present a generic spinner.
 
 The project tree and the execution graph answer different questions. Groups describe where work belongs. Connections describe what work depends on. The interface needs breadcrumbs, a minimap, search, collapsible groups, and a command to focus the selected task's dependencies.
 
@@ -138,9 +136,9 @@ For the first release, a C# service that orders graph operations can support liv
 
 VS Code Live Share and JetBrains Code With Me are useful interaction references, but they are not the default libraries to embed. Microsoft's Live Share repository is a feedback and documentation repository. Its separate Live Share SDK targets Teams and Microsoft 365. JetBrains announced Code With Me's sunset, with 2026.1 as the last officially supported IDE version. Prefer a general collaboration library whose data model iDevelop controls. [VS Live Share repository](https://github.com/Microsoft/live-share), [Live Share SDK](https://github.com/microsoft/live-share-sdk), [Code With Me sunset](https://blog.jetbrains.com/platform/2026/03/sunsetting-code-with-me/)
 
-Each scheduled attempt has one execution owner and a claim generation. An obsolete owner cannot publish a successful result after an explicit ownership transfer. The runner records launches durably and reconciles an interrupted attempt before replacement work starts. A disconnected machine is not automatically assumed to have stopped its agent. External actions need their own duplicate protection because a database claim cannot undo a duplicate GitHub request.
+Each running node has one machine that runs it. A disconnected machine is not automatically assumed to have stopped its agent. External actions need their own duplicate protection because a shared claim cannot undo a duplicate GitHub request.
 
-Editing a live workflow creates a new draft version. It does not silently change an active attempt's instructions or model. The user can explicitly cancel, retry, or approve a revised run. Completed artifacts remain available, but reuse requires matching inputs.
+The graph is always editable. Editing a running node's instruction, model, or edges stops it and marks it stale, and it waits for the person's Run. A result counts only while its basis matches the node's current basis ([ADR 0034](adr/0034-a-result-goes-stale-when-its-basis-changes.md)).
 
 The team service does not distribute members' personal subscription tokens. Each runner owns its provider authentication. Team permissions separately control who can edit a plan, start work on a machine, use an account, approve results, and administer the workspace.
 
@@ -221,22 +219,22 @@ On 2026-10-05 the user asked for a node editor that works like n8n, Unreal Engin
 
 The [node system redesign record](handoffs/2026-10-05-node-system-redesign.md) holds the decisions, their reasons, and the rejected alternatives. The shell keeps PlanWeave's surfaces, text, and borders, and these parts changed:
 
-- The accent, the node kinds, and the states take Apple's system colors. Each node kind has its own hue and glyph in a tile. Implement is indigo, Plan cyan, Architect purple, Review mint, Approval brown, Merge pink, and a read-only agent gray. A card's state shows in its ring, a tint, a glyph, and one subtitle line, and a connection takes its source kind's color. Review is not pink, because pink sits close to the Failed red, and teal is not used, because it sits close to cyan. The owner kept pink for the Merge node on 2026-10-19 ([ADR 0033](adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)).
+- The accent, the node kinds, and the states take Apple's system colors. Each node kind has its own hue and glyph in a tile. Implement is indigo, Plan cyan, Architect purple, Review mint, Approval brown, Merge pink, and a read-only agent gray. A card's state shows in its ring, a tint, a glyph, and one subtitle line, and a connection takes its source kind's color. Review is not pink, because pink sits close to the Failed red, and teal is not used, because it sits close to cyan. The owner kept pink for the Merge node on 2026-10-19 ([ADR 0033](adr/0033-a-merge-node-resolves-conflicts-and-merge-into-my-branch-waits-for-a-complete-workflow.md)).
 - Every icon comes from Microsoft's Fluent UI System Icons, which are MIT licensed, at a pinned commit. Phosphor, which is closer to Apple's SF Symbols, stays a candidate.
 - One Add popover adds every node. Right-click, double-click, or N on empty canvas opens it, and so do the sidebar's Add Node button, a wire dropped on empty canvas, and Insert Node on a connection. Cards and connections have context menus with icons and shortcut hints.
 - The inspector follows Godot's: a pinned header with the kind tile, a property filter, foldable sections, two-column rows, and revert arrows. With nothing selected, it shows the workflow's kinds and the blueprint library.
 - Generate Workflow places a Plan node in Chat mode with the person's description and runs it. The planner chooses the client, model, and reasoning of each new task, and of each task it fills that has no agent, from what the machine has ready, with a reason. The proposal shows as ghost cards with each task's agent, and nothing joins the workflow until the person accepts it.
 - Undo and redo cover every workflow edit, from the keyboard, the breadcrumb, and the Add popover.
 
-On 2026-10-06 the user approved giving blueprints their own icon and color, which format 3 carries. The user also confirmed the box "New tasks use the planner's agent" on 2026-10-06. It lets a generated workflow's new tasks take the planner's agent when their blueprint has none. On 2026-10-09 the user found that every generated task then had the same agent and asked the planner to choose each task's agent, in issue #91. The box now reads "Fall back to the planner's agent" and applies only to a new task that has no usable choice from the planner or the person. Issue #99 extended the choice to a run's planner, to its amendments, and to a fill whose task has no agent, and on 2026-10-12 the user decided that the box also gives such a fill the planner's agent when the planner gave it no usable choice.
+On 2026-10-06 the user approved giving blueprints their own icon and color, which format 3 carries. The user also confirmed the box "New tasks use the planner's agent" on 2026-10-06. It lets a generated workflow's new tasks take the planner's agent when their blueprint has none. On 2026-10-09 the user found that every generated task then had the same agent and asked the planner to choose each task's agent, in issue #91. The box now reads "Fall back to the planner's agent" and applies only to a new task that has no usable choice from the planner or the person. Issue #99 extended the choice to a fill whose task has no agent, and on 2026-10-12 the user decided that the box also gives such a fill the planner's agent when the planner gave it no usable choice.
 
 ### The workspace milestone responds to the workspace feedback
 
 The user reviewed the app on 2026-10-06. The compact card design remains the preferred collapsed appearance.
 
-The [workspace and execution plan](handoffs/2026-10-06-workspace-execution-plan.md) maps all seven feedback points to delivery slices and acceptance evidence. It proposes a visible Run Workflow action, a run coordinator over durable events, explicit predecessor inputs, multiple open project documents, a full conversation view, expandable cards, and confirmed GitHub publication. The user approved the plan on 2026-10-06 as the delivery direction, with its design and verification gates intact. The D0 design validation settled the UI layout choices, and its client probe recorded which interaction cases each client supports.
+The workspace milestone maps all seven feedback points to delivery slices and acceptance evidence. It asks for a visible Run Workflow action, explicit predecessor inputs, multiple open project documents, a full conversation view, expandable cards, and confirmed GitHub publication. The user approved the plan on 2026-10-06 as the delivery direction, with its design and verification gates intact. The D0 design validation settled the UI layout choices, and its client probe recorded which interaction cases each client supports.
 
-The proposed UI keeps PlanWeave's canvas and neutral surfaces, Apple's existing color tokens, and Fluent icons. Godot supplies the inspector's property hierarchy and editing patterns. The conversation takes the interaction quality of an agent chat application without replacing iDevelop's canvas with a chat-only interface. Controls on a card, in the inspector, and in Conversation must use the same task and attempt state.
+The proposed UI keeps PlanWeave's canvas and neutral surfaces, Apple's existing color tokens, and Fluent icons. Godot supplies the inspector's property hierarchy and editing patterns. The conversation takes the interaction quality of an agent chat application without replacing iDevelop's canvas with a chat-only interface. Controls on a card, in the inspector, and in Conversation use the same node state from the engine.
 
 Verification extends the `.claude/skills/verify-idevelop` feature map, and each built slice adds its recipes there.
 
@@ -262,13 +260,13 @@ The implementation should cover these acceptance cases:
 - Type English and Chinese with an IME, navigate by keyboard, select log text, and use screen-reader task controls.
 - Run two desktop clients against one project. Exercise simultaneous prompt edits, node deletion during an edit, connection conflicts, undo, reconnect, and revocation of access.
 - Run the entire solo workflow with no team service installed. Connect a separate shared project and verify that losing its connection does not allow duplicate independent execution.
-- Race two start requests. Observe one approved run and one launch per attempt. Restart the service and disconnect a runner during execution.
-- Change a draft after approval. Verify that unapproved changes cannot execute and that an active run retains its original version.
+- Race two start requests for one node. Observe one launch. Restart the service and disconnect a runner during execution.
+- Edit a running node. Verify that it stops, reads stale, and waits for the person's Run.
 - Retry a pull-request operation after an ambiguous response. Verify that it links the existing result rather than creating a duplicate.
 - Continue a task with a different agent using only the exported handoff and repository artifacts.
 - Build and smoke-test on Windows, macOS, and Linux separately. One shared codebase does not remove platform packaging and testing work.
 
-The [workspace and execution plan](handoffs/2026-10-06-workspace-execution-plan.md#verification-skill-plan) assigns local workspace, scheduling, conversation, inspector, card, and publication checks to the approved delivery slices. Team conflict and disconnected-ownership cases remain in the synchronization phase. The provider catalog can include additional documented integrations with their real availability clearly marked.
+The `verify-idevelop` skill holds the local workspace, conversation, inspector, card, and execution checks. Team conflict and disconnected-ownership cases remain in the synchronization phase. The provider catalog can include additional documented integrations with their real availability clearly marked.
 
 ## Delivery order
 
@@ -279,13 +277,13 @@ On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition 
 | 1. Editable local canvas | Done | Open a project, create and connect tasks, edit them, save, and reopen without a server. |
 | 2. PlanWeave look | Done | The shell and canvas follow PlanWeave in a light theme and a dark theme. |
 | 3. Single-task execution | Done | Every task runs on its own with each of Claude Code, Codex, Pi, and Antigravity CLI, using the agent, model, and reasoning setting configured on its node. |
-| 4. Node model | Five slices built. Platform verification gaps remain in its record. | The agent, planner, review, and approval behaviors are built, and an Approval node's human gate works in a workflow run. The node model record distinguishes implemented behavior from unverified cases. |
-| 5. Local workflow workspace | D0, U1, W1, C1, E1, E3, and N1 are built. G1 and the E3 checks on Windows and macOS ([#87](https://github.com/Mano-Liaoyan/iDevelop/issues/87)) remain. | Run Workflow executes dependency-linked tasks with explicit inputs. Multiple projects and workflows stay open. Conversation, inspector, attention, and expandable cards meet the feedback. Confirmed GitHub publication attaches results. The approved slices below define the checks. |
+| 4. Node model | Five slices built. Platform verification gaps remain in its record. | The agent, planner, review, and approval behaviors are built, and an Approval node works in a workflow. The node model record distinguishes implemented behavior from unverified cases. |
+| 5. Local workflow workspace | D0, U1, W1, C1, and N1 are built. Execution v2 ([#179](https://github.com/Mano-Liaoyan/iDevelop/issues/179)) and G1 remain. | Run Workflow executes dependency-linked nodes with explicit inputs. Multiple projects and workflows stay open. Conversation, inspector, attention, and expandable cards meet the feedback. Confirmed GitHub publication attaches results. |
 | 6. Team synchronization | Planned | Proposal. Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
 
 ### Single-task execution is done
 
-Each task node carries an execution configuration: the agent client, the model, and the reasoning setting that the chosen client and model support. The inspector and the card show the result when its run finishes. Since 2026-10-09 a node's Run starts a workflow run, which follows its connections (issue #90, [ADR 0020](adr/0020-a-node-s-run-starts-a-run-that-advances-only-when-every-predecessor-is-complete.md)). The card's agent label, its status pill, and status-colored cards joined the PlanWeave look with this phase.
+Each task node carries an execution configuration: the agent client, the model, and the reasoning setting that the chosen client and model support. The inspector and the card show the result when the node completes. Since 2026-10-09 a node's Run also runs each node after it once all of that node's predecessors are complete (issue #90, [ADR 0018](adr/0018-every-ready-node-starts-at-once.md)). The card's agent label, its status pill, and status-colored cards joined the PlanWeave look with this phase.
 
 The phase covers six cases:
 
@@ -294,11 +292,11 @@ The phase covers six cases:
 - See which clients are installed and ready, and why a client is not ready.
 - Try to run a task that cannot start, and see the reason instead of a launch.
 - Cancel a running task and see it recorded as cancelled.
-- Quit the app while a task runs, and see that run reported as interrupted when the project reopens.
+- Quit the app while a task runs, and see it reported as interrupted when the project reopens.
 
-The phase settled its open design questions. The [working decisions](context.md#working-decisions) state the settled rules, and the [execution record](handoffs/2026-10-04-single-task-execution.md) gives the reasons and the rejected alternatives. The [agent client behavior](agent-clients.md) reference records what each client does when it runs.
+The phase settled its open design questions. The [working decisions](context.md#working-decisions) state the settled rules, and the [agent client behavior](agent-clients.md) reference records what each client does when it runs.
 
-iDevelop starts the official clients, so each run uses the sign-in that client already has: a subscription for Claude Code, Codex, and Antigravity CLI, and whichever provider the user signed in to in Pi. Whether a provider's plan permits unattended use stays that provider's policy. The [provider access reference](provider-access.md) records each provider's access routes.
+iDevelop starts the official clients, so each turn uses the sign-in that client already has: a subscription for Claude Code, Codex, and Antigravity CLI, and whichever provider the user signed in to in Pi. Whether a provider's plan permits unattended use stays that provider's policy. The [provider access reference](provider-access.md) records each provider's access routes.
 
 ### The node model's five slices are built
 
@@ -306,17 +304,15 @@ The [node model record](handoffs/2026-10-04-node-model.md) holds the design that
 
 ### The local workflow workspace
 
-Workflow execution is a confirmed goal. Each node's agent reads its predecessors' output as its input.
+Workflow execution is a confirmed goal. Each node's agent reads its predecessors' latest results as its input.
 
-The approved slices are D0 design validation, U1 inspector repair, W1 multi-project ownership, C1 conversation, E1 run records, E3 Run Workflow and automatic scheduling, N1 expanded node controls, and G1 confirmed GitHub publication. The [slice table](handoffs/2026-10-06-workspace-execution-plan.md#approved-delivery-slices) records their dependencies and completion conditions. All but G1 are built. The [workflow execution design](handoffs/2026-10-07-workflow-execution-design.md) records the user's decisions for E3, and the [ADRs](adr/) record what E3's parts settled.
+The approved slices are D0 design validation, U1 inspector repair, W1 multi-project ownership, C1 conversation, N1 expanded node controls, and G1 confirmed GitHub publication, and all but G1 are built. Execution v2 replaces the earlier execution layer with the engine that [ADR 0042](adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md) describes, and map issue [#179](https://github.com/Mano-Liaoyan/iDevelop/issues/179) tracks it.
 
-Execution uses one run coordinator over durable events and pure readiness rules. A node starts once every required dependency has an accepted result and its inputs are available. Context remains non-blocking. Failure blocks affected dependents, not unrelated work. A review releases its successors after agreement, and an Approval node waits for the person. Work that must wait for a review depends on the review node rather than its subject.
-
-The ADRs settle run approval, retries, concurrency, crash recovery, and run amendments, and the [conversation record](handoffs/2026-10-07-conversation.md) settles each client's protocol. [D0's client probe](handoffs/2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server) recorded which interaction cases each client supports. A planner's proposal may add or fill unstarted nodes during a run, as a run amendment that changes no running attempt ([ADR 0012](adr/0012-an-amendment-adds-and-fills-only-tasks-whose-start-is-not-planned.md)). Failed-attempt retries remain distinct from the user-confirmed review loop.
+The engine is in-process. It starts every ready node at once and sends each result along the node's outgoing edges. Context remains non-blocking. Failure blocks the nodes after it, not unrelated work. A review hands on after it approves, and an Approval node waits for the person. A review's reject and an approval's send back go along a feedback edge to the direct predecessors, which continue in their own session. Each node keeps one append-only log of its results and its session id. The [conversation record](handoffs/2026-10-07-conversation.md) settles each client's protocol, and [D0's client probe](handoffs/2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server) recorded which interaction cases each client supports.
 
 ### Team synchronization comes after execution
 
-The current proposal is that synchronization shares a workflow that already carries execution configuration and run state. [Shared editing and execution have different owners](#shared-editing-and-execution-have-different-owners) still describes the service.
+The current proposal is that synchronization shares a workflow that already carries execution configuration and each node's state. [Shared editing and execution have different owners](#shared-editing-and-execution-have-different-owners) still describes the service.
 
 ### Later work
 
