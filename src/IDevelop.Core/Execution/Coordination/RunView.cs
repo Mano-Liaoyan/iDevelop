@@ -137,6 +137,9 @@ internal sealed record TaskView(TaskId Task, TaskState State)
     /// <summary>On a review: the fix round that closing iDevelop interrupted, which waits for Continue fix or Retry fix.</summary>
     public FixRecovery? Fix { get; init; }
 
+    /// <summary>On a review: the round that repeats an earlier round, which waits for the person's guidance.</summary>
+    public RepeatedRound? Repeat { get; init; }
+
     /// <summary>
     /// While <see cref="TaskState.Uncertain"/>: the newest turn's root exit is recorded, so only its settlement is
     /// unresolved, and a person cannot close the turn as stopped.

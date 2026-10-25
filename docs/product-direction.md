@@ -106,7 +106,7 @@ On 2026-10-04 the user asked for typed nodes and confirmed these requirements:
 - Blueprints live in a personal library in the user's folder and in a project library under `.idp/blueprints/`.
 - Node types build on interfaces. A node that needs a capability, such as interaction, implements that capability's interface.
 - iDevelop does not depend on PStack or any other skill library. A user's own commands and skills work inside a node.
-- A review is a back-and-forth between the implementer and the reviewer, each in its own continuing session, until both agree. It has no round limit, and the user does not have to stop it. Small tickets keep each session small.
+- A review is a back-and-forth between the implementer and the reviewer, each in its own continuing session, until both agree. A round that repeats an earlier round waits for the person's guidance ([ADR 0040](adr/0040-a-review-round-that-repeats-an-earlier-round-waits-for-the-person.md)). Small tickets keep each session small.
 - The user can answer, guide, and correct an agent that asks how to proceed. Some nodes never ask. A live terminal is not required.
 - A planner usually creates the implement nodes. Nodes may also exist already, be drawn empty and filled later, or have no planner. The long-term goal is to talk to one agent and get the whole workflow.
 
@@ -116,7 +116,7 @@ The [node model record](handoffs/2026-10-04-node-model.md) holds the design, whi
 
 A dependency means that the predecessor must meet a named completion condition before the successor becomes ready. A context connection shares information without blocking execution. The [node model](handoffs/2026-10-04-node-model.md#review-is-a-node-and-connections-express-flow) replaced the review connection with a review node, and format 3 stores only dependency and context connections.
 
-Dependencies use all required predecessors by default. Optional or alternative paths need explicit conditions. Failure blocks affected dependents and shows the causal task. It does not stop unrelated work automatically. Retry limits and human escalation prevent endless retries of a failed attempt. A review loop has no round limit and ends when the implementer and the reviewer agree, as the user decided on 2026-10-04.
+Dependencies use all required predecessors by default. Optional or alternative paths need explicit conditions. Failure blocks affected dependents and shows the causal task. It does not stop unrelated work automatically. Retry limits and human escalation prevent endless retries of a failed attempt. A review loop ends when the implementer and the reviewer agree, as the user decided on 2026-10-04, and waits for the person after a round that repeats an earlier round, as the owner decided on 2026-10-25.
 
 Task readiness is derived from dependencies, required inputs, approvals, runner availability, and quota constraints. Attempt status is recorded separately as queued, running, waiting for input, succeeded, failed, cancelled, or interrupted. A disconnected runner has an unknown outcome until reconciliation establishes what happened. The interface should say why a task is waiting rather than present a generic spinner.
 
@@ -312,7 +312,7 @@ The approved slices are D0 design validation, U1 inspector repair, W1 multi-proj
 
 Execution uses one run coordinator over durable events and pure readiness rules. A node starts once every required dependency has an accepted result and its inputs are available. Context remains non-blocking. Failure blocks affected dependents, not unrelated work. A review releases its successors after agreement, and an Approval node waits for the person. Work that must wait for a review depends on the review node rather than its subject.
 
-The ADRs settle run approval, retries, concurrency, crash recovery, and run amendments, and the [conversation record](handoffs/2026-10-07-conversation.md) settles each client's protocol. [D0's client probe](handoffs/2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server) recorded which interaction cases each client supports. A planner's proposal may add or fill unstarted nodes during a run, as a run amendment that changes no running attempt ([ADR 0012](adr/0012-an-amendment-adds-and-fills-only-tasks-whose-start-is-not-planned.md)). Failed-attempt retries remain distinct from the user-confirmed review loop, which has no round limit.
+The ADRs settle run approval, retries, concurrency, crash recovery, and run amendments, and the [conversation record](handoffs/2026-10-07-conversation.md) settles each client's protocol. [D0's client probe](handoffs/2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server) recorded which interaction cases each client supports. A planner's proposal may add or fill unstarted nodes during a run, as a run amendment that changes no running attempt ([ADR 0012](adr/0012-an-amendment-adds-and-fills-only-tasks-whose-start-is-not-planned.md)). Failed-attempt retries remain distinct from the user-confirmed review loop.
 
 ### Team synchronization comes after execution
 

@@ -8,6 +8,12 @@ namespace IDevelop.Execution;
 /// <param name="ContinueUnavailable">Why Continue fix cannot resume the fix's session, or null when it can.</param>
 internal sealed record FixRecovery(AttemptId Fix, int Round, string? ContinueUnavailable);
 
+/// <summary>
+/// Round <paramref name="Round"/> of this review repeats the positions of round <paramref name="Earlier"/>, so the review
+/// waits for the person's guidance, which resumes it (ADR 0040).
+/// </summary>
+internal sealed record RepeatedRound(int Round, int Earlier);
+
 /// <summary>How a run answers Continue fix or Retry fix.</summary>
 internal abstract record FixReply
 {
@@ -183,6 +189,10 @@ internal static class RunReviews
             Context(record, review.Id, log, null).Subject?.Latest is not { } fix) return null;
         return new(fix.Id, choose.Round, ContinueUnavailable(record, fix));
     }
+
+    /// <summary>The repeating round whose review waits for the person's guidance, or null.</summary>
+    public static RepeatedRound? Repeated(RunRecord record, AttemptRecord review, Func<RunAttempt, AttemptRecord?> log) =>
+        Step(record, review, log, null) is NodeStep.WaitForGuidance wait ? new(wait.Round, wait.Earlier) : null;
 
     /// <summary>Why Continue fix cannot resume <paramref name="fix"/>'s session, or null.</summary>
     public static string? ContinueUnavailable(RunRecord record, AttemptRecord fix) =>

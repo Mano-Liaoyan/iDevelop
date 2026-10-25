@@ -8,7 +8,8 @@ namespace IDevelop.Nodes;
 /// A review: a back-and-forth between two sessions until both agents agree. The reviewer's turns are the review
 /// attempt's turns, in one session that only reads. Each fix round is a new attempt of the subject whose first turn
 /// resumes the implementer's session. Each side reads its own history plus the other side's short message. The loop ends
-/// when the reviewer approves with no finding left standing. It has no round limit.
+/// when the reviewer approves with no finding left standing. A round that repeats an earlier round's positions waits for
+/// the person's guidance before the next one starts.
 /// </summary>
 public sealed class ReviewWork : IConverses
 {
@@ -86,6 +87,9 @@ public sealed class ReviewWork : IConverses
             AttemptStatus.Running or AttemptStatus.WaitingForInput => new NodeStep.WaitForSubject(),
             // Quitting iDevelop interrupts a running fix round. It never goes on by itself: the person chooses how.
             AttemptStatus.Interrupted => new NodeStep.ChooseFix(round.Number),
+            // A round that repeats an earlier one waits for the person, whose guidance after it resumes the loop (ADR 0040).
+            AttemptStatus.Succeeded when Repeats(review, round.Number, fix) is { } earlier && !GuidedSince(review, fix) =>
+                new NodeStep.WaitForGuidance(round.Number, earlier),
             AttemptStatus.Succeeded => new NodeStep.RunTurn(RoundPrompt(subject, review, ledger, round.Number, fix))
             {
                 Report = new FixReport(fix.Id, fix.Result, link.Guidance),
@@ -188,6 +192,10 @@ public sealed class ReviewWork : IConverses
         var next = new TurnRecord(review.Turns.Count + 1, null, TurnOutcome.Running, null) { Report = new FixReport(fix.Id, fix.Result, 0) };
         return ReviewLedger.Fold(review with { Turns = review.Turns.Add(next) }).Repeats(round);
     }
+
+    /// <summary>Whether the person added guidance once <paramref name="fix"/> ended its round.</summary>
+    private static bool GuidedSince(AttemptRecord review, AttemptRecord fix) =>
+        review.Guidance.Any(note => fix.EndedAt is not { } ended || note.At >= ended);
 
     private static string Template(TaskDefinition node, PromptTemplate template, SubjectView subject, string? change, string findings) =>
         template.Render(name => name switch

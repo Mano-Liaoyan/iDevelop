@@ -192,7 +192,7 @@ public sealed class ReviewTests : IDisposable
     }
 
     [Fact]
-    public async Task A_round_that_repeats_an_earlier_round_is_named_to_both_agents()
+    public async Task A_round_that_repeats_an_earlier_round_waits_for_guidance_and_is_named_to_both_agents()
     {
         const string Stands = """{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add subtracts.", "change": "Return a + b."}]}""";
         Reviewer(1, Verdict(Stands));
@@ -205,10 +205,23 @@ public sealed class ReviewTests : IDisposable
         Implementer(5, Fixed, Answers("""[{"id": "1", "answer": "fixed", "note": "Returns a + b."}]"""));
         Reviewer(5, Verdict("""{"status": "verdict", "verdict": "approve", "findings": []}"""));
 
-        var (review, runs) = await RunLoop();
+        var (review, runs) = await RunLoop(async runs =>
+        {
+            await Until(() => runs.Check(ReviewNode) is StartProblem.RoundRepeated, "the review waits for the person");
+            Assert.Equal(new StartProblem.RoundRepeated("Review add", 3, 1), runs.Check(ReviewNode));
+            await Task.Delay(300);
+            Assert.False(File.Exists(Path.Combine(_reviewer, "4.stdin")));
+            Assert.Equal(AttemptStatus.InReview, runs.Latest[Review].Status);
+            Assert.IsType<SendResult.Guided>(await runs.SendAsync(ReviewNode, "Settle it in one round.", stopTurn: false));
+            // Round 4 ends as round 1 did too, so the review waits again until the next guidance.
+            await Until(() => runs.Check(ReviewNode) is StartProblem.RoundRepeated { Round: 4 }, "the review waits again");
+            Assert.False(File.Exists(Path.Combine(_reviewer, "5.stdin")));
+            Assert.IsType<SendResult.Guided>(await runs.SendAsync(ReviewNode, "Return a + b.", stopTurn: false));
+        });
         await using (runs)
         {
             Assert.Equal((AttemptStatus.Succeeded, 5), (review.Status, review.Turns.Count));
+            Assert.Contains("## Guidance from the person\n\nSettle it in one round.", Prompt(_reviewer, 4));
             Assert.DoesNotContain("repeats the positions", Prompt(_reviewer, 3));
             Assert.Contains("Round 3 repeats the positions of round 1. For each finding that still stands, name the exact change that would settle it", Prompt(_reviewer, 4));
             Assert.Contains("Round 3 repeated the positions of round 1.", Prompt(_implementer, 5));

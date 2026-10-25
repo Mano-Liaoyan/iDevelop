@@ -44,10 +44,11 @@ internal static class RunProjection
         }
         foreach (var (task, view) in progress.ToArray())
         {
-            // A review whose fix round was interrupted names it, so the person can choose how it goes on.
+            // A review whose fix round was interrupted names it, so the person can choose how it goes on, and one whose
+            // round repeats an earlier round names both, so the person can guide it on.
             if (view is { State: TaskState.Waiting, Status: AttemptStatus.InReview, Attempt: { } review } &&
                 log(record.Attempts[review]) is { Status: AttemptStatus.InReview } reviewer)
-                progress[task] = view with { Fix = RunReviews.Recovery(record, reviewer, log) };
+                progress[task] = view with { Fix = RunReviews.Recovery(record, reviewer, log), Repeat = RunReviews.Repeated(record, reviewer, log) };
         }
         var predecessors = RunScope.Predecessors(snapshot);
         // A result that went out of date runs again by itself, as a Retry does, once every task before it is done, and
