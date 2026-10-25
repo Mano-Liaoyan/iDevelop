@@ -8,11 +8,11 @@ On 2026-10-25 map issue [#179](https://github.com/Mano-Liaoyan/iDevelop/issues/1
 
 ## How it works
 
-In Plan → Implement → Review → Approval, plus Plan → Docs → Review:
+In Plan → Implement → Changelog, plus Plan → Docs → Changelog, where Changelog is an editing node:
 
-- **A worktree per node.** Implement and Docs are editing nodes, so each gets its worktree at `.worktrees/<workflow>/<node>` in the project folder and its branch. Plan and Review are read-only, so their worktrees are detached at the merge of their predecessors and commit nothing.
+- **A worktree per node.** Implement, Docs, and Changelog are editing nodes, so each gets its worktree at `.worktrees/<workflow>/<node>` in the project folder and its branch. Plan is read-only, so it runs in the project folder without a worktree and commits nothing, as does a read-only Review.
 - **One commit at the end of a turn.** When Implement's client exits, iDevelop captures its worktree once, as one commit on the branch's tip. The commit of the node's last turn is part of its result.
-- **The merge of predecessors.** Review starts once Implement and Docs have completed. When they hand on different commits, `git merge-tree` merges them into one commit, and Review's worktree starts there, so it sees both nodes' edits. With one predecessor commit, the worktree starts at that commit. A conflict goes to a connected Merge node, or the node waits for the person ([ADR 0033](0033-a-merge-node-resolves-conflicts-and-merge-into-my-branch-waits-for-a-complete-workflow.md)).
+- **The merge of predecessors.** Changelog starts once Implement and Docs have completed. When they hand on different commits, `git merge-tree` merges them into one commit, and Changelog's worktree starts there, so it sees both nodes' edits. With one predecessor commit, the worktree starts at that commit. A conflict goes to a connected Merge node, or the node waits for the person ([ADR 0033](0033-a-merge-node-resolves-conflicts-and-merge-into-my-branch-waits-for-a-complete-workflow.md)).
 - **A continued session keeps its worktree.** A person's message and a feedback edge continue the node's session in its worktree, with its files as they are.
 - **A fresh session starts clean.** A Retry, and a rerun after an upstream change, reset the worktree to the merge of the predecessors' latest commits, without the files an earlier session left.
 

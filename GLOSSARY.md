@@ -58,7 +58,7 @@ A new attempt of a node in a fresh session, in a clean worktree from the merge o
 _Avoid_: rerun
 
 **Node worktree**:
-The Git worktree a node's agent works in, at `.worktrees/<workflow>/<node>` in the project folder. For a project below its repository's top, the agent works in the project's folder of that worktree ([ADR 0036](docs/adr/0036-a-project-folder-may-sit-below-its-repository-s-top.md)). An editing node's worktree is on its own branch, `idp/<workflow>/<node>`, and each turn ends with one commit there. A read-only node's worktree is detached at the merge of its predecessors and commits nothing. A continued session keeps the worktree's files, and a fresh session starts it clean ([ADR 0032](docs/adr/0032-each-editing-node-works-in-its-own-worktree.md)).
+The Git worktree an editing node's agent works in, at `.worktrees/<workflow>/<node>` in the project folder. For a project below its repository's top, the agent works in the project's folder of that worktree ([ADR 0036](docs/adr/0036-a-project-folder-may-sit-below-its-repository-s-top.md)). An editing node's worktree is on its own branch, `idp/<workflow>/<node>`, and each turn ends with one commit there. A read-only node has no worktree: it runs in the project folder and commits nothing. A continued session keeps the worktree's files, and a fresh session starts it clean ([ADR 0032](docs/adr/0032-each-editing-node-works-in-its-own-worktree.md)).
 _Avoid_: checkout, workspace
 
 **Merge of predecessors**:
