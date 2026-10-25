@@ -171,7 +171,14 @@ internal static class RunProjection
         switch (hold)
         {
             case TaskHold.Blocked blocked: return new(task, TaskState.Blocked) { Attempt = attempt, Block = blocked.Block };
-            case TaskHold.Refused refused: return new(task, TaskState.Refused) { Attempt = attempt, Refusal = refused.Reason, Problem = refused.Problem };
+            // A step refused after the attempt closed, such as its result's acceptance, keeps the closure: its agent finished.
+            case TaskHold.Refused refused:
+                return new(task, TaskState.Refused)
+                {
+                    Attempt = attempt, Refusal = refused.Reason, Problem = refused.Problem,
+                    End = attempt is { } closed ? record.Closures.GetValueOrDefault(closed) : null,
+                    Fixes = attempt is { } fixing && record.ReviewOf(fixing) is not null,
+                };
         }
         if (block is not null) return new(task, TaskState.Blocked) { Attempt = attempt, Block = block };
         if (attempt is not { } id) return null;

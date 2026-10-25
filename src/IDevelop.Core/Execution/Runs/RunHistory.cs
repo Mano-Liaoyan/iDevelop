@@ -125,8 +125,14 @@ internal sealed class RunHistory
         {
             var record = _runs[index];
             if (Touches(record, task))
-                return RunProjection.Settled(record, task) is { State: TaskState.Failed or TaskState.Blocked or TaskState.Uncertain or TaskState.SentBack } view
-                    ? new EndedTask(record, view) : null;
+                return RunProjection.Settled(record, task) switch
+                {
+                    { State: TaskState.Failed or TaskState.Blocked or TaskState.Uncertain or TaskState.SentBack } view => new EndedTask(record, view),
+                    // Its agent finished, and the run settled without accepting its result: the run refused it.
+                    { State: TaskState.Settling, End: AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } } finished =>
+                        new EndedTask(record, finished with { State = TaskState.Refused }),
+                    _ => null,
+                };
             if (RunScope.InFlow(record).Contains(task)) return null;
         }
         return null;

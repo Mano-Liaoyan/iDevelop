@@ -479,7 +479,7 @@
                         <TextBlock Text="{Binding RetryConfirmation}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                    AutomationProperties.AutomationId="RetryConfirmation" />
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ConfirmingRetry}">
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding TakesRetryNote}">
                         <TextBox Text="{Binding RetryNote}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="48"
                                  Watermark="A note to the agent (optional)"
                                  AutomationProperties.AutomationId="RetryNote"

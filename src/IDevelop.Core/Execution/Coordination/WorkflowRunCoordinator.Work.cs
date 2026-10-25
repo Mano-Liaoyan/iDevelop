@@ -42,7 +42,11 @@ internal sealed partial class WorkflowRunCoordinator
                 record = Stopped(record);
                 break;
         }
-        if (record.Phase is RunPhase.Completed or RunPhase.Stopped or RunPhase.Failed) ReleasePins();
+        if (record.Phase is RunPhase.Completed or RunPhase.Stopped or RunPhase.Failed)
+        {
+            ReleasePins();
+            ReleaseHandles();
+        }
         return record;
     }
 
@@ -438,6 +442,17 @@ internal sealed partial class WorkflowRunCoordinator
             default:
                 return Read() ?? record;
         }
+    }
+
+    /// <summary>
+    /// Gives up the task leases that a settled run still holds for settled turns whose disposition it refused, such as a
+    /// result it could not accept. A settled run records nothing more for them, so a later run of the task, such as the
+    /// node's own Run, can take the task. Their durable records stay as they are.
+    /// </summary>
+    private void ReleaseHandles()
+    {
+        foreach (var handle in _handles.Values) handle.Lease.Dispose();
+        _handles.Clear();
     }
 
     /// <summary>Releases the settled run's retention pins once per window. The count is diagnostic.</summary>

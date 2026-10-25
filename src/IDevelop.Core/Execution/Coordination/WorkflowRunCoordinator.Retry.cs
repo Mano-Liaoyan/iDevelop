@@ -15,6 +15,12 @@ internal abstract record RetryReply
 
     internal sealed record Refused(RunRejection Reason) : RetryReply;
 
+    /// <summary>
+    /// The run had refused the task's step before its agent ran, such as its start. The hold is gone, so the run tries that
+    /// step again at once, with the attempt it reserved, if any.
+    /// </summary>
+    internal sealed record Restarted : RetryReply;
+
     /// <summary>Another window controls the run. Nothing was recorded.</summary>
     internal sealed record Unavailable(string Message) : RetryReply;
 }
@@ -41,15 +47,25 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// Whether a run's task offers Retry: an agent's task that is done (#125), or whose newest attempt ended without a result
-    /// and fixed no review round, or a Merge node whose attempt ended without resolving the conflict that went to it.
+    /// and fixed no review round, such as one whose result the run refused to accept, or a Merge node whose attempt ended
+    /// without resolving the conflict that went to it. So does any task whose step the run refused, for a reason that does
+    /// not clear by itself, before an attempt of it ended, such as its start: its Retry tries that step again.
     /// </summary>
-    internal static bool OffersRetry(Workflow snapshot, TaskView? view) =>
-        view is { State: TaskState.Failed or TaskState.Done, Attempt: not null } && snapshot.Tasks.GetValueOrDefault(view.Task)?.Blueprint.Work switch
-        {
-            WorkSpec.Agent => view.State == TaskState.Done || !view.Fixes,
-            WorkSpec.Merge => view is { State: TaskState.Failed, Merge: not null },
-            _ => false,
-        };
+    internal static bool OffersRetry(Workflow snapshot, TaskView? view) => view switch
+    {
+        { State: TaskState.Refused, End: null } => !Transient(view.Refusal?.Problem) && snapshot.Tasks.ContainsKey(view.Task),
+        { State: TaskState.Failed or TaskState.Done, Attempt: not null } or { State: TaskState.Refused, Attempt: not null } =>
+            snapshot.Tasks.GetValueOrDefault(view.Task)?.Blueprint.Work switch
+            {
+                WorkSpec.Agent => view.State == TaskState.Done || !view.Fixes,
+                WorkSpec.Merge => view is { State: TaskState.Failed, Merge: not null },
+                _ => false,
+            },
+        _ => false,
+    };
+
+    /// <summary>Whether the task's Retry tries again a step the run refused before an attempt of it ended, rather than starting a new attempt.</summary>
+    internal static bool RetriesRefusedStep(TaskView? view) => view is { State: TaskState.Refused, End: null };
 
     private void RetryCore(RunRecord record, TaskId task, OperationId confirmation, string? note, Action<RetryReply> complete)
     {
@@ -82,6 +98,13 @@ internal sealed partial class WorkflowRunCoordinator
             complete(Refused(RunProblem.TaskBusy));
             return;
         }
+        // A step refused before an attempt ended, such as a start, is tried again: the hold goes, and the next decision runs it.
+        if (RetriesRefusedStep(view) && OffersRetry(record.Revision.Snapshot, view))
+        {
+            _holds.Remove(task);
+            complete(new RetryReply.Restarted());
+            return;
+        }
         if (!OffersRetry(record.Revision.Snapshot, view) || !record.Closures.ContainsKey(view!.Attempt!.Value))
         {
             complete(Refused(RunProblem.InvalidClaim));
@@ -89,6 +112,9 @@ internal sealed partial class WorkflowRunCoordinator
         }
         var previous = view.Attempt!.Value;
         var cause = new AttemptCause.Retry(previous, confirmation) { Note = note };
+        // The ended attempt's settled turn whose disposition the run refused still holds the task's lease. The retry
+        // replaces that attempt, so its lease goes, and its durable record stays as it is.
+        if (_handles.Remove(task, out var refused)) refused.Lease.Dispose();
         _live[task] = new(LiveStage.Settling);
         Background(() => Reserve(task, cause), reply =>
         {
