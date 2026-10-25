@@ -85,16 +85,19 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     });
 
     /// <summary>
-    /// Commits the node's files, when they changed or resolve a conflict, and then merges each of <paramref name="inputs"/> its
-    /// commit does not hold yet. The node's commit is the worktree's HEAD after a <see cref="WorktreeStart.Ready"/>.
+    /// Commits the node's files, when they changed or <paramref name="resolving"/> says they resolve the conflict the
+    /// worktree's HEAD holds, and then merges each of <paramref name="inputs"/> its commit does not hold yet. The node's
+    /// commit is the worktree's HEAD after a <see cref="WorktreeStart.Ready"/>.
     /// </summary>
-    public WorktreeStart Commit(TaskId node, string message, IReadOnlyList<CommitId> inputs) => Locked(repository =>
+    public WorktreeStart Commit(TaskId node, string message, IReadOnlyList<CommitId> inputs, bool resolving) => Locked(repository =>
     {
         var checkout = Checkout(node);
         var head = Value(repository.ResolveCheckoutHead(checkout)) ?? throw new GitFailure("The worktree has no commit.");
         var tree = Value(repository.Capture(checkout)).Tree;
-        var parents = ConflictParents(repository, head) ?? [head];
-        if (parents.Length > 1 || Value(repository.ReadCommit(head)).Tree != tree)
+        var read = Value(repository.ReadCommit(head));
+        // A resolution replaces the commit of Git's merge with its markers, on the same parents.
+        ImmutableArray<CommitId> parents = resolving && read.Parents.Length == 2 ? read.Parents : [head];
+        if (parents.Length > 1 || read.Tree != tree)
         {
             head = Value(repository.CreateCommit(Recipe(tree, parents, message)));
         }
@@ -104,24 +107,29 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
         return start.Result;
     });
 
-    /// <summary>The conflicting files in the node's worktree that still hold Git's conflict markers.</summary>
+    /// <summary>The conflicting files in the node's worktree, whose HEAD is a conflict's merge, that still hold Git's conflict markers.</summary>
     public ImmutableArray<string> MarkersRemain(TaskId node) => Locked(repository =>
     {
         var checkout = Checkout(node);
         var head = Value(repository.ResolveCheckoutHead(checkout));
-        return head is { } commit && ConflictParents(repository, commit) is [var ours, var theirs]
+        return head is { } commit && Value(repository.ReadCommit(commit)).Parents is [var ours, var theirs]
             && repository.MergeTrees(ours, theirs, ours) is TreeMerge.Conflicted conflicted
             ? MergeMarkers.Remaining(checkout, Paths(conflicted))
             : [];
     });
 
     /// <summary>
-    /// Merges <paramref name="ends"/> into the checked-out branch. Refused when they conflict with each other, and when the
-    /// branch moved and the merge conflicts.
+    /// Merges <paramref name="ends"/> into the checked-out branch. Refused while HEAD is detached, when they conflict with each
+    /// other, and when the branch moved and the merge conflicts.
     /// </summary>
     public void MergeIntoBranch(IReadOnlyList<CommitId> ends) => Locked<object?>(repository =>
     {
         if (ends.Count == 0) throw new InvalidOperationException("No node changed the project.");
+        if (Value(repository.SymbolicHead(repository.Root)) is null)
+        {
+            throw new InvalidOperationException("HEAD is detached. Check out the branch to merge into, and try again.");
+        }
+
         var work = Fold(repository, null, ends);
         if (work.Result is WorktreeStart.Conflict conflict)
         {
@@ -176,17 +184,6 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
 
         var result = merged ?? throw new GitFailure("There is no commit to start from.");
         return (result, new WorktreeStart.Ready(result));
-    }
-
-    /// <summary>
-    /// The parents of <paramref name="commit"/> when it is Git's merge of them with its conflict markers, which the next commit
-    /// replaces, or null.
-    /// </summary>
-    private static ImmutableArray<CommitId>? ConflictParents(GitRepository repository, CommitId commit)
-    {
-        var read = Value(repository.ReadCommit(commit));
-        return read.Parents is [var ours, var theirs] && repository.MergeTrees(ours, theirs, ours) is TreeMerge.Conflicted conflicted
-            && conflicted.Tree == read.Tree ? read.Parents : null;
     }
 
     private static ImmutableArray<string> Paths(TreeMerge.Conflicted conflicted) =>

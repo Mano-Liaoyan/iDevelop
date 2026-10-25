@@ -60,6 +60,22 @@ public sealed class MergeIntoBranchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task It_is_refused_while_HEAD_is_detached()
+    {
+        var a = _f.Node("A");
+        _f.Install(Reply("s-a", "Report A", On().Write("a.txt", "A\n")));
+        var engine = await _f.Open();
+        await engine.Run(a);
+        await Until<NodeState.Completed>(engine, a);
+        _f.Repository.Git("checkout", "-q", "--detach");
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(engine.MergeIntoBranch);
+
+        Assert.Contains("detached", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(_f.Start, _f.Head);
+    }
+
+    [Fact]
     public async Task It_is_refused_when_the_end_nodes_conflict_with_each_other()
     {
         var (a, b) = (_f.Node("A"), _f.Node("B"));

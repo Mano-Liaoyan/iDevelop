@@ -36,6 +36,9 @@ internal sealed class EngineFixture : IAsyncDisposable
 
     public GitFixture Repository { get; }
 
+    /// <summary>The folder the engine opens as the project, when it is not the repository's top.</summary>
+    public string? ProjectFolder { get; set; }
+
     /// <summary>The project branch's first commit.</summary>
     public string Start { get; }
 
@@ -102,7 +105,7 @@ internal sealed class EngineFixture : IAsyncDisposable
     public async Task<WorkflowEngine> Open()
     {
         _clients ??= await Fakes.DiscoverAsync();
-        var engine = new WorkflowEngine(Project, Workflow, _clients, TimeSpan.FromSeconds(1), Repository.Environment);
+        var engine = new WorkflowEngine(ProjectFolder ?? Project, Workflow, _clients, TimeSpan.FromSeconds(1), Repository.Environment);
         _engines.Add(engine);
         return engine;
     }

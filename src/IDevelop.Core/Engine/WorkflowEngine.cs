@@ -166,7 +166,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 throw new InvalidOperationException("The node waits for no approval.");
             }
 
-            log.Append(Finish(_workflow.Tasks[node], node, ResultBlock.Prose(waiting.Text), basis));
+            log.Append(Finish(_workflow.Tasks[node], node, ResultBlock.Prose(waiting.Text), basis, out _));
             if (log.Record.End is NodeEntry.Completed) Route(node);
         });
         return Task.CompletedTask;
@@ -176,7 +176,10 @@ public sealed class WorkflowEngine : IAsyncDisposable
     /// Commits the person's resolution of the conflict the node waits for, on the conflict's parents, and starts the node's
     /// fresh turn from there.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The node waits for no conflict, or a conflicting file still holds markers.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The node waits for no conflict, cannot run now, rests on a basis that changed since the conflict, or a conflicting
+    /// file still holds markers.
+    /// </exception>
     public Task MarkResolved(TaskId node)
     {
         Change(() =>
@@ -186,12 +189,18 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 throw new InvalidOperationException("The node waits for no conflict.");
             }
 
+            if (Refusal(node) is { } reason) throw new InvalidOperationException(reason);
+            if (basis != BasisIn(_workflow, node))
+            {
+                throw new InvalidOperationException("What the node starts from changed since the conflict. Run it again.");
+            }
+
             if (_worktrees.MarkersRemain(node) is { IsEmpty: false } remaining)
             {
                 throw new InvalidOperationException($"Conflict markers remain in {string.Join(", ", remaining)}.");
             }
 
-            Begin(node, basis, () => _worktrees.Commit(node, "Resolve the conflicting merge", InputCommits(node)));
+            Begin(node, basis, () => _worktrees.Commit(node, "Resolve the conflicting merge", InputCommits(node), resolving: true));
         });
         return Task.CompletedTask;
     }
@@ -278,7 +287,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
 
     /// <summary>
     /// Starts an editing node's fresh turn once <paramref name="prepare"/> readied its worktree. A conflict goes to a Merge
-    /// node's agent, or waits for the person. A Merge node whose inputs merged cleanly completes without a turn.
+    /// node's agent, or waits for the person. A failure fails only this node, so routing goes on to the others.
     /// </summary>
     private void Begin(TaskId id, Basis basis, Func<WorktreeStart> prepare)
     {
@@ -288,7 +297,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         {
             start = prepare();
         }
-        catch (GitFailure e)
+        catch (Exception e)
         {
             Settle(id, basis, new NodeEntry.Failed(e.Message));
             return;
@@ -297,14 +306,10 @@ public sealed class WorkflowEngine : IAsyncDisposable
         switch (start)
         {
             case WorktreeStart.Conflict conflict when node.Blueprint.Work is WorkSpec.Merge:
-                Start(id, basis, Prompt(id, conflict), session: null);
+                Start(id, basis, Prompt(id, conflict), session: null, conflict);
                 break;
             case WorktreeStart.Conflict conflict:
-                Settle(id, basis, new NodeEntry.Waiting(NodeState.Conflict, conflict.Description));
-                break;
-            case WorktreeStart.Ready ready when node.Blueprint.Work is WorkSpec.Merge:
-                Settle(id, basis, new NodeEntry.Completed(new NodeResult(NewId(), Inputs(id), ready.Commit.Hex, basis)));
-                Route(id);
+                Settle(id, basis, new NodeEntry.Conflicted(conflict.Description), new NodeEntry.Waiting(NodeState.Conflict, conflict.Description));
                 break;
             default:
                 Start(id, basis, Prompt(id, null), session: null);
@@ -312,31 +317,48 @@ public sealed class WorkflowEngine : IAsyncDisposable
         }
     }
 
-    /// <summary>Logs a fresh turn that ends as soon as it starts, with <paramref name="end"/>.</summary>
-    private void Settle(TaskId id, Basis basis, NodeEntry end)
+    /// <summary>Logs a fresh turn that ends as soon as it starts, with <paramref name="entries"/>.</summary>
+    private void Settle(TaskId id, Basis basis, params NodeEntry[] entries)
     {
         StopDescendants(id);
         Log(id).Append(new NodeEntry.TurnStarted(basis, null));
-        Log(id).Append(end);
+        foreach (var entry in entries) Log(id).Append(entry);
     }
 
     /// <summary>
-    /// How a turn that is done ends: with its result, which for an editing node holds its worktree's commit. When the commit
-    /// still lacks some of the predecessors' commits and merging them conflicts, the node waits for the person.
+    /// How a turn that is done ends: with its result, which for an editing node holds its worktree's commit. A Merge node
+    /// whose files still hold conflict markers waits for the person. When the commit still lacks some of the predecessors'
+    /// commits and merging them conflicts, a Merge node's session goes on with <paramref name="again"/>, the new conflict,
+    /// and any other node waits for the person.
     /// </summary>
-    private NodeEntry Finish(TaskDefinition node, TaskId id, string report, Basis basis)
+    private NodeEntry Finish(TaskDefinition node, TaskId id, string report, Basis basis, out WorktreeStart.Conflict? again)
     {
+        again = null;
         if (!Edits(node)) return new NodeEntry.Completed(new NodeResult(NewId(), report, null, basis));
+        var merge = node.Blueprint.Work is WorkSpec.Merge;
+        var resolving = Log(id).Record.Resolving;
         try
         {
-            return _worktrees.Commit(id, node.Title.Length > 0 ? node.Title : node.Blueprint.Name, InputCommits(id)) switch
+            if (merge && resolving && _worktrees.MarkersRemain(id) is { IsEmpty: false } remaining)
             {
-                WorktreeStart.Ready ready => new NodeEntry.Completed(new NodeResult(NewId(), report, ready.Commit.Hex, basis)),
-                WorktreeStart.Conflict conflict => new NodeEntry.Waiting(NodeState.Conflict, conflict.Description),
-                _ => throw new InvalidOperationException(),
-            };
+                return new NodeEntry.Waiting(NodeState.Conflict, $"Conflict markers remain in {string.Join(", ", remaining)}.");
+            }
+
+            switch (_worktrees.Commit(id, node.Title.Length > 0 ? node.Title : node.Blueprint.Name, InputCommits(id), resolving))
+            {
+                case WorktreeStart.Conflict conflict when merge:
+                    again = conflict;
+                    return new NodeEntry.Waiting(NodeState.Conflict, conflict.Description);
+                case WorktreeStart.Conflict conflict:
+                    Log(id).Append(new NodeEntry.Conflicted(conflict.Description));
+                    return new NodeEntry.Waiting(NodeState.Conflict, conflict.Description);
+                case WorktreeStart.Ready ready:
+                    return new NodeEntry.Completed(new NodeResult(NewId(), report, ready.Commit.Hex, basis));
+                default:
+                    throw new InvalidOperationException();
+            }
         }
-        catch (GitFailure e)
+        catch (Exception e) when (e is GitFailure or IOException or UnauthorizedAccessException)
         {
             return new NodeEntry.Failed(e.Message);
         }
@@ -354,13 +376,14 @@ public sealed class WorkflowEngine : IAsyncDisposable
         Start(id, basis, text, session);
     }
 
-    private void Start(TaskId id, Basis basis, string prompt, string? session)
+    private void Start(TaskId id, Basis basis, string prompt, string? session, WorktreeStart.Conflict? conflict = null)
     {
         var node = _workflow.Tasks[id];
         var agent = AgentOf(node) ?? throw new InvalidOperationException("This node kind does not run yet.");
         StopDescendants(id);
         var log = Log(id);
         log.Append(new NodeEntry.TurnStarted(basis, session));
+        if (conflict is not null) log.Append(new NodeEntry.Conflicted(conflict.Description));
         var folder = Edits(node) ? _worktrees.Folder(id) : _project;
         var live = new Live();
         _live[id] = live;
@@ -383,15 +406,22 @@ public sealed class WorkflowEngine : IAsyncDisposable
         {
             _live.Remove(id);
             if (live.Halt == Halt.Closing) return;
+            WorktreeStart.Conflict? again = null;
             log.Append(live.Halt != Halt.None ? new NodeEntry.Stopped() : outcome switch
             {
-                TurnOutcome.Done done => Finish(node, id, done.Report, basis),
+                TurnOutcome.Done done => Finish(node, id, done.Report, basis, out again),
                 TurnOutcome.Waits waits => new NodeEntry.Waiting(waits.Why, waits.Text),
                 TurnOutcome.Failed failed => new NodeEntry.Failed(failed.Reason),
                 _ => new NodeEntry.Stopped(),
             });
             var continues = live.Halt is Halt.None or Halt.Message && log.Record.Session is not null && _workflow.Tasks.ContainsKey(id);
-            if (live.Queued is { } message && continues)
+            if (again is not null && continues)
+            {
+                // A Merge node's next conflict among its inputs is another turn of its session.
+                Start(id, basis, Prompt(id, again), log.Record.Session, again);
+                _live[id].Queued = live.Queued;
+            }
+            else if (live.Queued is { } message && continues)
             {
                 Continue(id, message);
             }
@@ -508,7 +538,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             {
                 "title" => node.Title,
                 "inputs" => inputs,
-                "conflict" => conflict?.Description ?? "",
+                "conflict" => conflict?.Description ?? "The work handed on merged without a conflict. Check that the merge keeps what each side meant.\n",
                 _ => node.Field(name),
             });
         }
