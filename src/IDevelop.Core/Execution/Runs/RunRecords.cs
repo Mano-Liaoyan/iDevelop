@@ -19,8 +19,6 @@ internal readonly record struct RevisionId(string Sha256);
 
 internal readonly record struct Digest(string Sha256);
 
-internal readonly record struct CommitId(string Hex);
-
 internal readonly record struct LaunchKey(AttemptId Attempt, int Turn);
 
 internal sealed record ApprovedRevision(RevisionId Id, Workflow Snapshot);

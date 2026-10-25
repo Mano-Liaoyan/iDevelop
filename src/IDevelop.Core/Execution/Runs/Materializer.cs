@@ -179,7 +179,7 @@ internal sealed partial class Materializer
     private GitRepository OpenRepository() => GitRepository.Open(_project, _environment) switch
     {
         RepositoryOpen.Opened opened => opened.Repository,
-        RepositoryOpen.Refused refused => throw Fault(refused.Problem, refused.Detail, new BlockScope.Repository()),
+        RepositoryOpen.Refused refused => throw Fault(refused.Fault.Problem(), refused.Detail, new BlockScope.Repository()),
         _ => throw new InvalidOperationException(),
     };
 
@@ -262,11 +262,11 @@ internal sealed partial class Materializer
     private static T Value<T>(GitRead<T> read) => read switch
     {
         GitRead<T>.Read success => success.Value,
-        GitRead<T>.Failed failed => throw Fault(failed.Problem, failed.Detail, failed switch
+        GitRead<T>.Failed failed => throw Fault(failed.Fault.Problem(), failed.Detail, failed switch
         {
             { Refs.IsEmpty: false } => new BlockScope.Refs(failed.Refs),
             // Only a task checkout's index that hides entries fails as DirtyWorktree.
-            { Problem: MaterializationProblem.DirtyWorktree } => new BlockScope.Repository(),
+            { Fault: GitFault.HiddenChanges } => new BlockScope.Repository(),
             _ => new BlockScope.Operation(),
         }),
         _ => throw new InvalidOperationException(),

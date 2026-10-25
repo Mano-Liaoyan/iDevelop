@@ -26,10 +26,10 @@ internal interface IAgent
     string? Problem(TaskDefinition node);
 
     /// <summary>
-    /// Runs one turn with <paramref name="prompt"/>, continuing <paramref name="session"/> when it is set. It reports what the
-    /// agent says as it goes, and <paramref name="stop"/> stops the turn.
+    /// Runs one turn in <paramref name="folder"/> with <paramref name="prompt"/>, continuing <paramref name="session"/> when it
+    /// is set. It reports what the agent says as it goes, and <paramref name="stop"/> stops the turn.
     /// </summary>
-    Task<TurnOutcome> Turn(TaskDefinition node, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop);
+    Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop);
 }
 
 /// <summary>An Approval node's agent is the person: each turn waits for them to approve or send back.</summary>
@@ -41,6 +41,6 @@ internal sealed class PersonAgent : IAgent
 
     public string? Problem(TaskDefinition node) => null;
 
-    public Task<TurnOutcome> Turn(TaskDefinition node, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop) =>
+    public Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop) =>
         Task.FromResult<TurnOutcome>(new TurnOutcome.Waits(NodeState.Approval, prompt));
 }

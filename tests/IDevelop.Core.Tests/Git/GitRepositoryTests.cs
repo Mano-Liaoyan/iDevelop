@@ -207,7 +207,7 @@ public sealed class GitRepositoryTests
         var capture = Assert.IsType<GitRead<GitCapture>.Failed>(repository.Capture(f.Folder));
         Assert.Multiple(
             () => Assert.Null(GitTree.Snapshot(f.Folder)),
-            () => Assert.Equal(MaterializationProblem.DirtyWorktree, capture.Problem),
+            () => Assert.Equal(GitFault.HiddenChanges, capture.Fault),
             () => Assert.Equal("The index hides changes to out/o.txt with assume-unchanged or skip-worktree.", capture.Detail));
     }
 
@@ -267,10 +267,10 @@ public sealed class GitRepositoryTests
         var index = Read(repository.IndexPath(f.Folder));
         var before = File.ReadAllBytes(index);
         var capture = Assert.IsType<GitRead<GitCapture>.Failed>(repository.Capture(f.Folder));
-        Assert.Equal("DirtyWorktree", capture.Problem.ToString());
+        Assert.Equal(GitFault.HiddenChanges, capture.Fault);
         Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", capture.Detail);
         var status = Assert.IsType<GitRead<byte[]>.Failed>(repository.Status(f.Folder));
-        Assert.Equal("DirtyWorktree", status.Problem.ToString());
+        Assert.Equal(GitFault.HiddenChanges, status.Fault);
         Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", status.Detail);
         Assert.Equal(before, File.ReadAllBytes(index));
         if (state == "absent") Assert.False(File.Exists(f.PathOf("a.txt")));
@@ -322,10 +322,10 @@ public sealed class GitRepositoryTests
         f.Git("symbolic-ref", "refs/idp/r/base", "refs/heads/main");
         var repository = f.Open();
         var read = Assert.IsType<GitRead<CommitId?>.Failed>(repository.ReadRef("refs/idp/r/base"));
-        Assert.Equal("UncertainOwnership", read.Problem.ToString());
+        Assert.Equal(GitFault.SymbolicRef, read.Fault);
         Assert.Equal("Ref refs/idp/r/base is symbolic to refs/heads/main.", read.Detail);
         var snapshot = Assert.IsType<GitRead<SortedDictionary<string, CommitId>>.Failed>(repository.RefSnapshot("refs/idp/"));
-        Assert.Equal("UncertainOwnership", snapshot.Problem.ToString());
+        Assert.Equal(GitFault.SymbolicRef, snapshot.Fault);
         Assert.Equal("Ref refs/idp/r/base is symbolic to refs/heads/main.", snapshot.Detail);
         Assert.Equal("refs/heads/main\n", f.Git("symbolic-ref", "refs/idp/r/base"));
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n", f.Git("rev-parse", "refs/heads/main"));
@@ -358,10 +358,10 @@ public sealed class GitRepositoryTests
         var index = Read(repository.IndexPath(f.Folder));
         var bytes = File.ReadAllBytes(index);
         var capture = Assert.IsType<GitRead<GitCapture>.Failed>(repository.Capture(f.Folder));
-        Assert.Equal("DirtyWorktree", capture.Problem.ToString());
+        Assert.Equal(GitFault.HiddenChanges, capture.Fault);
         Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", capture.Detail);
         var status = Assert.IsType<GitRead<byte[]>.Failed>(repository.Status(f.Folder));
-        Assert.Equal("DirtyWorktree", status.Problem.ToString());
+        Assert.Equal(GitFault.HiddenChanges, status.Fault);
         Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", status.Detail);
         Assert.Equal("hidden edit\n", File.ReadAllText(f.PathOf("a.txt")));
         Assert.Equal(bytes, File.ReadAllBytes(index));
@@ -449,7 +449,7 @@ public sealed class GitRepositoryTests
     {
         using var f = new GitFixture(initialize: false);
         var refused = Assert.IsType<RepositoryOpen.Refused>(GitRepository.Open(f.Folder, f.Environment));
-        Assert.Equal(MaterializationProblem.NotRepositoryRoot, refused.Problem);
+        Assert.Equal(GitFault.NotInWorkTree, refused.Fault);
         Assert.Contains("not a git repository", refused.Detail);
     }
 
@@ -681,7 +681,7 @@ public sealed class GitRepositoryTests
         Assert.Equal(["a.txt", "plan.txt", "root.txt"], Read(repository.TrackedFiles(f.Folder)).ToArray());
         Assert.Empty(Read(repository.UnmergedEntries(f.Folder)));
         var failed = Assert.IsType<GitRead<string>.Failed>(repository.ObjectType(new string('9', 40)));
-        Assert.Equal(MaterializationProblem.GitFailed, failed.Problem);
+        Assert.Equal(GitFault.Failed, failed.Fault);
         Assert.Contains("could not get object info", failed.Detail);
     }
 
@@ -716,7 +716,7 @@ public sealed class GitRepositoryTests
         var path = Read(repository.IndexPath(f.Folder));
         File.WriteAllBytes(path, [68, 73, 82, 67]);
         var failed = Assert.IsType<GitRead<GitCapture>.Failed>(repository.Capture(f.Folder));
-        Assert.Equal(MaterializationProblem.GitFailed, failed.Problem);
+        Assert.Equal(GitFault.Failed, failed.Fault);
         Assert.Contains("index file smaller than expected", failed.Detail);
         Assert.Equal(new byte[] { 68, 73, 82, 67 }, File.ReadAllBytes(path));
     }
@@ -844,7 +844,7 @@ public sealed class GitRepositoryTests
         {
             Kill(id);
         }
-        Assert.Equal("GitFailed", failed.Problem.ToString());
+        Assert.Equal(GitFault.Failed, failed.Fault);
         Assert.Equal("Git timed out.", failed.Detail);
         f.Write("new.txt", "new\n");
         Assert.Equal("?? new.txt\0", Encoding.UTF8.GetString(Read(repository.Status(f.Folder))));

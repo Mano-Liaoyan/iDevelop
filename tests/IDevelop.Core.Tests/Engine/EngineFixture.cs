@@ -1,4 +1,5 @@
 using System.Text.Json;
+using IDevelop.Core.Tests.Git;
 using IDevelop.Engine;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -8,8 +9,9 @@ using static IDevelop.TestSupport.FakeRule;
 namespace IDevelop.Core.Tests.Engine;
 
 /// <summary>
-/// A project, a fake Antigravity CLI, and a workflow of Implement nodes. Antigravity reads its whole prompt from stdin and
-/// has a read-only mode, so one fake answers each node by the start of its prompt, and a stop ends its turn at once.
+/// A project in a Git repository with one commit, a fake Antigravity CLI, and a workflow of Implement nodes. Antigravity
+/// reads its whole prompt from stdin and has a read-only mode, so one fake answers each node by the start of its prompt,
+/// and a stop ends its turn at once.
 /// </summary>
 internal sealed class EngineFixture : IAsyncDisposable
 {
@@ -27,7 +29,18 @@ internal sealed class EngineFixture : IAsyncDisposable
         Fakes = new FakeClients(_temp.Create("bin"));
         Project = _temp.Create("project");
         Evidence = _temp.Create("evidence");
+        Repository = new GitFixture(folder: Project);
+        Repository.Write("README.md", "Project\n");
+        Start = Repository.Commit("Start").Hex;
     }
+
+    public GitFixture Repository { get; }
+
+    /// <summary>The folder the engine opens as the project, when it is not the repository's top.</summary>
+    public string? ProjectFolder { get; set; }
+
+    /// <summary>The project branch's first commit.</summary>
+    public string Start { get; }
 
     public FakeClients Fakes { get; }
 
@@ -49,6 +62,33 @@ internal sealed class EngineFixture : IAsyncDisposable
         return node.Id;
     }
 
+    /// <summary>A Plan node, which only reads the project.</summary>
+    public TaskId Reader(string title)
+    {
+        var node = new TaskDefinition(NextId(), BuiltInBlueprints.Plan) { Title = title, Execution = Agy, Conversation = ConversationMode.Autonomous }
+            .WithField("goal", $"Plan {title}.")!;
+        Workflow = Workflow.Must(TestNodes.Place(node, new CanvasPoint(0, 0)));
+        return node.Id;
+    }
+
+    public TaskId Merge(string title)
+    {
+        var node = new TaskDefinition(NextId(), BuiltInBlueprints.Merge) { Title = title, Execution = Agy };
+        Workflow = Workflow.Must(TestNodes.Place(node, new CanvasPoint(0, 0)));
+        return node.Id;
+    }
+
+    /// <summary>The folder of <paramref name="node"/>'s worktree.</summary>
+    public string Worktree(TaskId node) => Path.Combine(Project, ".worktrees", Workflow.Id.ToString(), node.ToString());
+
+    /// <summary>The files <paramref name="commit"/> holds, with their contents.</summary>
+    public IReadOnlyDictionary<string, string> Files(string commit) => Repository.Git("ls-tree", "-r", "--name-only", commit)
+        .Split('\n', StringSplitOptions.RemoveEmptyEntries).ToDictionary(path => path, path => Repository.Git("show", $"{commit}:{path}"));
+
+    public string[] Parents(string commit) => Repository.Git("rev-list", "--parents", "-n", "1", commit).Trim().Split(' ')[1..];
+
+    public string Head => Repository.Git("rev-parse", "HEAD").Trim();
+
     public TaskId Approval(string title)
     {
         var id = NextId();
@@ -65,7 +105,7 @@ internal sealed class EngineFixture : IAsyncDisposable
     public async Task<WorkflowEngine> Open()
     {
         _clients ??= await Fakes.DiscoverAsync();
-        var engine = new WorkflowEngine(Project, Workflow, _clients, TimeSpan.FromSeconds(1));
+        var engine = new WorkflowEngine(ProjectFolder ?? Project, Workflow, _clients, TimeSpan.FromSeconds(1), Repository.Environment);
         _engines.Add(engine);
         return engine;
     }
@@ -125,6 +165,7 @@ internal sealed class EngineFixture : IAsyncDisposable
     {
         foreach (var engine in _engines) await engine.DisposeAsync();
         Fakes.Dispose();
+        Repository.Dispose();
         _temp.Dispose();
     }
 }
