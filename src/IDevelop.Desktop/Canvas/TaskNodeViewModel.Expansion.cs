@@ -116,7 +116,7 @@ public sealed partial class TaskNodeViewModel
     {
         Role = Role,
         HasAgent = HasAgent,
-        LastReply = LastReply,
+        LastReply = Latest,
         Report = _history.Count > 0 ? _history[^1].Report : null,
         Detail = StateDetail,
         Proposal = Proposal is { HasItems: true } ? Subtitle : null,

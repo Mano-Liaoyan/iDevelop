@@ -130,6 +130,14 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
             : [];
     });
 
+    /// <summary>Whether any of <paramref name="ends"/> holds work that the checked-out branch's HEAD does not.</summary>
+    public bool HasWorkBeyondHead(IReadOnlyList<CommitId> ends)
+    {
+        var repository = Repository;
+        if (Value(repository.ResolveCommit("HEAD")) is not { } head) return ends.Count > 0;
+        return ends.Any(end => repository.IsAncestor(end, head) is not GitAncestry.Yes);
+    }
+
     /// <summary>
     /// Merges <paramref name="ends"/> into the checked-out branch. Refused while HEAD is detached, when they conflict with each
     /// other, and when the branch moved and the merge conflicts.

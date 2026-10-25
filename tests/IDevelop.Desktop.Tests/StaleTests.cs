@@ -19,7 +19,7 @@ public sealed class StaleTests
 
     private static Shell Completed(NodeFixture f)
     {
-        f.Install(On().Choose((Fresh("A"), Reply("s-a", "A ready.")), (Fresh("B"), Reply("s-b", "B ready."))));
+        f.Install(On().Choose((Fresh("A"), Reply("s-a", "A ready.", On().Write("a.txt", "A\n"))), (Fresh("B"), Reply("s-b", "B ready.", On().Write("b.txt", "B\n")))));
         var shell = f.Open();
         shell.RunNode("A");
         shell.WaitForState("B", NodeState.Completed);
@@ -30,11 +30,11 @@ public sealed class StaleTests
     [AvaloniaFact]
     public void An_edited_instruction_flags_the_result_stale_holds_back_the_merge_and_a_retry_makes_it_current()
     {
-        using var f = new NodeFixture(Plan(A, "A", 105), Plan(B, "B", 405), Dependency(A, B));
+        using var f = new NodeFixture(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
         var shell = Completed(f);
         var canvas = shell.Window.ViewModel.Canvas!;
 
-        canvas.Edit(new WorkflowEdit.SetField(A, "goal", "Plan A again."));
+        canvas.Edit(new WorkflowEdit.SetField(A, "instructions", "Build A again."));
         shell.Render();
 
         shell.WaitForState("A", NodeState.Stale);

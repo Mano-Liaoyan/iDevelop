@@ -65,4 +65,19 @@ public sealed class RunTests
         Assert.Equal("Merged the workflow's work into your branch.", shell.Status);
         Assert.Equal(("A\n", "B\n"), (File.ReadAllText(Path.Combine(f.Project, "a.txt")), File.ReadAllText(Path.Combine(f.Project, "b.txt"))));
     }
+
+    [AvaloniaFact]
+    public void Run_Workflow_that_cannot_write_the_nodes_logs_says_why_and_runs_nothing()
+    {
+        using var f = new NodeFixture(Plan(A, "A", 105));
+        f.Install(Reply("s-a", "A ready."));
+        // A file where the node logs go keeps them from being written.
+        File.WriteAllText(Path.Combine(f.Project, ".idp", "nodes"), "");
+        var shell = f.Open();
+
+        shell.Click(shell.Find<Button>("RunWorkflow"));
+
+        Assert.StartsWith("Couldn't run the workflow.", shell.Status);
+        Assert.Equal(NodeState.Idle, shell.NodeModel("A").State);
+    }
 }

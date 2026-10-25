@@ -209,6 +209,23 @@ public sealed class WorkspaceTests : IDisposable
     private static FakeRule Hangs() => On().Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-1")).Hang();
 
     [AvaloniaFact]
+    public void A_project_whose_lock_cannot_be_written_stays_closed_and_the_status_says_why()
+    {
+        var folder = Project("alpha");
+        // A folder where the data folder's .gitignore goes keeps the window's lock from being kept out of Git.
+        File.Delete(Path.Combine(folder, ".idp", ".gitignore"));
+        Directory.CreateDirectory(Path.Combine(folder, ".idp", ".gitignore"));
+
+        var shell = Shell.Open(folder);
+
+        Assert.Empty(shell.Window.ViewModel.Projects);
+        Assert.StartsWith($"Couldn't open {folder}", shell.Status);
+        Directory.Delete(Path.Combine(folder, ".idp", ".gitignore"));
+        shell.Window.ViewModel.Open(folder);
+        Assert.Single(shell.Window.ViewModel.Projects);
+    }
+
+    [AvaloniaFact]
     public void A_running_task_runs_on_across_switches_and_another_projects_close_and_stays_in_its_own_workflow()
     {
         FakeAgents.Install(_fakes, ClientId.Antigravity, Waits());

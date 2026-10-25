@@ -81,7 +81,15 @@ public sealed partial class WorkflowCanvasViewModel
     }
 
     /// <summary>Stops every node's turn, which reopens as interrupted, as the project's closing does.</summary>
-    internal ValueTask DisposeEngineAsync() => Engine.DisposeAsync();
+    internal ValueTask DisposeEngineAsync()
+    {
+        foreach (var node in Nodes)
+        {
+            node.StopFollowingLog();
+        }
+
+        return Engine.DisposeAsync();
+    }
 
     /// <summary>
     /// Reads every node from the engine again, and what the bar and the sidebar show. A node's change can change what the
@@ -146,23 +154,35 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>Whether the node has run: it runs, waits, or has a result.</summary>
     internal bool HasStarted(TaskId task) => Workflow.Tasks.ContainsKey(task) && Engine.State(task) is not IDevelop.Engine.NodeState.Idle;
 
-    private void RunWorkflow()
+    private void RunWorkflow() => Act(() =>
     {
         _ = Engine.RunWorkflow();
-        Notice(null);
-        ShowEngine();
-    }
+        return null;
+    }, "Couldn't run the workflow.");
 
-    private void MergeIntoBranch()
+    private void MergeIntoBranch() => Act(() =>
+    {
+        _ = Engine.MergeIntoBranch();
+        return "Merged the workflow's work into your branch.";
+    }, "Couldn't merge into your branch.");
+
+    /// <summary>
+    /// Runs an engine command and shows its notice, or why the engine refused it, or what kept it from writing, as a node's
+    /// own commands do. Nothing it throws reaches the window.
+    /// </summary>
+    private void Act(Func<string?> command, string failure)
     {
         try
         {
-            _ = Engine.MergeIntoBranch();
-            Notice("Merged the workflow's work into your branch.");
+            Notice(command());
         }
         catch (InvalidOperationException e)
         {
             Notice(e.Message);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Notice($"{failure} {e.Message}");
         }
 
         ShowEngine();

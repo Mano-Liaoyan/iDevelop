@@ -56,4 +56,28 @@ public sealed class NodeRunTests
         Assert.True(shell.InView<Button>("RunTask").IsEffectivelyEnabled);
         Assert.Empty(shell.NodeModel("A").Results);
     }
+
+    [AvaloniaFact]
+    public void A_running_cards_latest_message_follows_what_the_agent_does_while_its_state_stays_the_same()
+    {
+        using var f = new NodeFixture(Plan(A, "A", 105));
+        f.Install(Reply("s-a", "A ready.", On()
+            .Print("""{"event":"init","conversation_id":"s-a"}""")
+            .WaitForFile(f.Gate("first"))
+            .Print("""{"event":"step_update","step_update":{"step_type":"tool","state":"ACTIVE","tool_name":"read_file"}}""")
+            .WaitForFile(f.Gate("second"))));
+        var shell = f.Open();
+        shell.Click(shell.InCard<Avalonia.Controls.Primitives.ToggleButton>("A", "CardExpand"));
+        shell.RunNode("A");
+        shell.WaitForState("A", NodeState.Running);
+        shell.WaitUntil(() => shell.CardText("A", "CardNowText") == "No message yet.", "the card shows the turn has said nothing yet");
+
+        f.Release("first");
+
+        shell.WaitUntil(() => shell.CardText("A", "CardNowText") == "read_file", "the card shows the agent's tool",
+            () => shell.CardText("A", "CardNowText"));
+        Assert.Equal(NodeState.Running, shell.NodeModel("A").State);
+        f.Release("second");
+        shell.WaitForState("A", NodeState.Completed);
+    }
 }

@@ -19,7 +19,7 @@ public sealed partial class TaskNodeViewModel
         nameof(EngineState), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(Results), nameof(HasResults), nameof(LastReply), nameof(ReviewSummary), nameof(FindingsSummary),
-        nameof(Findings), nameof(HasFindings), nameof(Preview), nameof(SendProblem),
+        nameof(Findings), nameof(HasFindings), nameof(Preview), nameof(SendProblem), nameof(Latest),
     ];
 
     private EngineState _engineState = new EngineState.Idle();
@@ -27,6 +27,9 @@ public sealed partial class TaskNodeViewModel
     private IReadOnlyList<NodeResult> _history = [];
     private (int Index, string Text)? _lastReply;
     private (int Index, string Text)? _proposed;
+    private string? _latest;
+    private IConversation? _log;
+    private int _logChanged;
     private string _sendBackNote = "";
     private RelayCommand _run = null!;
     private RelayCommand _retry = null!;
@@ -98,6 +101,9 @@ public sealed partial class TaskNodeViewModel
         current: index == _history.Count - 1 && State == NodeState.Completed)).Reverse()];
 
     public bool HasResults => _history.Count > 0;
+
+    /// <summary>What the agent did last: its latest message, or the tool it started after it, or null.</summary>
+    public string? Latest => _latest;
 
     /// <summary>The prose of the agent's latest complete message, without its result block, or null.</summary>
     public string? LastReply => _lastReply is { Text: var text } ? ResultBlock.Prose(text) : null;
@@ -176,7 +182,7 @@ public sealed partial class TaskNodeViewModel
         _engineState = engine.State(Id);
         _runRefusal = engine.CanRun(Id);
         _history = engine.History(Id);
-        (_lastReply, _proposed) = HasAgent ? ReadReplies(engine) : (null, null);
+        (_lastReply, _proposed, _latest) = HasAgent ? ReadReplies(engine) : (null, null, null);
         ShowProposal();
         ShowState();
         OnPropertyChanged(nameof(ShowsApprove));
@@ -232,21 +238,73 @@ public sealed partial class TaskNodeViewModel
         Proposal = shown;
     }
 
-    /// <summary>The agent's latest reply, and its latest reply that ends with a result block, which may hold a proposal.</summary>
-    private ((int, string)? Last, (int, string)? Proposed) ReadReplies(WorkflowEngine engine)
+    /// <summary>
+    /// The agent's latest reply, its latest reply that ends with a result block, which may hold a proposal, and what it did
+    /// last, a message or a tool.
+    /// </summary>
+    private ((int, string)? Last, (int, string)? Proposed, string? Latest) ReadReplies(WorkflowEngine engine)
     {
-        using var conversation = engine.Conversation(Id);
-        var lines = conversation.Lines;
+        var lines = Log(engine).Lines;
         (int, string)? last = null;
+        string? latest = null;
         for (var index = lines.Count - 1; index >= 0; index--)
         {
+            latest ??= lines[index] switch
+            {
+                ConversationLine.Agent said => ResultBlock.Prose(said.Text),
+                ConversationLine.Activity activity => activity.Text,
+                _ => null,
+            };
             if (lines[index] is not ConversationLine.Agent { Subagent: null } agent) continue;
             last ??= (index, agent.Text);
             // A later reply that proposes nothing keeps the proposal before it.
-            if (ResultBlock.Read(agent.Text) is ResultBlock.Readable { Status: "proposal" } or ResultBlock.Unreadable) return (last, (index, agent.Text));
+            if (ResultBlock.Read(agent.Text) is ResultBlock.Readable { Status: "proposal" } or ResultBlock.Unreadable) return (last, (index, agent.Text), latest);
         }
 
-        return (last, null);
+        return (last, null, latest);
+    }
+
+    /// <summary>
+    /// The node's log, which the node follows while it is on the canvas: a line the agent writes in a turn changes no
+    /// state, so the card reads the log again, once per batch, when it grows.
+    /// </summary>
+    private IConversation Log(WorkflowEngine engine)
+    {
+        if (_log is null)
+        {
+            _log = engine.Conversation(Id);
+            _log.Changed += OnLogChanged;
+        }
+
+        return _log;
+    }
+
+    private void OnLogChanged()
+    {
+        if (Interlocked.Exchange(ref _logChanged, 1) == 1)
+        {
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            Interlocked.Exchange(ref _logChanged, 0);
+            if (_log is not null)
+            {
+                ShowEngine();
+            }
+        });
+    }
+
+    /// <summary>The node leaves the canvas, or its project closes, so it stops following its log.</summary>
+    internal void StopFollowingLog()
+    {
+        if (_log is { } log)
+        {
+            log.Changed -= OnLogChanged;
+            log.Dispose();
+            _log = null;
+        }
     }
 
     private void ShowState()

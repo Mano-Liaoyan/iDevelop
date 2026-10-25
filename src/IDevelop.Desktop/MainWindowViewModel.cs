@@ -379,7 +379,18 @@ public sealed class MainWindowViewModel : ObservableObject
             return null;
         }
 
-        if (ProjectLock.TryTake(identity) is not { } windowLock)
+        ProjectLock? windowLock;
+        try
+        {
+            windowLock = ProjectLock.TryTake(identity);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            notices = Describe(e, failure);
+            return null;
+        }
+
+        if (windowLock is null)
         {
             notices = $"{identity} is already open in another window.";
             return null;

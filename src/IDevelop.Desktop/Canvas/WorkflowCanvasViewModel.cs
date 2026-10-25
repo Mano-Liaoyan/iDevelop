@@ -521,6 +521,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             Nodes.Remove(node);
             _nodes.Remove(id);
             node.DetachDetail();
+            node.StopFollowingLog();
         }
     }
 

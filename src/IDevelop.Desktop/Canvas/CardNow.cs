@@ -14,7 +14,7 @@ internal sealed record CardFacts(EngineState State, string Status)
 
     public bool HasAgent { get; init; } = true;
 
-    /// <summary>The agent's latest complete message, or null.</summary>
+    /// <summary>What the agent did last: its latest message, or the tool it started after it, or null.</summary>
     public string? LastReply { get; init; }
 
     /// <summary>The report of the node's latest result, or null.</summary>
