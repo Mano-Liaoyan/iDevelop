@@ -54,8 +54,8 @@ internal sealed class RunApprovals
         PreflightGit git;
         if (open is RepositoryOpen.Refused refused)
         {
-            git = new PreflightGit.Refused(refused.Problem, refused.Detail);
-            gaps.Add(new PreflightGap.Git(refused.Problem, refused.Detail));
+            git = new PreflightGit.Refused(refused.Fault.Problem(), refused.Detail);
+            gaps.Add(new PreflightGap.Git(refused.Fault.Problem(), refused.Detail));
         }
         else
         {
@@ -424,7 +424,7 @@ internal sealed class RunApprovals
     private static bool InData(string path) => Excluded.Any(folder => path == folder || path.StartsWith(folder + "/", StringComparison.Ordinal));
 
     private static T Value<T>(GitRead<T> read) => read is GitRead<T>.Read value ? value.Value
-        : throw new GitFailure(((GitRead<T>.Failed)read).Problem, ((GitRead<T>.Failed)read).Detail);
+        : throw new GitFailure(((GitRead<T>.Failed)read).Fault.Problem(), ((GitRead<T>.Failed)read).Detail);
 
     private sealed class GitFailure(MaterializationProblem problem, string detail) : Exception(detail)
     {

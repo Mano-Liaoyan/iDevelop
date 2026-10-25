@@ -26,7 +26,7 @@ internal sealed partial class GitRepository
         if (result.ExitCode != 0) return Failure<ImmutableArray<DateTimeOffset>>(result);
         var lines = result.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length != commits.Length)
-            return new GitRead<ImmutableArray<DateTimeOffset>>.Failed(MaterializationProblem.GitFailed, "Git returned a different committer timestamp count.");
+            return new GitRead<ImmutableArray<DateTimeOffset>>.Failed("Git returned a different committer timestamp count.");
         var timestamps = ImmutableArray.CreateBuilder<DateTimeOffset>(commits.Length);
         for (var index = 0; index < commits.Length; index++)
         {
@@ -34,7 +34,7 @@ internal sealed partial class GitRepository
             if (fields.Length != 2 || !string.Equals(fields[0], commits[index].Hex, StringComparison.OrdinalIgnoreCase) ||
                 !long.TryParse(fields[1], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var seconds) ||
                 seconds < DateTimeOffset.MinValue.ToUnixTimeSeconds() || seconds > DateTimeOffset.MaxValue.ToUnixTimeSeconds())
-                return new GitRead<ImmutableArray<DateTimeOffset>>.Failed(MaterializationProblem.GitFailed, "Git returned malformed or out-of-order committer timestamps.");
+                return new GitRead<ImmutableArray<DateTimeOffset>>.Failed("Git returned malformed or out-of-order committer timestamps.");
             timestamps.Add(DateTimeOffset.FromUnixTimeSeconds(seconds));
         }
         return new GitRead<ImmutableArray<DateTimeOffset>>.Read(timestamps.ToImmutable());

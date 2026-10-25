@@ -18,6 +18,12 @@ public abstract record NodeState
     /// <summary>Why a Chat node waits after each turn: the person replies, or approves the last reply as the result.</summary>
     public const string Reply = "reply";
 
+    /// <summary>
+    /// Why a node waits when its predecessors' commits conflict and no Merge node takes the conflict: the person resolves
+    /// it in the node's worktree and marks it resolved.
+    /// </summary>
+    public const string Conflict = "conflict";
+
     private NodeState() { }
 
     /// <summary>The node has no result and nothing runs.</summary>
@@ -27,7 +33,7 @@ public abstract record NodeState
 
     /// <summary>
     /// The node waits for the person. <paramref name="Why"/> is <see cref="Interrupted"/>, <see cref="Approval"/>,
-    /// <see cref="Reply"/>, the agent's question, or why iDevelop could not read the agent's result block.
+    /// <see cref="Reply"/>, <see cref="Conflict"/>, the agent's question, or why iDevelop could not read the agent's result block.
     /// </summary>
     public sealed record InputRequired(string Why) : NodeState;
 
@@ -60,5 +66,8 @@ public sealed record Basis(ImmutableArray<BasisInput> Inputs, string Instruction
     public override int GetHashCode() => HashCode.Combine(Inputs.Length, Instruction, Model);
 }
 
-/// <summary>What a node hands on: a report and, once nodes work in Git, a commit, on the basis it was made from.</summary>
+/// <summary>
+/// What a node hands on: a report and, for a node that edits the project, the commit of its worktree, on the basis it was
+/// made from.
+/// </summary>
 public sealed record NodeResult(string Id, string Report, string? Commit, Basis Basis);

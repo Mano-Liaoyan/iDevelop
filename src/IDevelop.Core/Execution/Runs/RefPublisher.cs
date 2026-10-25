@@ -20,7 +20,7 @@ internal sealed class RefPublisher(RunStore store, Action<string>? probe = null)
         var record = ((RunRead.Loaded)read).Record;
         var live = repository.ReadRef(change.Ref);
         if (live is GitRead<CommitId?>.Failed failedRead)
-            return new RefPublication.Blocked(failedRead.Problem, failedRead.Detail);
+            return new RefPublication.Blocked(failedRead.Fault.Problem(), failedRead.Detail);
         var value = ((GitRead<CommitId?>.Read)live).Value;
         var mutation = new GitMutation.MoveRef(change);
         var prior = record.GitIntents.FirstOrDefault(pair => pair.Value.Plan == plan && RunReducer.Same(pair.Value.Mutation, mutation) &&

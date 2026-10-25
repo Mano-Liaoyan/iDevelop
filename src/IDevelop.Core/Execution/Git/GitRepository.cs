@@ -16,8 +16,10 @@ internal abstract record GitRead<T>
 {
     private GitRead() { }
     internal sealed record Read(T Value) : GitRead<T>;
-    internal sealed record Failed(MaterializationProblem Problem, string Detail) : GitRead<T>
+    internal sealed record Failed(string Detail) : GitRead<T>
     {
+        public GitFault Fault { get; init; }
+
         public ImmutableArray<string> Refs { get; init; } = [];
     }
 }
@@ -26,7 +28,10 @@ internal abstract record RepositoryOpen
 {
     private RepositoryOpen() { }
     internal sealed record Opened(GitRepository Repository) : RepositoryOpen;
-    internal sealed record Refused(MaterializationProblem Problem, string Detail) : RepositoryOpen;
+    internal sealed record Refused(string Detail) : RepositoryOpen
+    {
+        public GitFault Fault { get; init; }
+    }
 }
 
 internal sealed record GitCommit(TreeId Tree, ImmutableArray<CommitId> Parents);
@@ -108,18 +113,18 @@ internal sealed partial class GitRepository
         var version = Run(["version"], projectFolder, GitOperation.Metadata, limits, environment);
         if (version.ExitCode != 0)
         {
-            return new RepositoryOpen.Refused(MaterializationProblem.GitFailed, version.Stderr);
+            return new RepositoryOpen.Refused(version.Stderr);
         }
         var prefix = Run(["rev-parse", "--show-prefix"], projectFolder, GitOperation.Metadata, limits, environment);
         if (prefix.ExitCode != 0)
         {
-            return new RepositoryOpen.Refused(MaterializationProblem.NotRepositoryRoot, prefix.Stderr);
+            return new RepositoryOpen.Refused(prefix.Stderr) { Fault = GitFault.NotInWorkTree };
         }
         var toplevel = Run(["rev-parse", "--show-toplevel"], projectFolder, GitOperation.Metadata, limits, environment);
         var common = Run(["rev-parse", "--path-format=absolute", "--git-common-dir"], projectFolder, GitOperation.Metadata, limits, environment);
         if (toplevel.ExitCode != 0 || common.ExitCode != 0)
         {
-            return new RepositoryOpen.Refused(MaterializationProblem.GitFailed, toplevel.Stderr + common.Stderr);
+            return new RepositoryOpen.Refused(toplevel.Stderr + common.Stderr);
         }
         return new RepositoryOpen.Opened(new(toplevel.Text.TrimEnd('\r', '\n'), prefix.Text.TrimEnd('\r', '\n'),
             common.Text.TrimEnd('\r', '\n'), version.Text.TrimEnd('\r', '\n'), environment, limits));
@@ -211,8 +216,8 @@ internal sealed partial class GitRepository
     {
         var symbolic = Git(Root, GitOperation.Metadata, ["symbolic-ref", "--quiet", name]);
         if (symbolic.ExitCode == 0)
-            return new GitRead<CommitId?>.Failed(MaterializationProblem.UncertainOwnership,
-                $"Ref {name} is symbolic to {symbolic.Text.TrimEnd('\r', '\n')}.") { Refs = [name] };
+            return new GitRead<CommitId?>.Failed($"Ref {name} is symbolic to {symbolic.Text.TrimEnd('\r', '\n')}.")
+                { Fault = GitFault.SymbolicRef, Refs = [name] };
         if (symbolic.ExitCode != 1) return Failure<CommitId?>(symbolic) with { Refs = [name] };
         var result = Git(Root, GitOperation.Metadata, ["rev-parse", "--verify", "--quiet", name]);
         return result.ExitCode switch
@@ -375,8 +380,8 @@ internal sealed partial class GitRepository
             var fields = line.Split('\0');
             if (excludedPrefix is not null && fields[0].StartsWith(excludedPrefix, StringComparison.Ordinal)) continue;
             if (fields[2].Length != 0)
-                return new GitRead<SortedDictionary<string, CommitId>>.Failed(MaterializationProblem.UncertainOwnership,
-                    $"Ref {fields[0]} is symbolic to {fields[2]}.") { Refs = [fields[0]] };
+                return new GitRead<SortedDictionary<string, CommitId>>.Failed($"Ref {fields[0]} is symbolic to {fields[2]}.")
+                    { Fault = GitFault.SymbolicRef, Refs = [fields[0]] };
             refs.Add(fields[0], new(fields[1]));
         }
         return new GitRead<SortedDictionary<string, CommitId>>.Read(refs);
@@ -434,7 +439,7 @@ internal sealed partial class GitRepository
     public GitRead<Digest?> IndexDigest(string checkout) => IndexBytes(checkout) switch
     {
         GitRead<byte[]?>.Read read => new GitRead<Digest?>.Read(read.Value is { } bytes ? Revision.Hash(bytes) : null),
-        GitRead<byte[]?>.Failed failed => new GitRead<Digest?>.Failed(failed.Problem, failed.Detail),
+        GitRead<byte[]?>.Failed failed => new GitRead<Digest?>.Failed(failed.Detail) { Fault = failed.Fault },
         _ => throw new InvalidOperationException(),
     };
 
@@ -450,7 +455,7 @@ internal sealed partial class GitRepository
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new GitRead<byte[]?>.Failed(MaterializationProblem.GitFailed, error.Message);
+            return new GitRead<byte[]?>.Failed(error.Message);
         }
     }
 
@@ -482,7 +487,7 @@ internal sealed partial class GitRepository
         {
             var full = Path.Combine(folder, path);
             if (!Path.Exists(full))
-                return new GitRead<TreeId>.Failed(MaterializationProblem.DirtyWorktree, $"The index marks {path} skip-worktree, and the work tree has no such file.");
+                return new GitRead<TreeId>.Failed($"The index marks {path} skip-worktree, and the work tree has no such file.") { Fault = GitFault.HiddenChanges };
         }
         return WriteTree(folder, excludedPaths, environment, limits);
     }
@@ -512,7 +517,7 @@ internal sealed partial class GitRepository
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new GitRead<TreeId>.Failed(MaterializationProblem.GitFailed, error.Message);
+            return new GitRead<TreeId>.Failed(error.Message);
         }
         finally
         {
@@ -548,7 +553,7 @@ internal sealed partial class GitRepository
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new GitRead<TreeId>.Failed(MaterializationProblem.GitFailed, error.Message);
+            return new GitRead<TreeId>.Failed(error.Message);
         }
         finally
         {
@@ -587,7 +592,7 @@ internal sealed partial class GitRepository
         var committer = Identity(recipe.Committer);
         if (author is null || committer is null)
         {
-            return new GitRead<CommitId>.Failed(MaterializationProblem.GitFailed, "Commit identities must have the form Name <email>.");
+            return new GitRead<CommitId>.Failed("Commit identities must have the form Name <email>.");
         }
         var date = $"@{recipe.Timestamp.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)} +0000";
         var environment = new Dictionary<string, string>
@@ -663,7 +668,7 @@ internal sealed partial class GitRepository
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new GitRead<TreeId>.Failed(MaterializationProblem.GitFailed, error.Message);
+            return new GitRead<TreeId>.Failed(error.Message);
         }
         finally
         {
@@ -910,8 +915,8 @@ internal sealed partial class GitRepository
         foreach (var entry in NulFields(result).Where(entry => char.IsLower(entry[0]) || entry[0] == 'S'))
         {
             var path = entry[(entry.IndexOf('\t') + 1)..];
-            return new GitRead<byte[]>.Failed(MaterializationProblem.DirtyWorktree,
-                $"The index hides changes to {path} with assume-unchanged or skip-worktree.");
+            return new GitRead<byte[]>.Failed($"The index hides changes to {path} with assume-unchanged or skip-worktree.")
+                { Fault = GitFault.HiddenChanges };
         }
         return new GitRead<byte[]>.Read(result.Stdout);
     }
@@ -921,10 +926,10 @@ internal sealed partial class GitRepository
         ? new GitRead<ImmutableArray<string>>.Read([.. NulFields(result)]) : Failure<ImmutableArray<string>>(result);
     private static GitRead<string> ReadText(GitResult result, bool trim = false) => result.ExitCode == 0
         ? new GitRead<string>.Read(trim ? result.Text.TrimEnd('\r', '\n') : result.Text) : Failure<string>(result);
-    private static GitRead<T>.Failed Failure<T>(GitResult result) => new(MaterializationProblem.GitFailed, result.Stderr);
+    private static GitRead<T>.Failed Failure<T>(GitResult result) => new(result.Stderr);
     private static GitRead<TOut>.Failed ConvertFailure<TIn, TOut>(GitRead<TIn> result)
     {
         var failure = (GitRead<TIn>.Failed)result;
-        return new(failure.Problem, failure.Detail);
+        return new(failure.Detail) { Fault = failure.Fault };
     }
 }

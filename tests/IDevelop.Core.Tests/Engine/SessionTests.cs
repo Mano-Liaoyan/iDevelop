@@ -110,7 +110,7 @@ public sealed class SessionTests : IAsyncLifetime
     [Fact]
     public async Task After_a_crash_a_turn_without_an_end_reopens_interrupted_and_a_message_continues_its_session()
     {
-        var a = _f.Node("A");
+        var a = _f.Reader("A");
         _f.Install(Reply("s-a", "Continued", FakeAgents.Resuming(ClientId.Antigravity, "s-a")));
         var node = _f.Workflow.Tasks[a];
         var basis = new Basis([], AgentWork.Prompt(new NodeContext(node, "")), new AgentModel(ClientId.Antigravity, Agy.Model, Agy.Reasoning));

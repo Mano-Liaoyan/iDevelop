@@ -140,7 +140,7 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
     private GitRepository Repository() => _repository ??= GitRepository.Open(projectFolder, environment) switch
     {
         RepositoryOpen.Opened opened => opened.Repository,
-        RepositoryOpen.Refused refused => throw new MergeFailure(refused.Problem, refused.Detail),
+        RepositoryOpen.Refused refused => throw new MergeFailure(refused.Fault.Problem(), refused.Detail),
         _ => throw new InvalidOperationException(),
     };
 
@@ -155,7 +155,7 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
     private static T Value<T>(GitRead<T> read) => read switch
     {
         GitRead<T>.Read value => value.Value,
-        GitRead<T>.Failed failed => throw new MergeFailure(failed.Problem, failed.Detail),
+        GitRead<T>.Failed failed => throw new MergeFailure(failed.Fault.Problem(), failed.Detail),
         _ => throw new InvalidOperationException(),
     };
 

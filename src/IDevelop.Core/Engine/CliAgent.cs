@@ -9,10 +9,11 @@ namespace IDevelop.Engine;
 /// <summary>
 /// A node whose agent is Claude Code, Codex, Pi, or Antigravity CLI. Each turn is one client process through the client
 /// layer: the start check builds the launch, <see cref="ChildProcess"/> runs it, and the client's <see cref="TurnProtocol"/>
-/// reads its output and writes its input. Until nodes work in Git, every turn runs read-only in the project folder.
-/// Questions and permission requests are declined, so a question reaches the person as text in the agent's reply.
+/// reads its output and writes its input. A turn runs in the folder the engine gives it: an editing node's worktree, or
+/// the project folder for a node that only reads. Questions and permission requests are declined, so a question reaches
+/// the person as text in the agent's reply.
 /// </summary>
-internal sealed class CliAgent(ClientDirectory clients, string folder) : IAgent
+internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : IAgent
 {
     private static readonly TimeSpan WriteTime = TimeSpan.FromSeconds(5);
 
@@ -22,11 +23,11 @@ internal sealed class CliAgent(ClientDirectory clients, string folder) : IAgent
     public string? Problem(TaskDefinition node) =>
         node.Blueprint.Fields.FirstOrDefault(field => field.Required && string.IsNullOrWhiteSpace(node.Field(field.Key))) is { } missing
             ? $"{missing.Label} is empty."
-            : Plan(node, "", null) is StartVerdict.Blocked blocked ? Describe(blocked.Problem) : null;
+            : Plan(node, projectFolder, "", null) is StartVerdict.Blocked blocked ? Describe(blocked.Problem) : null;
 
-    public async Task<TurnOutcome> Turn(TaskDefinition node, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop)
+    public async Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop)
     {
-        if (Plan(node, prompt, session) is not StartVerdict.Allowed { Plan: var plan } )
+        if (Plan(node, folder, prompt, session) is not StartVerdict.Allowed { Plan: var plan })
         {
             return new TurnOutcome.Failed(Problem(node) ?? "The agent cannot start.");
         }
@@ -55,29 +56,10 @@ internal sealed class CliAgent(ClientDirectory clients, string folder) : IAgent
         }
     }
 
-    private StartVerdict Plan(TaskDefinition node, string prompt, string? session)
+    private StartVerdict Plan(TaskDefinition node, string folder, string prompt, string? session)
     {
         var skills = node.Execution is { Skills: not null } settings ? clients.Skills(settings.Client, folder) : null;
-        var verdict = StartCheck.Evaluate(node, folder, clients.Current, new Resumption(session, prompt) { Folder = folder }, skills: skills);
-        if (verdict is not StartVerdict.Allowed { Plan: var plan })
-        {
-            return verdict;
-        }
-
-        var client = plan.Settings.Client;
-        if (!Clients.HasReadOnlyMode(client))
-        {
-            return new StartVerdict.Blocked(new StartProblem.NoReadOnlyMode(client));
-        }
-
-        return new StartVerdict.Allowed(plan with
-        {
-            Request = plan.Request with
-            {
-                ReadOnly = true,
-                Policy = ClientPolicy.For(client, readOnly: true, node.Conversation, reviewer: false, new HostQuestions.Disabled()),
-            },
-        });
+        return StartCheck.Evaluate(node, folder, clients.Current, new Resumption(session, prompt) { Folder = folder }, skills: skills);
     }
 
     /// <summary>

@@ -4,8 +4,6 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
-internal readonly record struct TreeId(string Hex);
-
 internal sealed record CodeSource(TaskId Task, ResultId Result, ImmutableArray<TaskId> Owners, CommitId AttemptBase, CommitId Commit);
 
 internal sealed record JoinRecord(OperationId Operation, ImmutableArray<CodeSource> Sources, CommitId Commit, TreeId Tree, string Ref);
@@ -69,11 +67,6 @@ internal sealed record ExecutionLocation(WorktreeOwner Owner, CommitId AttemptBa
 internal sealed record PreparedExecution(LaunchKey Launch, InputId Inputs, ExecutionLocation Location, string Prompt, Digest PromptHash,
     string OutboxPath);
 
-internal sealed record CommitRecipe(TreeId Tree, ImmutableArray<CommitId> Parents, string Message, string Author, string Committer,
-    DateTimeOffset Timestamp);
-
-internal sealed record RefChange(string Ref, CommitId? Expected, CommitId Target);
-
 internal sealed record EvidenceFile(string RelativePath, Digest Content, long ByteLength);
 
 internal sealed record JoinRequest(CoordinatorPermit Permit, OperationId Operation, TaskId Task, InputId Inputs, ImmutableArray<CodeSource> Sources,
@@ -100,11 +93,17 @@ internal enum MaterializationProblem
     NotRepositoryRoot, GitVersionUnsupported, GitFailed, ArtifactCollision,
 }
 
-internal sealed record StageEntry(string Mode, string Object, int Stage, string Path);
-
-internal sealed record MergeMessage(ImmutableArray<string> Paths, string Type, string Text);
-
-internal sealed record ConfigEntry(string Key, string Value);
+internal static class GitFaults
+{
+    /// <summary>The materialization problem a Git failure of <paramref name="fault"/>'s kind is.</summary>
+    public static MaterializationProblem Problem(this GitFault fault) => fault switch
+    {
+        GitFault.NotInWorkTree => MaterializationProblem.NotRepositoryRoot,
+        GitFault.SymbolicRef => MaterializationProblem.UncertainOwnership,
+        GitFault.HiddenChanges => MaterializationProblem.DirtyWorktree,
+        _ => MaterializationProblem.GitFailed,
+    };
+}
 
 /// <summary>A fan-in conflict as Git reported it, stored and replayed without interpreting the merge.</summary>
 internal sealed record ConflictEvidence(ImmutableArray<CodeSource> Sources, int Step, ImmutableArray<string> Paths,

@@ -12,12 +12,16 @@ namespace IDevelop.Engine;
 /// node's own session. When a node starts a turn, every running node after it stops and goes stale, and it runs again once
 /// its inputs are complete. When the person edits a running node's basis, the node stops, goes stale, and waits for their
 /// Run. Each node's state is its log replayed, whether a turn runs, and its current basis, so nothing else is stored.
+/// A node that edits the project works in its own worktree, which a fresh session resets to the merge of its predecessors'
+/// commits, and its completed turn is one commit there. A node that only reads runs in the project folder and hands on
+/// the commits it was given.
 /// </summary>
 public sealed class WorkflowEngine : IAsyncDisposable
 {
     private readonly Lock _gate = new();
     private readonly string _project;
     private readonly CliAgent _cli;
+    private readonly Worktrees _worktrees;
     private readonly Dictionary<TaskId, NodeLog> _logs = [];
     private readonly Dictionary<TaskId, Live> _live = [];
     private readonly Lock _dispatch = new();
@@ -26,12 +30,14 @@ public sealed class WorkflowEngine : IAsyncDisposable
     private ImmutableDictionary<TaskId, NodeState> _published;
 
     public WorkflowEngine(string projectFolder, Workflow workflow, ClientDirectory clients)
-        : this(projectFolder, workflow, clients, TimeSpan.FromSeconds(5)) { }
+        : this(projectFolder, workflow, clients, TimeSpan.FromSeconds(5), new Dictionary<string, string>()) { }
 
-    internal WorkflowEngine(string projectFolder, Workflow workflow, ClientDirectory clients, TimeSpan shutdownTime)
+    internal WorkflowEngine(string projectFolder, Workflow workflow, ClientDirectory clients, TimeSpan shutdownTime,
+        IReadOnlyDictionary<string, string> gitEnvironment)
     {
         _project = projectFolder;
         _cli = new CliAgent(clients, projectFolder) { ShutdownTime = shutdownTime };
+        _worktrees = new Worktrees(projectFolder, workflow.Id, gitEnvironment);
         _workflow = workflow;
         _published = States();
     }
@@ -160,9 +166,57 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 throw new InvalidOperationException("The node waits for no approval.");
             }
 
-            log.Append(new NodeEntry.Completed(new NodeResult(NewId(), ResultBlock.Prose(waiting.Text), null, basis)));
-            Route(node);
+            log.Append(Finish(_workflow.Tasks[node], node, ResultBlock.Prose(waiting.Text), basis));
+            if (log.Record.End is NodeEntry.Completed) Route(node);
         });
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Commits the person's resolution of the conflict the node waits for, on the conflict's parents, and starts the node's
+    /// fresh turn from there.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The node waits for no conflict, or a conflicting file still holds markers.</exception>
+    public Task MarkResolved(TaskId node)
+    {
+        Change(() =>
+        {
+            if (Waiting(node) is not { Why: NodeState.Conflict } || Log(node).Record.TurnBasis is not { } basis)
+            {
+                throw new InvalidOperationException("The node waits for no conflict.");
+            }
+
+            if (_worktrees.MarkersRemain(node) is { IsEmpty: false } remaining)
+            {
+                throw new InvalidOperationException($"Conflict markers remain in {string.Join(", ", remaining)}.");
+            }
+
+            Begin(node, basis, () => _worktrees.Commit(node, "Resolve the conflicting merge", InputCommits(node)));
+        });
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Whether Merge into my branch is offered: every node is completed and nothing is stale.</summary>
+    public bool CanMergeIntoBranch
+    {
+        get
+        {
+            lock (_gate) return _workflow.Tasks.Count > 0 && _workflow.Tasks.Keys.All(id => StateOf(id) is NodeState.Completed);
+        }
+    }
+
+    /// <summary>Merges every end node's commit, the commits of the nodes with no successors, into the checked-out branch.</summary>
+    /// <exception cref="InvalidOperationException">
+    /// A node is not completed or is stale, the end nodes conflict with each other, or the branch moved and the merge conflicts.
+    /// </exception>
+    public Task MergeIntoBranch()
+    {
+        lock (_gate)
+        {
+            if (!CanMergeIntoBranch) throw new InvalidOperationException("Every node must be completed and current first.");
+            _worktrees.MergeIntoBranch([.. _workflow.Tasks.Keys.Where(id => !Successors(id).Any()).SelectMany(Handed).Distinct()]);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -211,7 +265,81 @@ public sealed class WorkflowEngine : IAsyncDisposable
     private void StartFresh(TaskId id)
     {
         if (Refusal(id) is { } reason) throw new InvalidOperationException(reason);
-        Start(id, BasisIn(_workflow, id), Prompt(id), session: null);
+        var basis = BasisIn(_workflow, id);
+        if (Edits(_workflow.Tasks[id]))
+        {
+            Begin(id, basis, () => _worktrees.Reset(id, InputCommits(id)));
+        }
+        else
+        {
+            Start(id, basis, Prompt(id, null), session: null);
+        }
+    }
+
+    /// <summary>
+    /// Starts an editing node's fresh turn once <paramref name="prepare"/> readied its worktree. A conflict goes to a Merge
+    /// node's agent, or waits for the person. A Merge node whose inputs merged cleanly completes without a turn.
+    /// </summary>
+    private void Begin(TaskId id, Basis basis, Func<WorktreeStart> prepare)
+    {
+        var node = _workflow.Tasks[id];
+        WorktreeStart start;
+        try
+        {
+            start = prepare();
+        }
+        catch (GitFailure e)
+        {
+            Settle(id, basis, new NodeEntry.Failed(e.Message));
+            return;
+        }
+
+        switch (start)
+        {
+            case WorktreeStart.Conflict conflict when node.Blueprint.Work is WorkSpec.Merge:
+                Start(id, basis, Prompt(id, conflict), session: null);
+                break;
+            case WorktreeStart.Conflict conflict:
+                Settle(id, basis, new NodeEntry.Waiting(NodeState.Conflict, conflict.Description));
+                break;
+            case WorktreeStart.Ready ready when node.Blueprint.Work is WorkSpec.Merge:
+                Settle(id, basis, new NodeEntry.Completed(new NodeResult(NewId(), Inputs(id), ready.Commit.Hex, basis)));
+                Route(id);
+                break;
+            default:
+                Start(id, basis, Prompt(id, null), session: null);
+                break;
+        }
+    }
+
+    /// <summary>Logs a fresh turn that ends as soon as it starts, with <paramref name="end"/>.</summary>
+    private void Settle(TaskId id, Basis basis, NodeEntry end)
+    {
+        StopDescendants(id);
+        Log(id).Append(new NodeEntry.TurnStarted(basis, null));
+        Log(id).Append(end);
+    }
+
+    /// <summary>
+    /// How a turn that is done ends: with its result, which for an editing node holds its worktree's commit. When the commit
+    /// still lacks some of the predecessors' commits and merging them conflicts, the node waits for the person.
+    /// </summary>
+    private NodeEntry Finish(TaskDefinition node, TaskId id, string report, Basis basis)
+    {
+        if (!Edits(node)) return new NodeEntry.Completed(new NodeResult(NewId(), report, null, basis));
+        try
+        {
+            return _worktrees.Commit(id, node.Title.Length > 0 ? node.Title : node.Blueprint.Name, InputCommits(id)) switch
+            {
+                WorktreeStart.Ready ready => new NodeEntry.Completed(new NodeResult(NewId(), report, ready.Commit.Hex, basis)),
+                WorktreeStart.Conflict conflict => new NodeEntry.Waiting(NodeState.Conflict, conflict.Description),
+                _ => throw new InvalidOperationException(),
+            };
+        }
+        catch (GitFailure e)
+        {
+            return new NodeEntry.Failed(e.Message);
+        }
     }
 
     private void Continue(TaskId id, string text)
@@ -233,17 +361,18 @@ public sealed class WorkflowEngine : IAsyncDisposable
         StopDescendants(id);
         var log = Log(id);
         log.Append(new NodeEntry.TurnStarted(basis, session));
+        var folder = Edits(node) ? _worktrees.Folder(id) : _project;
         var live = new Live();
         _live[id] = live;
-        live.Done = Task.Run(() => Drive(id, node, agent, log, live, basis, prompt, session));
+        live.Done = Task.Run(() => Drive(id, node, agent, log, live, basis, folder, prompt, session));
     }
 
-    private async Task Drive(TaskId id, TaskDefinition node, IAgent agent, NodeLog log, Live live, Basis basis, string prompt, string? session)
+    private async Task Drive(TaskId id, TaskDefinition node, IAgent agent, NodeLog log, Live live, Basis basis, string folder, string prompt, string? session)
     {
         TurnOutcome outcome;
         try
         {
-            outcome = await agent.Turn(node, prompt, session, e => log.Append(new NodeEntry.Agent(e)), live.Stop.Token);
+            outcome = await agent.Turn(node, folder, prompt, session, e => log.Append(new NodeEntry.Agent(e)), live.Stop.Token);
         }
         catch (Exception e)
         {
@@ -256,7 +385,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             if (live.Halt == Halt.Closing) return;
             log.Append(live.Halt != Halt.None ? new NodeEntry.Stopped() : outcome switch
             {
-                TurnOutcome.Done done => new NodeEntry.Completed(new NodeResult(NewId(), done.Report, null, basis)),
+                TurnOutcome.Done done => Finish(node, id, done.Report, basis),
                 TurnOutcome.Waits waits => new NodeEntry.Waiting(waits.Why, waits.Text),
                 TurnOutcome.Failed failed => new NodeEntry.Failed(failed.Reason),
                 _ => new NodeEntry.Stopped(),
@@ -323,8 +452,19 @@ public sealed class WorkflowEngine : IAsyncDisposable
             if (StateOf(predecessor) is not NodeState.Completed) return $"It waits for {Title(predecessor)}.";
         }
 
-        return AgentOf(node) is { } agent ? agent.Problem(node) : "This node kind does not run yet.";
+        if (AgentOf(node) is not { } agent) return "This node kind does not run yet.";
+        return agent.Problem(node) ?? (Edits(node) ? _worktrees.Problem : null);
     }
+
+    private static bool Edits(TaskDefinition node) => node.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } or WorkSpec.Merge;
+
+    /// <summary>The distinct commits the node's predecessors hand on, in predecessor order.</summary>
+    private ImmutableArray<CommitId> InputCommits(TaskId id) => [.. Predecessors(_workflow, id).SelectMany(Handed).Distinct()];
+
+    /// <summary>The node's latest commit, or the commits it was given when its latest result has none, as a node that only reads.</summary>
+    private IEnumerable<CommitId> Handed(TaskId id) => Log(id).Record.History.LastOrDefault() is { Commit: { } commit }
+        ? [new CommitId(commit)]
+        : Predecessors(_workflow, id).SelectMany(Handed);
 
     private NodeEntry.Waiting? Waiting(TaskId id) =>
         !_live.ContainsKey(id) && Log(id).Record is { Open: false, End: NodeEntry.Waiting waiting } ? waiting : null;
@@ -355,14 +495,24 @@ public sealed class WorkflowEngine : IAsyncDisposable
 
     /// <summary>
     /// A fresh turn's prompt: the node's rendered template with its predecessors' latest reports as its inputs, which follow
-    /// the template under their own heading when it has no place for them. An Approval node's prompt is its inputs alone.
+    /// the template under their own heading when it has no place for them. A Merge node's prompt names the
+    /// <paramref name="conflict"/> it resolves. An Approval node's prompt is its inputs alone.
     /// </summary>
-    private string Prompt(TaskId id)
+    private string Prompt(TaskId id, WorktreeStart.Conflict? conflict)
     {
         var node = _workflow.Tasks[id];
-        var inputs = string.Join("\n\n", Predecessors(_workflow, id)
-            .Select(p => Log(p).Record.History.LastOrDefault() is { } result ? $"### {Title(p)}\n\n{result.Report.TrimEnd()}" : null)
-            .OfType<string>());
+        var inputs = Inputs(id);
+        if (node.Blueprint.Work is WorkSpec.Merge merge)
+        {
+            return merge.Template.Render(name => name switch
+            {
+                "title" => node.Title,
+                "inputs" => inputs,
+                "conflict" => conflict?.Description ?? "",
+                _ => node.Field(name),
+            });
+        }
+
         if (node.Blueprint.Work is not WorkSpec.Agent { Template: var template })
         {
             return inputs;
@@ -372,9 +522,14 @@ public sealed class WorkflowEngine : IAsyncDisposable
         return template.Variables.Contains("inputs") || inputs.Length == 0 ? prompt : $"{prompt.TrimEnd()}\n\n## What earlier tasks handed on\n\n{inputs}\n";
     }
 
+    /// <summary>The predecessors' latest reports, each under its node's title.</summary>
+    private string Inputs(TaskId id) => string.Join("\n\n", Predecessors(_workflow, id)
+        .Select(p => Log(p).Record.History.LastOrDefault() is { } result ? $"### {Title(p)}\n\n{result.Report.TrimEnd()}" : null)
+        .OfType<string>());
+
     private IAgent? AgentOf(TaskDefinition node) => node.Blueprint.Work switch
     {
-        WorkSpec.Agent => _cli,
+        WorkSpec.Agent or WorkSpec.Merge => _cli,
         WorkSpec.Person => PersonAgent.Instance,
         _ => null,
     };
