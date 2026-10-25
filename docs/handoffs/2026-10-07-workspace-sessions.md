@@ -2,7 +2,7 @@
 
 ## Task
 
-W1 is the slice "Open multiple projects and workflows" of the [approved execution plan](2026-10-06-workspace-execution-plan.md#approved-delivery-slices). Its completion condition is that two projects with several workflows each stay open, and workflow rows hide their nodes by default. Switching keeps unsaved state, undo history, and run ownership, and existing projects still load.
+W1 is the slice "Open multiple projects and workflows" of the workspace milestone the owner approved on 2026-10-06. Its completion condition is that two projects with several workflows each stay open, and workflow rows hide their nodes by default. Switching keeps unsaved state, undo history, and run ownership, and existing projects still load.
 
 Pull request [#37](https://github.com/Mano-Liaoyan/iDevelop/pull/37) built it and merged to `main` as `e9c8f5c`. The sidebar is a project tree. Each project lists its workflows, and a workflow row lists its tasks only when expanded. **Open Folder** adds a project. Each project row has **New workflow** and **Close project**, and F2 or **Rename** renames a workflow inline. The [D0 record](2026-10-06-d0-design-validation.md) placed the blueprint icon and color fields in W1's format review.
 
@@ -22,11 +22,11 @@ Selection, expansion, pan, zoom, and conversation drafts are view state, so they
 
 `ProjectViewModel` holds one `ProjectRuns` per open folder, one canvas per workflow file, and a map from each task to the workflow that holds it. The project calls `ProjectRuns.Follow` for every workflow and again on each change. A review loop therefore goes on while its workflow is hidden. Canvases are created for every workflow when the project opens.
 
-`WorkflowDocument.OpenProject` opens every top-level JSON file in `.idp/workflows/`. It refuses a folder whose files repeat a workflow ID or share a task ID, because attempts and the run lock are keyed by task ID within a project folder. Titles are never identifiers, so two projects can each hold a workflow named "Build" with a task named "Implement". The [E1 record](2026-10-07-run-and-input-records.md#open-issues) relies on this uniqueness. Its landing check on the merged tree found that `OpenProject` still refuses shared IDs and that no command duplicates or imports a whole workflow.
+`WorkflowDocument.OpenProject` opens every top-level JSON file in `.idp/workflows/`. It refuses a folder whose files repeat a workflow ID or share a task ID, because each node's log is keyed by task ID within a project folder. Titles are never identifiers, so two projects can each hold a workflow named "Build" with a task named "Implement".
 
-### Run ownership survives every switch
+### Running nodes survive every switch
 
-Switching a project or workflow keeps every runner and canvas, and a running task keeps running. If the open conversation belongs to another workflow, the window closes it and disposes its view model. The task's draft stays in the project session. A canvas's run bar shows only the active attempts of tasks that its workflow has held during the session, and that set only grows. A running task deleted from its workflow therefore still shows in its own workflow's bar. A workflow row and a project row show a running mark while any of their tasks runs.
+Switching a project or workflow keeps every runner and canvas, and a running task keeps running. If the open conversation belongs to another workflow, the window closes it and disposes its view model. The task's draft stays in the project session. A workflow row and a project row show a running mark while any of their tasks runs.
 
 **Close project** asks before it stops a running task or drops unsaved edits. It gathers both answers before either acts, completes any requested saves, and only then disposes the runner. Window close asks the same questions across every open project and awaits every runner's disposal. A review that rests between turns holds no process, so the close question does not count it as running. It resumes when its project opens again, as it already did when a person opened the folder by hand.
 

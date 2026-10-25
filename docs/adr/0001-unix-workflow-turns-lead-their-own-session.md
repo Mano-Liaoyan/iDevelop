@@ -4,11 +4,11 @@ On Linux and macOS, a workflow turn's client root starts through iDevelop's own 
 
 ## The launch
 
-`POSIX_SPAWN_SETPGROUP` with group 0 is the fallback when `posix_spawn` refuses the session flag, and the turn's containment detail says why the child shares iDevelop's session. The launcher keeps what `Process.Start` gives a child: the working folder, arguments, environment, three redirected pipes, the signal mask and ignored signals, the exit code (128 plus the signal for a signaled root), and the failure message. Standalone runs keep `Process.Start` and their Cancel, Stop and send, and leave behavior.
+`POSIX_SPAWN_SETPGROUP` with group 0 is the fallback when `posix_spawn` refuses the session flag, and the turn's containment detail says why the child shares iDevelop's session. The launcher keeps what `Process.Start` gives a child: the working folder, arguments, environment, three redirected pipes, the signal mask and ignored signals, the exit code (128 plus the signal for a signaled root), and the failure message.
 
 ## Group IDs stay reserved while iDevelop may signal them
 
-The exited root is not reaped (`waitid` with `WNOWAIT`), so its process ID, and with it the group ID, cannot be reused until cleanup or disposal reaps it. After the reap, every signal follows a check that the group still has members, and a group once seen empty is never signaled again. Disposal signals nothing. As design v5 requires, iDevelop never signals a group ID read from a journal after a restart.
+The exited root is not reaped (`waitid` with `WNOWAIT`), so its process ID, and with it the group ID, cannot be reused until cleanup or disposal reaps it. After the reap, every signal follows a check that the group still has members, and a group once seen empty is never signaled again. Disposal signals nothing. As design v5 requires, iDevelop never signals a group ID read from a node's log after a restart.
 
 ## Cleanup and Stop
 

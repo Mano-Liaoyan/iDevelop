@@ -34,11 +34,11 @@ The user wrote in Chinese. This summary keeps the meaning.
 
 After reading the proposal on 2026-10-04, the user kept the defaults for three questions:
 
-- During a workflow run, an accepted proposal only adds nodes and fills nodes that have not started.
+- An accepted proposal only adds nodes and fills nodes that have not started.
 - Changing one node's fields, template, or work means deriving a blueprint first.
 - The Approval node stays in the first release.
 
-The user changed the review loop. The proposal started both agents in fresh sessions each round and paused for the user when a round repeated an earlier one. The user wants the implement node to do its work and tell the reviewer what it changed. The reviewer judges and says what is wrong. The implement node fixes it and hands it back. They go back and forth until both agree. Each agent keeps its own session. On 2026-10-25 the owner decided that a round that repeats an earlier round waits for the person ([ADR 0040](../adr/0040-a-review-round-that-repeats-an-earlier-round-waits-for-the-person.md)).
+The user changed the review loop. The proposal started both agents in fresh sessions each round and paused for the user when a round repeated an earlier one. The user wants the implement node to do its work and tell the reviewer what it changed. The reviewer judges and says what is wrong. The implement node fixes it and hands it back. They go back and forth until both agree. Each agent keeps its own session. On 2026-10-25 the owner decided that the reviewer waits for the person after a set number of rounds ([ADR 0040](../adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)).
 
 ## Design
 
@@ -69,7 +69,7 @@ The rule is "the blueprint fixes the structure, the node sets the values". A nod
 
 The test for an interface is that implementations behave differently and more are coming. Otherwise data or a closed union is better, because an exhaustive switch shows the next developer every place a new case must go.
 
-- `INodeWork` is the base node interface. Its one method, `Next(context, history)`, is a pure decider. It reads the node, what earlier nodes handed on, and the node's history, and it returns one step: run a turn, wait for the person with a reason, finish with a handoff, or fail. It starts no process and touches no file. A standalone run and the later workflow scheduler call it the same way, and the same history gives the same step, so a crash between a turn's end and the recorded step converges on reopen.
+- `INodeWork` is the base node interface. Its one method, `Next(context, history)`, is a pure decider. It reads the node, what earlier nodes handed on, and the node's history, and it returns one step: run a turn, wait for the person with a reason, finish with a handoff, or fail. It starts no process and touches no file. A single node's Run and the later workflow scheduler call it the same way, and the same history gives the same step, so a crash between a turn's end and the recorded step converges on reopen.
 - `IConverses` is the interaction capability. `AgentWork` continues the client's session with the person's message. `ReviewWork` adds the message to its ledger as guidance. `PersonWork` has no agent and does not implement it.
 - Each work carries a `WorkKind` enum value. The build already fails on a non-exhaustive enum switch, so a new work breaks every mapping that must handle it.
 - Each client stays a row of pure functions, as phase 3 decided. A row gains the arguments that resume a session. The exit policy stays in one reducer and settles a turn instead of an attempt.
@@ -105,9 +105,9 @@ The loop ends when the two agents agree. The reviewer approves with no open find
 
 - Every finding names the change that would settle it.
 - A disputed finding goes back to the reviewer, who withdraws it or answers the reason.
-- If a round repeats the positions of an earlier round, the review waits for the person's guidance ([ADR 0040](../adr/0040-a-review-round-that-repeats-an-earlier-round-waits-for-the-person.md)). Then iDevelop says so to both agents in their next message and asks the reviewer for the exact change that would settle each open finding.
+- After the review's round limit, 3 by default, the reviewer waits for the person's guidance ([ADR 0040](../adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)).
 
-The user can add guidance at any time, which reaches both agents in their next message, and can cancel the review as any run can be cancelled.
+The user can add guidance at any time, which reaches both agents in their next message, and can stop the review as any node can be stopped.
 
 iDevelop folds a findings ledger from the verdicts and replies. The card shows the round and the open findings. The inspector lists each finding with both sides' latest words. The ledger is a record and a view, and the agents talk through their sessions. If a session cannot resume, for example after the user changed the node's client, the next turn starts a fresh session with the ticket and the ledger.
 
@@ -120,8 +120,7 @@ Every agent that plans produces one `Proposal`. A Plan node, an Architect node, 
 - The prompt lists the empty nodes after the planner as handles such as `slot-1`, and the blueprints the planner may place as handles such as `type-2`. The agent writes only handles. It never writes ids and never chooses agents. A new node takes its blueprint's default agent, model, and reasoning, so the person's choices come with it.
 - iDevelop parses the proposal once, where it arrives, and mints the new ids then. A second Accept is rejected by the existing duplicate-id rule.
 - A dry run through `Workflow.Apply` draws the proposed nodes as dashed ghost cards and fills the drawn ones in place. The person accepts all of them or unticks some first. Accepting applies one `Batch` edit: all or nothing, one undo step, and later one synchronized operation. A proposal that would close a cycle names the cycle and changes nothing.
-- Before a run, the person runs the planner on its own, as any task runs today. The workflow is complete before it runs. A person who wants the shape early draws empty nodes first, or sets the planner to Chat, where the first proposal appears after one turn and changes after each reply.
-- During a run, which workflow execution builds, an accepted proposal may only add nodes and fill nodes that have not started.
+- Planning is design time. A person who wants the shape early draws empty nodes first, or sets the planner to Chat, where the first proposal appears after one turn and changes after each reply. The graph stays editable at any time ([ADR 0042](../adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md)).
 - The "talk to one agent" button places a Plan node in Chat mode and opens its conversation. Only the entry point is new.
 
 ### Interaction resumes the client's own session
@@ -209,7 +208,7 @@ The two converged on review as a node, planning as approved graph edits, convers
 | Reader load and delivery | 3 | 4 |
 | Total | 23 | 25 |
 
-The cross-judge and the coordinator chose B as the base. Its extension point is one pure decider per work, which a standalone run and the scheduler call the same way. Its user types declare their own fields, which meets the user's request for richer, user-defined nodes. Its first slice delivers interaction without a file format change.
+The cross-judge and the coordinator chose B as the base. Its extension point is one pure decider per work, which a single node's Run and the scheduler call the same way. Its user types declare their own fields, which meets the user's request for richer, user-defined nodes. Its first slice delivers interaction without a file format change.
 
 These parts came from A or from the judge:
 
@@ -262,4 +261,4 @@ These remain unverified:
 
 ## Next action
 
-Slices 1 to 5 are built: talking to a node, typed nodes with workflow format 3, blueprint libraries, planning, and review and approval. Workflow execution is next, and its readiness schedule, `WorkflowSchedule`, is built. A node is ready when every dependency predecessor's latest attempt succeeded. A review hands on when `ProjectRuns` records its approval as succeeded, not while it rests in review. A subject hands on to the nodes connected directly to it as any node does, because this record gives a review no hold over them. Its scheduler calls `Next` for each ready node as `ProjectRuns` already does for a resting review, and an approval runs once it can reach one. A Windows session runs `.claude/skills/verify-idevelop/features/conversation.md` against slices 1 and 2, which no Windows machine has run yet, and checks the palette, the editor, ghost cards, and a review node in the real window.
+Slices 1 to 5 are built: talking to a node, typed nodes with workflow format 3, blueprint libraries, planning, and review and approval. Workflow execution follows as the engine that [ADR 0042](../adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md) describes. A node is ready when all its predecessors are completed and none of their results is stale. A review hands on when it approves. A subject hands on to the nodes connected directly to it as any node does, because this record gives a review no hold over them. A Windows session runs `.claude/skills/verify-idevelop/features/conversation.md` against slices 1 and 2, which no Windows machine has run yet, and checks the palette, the editor, ghost cards, and a review node in the real window.

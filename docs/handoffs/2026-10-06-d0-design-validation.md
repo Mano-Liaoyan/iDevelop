@@ -2,7 +2,7 @@
 
 ## Task
 
-On 2026-10-06 the user authorized D0 and lifted the execution plan's deferral of implementation. D0 validates the designs before the [approved delivery slices](2026-10-06-workspace-execution-plan.md#approved-delivery-slices) build them.
+On 2026-10-06 the user authorized D0 and lifted the execution plan's deferral of implementation. D0 validates the designs before the approved delivery slices build them.
 
 D0's two workstreams are done. They cover UI prototypes and client capabilities. C1 can start after W1 with the probe's results.
 
@@ -175,7 +175,6 @@ This documentation change touches only these repository files:
 
 - `docs/handoffs/2026-10-06-d0-design-validation.md` records the decisions, evidence, client capability results, and remaining gates.
 - `docs/product-direction.md` records D0's state and the accepted direction.
-- `docs/handoffs/2026-10-06-workspace-execution-plan.md` updates authority, slice status, and next actions.
 - `docs/handoffs/2026-10-05-node-system-redesign.md` records the user's two decisions on its open issues.
 
 The evidence sits in the D0 session's throwaway scratch folder outside the repository. It is not committed and may disappear. These paths are relative to that folder:

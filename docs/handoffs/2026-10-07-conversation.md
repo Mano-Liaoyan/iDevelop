@@ -2,7 +2,7 @@
 
 ## Task
 
-C1 is the slice "Build conversation and attention" of the [approved execution plan](2026-10-06-workspace-execution-plan.md#approved-delivery-slices). Its completion condition is that the selected task has durable, correctly routed history, Markdown, a composer, structured requests, and honest client capability limits. The inspector and compact-card attention open the same conversation.
+C1 is the slice "Build conversation and attention" of the workspace milestone the owner approved on 2026-10-06. Its completion condition is that the selected task has durable, correctly routed history, Markdown, a composer, structured requests, and honest client capability limits. The inspector and compact-card attention open the same conversation.
 
 C1 shipped as two pull requests. Pull request [#40](https://github.com/Mano-Liaoyan/iDevelop/pull/40) is C1a, the backend, merged as `7a7789e`. It moves Claude Code and Codex to protocols that carry questions and interrupts, adds the permission policy, and gives each task an `IConversationSession` through `ProjectRuns.OpenConversation`. Pull request [#42](https://github.com/Mano-Liaoyan/iDevelop/pull/42) is C1b, the view, merged as `ea66404`. It changes no C1a execution code.
 
@@ -143,4 +143,4 @@ The [workspace session](2026-10-07-workspace-sessions.md) owns conversation view
 
 ## Next action
 
-E3 routes run-owned conversations through the same session, as the [workflow execution design](2026-10-07-workflow-execution-design.md) describes. N1 later adds the compact conversation on expanded cards.
+The engine of [ADR 0042](../adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md) serves each node's conversation through the same session contract. N1 later adds the compact conversation on expanded cards.
