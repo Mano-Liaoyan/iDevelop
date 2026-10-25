@@ -10,10 +10,10 @@ The workspace and execution plan that the owner approved on 2026-10-06 said: "Ex
 - **The expanded card.** The 64 px header stays as [ADR 0019](0019-a-planner-chooses-each-new-task-s-agent.md) describes it: the tile, the title, the client or the status, then the model and level. The state's tint stays on the header. Under it, three sections sit under hairlines:
   - **Now.** Its heading and text follow the node's state, as the card's status line names it:
     - Running: the agent's latest message.
-    - Waiting for you: the agent's question, or its last reply, with an answer box.
-    - Succeeded: the latest result's first paragraph.
-    - Out of date: which part of its basis changed, in the state's warning colour, as the inspector says it once. When the engine's reason it cannot run names what to run first, the card shows that sentence here.
-    - Failed, or stopped: why it ended.
+    - Input required: the agent's question, or its last reply, with an answer box.
+    - Completed: the latest result's first paragraph.
+    - Stale: which part of its basis changed, in the state's warning colour, as the inspector says it once. When the engine's reason it cannot run names what to run first, the card shows that sentence here.
+    - Failed: why it ended.
     - Waits: the nodes it starts after, each with its status. A listed node that waits for one node counts it, as its card does when the name does not fit, so the listed title keeps its room.
     - Otherwise, the task's first field.
 

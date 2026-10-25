@@ -48,6 +48,6 @@ IConversation Conversation(NodeId)          // snapshot, paging, new conversatio
 
 ## Supersedes
 
-This record deletes ADRs 0004, 0005, 0006, 0008, 0010, 0011, 0012, 0013, 0014, 0015, 0016, 0020, 0022, 0028, and 0038, which described the run container: a run and its approval with its approval intent, the preflight, node runs and standalone runs, carried results and report reuse, the run journal, runtime amendments, slots and fills, the controlling window and Resume, leases, permits, pins, intents, ref fences, and resalvage. It rewrites ADRs 0007, 0017, 0018, 0029, 0032, 0033, 0034, 0035, 0037, 0040, and 0041 to match the model above.
+This record deletes ADRs 0004, 0005, 0006, 0008, 0010, 0011, 0012, 0013, 0014, 0015, 0016, 0020, 0022, 0028, and 0038, which described the run container: a run and its approval with its approval intent, the preflight, node runs and standalone runs, carried results and report reuse, the run journal, runtime amendments with their slots and fills, the controlling window and Resume, leases, permits, pins, intents, ref fences, and resalvage. It rewrites ADRs 0007, 0017, 0018, 0029, 0032, 0033, 0034, 0035, 0037, 0040, and 0041 to match the model above.
 
 Source: map issue [#179](https://github.com/Mano-Liaoyan/iDevelop/issues/179), settled with the owner on 2026-10-25.

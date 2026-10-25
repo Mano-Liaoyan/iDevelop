@@ -4,7 +4,7 @@ Each card shows its node's state from the engine, and the controls that act on t
 
 ## How it works
 
-- **No new visual language.** Each engine state maps onto an existing card state and pill tone: Idle, Running, Input required as Waiting for you, Completed as Succeeded, Failed, and Stale as Out of date. Input required names why: a question, an approval, a conflict to resolve, an interrupted turn, or a review that reached its round limit.
+- **No new visual language.** Each engine state, Idle, Running, Input required, Completed, Failed, or Stale, maps onto an existing card state and pill tone, and the card names it. Input required names why: a question, an approval, a conflict to resolve, an interrupted turn, or a review that reached its round limit.
 - **A node's own controls.** A card, its menu, and the inspector offer the node's Run while the engine's `CanRun` allows it, and otherwise say why. They offer Stop while it runs, Retry once it has ended, and the person's answer while it waits.
 - **The bar counts what goes on.** The bar's pill counts the nodes that run and the nodes that wait for the person. Stop All stops every running node. Merge into my branch appears only while every node is completed and nothing is stale ([ADR 0033](0033-a-merge-node-resolves-conflicts-and-merge-into-my-branch-waits-for-a-complete-workflow.md)).
 - **The strip over the conversation** reuses the conversation's banner style and the bar's pill. It hides in the dock layout, where the canvas's own bar is in view.

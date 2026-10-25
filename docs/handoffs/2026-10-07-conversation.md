@@ -85,14 +85,6 @@ When a May ask or Chat turn asks a structured question, iDevelop records the una
 
 `HostQuestions.Bounded.Recommended` holds the process and the task lock for up to 55 seconds to answer plus 5 seconds to shut down, then defers by the same path. It stays off until the user confirms that timeout.
 
-### One published record per task, paired with its log revision
-
-`ProjectRuns.Latest` is the only published record of each task. Each published record and its log revision form one private value, `PublishedAttempt`. Every writer sets both through `SetPublished`. A run's live record is private to the run. Other readers see its task, title, attempt ID, and live requests. The conversation snapshot, the attempt list, `Current`, notification subjects, and Cancel all read the published pair. The compiler therefore rejects a new reader of a run's live status. Both lock-take rereads keep the published pair of every task that this window runs. `Finish` publishes the settled record once, under the same lock, as the run leaves `_active`.
-
-This fixed a race. A run published its waiting or cancelled record while it still disposed its turn and held the task lock. The gap took about 0.02 ms when idle and up to 700 ms under load. In that gap, Mark done was dropped silently and Send was refused. A subject freed by deleting its review was still refused with `AlreadyRunning`. A 1 s gap injected by the coordinator reproduced both macOS CI timeouts. The same root cause made a review test fail with `AlreadyRunning` on `main`.
-
-The fix took three rounds. Round 4 kept a run's published record running until teardown ended. Round 5 stopped a lock-take reread from replacing a held run's record with its waiting one. It also moved the snapshot and the attempt list to the published record. Round 6 paired the record with its own log revision. Before round 6, the snapshot showed `Running` at the final revision and then `WaitingForInput` at that same revision. A consumer that reloads attempts only when the revision changes kept `Running` until the next log change. C1b's attempt picker is such a consumer.
-
 ### The view keeps one draft per task in the open-project session
 
 The [workspace session](2026-10-07-workspace-sessions.md) owns conversation view state, keyed by workflow and task. The conversation takes the main area by default, or a dock. **Open conversation** in the inspector and the state glyph on a card that waits or failed open it. The composer keeps one draft per task across task, workflow, project, and dock switches, and the inspector's composer shows the same draft. Send clears the text only after iDevelop recorded the message, and only if the person did not change it meanwhile. A line under the header states what the client cannot do here. An earlier attempt is read-only. Unsent drafts do not survive a restart of the app.
@@ -111,7 +103,7 @@ The [workspace session](2026-10-07-workspace-sessions.md) owns conversation view
 ## Changed artifacts
 
 - `src/IDevelop.Core/Execution/Clients/ClientPolicy.cs`, `Clients/TurnProtocol.cs`, `Clients/ClaudeProtocol.cs`, and `Clients/CodexProtocol.cs` hold the policy and the per-turn protocols.
-- `src/IDevelop.Core/Execution/Conversation/ConversationContract.cs`, `Conversation/ConversationHistory.cs`, `Conversation/ConversationPager.cs`, and `ProjectRuns.Conversation.cs` hold the session contract and history paging. `ProjectRuns.cs` and `ProjectRuns.ActiveRun.cs` hold the drain and the published records.
+- `src/IDevelop.Core/Execution/Conversation/ConversationContract.cs`, `Conversation/ConversationHistory.cs`, and `Conversation/ConversationPager.cs` hold the session contract and history paging.
 - `src/IDevelop.Desktop/Conversation/` holds `MarkdownView`, `ConversationLinkRouter`, the view, its view model, and attention.
 - `Directory.Packages.props` pins Markdig 1.4.0, and `THIRD-PARTY-NOTICES.md` carries its license.
 - `docs/agent-clients.md` gains the C1 protocols section.
@@ -127,7 +119,6 @@ The [workspace session](2026-10-07-workspace-sessions.md) owns conversation view
 | Each C1a review fix | Each has a test that failed on the previous head and passes after the fix. |
 | `A_revision_cached_attempt_selector_reloads_the_waiting_status_when_teardown_finishes` | Before round 6 it expected `WaitingForInput` and got `Running`. After it, the held and final revisions are 5 and 6. |
 | The two macOS CI tests under CPU load, 3 CPUs and 6 busy loops | 10 of 10 runs passed after round 5. |
-| `ProjectRuns.DisposeAsync` from a UI thread that does not pump | It never completed in 25 s before round 2, and completes in 0.04 s after it. |
 | Each C1b fix-round test | Each failed with its fix reverted and passes with it. |
 | Landing check of C1b at `15a2c2d` | Two conflicts with U1, in the icon manifest and the skill, resolved as the integration probe did. Build with 0 warnings. Core passed 529 with 9 skipped, and Desktop passed 392. The license, token, icon, handoff, and PStack checks pass. |
 | Real window on Linux under Xvfb | Fake Claude Code and Codex shims only. Streaming, a deferred question, card attention, the dock, and both themes render. `xdg-open` was never called. |
@@ -137,7 +128,6 @@ The [workspace session](2026-10-07-workspace-sessions.md) owns conversation view
 1. Real-client checks still need the user's approval, because each spends subscription quota. Claude Code needs `AskUserQuestion` under `bypassPermissions` and `plan`, a denied `ExitPlanMode`, Autonomous and review turns with `--permission-prompts none`, an interrupt with trailing output, resume after a deferred question, and the exit time of a client with SessionEnd hooks. Codex needs app-server with the question feature off, `thread/resume` with `excludeTurns` of a session that `codex exec` created, and fresh and resumed read-only turns.
 2. No client ran on Windows, so npm shims holding stdin open, shutdown after the final result, Job Object stopping, and continuation are unverified. The Windows recipe for the view has not run.
 3. The bounded live hold for structured questions waits for the user's confirmation of its timeout.
-4. A log-write failure can change a run's in-memory status without advancing its durable revision, at `ProjectRuns.ActiveRun.cs`. The Astra review found it and marked it as older than C1a.
 5. The inspector's older **Talk to the Agent** transcript stays beside **Open conversation**. Removing it was left until U1 landed, and U1 has landed.
 6. The renderer has no syntax highlighting and no selection across blocks. It was not measured on Windows, at 125% or 150% scaling, or with a screen reader.
 

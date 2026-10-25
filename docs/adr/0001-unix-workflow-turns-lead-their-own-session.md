@@ -1,6 +1,6 @@
 # Unix workflow turns lead their own session and process group
 
-On Linux and macOS, a workflow turn's client root starts through iDevelop's own `posix_spawn` launcher with `POSIX_SPAWN_SETSID`, so it leads a new session and a process group whose ID is its own before the command runs, and cleanup and Stop signal that group. [Design v5](https://github.com/Mano-Liaoyan/iDevelop/issues/54#issuecomment-6065458422) named `POSIX_SPAWN_SETPGROUP` with group 0. The new session was added during the 2026-10-08 implementation run, so that a client has no controlling terminal: when iDevelop runs in a terminal, a client that reads the terminal fails at once, as under a desktop launch, instead of stopping on `SIGTTIN` or `SIGTTOU`.
+On Linux and macOS, a workflow turn's client root starts through iDevelop's own `posix_spawn` launcher with `POSIX_SPAWN_SETSID`, so it leads a new session and a process group whose ID is its own before the command runs, and cleanup and Stop signal that group. The first design used `POSIX_SPAWN_SETPGROUP` with group 0. The new session was added during the 2026-10-08 implementation run, so that a client has no controlling terminal: when iDevelop runs in a terminal, a client that reads the terminal fails at once, as under a desktop launch, instead of stopping on `SIGTTIN` or `SIGTTOU`.
 
 ## The launch
 
@@ -8,7 +8,7 @@ On Linux and macOS, a workflow turn's client root starts through iDevelop's own 
 
 ## Group IDs stay reserved while iDevelop may signal them
 
-The exited root is not reaped (`waitid` with `WNOWAIT`), so its process ID, and with it the group ID, cannot be reused until cleanup or disposal reaps it. After the reap, every signal follows a check that the group still has members, and a group once seen empty is never signaled again. Disposal signals nothing. As design v5 requires, iDevelop never signals a group ID read from a node's log after a restart.
+The exited root is not reaped (`waitid` with `WNOWAIT`), so its process ID, and with it the group ID, cannot be reused until cleanup or disposal reaps it. After the reap, every signal follows a check that the group still has members, and a group once seen empty is never signaled again. Disposal signals nothing. iDevelop never signals a group ID read from a node's log after a restart, because the system may have given that ID to another process.
 
 ## Cleanup and Stop
 
@@ -20,8 +20,8 @@ When the launcher is unavailable, for example on glibc older than 2.29 or macOS 
 
 ## Considered options
 
-- `POSIX_SPAWN_SETPGROUP` alone, as design v5 wrote it. A child in iDevelop's session stops in the background when it reads the terminal iDevelop runs in.
-- `setpgid` from the parent after launch. The child would run before its group exists, and design v5 says that is not the contract.
+- `POSIX_SPAWN_SETPGROUP` alone. A child in iDevelop's session stops in the background when it reads the terminal iDevelop runs in.
+- `setpgid` from the parent after launch. The child would run before its group exists, so cleanup could miss what it starts first.
 - Refusing workflow turns without a launcher. That contradicts the user's decision that every platform gets workflow execution.
 
 ## Consequences

@@ -101,7 +101,7 @@ The route a review's reject or an approval's send back takes, with its findings 
 One reject along a review's feedback edge and its predecessor's new result. After a node's round limit, 3 by default, the reviewer waits for the person ([ADR 0040](docs/adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)).
 
 **Send back**:
-A person's answer on an Approval node that refuses its inputs with a note, which goes along the feedback edge to its predecessors ([ADR 0035](docs/adr/0035-send-back-is-a-feedback-edge.md)).
+A person's answer that refuses a node's inputs with a note, which goes along the feedback edge to its predecessors: on an Approval node, or on a review that reached its round limit ([ADR 0035](docs/adr/0035-send-back-is-a-feedback-edge.md), [ADR 0040](docs/adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)).
 _Avoid_: reject, which names a review's verdict
 
 ### Canvas

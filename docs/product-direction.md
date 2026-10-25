@@ -104,7 +104,7 @@ On 2026-10-04 the user asked for typed nodes and confirmed these requirements:
 - Blueprints live in a personal library in the user's folder and in a project library under `.idp/blueprints/`.
 - Node types build on interfaces. A node that needs a capability, such as interaction, implements that capability's interface.
 - iDevelop does not depend on PStack or any other skill library. A user's own commands and skills work inside a node.
-- A review is a back-and-forth between the implementer and the reviewer, each in its own continuing session, until both agree. After its round limit, 3 by default, the reviewer waits for the person's guidance ([ADR 0040](adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)). Small tickets keep each session small.
+- A review is a back-and-forth between the implementer and the reviewer until both agree. The implementer continues its session with the findings, and the reviewer reviews each new result in a fresh session. After its round limit, 3 by default, the reviewer waits for the person's guidance ([ADR 0040](adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)). Small tickets keep each session small.
 - The user can answer, guide, and correct an agent that asks how to proceed. Some nodes never ask. A live terminal is not required.
 - A planner usually creates the implement nodes. Nodes may also exist already, be drawn empty and filled later, or have no planner. The long-term goal is to talk to one agent and get the whole workflow.
 

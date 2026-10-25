@@ -8,7 +8,7 @@ In Implement → Review, with Review's limit at 3:
 
 - **The loop runs its rounds.** Review rejects, Implement continues in its session with the findings, and Review reviews its new result, three times.
 - **Then the reviewer waits.** After the third round, Review is input-required, and its inspector says it reached its round limit, beside its findings.
-- **The person decides.** The person's message to Review continues the reviewer's session and lets it review again. Raising the limit lets the loop go on. A Retry starts the loop over in a fresh session.
+- **The person decides.** The person approves, which completes Review and hands Implement's result on, or sends back with a note, which goes along the feedback edge to Implement as a reject would. The person can also edit the workflow, such as Review's instruction or its limit.
 - **The wait holds nothing.** No client runs while Review waits, and the wait is in the node's log, so it survives a restart.
 
 ## Considered options
