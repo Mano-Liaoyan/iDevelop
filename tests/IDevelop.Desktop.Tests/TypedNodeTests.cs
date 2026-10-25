@@ -53,7 +53,7 @@ public sealed class TypedNodeTests : IDisposable
         Assert.Equal(["Autonomous", "May ask", "Chat"], shell.Pick("TaskConversation", "Chat"));
 
         Assert.Equal(
-            ("Waits for you after every turn.", "The task waits for you after every turn, until you mark it done."),
+            ("Waits for you after every turn.", "The node waits for you after every turn, until you approve its reply."),
             shell.Note("ConversationNote"));
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(ConversationMode.Chat, WorkflowDocument.OpenProject(folder).Single().Current.Tasks[TestTasks.Design].Conversation);

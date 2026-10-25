@@ -1,76 +1,50 @@
 using Avalonia.Controls;
-using IDevelop.TestSupport;
 using Avalonia.Headless.XUnit;
+using IDevelop.Desktop.Canvas;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using static IDevelop.Desktop.Tests.WorkflowRunFixture;
+using static IDevelop.Desktop.Tests.NodeFixture;
+using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>After a send back: Ask again on the Approval node, and a Retry's note to the agent prefilled with the reason (#126).</summary>
+/// <summary>
+/// An Approval node waits for the person, who approves what the nodes before it handed on, or sends it back with a note
+/// that continues their sessions (ADR 0035, ADR 0042).
+/// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class SendBackTests
 {
     private static readonly TaskId A = TestTasks.Design;
-    private static readonly TaskId G = TestTasks.Build;
-
-    private static Shell SentBack(WorkflowRunFixture f)
-    {
-        var shell = f.Window();
-        shell.StartRun();
-        shell.WaitForCard("Approve", "Waiting for approval");
-        shell.Click(shell.Find<Button>("NextWaiting"));
-        shell.Click(shell.InView<TextBox>("GateReason"));
-        shell.Type("Needs tests");
-        shell.Click(shell.InView<Button>("SendBackGate"));
-        shell.WaitForCard("Approve", "Sent back");
-        return shell;
-    }
-
-    private static WorkflowRunFixture Gated()
-    {
-        var f = new WorkflowRunFixture(Task(A, "A", 105), Approval(G, "Approve", 405), Dependency(A, G));
-        f.Answer("A", f.Says("A ready."), f.Says("A again."));
-        return f;
-    }
+    private static readonly TaskId P = TestTasks.Build;
 
     [AvaloniaFact]
-    public void Ask_again_asks_first_then_opens_a_new_request_on_the_same_inputs()
+    public void Send_back_takes_a_note_continues_the_nodes_session_with_it_and_the_approval_asks_again_on_the_new_result()
     {
-        using var f = Gated();
-        var shell = SentBack(f);
-        Assert.False(shell.ShowsAny("AskAgainConfirmation"));
+        using var f = new NodeFixture(Plan(A, "A", 105), Approval(P, "Check", 405), Dependency(A, P));
+        f.Install(
+            Reply("s-a", "A fixed.", FakeAgents.Resuming(ClientId.Antigravity, "s-a").CapturePrompt(Path.Combine(f.Evidence, "note.txt"))),
+            Reply("s-a", "A ready."));
+        var shell = f.Open();
+        shell.RunNode("A");
+        shell.WaitForState("Check", NodeState.InputRequired);
+        shell.Click(shell.Header(shell.Node("Check")));
+        var sendBack = shell.InView<Button>("SendBack");
+        Assert.False(sendBack.IsEffectivelyEnabled);
 
-        shell.Click(shell.InView<Button>("AskGateAgain"));
+        shell.InView<TextBox>("SendBackNote").Text = "Fix the typo.";
+        shell.Render();
+        shell.Click(shell.InView<Button>("SendBack"));
 
-        Assert.Equal("Ask again opens a new request on the same inputs. The sent-back request and its reason stay in the run's history.",
-            shell.Text("AskAgainConfirmation"));
-        shell.Click(shell.InView<Button>("KeepAskAgain"));
-        Assert.False(shell.ShowsAny("AskAgainConfirmation"));
-        shell.Click(shell.InView<Button>("AskGateAgain"));
-        shell.Click(shell.InView<Button>("ConfirmAskAgain"));
+        shell.WaitUntil(() => File.Exists(Path.Combine(f.Evidence, "note.txt")), "A's session gets the note");
+        Assert.Equal("Fix the typo.", File.ReadAllText(Path.Combine(f.Evidence, "note.txt")).Trim());
+        shell.WaitUntil(() => shell.NodeModel("A").LastReply == "A fixed." && shell.NodeModel("Check").State == NodeState.InputRequired,
+            "the approval asks again on the new result");
+        Assert.Equal("", shell.InView<TextBox>("SendBackNote").Text);
 
-        shell.WaitForCard("Approve", "Waiting for approval");
-        shell.WaitUntil(() => shell.ShowsAny("GateRequest") && shell.Text("GateRequest") == "2 of this run", "the new request shows",
-            () => shell.Text("GateRequest"));
-        Assert.False(shell.ShowsAny("AskGateAgain"));
-        Assert.Equal(1, f.Launches("A"));
-        shell.Click(shell.InView<Button>("ApproveGate"));
-        shell.WaitForStatus("Completed");
-    }
+        shell.Click(shell.InView<Button>("Approve"));
 
-    [AvaloniaFact]
-    public void A_retry_of_the_task_before_a_sent_back_approval_opens_with_the_reason_as_its_note()
-    {
-        using var f = Gated();
-        var shell = SentBack(f);
-        shell.Click(shell.Header(shell.Node("A")));
-
-        shell.Click(shell.InView<Button>("RetryTask"));
-
-        Assert.Equal("Needs tests", shell.InView<TextBox>("RetryNote").Text);
-        shell.Click(shell.InView<Button>("ConfirmRetry"));
-        shell.WaitUntil(() => f.Launches("A") == 2, "A runs again", () => $"{f.Launches("A")} launches");
-        shell.WaitForCard("Approve", "Waiting for approval");
-        Assert.Contains("Needs tests", f.Prompt("A", 2));
+        shell.WaitForState("Check", NodeState.Completed);
+        Assert.Contains("A fixed.", Assert.Single(shell.NodeModel("Check").Results).Report);
     }
 }

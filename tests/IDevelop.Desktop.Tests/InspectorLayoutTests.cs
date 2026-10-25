@@ -38,39 +38,24 @@ public sealed class InspectorLayoutTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [AvaloniaTheory]
-    [InlineData(280, true)]
-    [InlineData(320, true)]
-    [InlineData(520, true)]
-    [InlineData(280, false)]
-    [InlineData(320, false)]
-    [InlineData(520, false)]
-    public void The_composer_s_buttons_end_where_its_box_ends_and_wrap_before_it(double width, bool moved)
+    [InlineData(280)]
+    [InlineData(320)]
+    [InlineData(520)]
+    public void The_composer_s_buttons_end_where_its_box_ends_and_wrap_before_it(double width)
     {
-        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
-        Install(_fakes, ClientId.Pi);
-        var project = _temp.Seed(TaskAt(Design, "Design", 105, 90, pi, "Draft it.", ConversationMode.Chat));
-        // A waiting Pi conversation whose folder moved shows every button: Send, Mark done, Start a new conversation, and
-        // Open in terminal. One whose folder stayed shows Send, Mark done, and Open in terminal, which once ran 26 px past
-        // the box in the default 320 px inspector, where they share a line only at the panel's inset (#85).
-        ConversationFixtures.WriteAttempt(project, ConversationFixtures.Requested(ConversationFixtures.A, Design, 0, "# Design") with
-            {
-                Settings = pi, Conversation = ConversationMode.Chat,
-                WorkingFolder = moved ? Path.Combine(Path.GetDirectoryName(project)!, "before-the-move") : project,
-            },
-            ConversationFixtures.Launched(1), ConversationFixtures.At(2, new AgentEvent.SessionStarted("s-1")),
-            ConversationFixtures.At(3, new AgentEvent.Succeeded("Which fruit?")), ConversationFixtures.Exited(4));
-        var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
+        using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105, ConversationMode.Chat));
+        f.Install(NodeFixture.Reply("s-1", "Which fruit?"));
+        var shell = f.Open();
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.WaitUntil(() => shell.Find<Button>("MarkDone").IsEffectivelyVisible && shell.Find<Button>("StartNewConversation").IsEffectivelyVisible == moved,
-            "the inspector offers Mark done, and a new conversation only after the folder moved");
+        shell.RunNode("Design");
+        shell.WaitForState("Design", IDevelop.Desktop.Canvas.NodeState.InputRequired);
         var inspector = shell.Find<Control>("Inspector");
         var box = shell.InView<TextBox>("Composer");
         shell.Render();
         double Right(Control control) => control.TranslatePoint(new Point(control.Bounds.Width, 0), inspector)!.Value.X;
 
-        string[] shown = moved ? ["SendMessage", "MarkDone", "StartNewConversation", "OpenInTerminal"] : ["SendMessage", "MarkDone", "OpenInTerminal"];
-        var buttons = shown.Select(shell.Find<Button>).ToArray();
+        var buttons = new[] { "SendMessage", "OpenInTerminal" }.Select(shell.Find<Button>).ToArray();
 
         Assert.All(buttons, button => Assert.True(button.IsEffectivelyVisible, AutomationProperties.GetAutomationId(button)));
         Assert.All(buttons, button => Assert.True(Right(button) <= Right(box) + 0.5,
@@ -231,11 +216,11 @@ public sealed class InspectorLayoutTests : IDisposable
             .Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Buttons)).ToArray();
 
         Assert.Equal(
-            ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Type", "Version", "Description"],
+            ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Status", "Type", "Version", "Description"],
             rows.Select(row => row.Label));
         Assert.All(rows, row => Assert.True(row.Icon is not null || row.Lead is not null, $"{row.Label} has no glyph."));
         Assert.Equal(
-            ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", null, "IconVersion", "IconDescription"],
+            ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", null, null, "IconVersion", "IconDescription"],
             rows.Select(row => IconKey(row.Icon)));
     }
 
@@ -420,7 +405,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        AssertAllUnder(shell, ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Type", "Version", "Description"]);
+        AssertAllUnder(shell, ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Status", "Type", "Version", "Description"]);
 
         shell.Click(shell.ConnectionInto("Build"));
 
@@ -453,18 +438,18 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(280)]
     [InlineData(320)]
     [InlineData(520)]
-    public void The_last_run_puts_its_status_agent_and_time_under_their_labels_each_on_one_line(double width)
+    public void The_run_puts_its_status_and_results_under_their_labels(double width)
     {
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Replay(Fixture.Path("codex-success.jsonl")));
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Say hi", 105, 90, Codex, "Reply with DONE.")), _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
+        shell.RunNode();
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Completed", "the run completes");
         shell.Render();
 
         var inspector = shell.Bounds(shell.Find<Control>("Inspector"));
-        foreach (var id in new[] { "LastRunStatus", "LastRunConfiguration", "LastRunTiming" })
+        foreach (var id in new[] { "RunTaskStatus", "Results" })
         {
             var row = shell.Find<Control>(id).FindAncestorOfType<InspectorRow>()!;
             var (label, value) = (shell.Bounds(Label(row)), shell.Bounds(Presenter(row)));
@@ -567,12 +552,12 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(320)]
     [InlineData(440)]
     [InlineData(520)]
-    public void The_longest_model_names_of_every_client_show_whole_in_their_pickers_and_chips(double width)
+    public void The_longest_model_names_of_every_client_show_whole_in_their_pickers(double width)
     {
         TaskId claude = TaskId.New(), codex = TaskId.New(), pi = TaskId.New(), agy = TaskId.New();
         Install(_fakes, ClientId.ClaudeCode);
         Install(_fakes, ClientId.Codex);
-        Install(_fakes, ClientId.Pi, Fresh(ClientId.Pi).Print(SessionLine(ClientId.Pi, "s1")).Print(ReplyLines(ClientId.Pi, "Done.")));
+        Install(_fakes, ClientId.Pi);
         Install(_fakes, ClientId.Antigravity);
         var shell = Shell.Open(_temp.Seed(
             TaskAt(claude, "Claude", 105, 90, new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-sonnet-5-5", Reasoning = "high" }),
@@ -587,35 +572,6 @@ public sealed class InspectorLayoutTests : IDisposable
             Assert.Equal((title, model), (title, shell.Picked("TaskModel")));
             AssertNothingCutShort(shell);
         }
-
-        shell.Click(shell.Header(shell.Node("Pi")));
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Pi", "CardStatus") == "Succeeded", "the run succeeds");
-        shell.Render();
-
-        Assert.Equal(["Pi", "DeepSeek V4.1 Flash (deepseek)", "high"], Shell.Texts(shell.InView<ItemsControl>("LastRunConfiguration")));
-        AssertNothingCutShort(shell);
-    }
-
-    [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    public void The_activity_wraps_at_the_value_edge(double width)
-    {
-        const string said = "I drafted the release notes. They list the new table, the migration step, and the totals that now match the ledger.";
-        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, "s1")).Print(ReplyLines(ClientId.Codex, said)));
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Say hi", 105, 90, Codex, "Reply.")), _fakes.DiscoverAsync().Result);
-        shell.SizeInspector(width);
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
-        shell.Render();
-
-        var line = shell.InView<ItemsControl>("LastRunActivity").GetVisualDescendants().OfType<TextBlock>().Single();
-        Assert.Equal(said, line.Text);
-        Assert.DoesNotContain(line.TextLayout.TextLines, text => text.HasCollapsed);
-        Assert.True(line.TextLayout.TextLines.Count > 1);
-        Assert.True(shell.Bounds(line).Right <= shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset - InspectorGrid.TrailWidth + 0.5);
     }
 
     [AvaloniaTheory]

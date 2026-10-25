@@ -1,15 +1,15 @@
 using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using static IDevelop.Desktop.Tests.AppTempFolder;
-using static IDevelop.Desktop.Tests.WorkflowRunFixture;
+using static IDevelop.Desktop.Tests.NodeFixture;
+using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The three-task fan-out the owner checked the canvas with: "Design the API", then "Build the API", which keeps running
-/// until its gate opens, and "Write docs", a Chat task that waits for the person after its turn. Generate's planner
-/// proposes three more tasks.
+/// The three-node fan-out the owner checked the canvas with: "Design the API", then "Build the API", which keeps running
+/// until its gate opens, and "Write docs", a Chat node that waits for the person after its turn. Generate's planner
+/// proposes three more nodes.
 /// </summary>
 internal static class FanOut
 {
@@ -30,26 +30,27 @@ internal static class FanOut
         ```
         """;
 
-    public static WorkflowRunFixture Fixture()
+    public static NodeFixture Fixture()
     {
-        var f = new WorkflowRunFixture(
-            TaskAt(Design, "Design the API", 105, 190, WorkflowRunFixture.Codex, "Design the export endpoint."),
-            TaskAt(Build, "Build the API", 465, 90, WorkflowRunFixture.Codex, "Build the export endpoint."),
-            TaskAt(Docs, "Write docs", 465, 290, WorkflowRunFixture.Codex, "Document the export.", ConversationMode.Chat),
+        var f = new NodeFixture(
+            AppTempFolder.TaskAt(Design, "Design the API", 105, 190, Agy, "Design the export endpoint."),
+            AppTempFolder.TaskAt(Build, "Build the API", 465, 90, Agy, "Build the export endpoint."),
+            AppTempFolder.TaskAt(Docs, "Write docs", 465, 290, Agy, "Document the export.", ConversationMode.Chat),
             Dependency(Design, Build), Dependency(Design, Docs));
-        f.Answer("Design the API", f.Says("The design is ready."))
-            .Answer("Build the API", f.Says("Built.", gate: "build"))
-            .Answer("Write docs", f.Says("Here is a first draft of the export docs. Should they cover large reports too?"))
-            .Answer(Goal, f.Says(Proposal));
+        f.Install(On().Choose(
+            (Fresh("Design the API"), Reply("s-design", "The design is ready.")),
+            (Fresh("Build the API"), Reply("s-build", "Built.", On().WaitForFile(f.Gate("build")))),
+            (Fresh("Write docs"), Reply("s-docs", "Here is a first draft of the export docs. Should they cover large reports too?")),
+            (Fresh(Goal), Reply("s-plan", Proposal))));
         return f;
     }
 
-    /// <summary>Starts the workflow's run and waits until "Build the API" runs and "Write docs" waits for the person.</summary>
+    /// <summary>Runs the workflow and waits until "Build the API" runs and "Write docs" waits for the person.</summary>
     public static void Run(Shell shell)
     {
-        shell.StartRun();
-        shell.WaitForCard("Write docs", "Waiting for you");
-        shell.WaitForCard("Build the API", "Running");
+        shell.Click(shell.Find<Avalonia.Controls.Button>("RunWorkflow"));
+        shell.WaitForState("Write docs", NodeState.InputRequired);
+        shell.WaitForState("Build the API", NodeState.Running);
     }
 
     /// <summary>Generates from <see cref="Goal"/> and waits until the planner's proposal shows.</summary>

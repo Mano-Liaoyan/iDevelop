@@ -90,14 +90,13 @@
                     Foreground="{DynamicResource StateWaitingStrongBrush}" />
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" IsVisible="{Binding IsInspectorRequest}" />
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconDescription}" IsVisible="{Binding IsResult}" />
-          <!-- A result that no longer counts takes the card's warning glyph and colour (#90). -->
-          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStateOutOfDate}" IsVisible="{Binding IsOutOfDate}"
+          <!-- A stale result takes the card's warning glyph and colour. -->
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStateOutOfDate}" IsVisible="{Binding IsStale}"
                     Foreground="{DynamicResource StateWarningStrongBrush}" />
-          <!-- A failure or an interruption marks its heading in its state's colour; another ending stays neutral. -->
+          <!-- A failure marks its heading in its state's colour; another stop stays neutral. -->
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStateFailed}" IsVisible="{Binding IsProblem}"
                     Foreground="{DynamicResource StateFailedStrongBrush}" />
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" IsVisible="{Binding IsQuietStop}" />
-          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconWireDependency}" IsVisible="{Binding IsWaits}" />
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconBrief}" IsVisible="{Binding IsTask}" />
         </Panel>
         <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -111,28 +110,9 @@
         <Border Grid.Column="1" Classes="cardCallout" Classes.callout="{Binding IsCallout}" Classes.waiting="{Binding IsAnswerable}"
                 Classes.failed="{Binding IsProblem}">
           <StackPanel Spacing="8">
-            <TextBlock Classes="cardBody" Text="{Binding Text}" IsVisible="{Binding ShowsBodyText}"
+            <TextBlock Classes="cardBody" Text="{Binding Text}" IsVisible="{Binding HasText}"
                        Foreground="{DynamicResource TextStrongBrush}"
                        AutomationProperties.AutomationId="CardNowText" />
-            <ItemsControl ItemsSource="{Binding Waits}" IsVisible="{Binding IsWaits}" AutomationProperties.AutomationId="CardWaits">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <StackPanel Spacing="4" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="canvas:CardWait">
-                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" MinHeight="22">
-                    <theme:KindTile Kind="{Binding Kind}" TileSize="16" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Classes="cardBody" Text="{Binding Title}" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2" Classes="cardMeta" Text="{Binding Status}" />
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <!-- Under the tasks it waits for, those that only the person can run. -->
-            <TextBlock Classes="cardMeta" Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasWaitsNote}"
-                       AutomationProperties.AutomationId="CardWaitsNote" />
             <!-- The person's words to the agent, which the conversation's composer shares as its draft. -->
             <StackPanel Spacing="8" IsVisible="{Binding IsAnswerable}">
               <TextBox Text="{Binding Draft}" Watermark="{Binding AnswerWatermark}" TextWrapping="Wrap" AcceptsReturn="True"
@@ -159,8 +139,8 @@
       </Grid>
     </StackPanel>
 
-    <!-- The agent that runs the task next. A change describes the next attempt, never the one that runs, and the line under
-         the pickers names the agent the running attempt started with once the pickers name another. -->
+    <!-- The agent that runs the node next. A change while a turn runs stops it and leaves the node stale, which the line
+         under the pickers says. -->
     <Border Classes="cardRule" IsVisible="{Binding HasAgent}" />
     <StackPanel Classes="cardSection" IsVisible="{Binding HasAgent}">
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8">
@@ -200,81 +180,95 @@
         </ComboBox>
       </Grid>
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding ShowsNextRunNote}">
-        <TextBlock Grid.Column="1" Classes="cardMeta" Text="{Binding Detail.NextRunNote, FallbackValue='A change applies to the next run.'}"
+        <TextBlock Grid.Column="1" Classes="cardMeta" Text="A change stops the running turn, and the node waits for your Run."
                    TextWrapping="Wrap" AutomationProperties.AutomationId="CardNextRunNote" />
       </Grid>
     </StackPanel>
 
-    <!-- The actions: the conversation on the content edge, and the task's own Run or Stop on the other. -->
+    <!-- The actions: the conversation, then what the node's state offers. -->
     <Border Classes="cardRule" />
     <StackPanel Margin="12,8,12,10" Spacing="6">
-      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <Button Classes="cardAction" Command="{Binding OpenConversationCommand}" IsVisible="{Binding HasAgent}"
-                  AutomationProperties.AutomationId="CardOpenConversation" AutomationProperties.Name="Open conversation">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconConversation}" />
-              <TextBlock Text="Open conversation" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-          <Button Classes="cardAction" Command="{Binding SelectCommand}" IsVisible="{Binding Detail.NeedsInspector, FallbackValue=False}"
-                  AutomationProperties.AutomationId="CardShowInspector" AutomationProperties.Name="Show in the inspector">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" />
-              <TextBlock Text="Inspector" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-        </StackPanel>
-        <Button Grid.Column="2" Classes="cardAction" Command="{Binding RunCommand}" IsVisible="{Binding ShowsCardRun}"
-                ToolTip.Tip="{Binding StartProblem}" ToolTip.ShowOnDisabled="True"
+      <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
+        <Button Classes="cardAction" Command="{Binding OpenConversationCommand}" IsVisible="{Binding HasAgent}"
+                AutomationProperties.AutomationId="CardOpenConversation" AutomationProperties.Name="Open conversation">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconConversation}" />
+            <TextBlock Text="Open conversation" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="cardAction" Command="{Binding SelectCommand}" IsVisible="{Binding Detail.NeedsInspector, FallbackValue=False}"
+                AutomationProperties.AutomationId="CardShowInspector" AutomationProperties.Name="Show in the inspector">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" />
+            <TextBlock Text="Inspector" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </WrapPanel>
+      <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" AutomationProperties.AutomationId="CardActions">
+        <Button Classes="cardAction" Command="{Binding RunCommand}" IsVisible="{Binding ShowsRun}"
+                ToolTip.Tip="{Binding RunRefusal}" ToolTip.ShowOnDisabled="True"
                 AutomationProperties.AutomationId="CardRun" AutomationProperties.Name="Run">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
             <TextBlock Text="Run" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Grid.Column="2" Classes="cardAction" Command="{Binding CancelCommand}" IsVisible="{Binding ShowsCardStop}"
-                AutomationProperties.AutomationId="CardStop" AutomationProperties.Name="Stop">
+        <Button Classes="cardAction" Command="{Binding ApproveCommand}" IsVisible="{Binding ShowsApprove}"
+                AutomationProperties.AutomationId="CardApprove" AutomationProperties.Name="Approve">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
-            <TextBlock Text="Stop" VerticalAlignment="Center" />
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" />
+            <TextBlock Text="Approve" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Grid.Column="2" Classes="cardAction" Command="{Binding CancelInRunCommand}" IsVisible="{Binding ShowsRunCancel}"
-                AutomationProperties.AutomationId="CardCancel" AutomationProperties.Name="Cancel">
+        <!-- Send back takes a note, which the inspector's box holds. -->
+        <Button Classes="cardAction" Command="{Binding SelectCommand}" IsVisible="{Binding ShowsSendBack}"
+                ToolTip.Tip="Write the note in the inspector, then send it back"
+                AutomationProperties.AutomationId="CardSendBack" AutomationProperties.Name="Send back">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
-            <TextBlock Text="Cancel" VerticalAlignment="Center" />
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconUndo}" />
+            <TextBlock Text="Send back…" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Grid.Column="2" Classes="cardAction" Command="{Binding RetryCommand}" IsVisible="{Binding ShowsRetry}"
-                AutomationProperties.AutomationId="CardRetry" AutomationProperties.Name="Retry">
+        <Button Classes="cardAction" Command="{Binding ContinueCommand}" IsVisible="{Binding ShowsContinue}"
+                AutomationProperties.AutomationId="CardContinue" AutomationProperties.Name="Continue">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" />
-            <TextBlock Text="Retry" VerticalAlignment="Center" />
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
+            <TextBlock Text="Continue" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-      </Grid>
-      <!-- A conflict between the task's predecessors that no Merge node takes: the person fixes it in its worktree. -->
-      <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" IsVisible="{Binding ShowsConflictActions}">
-        <Button Classes="cardAction" Command="{Binding OpenConflictCommand}"
+        <Button Classes="cardAction" Command="{Binding OpenWorktreeCommand}" IsVisible="{Binding ShowsMarkResolved}"
                 AutomationProperties.AutomationId="CardOpenConflict" AutomationProperties.Name="Open worktree">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" />
             <TextBlock Text="Open worktree" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Classes="cardAction" Command="{Binding MarkResolvedCommand}"
+        <Button Classes="cardAction" Command="{Binding MarkResolvedCommand}" IsVisible="{Binding ShowsMarkResolved}"
                 AutomationProperties.AutomationId="CardMarkResolved" AutomationProperties.Name="Mark resolved">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" />
             <TextBlock Text="Mark resolved" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
+        <Button Classes="cardAction" Command="{Binding RetryCommand}" IsVisible="{Binding ShowsRetry}"
+                ToolTip.Tip="{Binding RunRefusal, FallbackValue='Runs it again in a fresh session'}" ToolTip.ShowOnDisabled="True"
+                AutomationProperties.AutomationId="CardRetry" AutomationProperties.Name="Retry">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" />
+            <TextBlock Text="Retry" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="cardAction" Command="{Binding StopCommand}" IsVisible="{Binding ShowsStop}"
+                AutomationProperties.AutomationId="CardStop" AutomationProperties.Name="Stop">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
+            <TextBlock Text="Stop" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
       </WrapPanel>
-      <!-- Why Run would start nothing, as the line under the inspector's Run says it, such as "Runs after "A". Run "A" first." -->
-      <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding Detail.HasRunNote, FallbackValue=False}">
-        <TextBlock Grid.Column="1" Classes="cardMeta" Text="{Binding Detail.RunNote, FallbackValue={x:Null}}" TextWrapping="Wrap"
+      <!-- Why Run or Retry would start nothing, as the line under the inspector's Run says it. -->
+      <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding RunRefusal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Grid.Column="1" Classes="cardMeta" Text="{Binding RunRefusal}" TextWrapping="Wrap"
                    AutomationProperties.AutomationId="CardRunNote" />
       </Grid>
     </StackPanel>

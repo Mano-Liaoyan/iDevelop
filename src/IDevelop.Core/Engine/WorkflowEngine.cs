@@ -83,6 +83,51 @@ public sealed class WorkflowEngine : IAsyncDisposable
         lock (_gate) return Log(node).Entries;
     }
 
+    /// <summary>
+    /// What a planner may fill and place, which its prompt names when a fresh turn starts, or null for none. The engine
+    /// calls it under its lock, so it must not wait for another thread.
+    /// </summary>
+    public Func<TaskId, PlanningContext?>? Planning { get; set; }
+
+    /// <summary>The node's conversation, which follows its log until it is disposed.</summary>
+    public IConversation Conversation(TaskId node)
+    {
+        lock (_gate) return new NodeConversation(node, Log(node), () => TerminalCommand(node));
+    }
+
+    /// <summary>
+    /// The folder the node's agent works in: its worktree for a node that edits the project, else the project folder. Null
+    /// when the worktree cannot be found, such as outside a Git work tree.
+    /// </summary>
+    public string? Folder(TaskId node)
+    {
+        lock (_gate)
+        {
+            if (_workflow.Tasks.GetValueOrDefault(node) is not { } task || !Edits(task)) return _project;
+            try
+            {
+                return _worktrees.Folder(node);
+            }
+            catch (GitFailure)
+            {
+                return null;
+            }
+        }
+    }
+
+    private string? TerminalCommand(TaskId id)
+    {
+        lock (_gate)
+        {
+            if (_live.ContainsKey(id) || Log(id).Record is not { Session: { } session, SessionBasis.Model.Client: var client } || Folder(id) is not { } folder)
+            {
+                return null;
+            }
+
+            return IDevelop.Execution.TerminalCommand.For(folder, Clients.Get(client).Terminal(session), IDevelop.Execution.TerminalCommand.Current);
+        }
+    }
+
     /// <summary>Null when the node can start a fresh turn now, or the reason it cannot.</summary>
     public string? CanRun(TaskId node)
     {
@@ -655,7 +700,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             return inputs;
         }
 
-        var prompt = AgentWork.Prompt(new NodeContext(node, inputs));
+        var prompt = AgentWork.Prompt(new NodeContext(node, inputs) { Planning = Planning?.Invoke(id) });
         return template.Variables.Contains("inputs") || inputs.Length == 0 ? prompt : $"{prompt.TrimEnd()}\n\n## What earlier tasks handed on\n\n{inputs}\n";
     }
 

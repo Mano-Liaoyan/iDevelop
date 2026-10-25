@@ -205,67 +205,23 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void After_a_run_its_agent_and_time_show_as_chips_and_its_tool_calls_wait_behind_a_disclosure()
+    public void After_each_run_the_Run_section_lists_its_results_newest_first_and_marks_the_current_one()
     {
-        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Replay(Fixture.Path("codex-success.jsonl")));
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Say hi", 105, 90, Codex, "Reply with DONE.")), _fakes.DiscoverAsync().Result);
+        using var f = new NodeFixture(NodeFixture.Plan(Design, "Say hi", 105));
+        f.Install(NodeFixture.Reply("s-1", "Said hi."));
+        var shell = f.Open();
         shell.Click(shell.Header(shell.Node("Say hi")));
-        Assert.False(shell.Section("Activity").IsEffectivelyVisible);
+        Assert.False(shell.Find<ItemsControl>("Results").IsEffectivelyVisible);
 
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
-
-        Assert.Equal("Succeeded", shell.Find<TextBlock>("LastRunStatus").Text);
-        var agent = shell.InView<ItemsControl>("LastRunConfiguration");
-        // The chips name the model as its picker does.
-        Assert.Equal(["Codex", "GPT-5.5", "high"], Shell.Texts(agent));
-        Assert.Equal("Requested Codex · gpt-5.5 · high.", ToolTip.GetTip(agent));
-        var time = shell.Find<Control>("LastRunTiming");
-        Assert.Matches(@"^Just now \d+ s$", Shell.TextOf(time));
-        Assert.Matches(@"^Started .+ · took \d+ s$", (string)ToolTip.GetTip(time)!);
-        Assert.Equal(2, time.GetVisualDescendants().OfType<Border>().Count(border => border.IsEffectivelyVisible && border.Classes.Contains("chip")));
-
-        var activity = shell.InView<ItemsControl>("LastRunActivity");
-        var tools = shell.InView<ToggleButton>("ToolCallsToggle");
-        Assert.Equal(["DONE"], Shell.Texts(activity));
-        Assert.Single(activity.GetVisualDescendants().OfType<TextBlock>());
-        Assert.Equal("1 tool call", Shell.TextOf(tools));
-
-        shell.Click(tools);
-
-        Assert.Equal(["command: pwsh.exe -Command \"Set-Content -LiteralPath .\\\\hello.txt -Value 'hi' -NoNewline\"", "DONE"], Shell.Texts(activity));
-
-        var runs = shell.Window.ViewModel.Canvas!.Runs;
-        var first = runs.Latest[Design].Id;
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => runs.Latest[Design] is { Status: AttemptStatus.Succeeded } next && next.Id != first, "the next run succeeds");
+        shell.RunNode();
+        shell.WaitForState("Say hi", IDevelop.Desktop.Canvas.NodeState.Completed);
+        shell.Click(shell.InView<Button>("RetryTask"));
+        shell.WaitUntil(() => shell.NodeModel("Say hi").Results.Count == 2 && shell.NodeModel("Say hi").State == IDevelop.Desktop.Canvas.NodeState.Completed,
+            "the retry completes");
         shell.Render();
 
-        Assert.True(shell.Find<ToggleButton>("ToolCallsToggle").IsChecked, "The disclosure stays open for the task's next run.");
-        Assert.Equal(2, Shell.Texts(shell.Find<ItemsControl>("LastRunActivity")).Length);
-    }
-
-    [AvaloniaFact]
-    public void Each_task_keeps_its_own_tool_call_disclosure_from_the_canvas_and_the_sidebar()
-    {
-        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Replay(Fixture.Path("codex-success.jsonl")));
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "One", 105, 90, Codex, "Hi."), TaskAt(Build, "Two", 505, 90, Codex, "Hi.")), _fakes.DiscoverAsync().Result);
-        foreach (var title in new[] { "Two", "One" })
-        {
-            shell.Click(shell.Header(shell.Node(title)));
-            shell.RunOnItsOwn();
-            shell.WaitUntil(() => shell.CardText(title, "CardStatus") == "Succeeded", $"{title} succeeds");
-        }
-
-        (string?, bool?) Shown() => (shell.Window.ViewModel.Canvas!.SelectedNode?.Title, shell.InView<ToggleButton>("ToolCallsToggle").IsChecked);
-        shell.Click(shell.InView<ToggleButton>("ToolCallsToggle"));
-
-        shell.ShowTasks();
-        shell.Click(shell.Header(shell.Node("Two")));
-        var two = Shown();
-        shell.Click(shell.SidebarRow("One"));
-
-        Assert.Equal((("Two", false), ("One", true)), (two, Shown()));
+        Assert.Equal("Completed", shell.Find<TextBlock>("RunTaskStatus").Text);
+        Assert.Equal(["Result 2 · Current", "Said hi.", "Result 1", "Said hi."], Shell.Texts(shell.InView<ItemsControl>("Results")));
     }
 
     [Theory]
@@ -290,27 +246,6 @@ public sealed class InspectorTests : IDisposable
         {
             System.Globalization.CultureInfo.CurrentCulture = culture;
         }
-    }
-
-    [Theory]
-    [InlineData("", "")]
-    [InlineData("t t a", "t t a")]
-    [InlineData("t t t", "t t t")]
-    [InlineData("a b c", "a b c")]
-    [InlineData("t a t b c t", "t a t b c t")]
-    [InlineData("t a b c d", "b c d")]
-    [InlineData("a b c d t", "b c d t")]
-    [InlineData("a t b t c t d", "b t c t d")]
-    [InlineData("t t t t", "t t t")]
-    public void The_activity_keeps_the_last_lines_said_and_every_tool_call_since_the_earliest(string lines, string kept)
-    {
-        // Each word is a line, "t" a tool call and any other word a message; three messages fit.
-        static ActivityLine[] Lines(string words) =>
-            [.. words.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select((word, index) => new ActivityLine(default, $"{word}{index}", word == "t"))];
-
-        var shown = IDevelop.Desktop.Execution.AttemptViewModel.Recent(Lines(lines), 3);
-
-        Assert.Equal(kept, string.Join(' ', shown.Select(line => line.Text.TrimEnd("0123456789".ToCharArray()))));
     }
 
     [AvaloniaFact]
@@ -364,7 +299,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Single(shell.Window.ViewModel.Canvas!.Workflow.Tasks.Values, task => task.Title == "Wire export");
         Assert.Equal("Added 1 task.", shell.Status);
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Succeeded", "the planner is done");
+        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Completed", "the planner is done");
         Assert.False(shell.Has<StackPanel>("Proposal"));
     }
 
@@ -374,15 +309,14 @@ public sealed class InspectorTests : IDisposable
         var shell = WaitingArchitect();
 
         Assert.Equal(["ProposalAcceptFinish"], PrimaryButtons(shell));
-        Assert.Equal((false, false, false, false), (Shows(shell, "RunTask"), Shows(shell, "CancelRun"), Shows(shell, "StartProblem"), Shows(shell, "LastRunConfiguration")));
-        Assert.Equal("Waiting for you", shell.InView<TextBlock>("LastRunStatus").Text);
-        Assert.Equal(["Status"], Shell.Texts(shell.Section("Run")).Where(text => text != "Run" && text != "Waiting for you"));
+        Assert.Equal((false, false, false, false), (Shows(shell, "RunTask"), Shows(shell, "Approve"), Shows(shell, "StopTask"), Shows(shell, "StartProblem")));
+        Assert.Equal("Input required · reply", shell.InView<TextBlock>("RunTaskStatus").Text);
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Succeeded", "the planner is done");
+        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Completed", "the planner is done");
 
-        Assert.Equal(["RunTask"], PrimaryButtons(shell));
-        Assert.Equal((true, true, true), (Shows(shell, "RunTask"), Shows(shell, "CancelRun"), Shows(shell, "LastRunConfiguration")));
+        Assert.Empty(PrimaryButtons(shell));
+        Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "RetryTask")));
     }
 
     [AvaloniaFact]
@@ -403,7 +337,7 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_planner_whose_next_turn_runs_under_an_open_proposal_offers_Cancel_but_not_Run()
+    public void A_planner_whose_next_turn_runs_under_an_open_proposal_offers_Stop_but_not_Run()
     {
         var gate = System.IO.Path.Combine(_temp.Create("evidence"), "go");
         var shell = WaitingArchitect(Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(gate).Print(ReplyLines(ClientId.Codex, "Noted.")));
@@ -411,17 +345,19 @@ public sealed class InspectorTests : IDisposable
         shell.Type("Keep the export small.");
 
         shell.Click(shell.InView<Button>("SendMessage"));
-        shell.WaitUntil(() => shell.Find<TextBlock>("LastRunStatus").Text == "Running", "the next turn runs");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Running", "the next turn runs");
+        shell.Render();
 
         Assert.True(shell.Has<StackPanel>("Proposal"));
-        Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "CancelRun")));
+        Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "StopTask")));
         Assert.Equal(["AcceptProposal"], PrimaryButtons(shell));
-        Assert.True(shell.Find<Button>("CancelRun").IsEffectivelyEnabled);
+        Assert.True(shell.Find<Button>("StopTask").IsEffectivelyEnabled);
+        Assert.False(shell.Find<Button>("SendBack").IsEffectivelyVisible);
 
         File.WriteAllText(gate, "");
-        shell.WaitUntil(() => shell.Find<TextBlock>("LastRunStatus").Text == "Waiting for you", "the turn ends waiting");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · reply", "the turn ends waiting");
 
-        Assert.Equal((false, false), (Shows(shell, "RunTask"), Shows(shell, "CancelRun")));
+        Assert.Equal((false, false), (Shows(shell, "RunTask"), Shows(shell, "StopTask")));
     }
 
     [AvaloniaFact]
@@ -435,13 +371,12 @@ public sealed class InspectorTests : IDisposable
         shell.Type("Keep the export small.");
 
         shell.Click(shell.InView<Button>("SendMessage"));
-        shell.WaitUntil(() => shell.Find<TextBlock>("LastRunStatus").Text == "Failed", "the next turn fails");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Failed", "the next turn fails");
 
         Assert.True(shell.Has<StackPanel>("Proposal"));
         Assert.Equal(["AcceptProposal"], PrimaryButtons(shell));
-        Assert.Equal(
-            (true, "You've hit your usage limit. Try again later."),
-            (Shows(shell, "LastRunDetail"), shell.Find<TextBlock>("LastRunDetail").Text));
+        Assert.True(Shows(shell, "RunTaskDetail"));
+        Assert.Contains("You've hit your usage limit.", shell.Find<TextBlock>("RunTaskDetail").Text);
     }
 
     [AvaloniaFact]
@@ -492,9 +427,9 @@ public sealed class InspectorTests : IDisposable
             _fakes.DiscoverAsync().Result);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design export")));
-        shell.RunOnItsOwn();
+        shell.RunNode();
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
-        shell.WaitUntil(() => shell.Find<TextBlock>("LastRunStatus").Text == "Waiting for you", "the planner waits");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · reply", "the planner waits");
         return shell;
     }
 

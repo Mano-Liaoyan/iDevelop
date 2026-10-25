@@ -444,12 +444,11 @@
               </Border>
             </Button>
 
-            <!-- Run Workflow runs the whole workflow, so it needs no selected node. While a run of the workflow is active,
-                 the run bar at the bottom holds its controls instead. -->
+            <!-- Run Workflow runs every node that has no current result, so it needs no selected node (ADR 0017). -->
             <Panel canvas:CanvasTopBar.Slot="Trailing" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
               <StackPanel x:DataType="canvas:WorkflowCanvasViewModel" DataContext="{Binding Canvas}" Orientation="Horizontal" Spacing="8">
-                <Button Classes="action glyph" Command="{Binding RunWorkflowCommand}" IsVisible="{Binding ShowsRunWorkflow}"
-                        ToolTip.Tip="Run Workflow&#10;Check the whole workflow, then run it along its dependencies"
+                <Button Classes="action glyph" Command="{Binding RunWorkflowCommand}"
+                        ToolTip.Tip="Run Workflow&#10;Run every node that has no current result, along its dependencies"
                         AutomationProperties.AutomationId="RunWorkflow"
                         AutomationProperties.Name="Run Workflow">
                   <StackPanel Orientation="Horizontal" Spacing="6">
@@ -544,13 +543,6 @@
       <ContentControl.DataTemplates>
         <DataTemplate DataType="canvas:GenerateWorkflowViewModel">
           <canvas:GenerateSheet />
-        </DataTemplate>
-      </ContentControl.DataTemplates>
-    </ContentControl>
-    <ContentControl Grid.ColumnSpan="5" ZIndex="2" Content="{Binding Canvas.Preflight}">
-      <ContentControl.DataTemplates>
-        <DataTemplate DataType="execution:RunPreflightViewModel">
-          <execution:RunPreflightSheet />
         </DataTemplate>
       </ContentControl.DataTemplates>
     </ContentControl>

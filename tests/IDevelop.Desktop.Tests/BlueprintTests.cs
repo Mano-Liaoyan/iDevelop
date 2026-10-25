@@ -173,7 +173,7 @@ public sealed class BlueprintTests : IDisposable
 
         Assert.False(shell.Has<StackPanel>("BlueprintEditor"));
         Assert.True(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
-        Assert.False(Directory.Exists(Path.Combine(project, ".idp")));
+        Assert.False(Directory.Exists(Path.Combine(project, ".idp", "blueprints")));
     }
 
     [AvaloniaFact]

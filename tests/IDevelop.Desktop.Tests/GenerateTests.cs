@@ -159,7 +159,7 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal(planner.Id, canvas.SelectedNode?.Id);
         Assert.True(canvas.HasStarted(planner.Id));
         Assert.True(canvas.Generated(planner.Id));
-        shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the planner's turn ends before its folder goes");
+        shell.WaitUntil(() => !shell.Window.ViewModel.RunningNodes.Any(), "the planner's turn ends before its folder goes");
     }
 
     [AvaloniaFact]
@@ -180,7 +180,7 @@ public sealed class GenerateTests : IDisposable
 
         Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
         Assert.Equal([Prompt], canvas.Workflow.Tasks.Values.Select(task => task.Field("goal")));
-        shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the planner's turn ends before its folder goes");
+        shell.WaitUntil(() => !shell.Window.ViewModel.RunningNodes.Any(), "the planner's turn ends before its folder goes");
     }
 
     [AvaloniaFact]
@@ -226,7 +226,7 @@ public sealed class GenerateTests : IDisposable
     {
         var shell = Generated();
 
-        Assert.Equal("Here is the plan.", shell.InView<TextBox>("LastRunResult").Text);
+        Assert.Equal("Here is the plan.", shell.InView<TextBox>("LastReply").Text);
         Assert.Equal(3, shell.InView<StackPanel>("Proposal").GetVisualDescendants().OfType<CheckBox>().Count(box => box.IsChecked == true && AutomationProperties.GetAutomationId(box) != "ProposalUsePlannerAgent"));
     }
 
@@ -240,7 +240,7 @@ public sealed class GenerateTests : IDisposable
         var origin = canvas.Workflow.Positions[planner];
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
-        shell.WaitUntil(() => node.State == NodeState.Succeeded, "the planner is done");
+        shell.WaitUntil(() => node.State == NodeState.Completed, "the planner is done");
         Assert.Equal("Added 3 tasks.", shell.Status);
         shell.ShowTasks();
         Assert.Equal([Prompt, "Export API", "Export button", "Export tests"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
@@ -289,7 +289,7 @@ public sealed class GenerateTests : IDisposable
         });
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Plan export")));
-        shell.RunOnItsOwn();
+        shell.RunNode();
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
         InspectorLayoutTests.AssertLaidOut(shell);
 
@@ -321,7 +321,7 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal("Review Proposal", ButtonLabel(shell));
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
-        shell.WaitUntil(() => planner.State == NodeState.Succeeded, "the planner is done");
+        shell.WaitUntil(() => planner.State == NodeState.Completed, "the planner is done");
         Assert.Equal("Generate", ButtonLabel(shell));
         shell.Click(shell.Find<Button>("GenerateWorkflow"));
         Assert.True(shell.Has<GenerateSheet>("GenerateSheet"));
@@ -332,9 +332,10 @@ public sealed class GenerateTests : IDisposable
     {
         Install(_fakes, ClientId.Codex);
         var project = _temp.Create("seed");
-        var attempts = DataFolder.Attempts(project);
-        Directory.CreateDirectory(Path.GetDirectoryName(attempts)!);
-        File.WriteAllText(attempts, "");
+        // A file where the node logs go keeps the planner's log from being written.
+        var logs = Path.Combine(project, DataFolder.Name, "nodes");
+        Directory.CreateDirectory(Path.GetDirectoryName(logs)!);
+        File.WriteAllText(logs, "");
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         var canvas = shell.Window.ViewModel.Canvas!;
 
@@ -342,7 +343,7 @@ public sealed class GenerateTests : IDisposable
 
         var planner = Assert.Single(canvas.Workflow.Tasks.Values);
         Assert.Equal((Prompt, false), (planner.Title, canvas.HasStarted(planner.Id)));
-        Assert.StartsWith($"iDevelop could not write {attempts}.", shell.Status);
+        Assert.StartsWith($"Couldn't write the log of \"{Prompt}\".", shell.Status);
         Assert.Equal("Generate", ButtonLabel(shell));
     }
 

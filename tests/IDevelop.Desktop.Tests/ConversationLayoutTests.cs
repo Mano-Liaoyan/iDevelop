@@ -41,65 +41,34 @@ public sealed class ConversationLayoutTests
             var header = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationTitle"), "conversationHeader"));
             AssertWholeAndApart(shell, at, header.Intersect(view), 12,
                 ("Title", shell.Find<Control>("ConversationTitle")), ("Status", Shell.Around(shell.Find<TextBlock>("ConversationStatus"), "pill")),
-                ("Attempt", shell.Find<Control>("AttemptPicker")), ("Layout", shell.Find<Control>("ConversationLayout")),
-                ("Close", shell.Find<Control>("CloseConversation")));
+                ("Layout", shell.Find<Control>("ConversationLayout")), ("Close", shell.Find<Control>("CloseConversation")));
             Assert.Equal(header.Right - 12, shell.Bounds(shell.Find<Control>("CloseConversation")).Right, 0.5);
 
             var strip = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationRunStatus"), "limitations"));
-            // The status, its progress, and its activity wrap as one group, its lines 4 px apart.
+            // The status and its activity wrap as one group, its lines 4 px apart.
             AssertWholeAndApart(shell, at, strip.Intersect(view), 16, 4,
-                ("Run status", Shell.Around(shell.Find<TextBlock>("ConversationRunStatus"), "pill")), ("Progress", shell.Find<Control>("ConversationRunProgress")),
-                ("Activity", shell.Find<Control>("ConversationRunActivity")));
+                ("Run status", Shell.Around(shell.Find<TextBlock>("ConversationRunStatus"), "pill")), ("Activity", shell.Find<Control>("ConversationRunActivity")));
             AssertWholeAndApart(shell, at, strip.Intersect(view), 16,
-                ("Run", (Control)shell.Find<Control>("ConversationRunProgress").GetVisualParent()!), ("Stop", shell.Find<Control>("ConversationStopWorkflow")));
+                ("Run", (Control)shell.Find<Control>("ConversationRunActivity").GetVisualParent()!), ("Stop", shell.Find<Control>("ConversationStopAll")));
 
             var composer = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer"));
             Assert.True(view.Contains(composer), $"At {at}, the composer at {composer} leaves the view at {view}.");
             AssertWholeAndApart(shell, at, composer, 10,
-                ("Hint", shell.Find<Control>("ComposerHint")), ("Mark done", shell.Find<Control>("ConversationMarkDone")),
-                ("Cancel", shell.Find<Control>("ConversationCancel")), ("Send", shell.Find<Control>("ConversationSend")));
+                ("Hint", shell.Find<Control>("ComposerHint")), ("Terminal", shell.Find<Control>("ConversationTerminal")),
+                ("Approve", shell.Find<Control>("ConversationApprove")), ("Send", shell.Find<Control>("ConversationSend")));
             // Send ends where the composer's box ends.
             Assert.Equal(shell.Bounds(shell.Find<Control>("ConversationComposer")).Right, shell.Bounds(shell.Find<Control>("ConversationSend")).Right, 0.5);
         }
     }
 
-    [AvaloniaFact]
-    public void The_first_message_folds_idevelops_artifact_instructions_into_a_note_that_opens_on_a_click()
-    {
-        using var f = FanOut.Fixture();
-        var shell = Opened(f);
-        var prompt = shell.Window.ViewModel.Conversation!.Items.OfType<MessageItemViewModel>().First();
-
-        Assert.Equal("iDevelop", prompt.AuthorLabel);
-        Assert.StartsWith("# Write docs", prompt.Text);
-        Assert.DoesNotContain("Declare artifacts", prompt.Text);
-        Assert.StartsWith("Declare artifacts in .idp/outbox/", prompt.Instructions);
-        var message = Shell.ById<Control>(shell.Window, "Message").First();
-        Assert.DoesNotContain(Shell.Texts(message), text => text.Contains(".idp/outbox", StringComparison.Ordinal));
-
-        var note = shell.Shown<ToggleButton>("ArtifactInstructions");
-        Assert.Equal(("Artifact instructions from iDevelop", false), (AutomationProperties.GetName(note), ShowsText(shell)));
-        Assert.Equal(["Artifact instructions from iDevelop"], Shell.Texts(note));
-        Assert.True(shell.Bounds(note).Height <= 24, $"The note is {shell.Bounds(note).Height} px tall, more than one line.");
-
-        shell.Click(note);
-
-        Assert.Equal(prompt.Instructions, Shell.ById<SelectableTextBlock>(shell.Window, "ArtifactInstructionsText").Single(text => text.IsEffectivelyVisible).Text);
-        Assert.True(ShowsText(shell));
-        shell.Click(note);
-        Assert.False(ShowsText(shell));
-    }
-
-    private static bool ShowsText(Shell shell) => shell.ShowsAny("ArtifactInstructionsText");
-
     /// <summary>Runs the fan-out and opens "Write docs"'s conversation, which waits for the person, over the canvas.</summary>
-    private static Shell Opened(WorkflowRunFixture f)
+    private static Shell Opened(NodeFixture f)
     {
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Run(shell);
         shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
         var conversation = shell.Window.ViewModel.Conversation!;
-        shell.WaitUntil(() => conversation.SelectedAttempt is not null && conversation.Items.OfType<MessageItemViewModel>().Count() >= 2, "the conversation shows its turn");
+        shell.WaitUntil(() => conversation.Items.OfType<MessageItemViewModel>().Any(), "the conversation shows its turn");
         Assert.True(shell.Find<Control>("ConversationRun").IsEffectivelyVisible);
         return shell;
     }

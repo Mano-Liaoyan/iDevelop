@@ -151,6 +151,9 @@ internal sealed class NodeLog
 
     public NodeRecord Record { get; private set; } = NodeRecord.Empty;
 
+    /// <summary>Raised after each entry is written, on the thread that wrote it.</summary>
+    public event Action? Appended;
+
     public void Append(NodeEntry entry)
     {
         lock (_gate)
@@ -164,6 +167,8 @@ internal sealed class NodeLog
             File.AppendAllText(_path, JsonSerializer.Serialize(entry, Options) + "\n", Utf8);
             Add(entry);
         }
+
+        Appended?.Invoke();
     }
 
     private void Add(NodeEntry entry)

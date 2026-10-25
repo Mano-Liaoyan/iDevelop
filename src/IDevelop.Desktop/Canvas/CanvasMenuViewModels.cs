@@ -22,9 +22,8 @@ public sealed class NodeMenuViewModel
         Node = canvas.SelectedNodes is [var single] ? single : null;
         ShowRun = Node is { HasAgent: true, HasClient: true } node && node.RunCommand.CanExecute(null);
         ShowChooseAgent = Node is { HasAgent: true, HasClient: false } && canvas.Blueprints.Editor is null;
-        ShowCancel = Node?.CancelCommand.CanExecute(null) == true;
+        ShowStop = Node?.StopCommand.CanExecute(null) == true;
         ShowRetry = Node?.ShowsRetry == true;
-        ShowCancelInRun = Node?.CancelInRunCommand.CanExecute(null) == true;
         ShowReplace = Node is { } one && !canvas.HasStarted(one.Id);
         ShowDisconnect = canvas.Workflow.Connections.Keys.Any(key => selection.Contains(key.From) || selection.Contains(key.To));
         ReplaceChoices = Node is { } replaced && ShowReplace
@@ -52,15 +51,13 @@ public sealed class NodeMenuViewModel
     /// </summary>
     public bool ShowChooseAgent { get; }
 
-    public bool ShowCancel { get; }
+    /// <summary>The node runs, and Stop ends its turn.</summary>
+    public bool ShowStop { get; }
 
-    /// <summary>The run's task ended without a result; the inspector asks before it retries.</summary>
+    /// <summary>The node's turn has ended, and Retry starts a fresh session.</summary>
     public bool ShowRetry { get; }
 
-    /// <summary>The run's task runs or waits, and Cancel ends its attempt in the run.</summary>
-    public bool ShowCancelInRun { get; }
-
-    public bool ShowRunGroup => ShowRun || ShowChooseAgent || ShowCancel || ShowRetry || ShowCancelInRun;
+    public bool ShowRunGroup => ShowRun || ShowChooseAgent || ShowStop || ShowRetry;
 
     /// <summary>Only a node that never started can change its blueprint.</summary>
     public bool ShowReplace { get; }

@@ -17,14 +17,12 @@
     <!-- An overlay scroll bar 10 px wide, expanded, fits in the panel's 12 px right inset, so it never covers a row's
          buttons, and the rows never move for it. -->
     <x:Double x:Key="ScrollBarSize">10</x:Double>
-    <!-- One finding of a review, in the Review node's Findings and in an Approval's handed-on review alike: its heading, with
-         its severity at the card's right edge where every card keeps it, then its location, the reviewer's latest words, and
-         how it was or would be settled: the change that would settle it, the implementer's answer, and why the reviewer
-         withdrew it. A verdict that gave no severity or location shows neither. -->
+    <!-- One finding of a review's verdict: its heading, with its severity at the card's right edge where every card keeps
+         it, then its location, the reviewer's words, and the change that would settle it. A verdict that gave no severity
+         or location shows neither. -->
     <DataTemplate x:Key="FindingTemplate" DataType="execution:FindingViewModel">
       <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
-              BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
-              Opacity="{Binding Emphasis}">
+              BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}">
         <StackPanel Spacing="4">
           <!-- The chip keeps to 96 px, so an odd long severity wraps inside it rather than pushing it past the card, and the
                heading sits on the chip's first line. -->
@@ -42,10 +40,6 @@
           <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
           <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                      IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-          <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                     IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-          <TextBlock Text="{Binding Withdrawal}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                     IsVisible="{Binding Withdrawal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
       </Border>
     </DataTemplate>
@@ -351,45 +345,34 @@
 
                   <inspector:InspectorSection Key="Run" Title="Run">
                     <StackPanel>
-                      <!-- A task that the canvas's workflow run owns shows the run's state, not its own Run and Cancel. -->
-                      <!-- Stacked, so a long status such as what a pending task waits for has the section's whole width. -->
-                      <inspector:InspectorRow Label="Status" Layout="Stacked" Icon="{StaticResource IconStatus}" IsShown="{Binding ShowsRunState}">
+                      <!-- Stacked, so a long status has the section's whole width. -->
+                      <inspector:InspectorRow Label="Status" Layout="Stacked" Icon="{StaticResource IconStatus}">
                         <Border Classes="pill" HorizontalAlignment="Left"
-                                Classes.running="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                                Classes.complete="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                                Classes.problem="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                                Classes.waiting="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
-                                Classes.warning="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
-                          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding RunStatusLabel}">
-                            <PathIcon Theme="{StaticResource Glyph}" IsVisible="{Binding RunHasGlyph}" />
-                            <TextBlock Grid.Column="1" Text="{Binding RunStatusLabel}"
+                                Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                                Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                                Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                                Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
+                                Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
+                          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding StatusLabel}">
+                            <PathIcon Theme="{StaticResource Glyph}" />
+                            <TextBlock Grid.Column="1" Text="{Binding StatusLabel}"
                                        AutomationProperties.AutomationId="RunTaskStatus" />
                           </Grid>
                         </Border>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full">
-                        <inspector:InspectorRow.IsShown>
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="ShowsRunState" />
-                            <Binding Path="RunOwner" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
-                          </MultiBinding>
-                        </inspector:InspectorRow.IsShown>
-                        <TextBlock Text="{Binding RunOwner}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                   AutomationProperties.AutomationId="RunOwner" />
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full">
-                        <inspector:InspectorRow.IsShown>
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="ShowsRunState" />
-                            <Binding Path="RunDetail" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
-                          </MultiBinding>
-                        </inspector:InspectorRow.IsShown>
-                        <TextBlock Text="{Binding RunDetail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding StateDetail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding StateDetail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                    AutomationProperties.AutomationId="RunTaskDetail" />
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsCancel}">
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsSendBack}">
+                        <TextBox Text="{Binding SendBackNote}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="48"
+                                 Watermark="Why send it back? The note goes to the nodes before it."
+                                 AutomationProperties.AutomationId="SendBackNote"
+                                 AutomationProperties.Name="Note to send back" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Buttons">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                          <Button Classes="primary" Command="{Binding RunCommand}" IsVisible="{Binding ShowsRunControls}"
+                          <Button Classes="primary" Command="{Binding RunCommand}" IsVisible="{Binding ShowsRun}"
                                   ToolTip.Tip="{Binding RunRefusal}" ToolTip.ShowOnDisabled="True"
                                   AutomationProperties.AutomationId="RunTask"
                                   AutomationProperties.Name="Run">
@@ -398,40 +381,32 @@
                               <TextBlock Text="Run" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                          <Button Classes="action" Command="{Binding CancelCommand}" IsVisible="{Binding ShowsCancelButton}"
-                                  AutomationProperties.AutomationId="CancelRun"
-                                  AutomationProperties.Name="Cancel run">
+                          <Button Classes="primary" Command="{Binding ApproveCommand}" IsVisible="{Binding ShowsApprove}"
+                                  AutomationProperties.AutomationId="Approve"
+                                  AutomationProperties.Name="Approve">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                              <TextBlock Text="Cancel" VerticalAlignment="Center" />
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
+                              <TextBlock Text="Approve" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                        </WrapPanel>
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsFixChoice}">
-                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                          <Button Classes="primary" Command="{Binding ContinueFixCommand}"
-                                  AutomationProperties.AutomationId="ContinueFix"
-                                  AutomationProperties.Name="Continue fix">
+                          <Button Classes="action" Command="{Binding SendBackCommand}" IsVisible="{Binding ShowsSendBack}"
+                                  ToolTip.Tip="Write a note first. It goes to the nodes before this one." ToolTip.ShowOnDisabled="True"
+                                  AutomationProperties.AutomationId="SendBack"
+                                  AutomationProperties.Name="Send back">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconUndo}" Width="14" Height="14" />
+                              <TextBlock Text="Send back" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes="primary" Command="{Binding ContinueCommand}" IsVisible="{Binding ShowsContinue}"
+                                  AutomationProperties.AutomationId="ContinueTask"
+                                  AutomationProperties.Name="Continue">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
-                              <TextBlock Text="Continue fix" VerticalAlignment="Center" />
+                              <TextBlock Text="Continue" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                          <Button Classes="action" Command="{Binding RetryFixCommand}"
-                                  AutomationProperties.AutomationId="RetryFix"
-                                  AutomationProperties.Name="Retry fix">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" Width="14" Height="14" />
-                              <TextBlock Text="Retry fix" VerticalAlignment="Center" />
-                            </StackPanel>
-                          </Button>
-                        </WrapPanel>
-                      </inspector:InspectorRow>
-                      <!-- A conflict between the task's predecessors that no Merge node takes: the person fixes it in its worktree. -->
-                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsConflictActions}">
-                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                          <Button Classes="action" Command="{Binding OpenConflictCommand}"
+                          <Button Classes="action" Command="{Binding OpenWorktreeCommand}" IsVisible="{Binding ShowsMarkResolved}"
                                   AutomationProperties.AutomationId="OpenConflict"
                                   AutomationProperties.Name="Open worktree">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -439,7 +414,7 @@
                               <TextBlock Text="Open worktree" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                          <Button Classes="primary" Command="{Binding MarkResolvedCommand}"
+                          <Button Classes="primary" Command="{Binding MarkResolvedCommand}" IsVisible="{Binding ShowsMarkResolved}"
                                   AutomationProperties.AutomationId="MarkResolved"
                                   AutomationProperties.Name="Mark resolved">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -447,25 +422,8 @@
                               <TextBlock Text="Mark resolved" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                        </WrapPanel>
-                      </inspector:InspectorRow>
-                      <!-- Cancel of a run's task while its attempt runs or waits, which the run then shows as Cancelled with Retry. -->
-                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsRunCancel}">
-                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                          <Button Classes="action" Command="{Binding CancelInRunCommand}"
-                                  AutomationProperties.AutomationId="CancelRunTask"
-                                  AutomationProperties.Name="Cancel">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                              <TextBlock Text="Cancel" VerticalAlignment="Center" />
-                            </StackPanel>
-                          </Button>
-                        </WrapPanel>
-                      </inspector:InspectorRow>
-                      <!-- Retry of a run's task that ended without a result asks first, here, wherever the person chose it. -->
-                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsRetryButton}">
-                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                          <Button Classes="primary" Command="{Binding RetryCommand}"
+                          <Button Classes="action" Command="{Binding RetryCommand}" IsVisible="{Binding ShowsRetry}"
+                                  ToolTip.Tip="{Binding RunRefusal, FallbackValue='Runs it again in a fresh session'}" ToolTip.ShowOnDisabled="True"
                                   AutomationProperties.AutomationId="RetryTask"
                                   AutomationProperties.Name="Retry">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -473,350 +431,53 @@
                               <TextBlock Text="Retry" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                        </WrapPanel>
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ConfirmingRetry}">
-                        <TextBlock Text="{Binding RetryConfirmation}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                   AutomationProperties.AutomationId="RetryConfirmation" />
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding TakesRetryNote}">
-                        <TextBox Text="{Binding RetryNote}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="48"
-                                 Watermark="A note to the agent (optional)"
-                                 AutomationProperties.AutomationId="RetryNote"
-                                 AutomationProperties.Name="Note to the agent" />
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ConfirmingRetry}">
-                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                          <Button Classes="primary" Command="{Binding ConfirmRetryCommand}"
-                                  AutomationProperties.AutomationId="ConfirmRetry"
-                                  AutomationProperties.Name="Retry">
+                          <Button Classes="action" Command="{Binding StopCommand}" IsVisible="{Binding ShowsStop}"
+                                  AutomationProperties.AutomationId="StopTask"
+                                  AutomationProperties.Name="Stop">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" Width="14" Height="14" />
-                              <TextBlock Text="Retry" VerticalAlignment="Center" />
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+                              <TextBlock Text="Stop" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                          <Button Classes="action" Command="{Binding KeepRetryCommand}"
-                                  AutomationProperties.AutomationId="KeepRetry"
-                                  AutomationProperties.Name="Not now">
-                            <TextBlock Text="Not now" VerticalAlignment="Center" />
-                          </Button>
                         </WrapPanel>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full">
-                        <inspector:InspectorRow.IsShown>
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="ShowsRunControls" />
-                            <Binding Path="StartProblem" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
-                          </MultiBinding>
-                        </inspector:InspectorRow.IsShown>
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding StartProblem}" Background="Transparent">
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding RunRefusal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding RunRefusal}" Background="Transparent">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
                                     VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
-                          <TextBlock Grid.Column="1" Text="{Binding StartProblem}" TextWrapping="Wrap"
+                          <TextBlock Grid.Column="1" Text="{Binding RunRefusal}" TextWrapping="Wrap"
                                      FontSize="12" Foreground="{DynamicResource TextBrush}"
                                      AutomationProperties.AutomationId="StartProblem" />
                         </Grid>
                       </inspector:InspectorRow>
-                      <ContentControl Content="{Binding LastRun}">
-                        <ContentControl.ContentTemplate>
-                          <!-- The status and why a run ended show even while a proposal hides the rest of the run. -->
-                          <DataTemplate DataType="execution:AttemptViewModel">
-                            <StackPanel>
-                              <inspector:InspectorRow Label="Status" Layout="Stacked" Icon="{StaticResource IconStatus}">
-                                <Border Classes="pill" HorizontalAlignment="Left"
-                                        Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                                        Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                                        Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                                        Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-                                  <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon Theme="{StaticResource Glyph}" />
-                                    <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
-                                  </StackPanel>
-                                </Border>
-                              </inspector:InspectorRow>
-                              <inspector:InspectorRow Layout="Full" IsShown="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                           AutomationProperties.AutomationId="LastRunDetail" />
-                              </inspector:InspectorRow>
-                            </StackPanel>
-                          </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                      </ContentControl>
-                      <!-- What ran and when, as chips whose tooltips say it in full, under their labels like the status above, so
-                           the chips keep to one line at every width. -->
-                      <ContentControl Content="{Binding LastRun}" IsVisible="{Binding ShowsRunControls}">
-                        <ContentControl.ContentTemplate>
-                          <DataTemplate DataType="execution:AttemptViewModel">
-                            <StackPanel>
-                              <inspector:InspectorRow Label="Agent" Layout="Stacked" Icon="{StaticResource IconAgent}">
-                                <ItemsControl ItemsSource="{Binding Agent}" ToolTip.Tip="{Binding Configuration}" Background="Transparent"
-                                              AutomationProperties.AutomationId="LastRunConfiguration"
-                                              AutomationProperties.Name="{Binding Configuration}">
-                                  <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                      <WrapPanel Classes="chips" />
-                                    </ItemsPanelTemplate>
-                                  </ItemsControl.ItemsPanel>
-                                  <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="x:String">
-                                      <Border Classes="chip">
-                                        <TextBlock Text="{Binding}" />
-                                      </Border>
-                                    </DataTemplate>
-                                  </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                              </inspector:InspectorRow>
-                              <inspector:InspectorRow Label="Time" Layout="Stacked" Icon="{StaticResource IconTime}">
-                                <WrapPanel Classes="chips" ToolTip.Tip="{Binding Timing}" Background="Transparent"
-                                           AutomationProperties.AutomationId="LastRunTiming"
-                                           AutomationProperties.Name="{Binding Timing}">
-                                  <Border Classes="chip">
-                                    <inspector:RelativeTime At="{Binding Started}" />
-                                  </Border>
-                                  <Border Classes="chip" IsVisible="{Binding Took, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                    <TextBlock Text="{Binding Took}" />
-                                  </Border>
-                                </WrapPanel>
-                              </inspector:InspectorRow>
-                            </StackPanel>
-                          </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                      </ContentControl>
-                    </StackPanel>
-                  </inspector:InspectorSection>
-
-                  <!-- An Approval node's request in the run: what approving hands on, the two answers, and Ask again after a send back. -->
-                  <inspector:InspectorSection Key="Approval" Title="Approval" IsShown="{Binding Gate, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <ContentControl Content="{Binding Gate}">
-                      <ContentControl.ContentTemplate>
-                        <DataTemplate DataType="execution:GateViewModel">
-                          <StackPanel>
-                            <!-- The Run section above shows the request's status, so this section shows what it is about. -->
-                            <inspector:InspectorRow Label="Request" Icon="{StaticResource IconVersion}">
-                              <TextBlock Text="{Binding RequestLabel}" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextBrush}"
-                                         AutomationProperties.AutomationId="GateRequest" />
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Hands on" Layout="Stacked" Icon="{StaticResource IconBrief}" IsShown="{Binding HasInputs}">
-                              <!-- Each input shows its heading, then its report as Markdown in a card, as the conversation renders
-                                   it. A review shows its verdict as a status and every finding it raised on the Review node's
-                                   finding cards, with no card around them, and keeps its recorded report, with the raw verdict,
-                                   behind a disclosure. Everything grows with what it holds, so the panel's own scroll is the only one. -->
-                              <ItemsControl ItemsSource="{Binding Inputs}" AutomationProperties.AutomationId="GateInputs">
-                                <ItemsControl.Styles>
-                                  <StyleInclude Source="/Conversation/ConversationStyles.axaml" />
-                                </ItemsControl.Styles>
-                                <ItemsControl.ItemsPanel>
-                                  <ItemsPanelTemplate>
-                                    <StackPanel Spacing="12" />
-                                  </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                  <DataTemplate DataType="execution:GateInputViewModel">
-                                    <!-- Every input's heading starts at the row's edge, above its report's card or its review. -->
-                                    <StackPanel Spacing="8">
-                                      <TextBlock Text="{Binding Heading}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium"
-                                                 Foreground="{DynamicResource TextStrongBrush}"
-                                                 AutomationProperties.AutomationId="GateInputHeading" />
-                                      <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
-                                              IsVisible="{Binding !IsReview}">
-                                        <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
-                                                                   AutomationProperties.AutomationId="GateReport"
-                                                                   AutomationProperties.Name="What approving hands on" />
-                                      </Border>
-                                      <StackPanel Spacing="8" IsVisible="{Binding IsReview}" AutomationProperties.AutomationId="GateReview">
-                                        <Border Classes="pill" HorizontalAlignment="Left" Classes.complete="{Binding Approves}" Classes.waiting="{Binding !Approves}">
-                                          <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <PathIcon Theme="{StaticResource Glyph}" />
-                                            <TextBlock Text="{Binding Verdict}" AutomationProperties.AutomationId="GateVerdict" />
-                                          </StackPanel>
-                                        </Border>
-                                        <ItemsControl ItemsSource="{Binding Findings}" ItemTemplate="{StaticResource FindingTemplate}"
-                                                      IsVisible="{Binding NoFindings, Converter={x:Static StringConverters.IsNullOrEmpty}}"
-                                                      AutomationProperties.AutomationId="GateFindings"
-                                                      AutomationProperties.Name="Findings">
-                                          <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                              <StackPanel Spacing="8" />
-                                            </ItemsPanelTemplate>
-                                          </ItemsControl.ItemsPanel>
-                                        </ItemsControl>
-                                        <TextBlock Classes="caption" Text="{Binding NoFindings}" TextWrapping="Wrap"
-                                                   IsVisible="{Binding NoFindings, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                   AutomationProperties.AutomationId="GateNoFindings" />
-                                        <StackPanel Spacing="4">
-                                          <ToggleButton x:Name="RawToggle" Classes="disclosure"
-                                                        AutomationProperties.AutomationId="GateRawToggle"
-                                                        AutomationProperties.Name="Raw data">
-                                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                              <PathIcon Theme="{StaticResource Glyph}" />
-                                              <TextBlock Text="Raw data" />
-                                            </StackPanel>
-                                          </ToggleButton>
-                                          <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
-                                                  IsVisible="{Binding #RawToggle.IsChecked}">
-                                            <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
-                                                                       AutomationProperties.AutomationId="GateRaw"
-                                                                       AutomationProperties.Name="The review's recorded report" />
-                                          </Border>
-                                        </StackPanel>
-                                      </StackPanel>
-                                    </StackPanel>
-                                  </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                              </ItemsControl>
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding SentBackReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding SentBackReason, StringFormat='Sent back: {0}'}" TextWrapping="Wrap" FontSize="12"
-                                         Foreground="{DynamicResource TextBrush}"
-                                         AutomationProperties.AutomationId="GateSentBackReason" />
-                            </inspector:InspectorRow>
-                            <!-- Ask again after a send back asks first: a new request on the same inputs, with the sent-back one kept. -->
-                            <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsAskAgainButton}">
-                              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                                <Button Classes="action" Command="{Binding AskAgainCommand}"
-                                        AutomationProperties.AutomationId="AskGateAgain"
-                                        AutomationProperties.Name="Ask again">
-                                  <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" Width="14" Height="14" />
-                                    <TextBlock Text="Ask again" VerticalAlignment="Center" />
-                                  </StackPanel>
-                                </Button>
-                              </WrapPanel>
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding ConfirmingAskAgain}">
-                              <TextBlock Text="{Binding AskAgainConfirmation}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                         AutomationProperties.AutomationId="AskAgainConfirmation" />
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ConfirmingAskAgain}">
-                              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                                <Button Classes="primary" Command="{Binding ConfirmAskAgainCommand}"
-                                        AutomationProperties.AutomationId="ConfirmAskAgain"
-                                        AutomationProperties.Name="Ask again">
-                                  <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" Width="14" Height="14" />
-                                    <TextBlock Text="Ask again" VerticalAlignment="Center" />
-                                  </StackPanel>
-                                </Button>
-                                <Button Classes="action" Command="{Binding KeepAskAgainCommand}"
-                                        AutomationProperties.AutomationId="KeepAskAgain"
-                                        AutomationProperties.Name="Not now">
-                                  <TextBlock Text="Not now" VerticalAlignment="Center" />
-                                </Button>
-                              </WrapPanel>
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding IsWaiting}">
-                              <TextBox Text="{Binding Reason}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="48"
-                                       Watermark="Why send it back? The reason stays with the request."
-                                       AutomationProperties.AutomationId="GateReason"
-                                       AutomationProperties.Name="Reason to send back" />
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Buttons" IsShown="{Binding IsWaiting}">
-                              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-                                <Button Classes="primary" Command="{Binding ApproveCommand}"
-                                        AutomationProperties.AutomationId="ApproveGate"
-                                        AutomationProperties.Name="Approve">
-                                  <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
-                                    <TextBlock Text="Approve" VerticalAlignment="Center" />
-                                  </StackPanel>
-                                </Button>
-                                <Button Classes="action" Command="{Binding SendBackCommand}"
-                                        AutomationProperties.AutomationId="SendBackGate"
-                                        AutomationProperties.Name="Send back">
-                                  <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconUndo}" Width="14" Height="14" />
-                                    <TextBlock Text="Send back" VerticalAlignment="Center" />
-                                  </StackPanel>
-                                </Button>
-                              </WrapPanel>
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Classes="caption" Text="{Binding Notice}" TextWrapping="Wrap"
-                                         AutomationProperties.AutomationId="GateNotice" />
-                            </inspector:InspectorRow>
-                          </StackPanel>
-                        </DataTemplate>
-                      </ContentControl.ContentTemplate>
-                    </ContentControl>
-                  </inspector:InspectorSection>
-
-                  <!-- A block or an unresolved turn in the run: its evidence, then Close as stopped. -->
-                  <inspector:InspectorSection Key="Recovery" Title="Recovery" IsShown="{Binding Recovery, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <ContentControl Content="{Binding Recovery}">
-                      <ContentControl.ContentTemplate>
-                        <DataTemplate DataType="execution:RecoveryViewModel">
-                          <StackPanel>
-                            <inspector:InspectorRow Label="Attempt" Layout="Stacked" Icon="{StaticResource IconVersion}"
-                                                    IsShown="{Binding AttemptText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding AttemptText}" TextWrapping="Wrap" FontSize="13"
-                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryAttempt" />
-                            </inspector:InspectorRow>
-                            <!-- Every block that holds the task. -->
-                            <ItemsControl ItemsSource="{Binding Blocks}" AutomationProperties.AutomationId="RecoveryBlocks">
-                              <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="execution:RecoveryBlock">
-                                  <inspector:InspectorRow Label="Block" Layout="Stacked" Icon="{StaticResource IconStateFailed}">
-                                    <StackPanel Spacing="4">
-                                      <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextBrush}"
-                                                 AutomationProperties.AutomationId="RecoveryBlockProblem" />
-                                      <TextBlock Classes="caption" Text="{Binding Detail}" TextWrapping="Wrap"
-                                                 AutomationProperties.AutomationId="RecoveryBlockDetail" />
-                                    </StackPanel>
-                                  </inspector:InspectorRow>
-                                </DataTemplate>
-                              </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <inspector:InspectorRow Label="Client" Layout="Stacked" Icon="{StaticResource IconAgent}"
-                                                    IsShown="{Binding ClientText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding ClientText}" TextWrapping="Wrap" FontSize="13"
-                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryClient" />
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Turn end" Layout="Stacked" Icon="{StaticResource IconStatus}"
-                                                    IsShown="{Binding TurnEndText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding TurnEndText}" TextWrapping="Wrap" FontSize="13"
-                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryTurnEnd" />
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding NoActionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Classes="caption" Text="{Binding NoActionNote}" TextWrapping="Wrap"
-                                         AutomationProperties.AutomationId="RecoveryNoAction" />
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding UnsettledNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding UnsettledNote}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                         AutomationProperties.AutomationId="RecoveryUnsettled" />
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding CanClose}">
-                              <StackPanel Spacing="6">
-                                <TextBlock Classes="caption" TextWrapping="Wrap"
-                                           Text="Close as stopped records that its client stopped, with your reason. It records no result, and the run never starts this turn again." />
-                                <TextBlock Text="{Binding StillRuns}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                           IsVisible="{Binding StillRuns, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           AutomationProperties.AutomationId="RecoveryStillRuns" />
-                              </StackPanel>
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding CanClose}">
-                              <TextBox Text="{Binding Reason}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="48"
-                                       Watermark="What did you check? For example, that the client no longer runs."
-                                       AutomationProperties.AutomationId="RecoveryReason"
-                                       AutomationProperties.Name="Why you close the turn" />
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Buttons" IsShown="{Binding CanClose}">
-                              <Button Classes="action" HorizontalAlignment="Left" Command="{Binding CloseCommand}"
-                                      AutomationProperties.AutomationId="CloseAsStopped"
-                                      AutomationProperties.Name="Close as stopped">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                                  <TextBlock Text="Close as stopped" VerticalAlignment="Center" />
+                      <!-- Each result the node handed on, newest first. -->
+                      <inspector:InspectorRow Label="Results" Layout="Stacked" Icon="{StaticResource IconBrief}" IsShown="{Binding HasResults}">
+                        <ItemsControl ItemsSource="{Binding Results}" AutomationProperties.AutomationId="Results">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <StackPanel Spacing="6" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="execution:ResultViewModel">
+                              <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+                                      BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
+                                      ToolTip.Tip="{Binding Report}">
+                                <StackPanel Spacing="4">
+                                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Classes="caption" Text="{Binding Heading}" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Commit}"
+                                               IsVisible="{Binding Commit, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                  </Grid>
+                                  <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
+                                             FontSize="12" Foreground="{DynamicResource TextBrush}" />
                                 </StackPanel>
-                              </Button>
-                            </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Classes="caption" Text="{Binding Notice}" TextWrapping="Wrap"
-                                         AutomationProperties.AutomationId="RecoveryNotice" />
-                            </inspector:InspectorRow>
-                          </StackPanel>
-                        </DataTemplate>
-                      </ContentControl.ContentTemplate>
-                    </ContentControl>
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </inspector:InspectorRow>
+                    </StackPanel>
                   </inspector:InspectorSection>
 
                   <inspector:InspectorSection Key="Proposal" Title="Proposal" IsShown="{Binding Proposal, Converter={x:Static ObjectConverters.IsNotNull}}">
@@ -970,11 +631,7 @@
                                 <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource DestructiveTextBrush}"
                                            AutomationProperties.AutomationId="ProposalProblem" />
                               </inspector:InspectorRow>
-                              <!-- A run's planner's proposal once Accept no longer amends its run (#84). -->
-                              <inspector:InspectorRow Layout="Full" IsShown="{Binding RunNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                <TextBlock Text="{Binding RunNote}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                           AutomationProperties.AutomationId="ProposalRunNote" />
-                              </inspector:InspectorRow>
+
                             </StackPanel>
                           </DataTemplate>
                         </ContentControl.ContentTemplate>
@@ -1010,8 +667,7 @@
                     </StackPanel>
                   </inspector:InspectorSection>
 
-                  <!-- The review's round and every finding it raised: the task's review in the canvas's run while the run shows the
-                       task, else its own latest attempt. -->
+                  <!-- The findings of the review's latest verdict. -->
                   <inspector:InspectorSection Key="Findings" Title="Findings" IsShown="{Binding FindingsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <inspector:InspectorRow Layout="Full">
                       <StackPanel Spacing="6" AutomationProperties.AutomationId="Review">
@@ -1043,109 +699,12 @@
                           </StackPanel>
                         </Button>
                       </inspector:InspectorRow>
-                      <ContentControl Content="{Binding LastRun}">
-                        <ContentControl.ContentTemplate>
-                          <DataTemplate DataType="execution:AttemptViewModel">
-                            <inspector:InspectorRow Layout="Full">
-                              <StackPanel Spacing="8">
-                                <ItemsControl ItemsSource="{Binding Conversation}"
-                                              AutomationProperties.AutomationId="Conversation"
-                                              AutomationProperties.Name="Conversation">
-                                  <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                      <StackPanel Spacing="12" />
-                                    </ItemsPanelTemplate>
-                                  </ItemsControl.ItemsPanel>
-                                  <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="execution:ExchangeViewModel">
-                                      <StackPanel Spacing="6">
-                                        <TextBlock Classes="caption" Text="{Binding StatusLine}" TextWrapping="Wrap"
-                                                   IsVisible="{Binding StatusLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                        <ItemsControl ItemsSource="{Binding Turns}">
-                                          <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                              <StackPanel Spacing="6" />
-                                            </ItemsPanelTemplate>
-                                          </ItemsControl.ItemsPanel>
-                                          <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="execution:TurnViewModel">
-                                              <StackPanel Spacing="6">
-                                                <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
-                                                        IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                                  <StackPanel Spacing="2">
-                                                    <TextBlock Classes="caption" Text="{Binding Author}" />
-                                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
-                                                  </StackPanel>
-                                                </Border>
-                                                <TextBox Text="{Binding Reply, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240" FontSize="13"
-                                                         IsVisible="{Binding Reply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                         AutomationProperties.AutomationId="{Binding ReplyId}"
-                                                         AutomationProperties.Name="{Binding ReplyName}" />
-                                                <TextBlock Classes="caption" Text="{Binding Note}" TextWrapping="Wrap"
-                                                           IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                              </StackPanel>
-                                            </DataTemplate>
-                                          </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                        <TextBlock Classes="caption" Text="{Binding TerminalNote}" TextWrapping="Wrap"
-                                                   IsVisible="{Binding TerminalNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                      </StackPanel>
-                                    </DataTemplate>
-                                  </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <StackPanel Spacing="4" IsVisible="{Binding WaitingCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                            AutomationProperties.AutomationId="Waiting">
-                                  <TextBlock Classes="caption" Text="{Binding WaitingCaption}" />
-                                  <ItemsControl ItemsSource="{Binding Waiting}"
-                                                AutomationProperties.AutomationId="WaitingMessages"
-                                                AutomationProperties.Name="{Binding WaitingCaption}">
-                                    <ItemsControl.ItemTemplate>
-                                      <DataTemplate x:DataType="x:String">
-                                        <Border Background="{DynamicResource SurfaceMuted60Brush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="0,0,0,4">
-                                          <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
-                                        </Border>
-                                      </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                  </ItemsControl>
-                                </StackPanel>
-                                <TextBlock Classes="caption" Text="{Binding TerminalNote}" TextWrapping="Wrap"
-                                           IsVisible="{Binding TerminalNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           AutomationProperties.AutomationId="TerminalNote" />
-                              </StackPanel>
-                            </inspector:InspectorRow>
-                          </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                      </ContentControl>
-                      <inspector:InspectorRow Layout="Full">
-                        <inspector:InspectorRow.IsShown>
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="ShowsRunConversation" />
-                            <Binding Path="HasAgent" />
-                          </MultiBinding>
-                        </inspector:InspectorRow.IsShown>
-                        <TextBlock Classes="caption" Text="The run's conversation with this task opens in the conversation view." TextWrapping="Wrap"
-                                   AutomationProperties.AutomationId="RunConversationNote" />
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding LastReply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBox Text="{Binding LastReply, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240" FontSize="13"
+                                 AutomationProperties.AutomationId="LastReply"
+                                 AutomationProperties.Name="The agent's latest message" />
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full">
-                        <inspector:InspectorRow.IsShown>
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="IsWaiting" />
-                            <Binding Path="!IsRunOwned" />
-                          </MultiBinding>
-                        </inspector:InspectorRow.IsShown>
-                        <StackPanel Spacing="6">
-                          <Border Classes="pill waiting" HorizontalAlignment="Left">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                              <PathIcon Theme="{StaticResource Glyph}" />
-                              <TextBlock Text="Waiting for you" />
-                            </StackPanel>
-                          </Border>
-                          <TextBlock Text="{Binding Waiting}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
-                                     IsVisible="{Binding Waiting, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                     AutomationProperties.AutomationId="PendingQuestion" />
-                        </StackPanel>
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding !IsRunOwned}">
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding HasAgent}">
                         <!-- Ctrl+Enter sends, so Enter stays a line break in the message. -->
                         <TextBox Text="{Binding Draft}"
                                  AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="64"
@@ -1158,7 +717,7 @@
                         </TextBox>
                       </inspector:InspectorRow>
                       <!-- The composer's buttons end where its box ends, so they wrap at the value edge, not the panel's inset. -->
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding !IsRunOwned}">
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding HasAgent}">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                           <Button Classes="action" Command="{Binding SendCommand}"
                                   AutomationProperties.AutomationId="SendMessage"
@@ -1173,16 +732,6 @@
                               <TextBlock Text="Stop and send" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                          <Button Classes="action" Command="{Binding MarkDoneCommand}" IsVisible="{Binding IsWaiting}"
-                                  AutomationProperties.AutomationId="MarkDone"
-                                  AutomationProperties.Name="Mark done">
-                            <TextBlock Text="Mark done" />
-                          </Button>
-                          <Button Classes="action" Command="{Binding NewConversationCommand}" IsVisible="{Binding CanStartNewConversation}"
-                                  AutomationProperties.AutomationId="StartNewConversation"
-                                  AutomationProperties.Name="Start a new conversation">
-                            <TextBlock Text="Start a new conversation" />
-                          </Button>
                           <Button Classes="action" Command="{Binding OpenInTerminalCommand}"
                                   AutomationProperties.AutomationId="OpenInTerminal"
                                   AutomationProperties.Name="Open in terminal">
@@ -1192,47 +741,10 @@
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Layout="Full">
                         <inspector:InspectorRow.IsShown>
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="SendProblem" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
-                            <Binding Path="!IsRunOwned" />
-                          </MultiBinding>
+                          <Binding Path="SendProblem" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
                         </inspector:InspectorRow.IsShown>
                         <TextBlock Classes="caption" Text="{Binding SendProblem}" TextWrapping="Wrap"
                                    AutomationProperties.AutomationId="SendProblem" />
-                      </inspector:InspectorRow>
-                    </StackPanel>
-                  </inspector:InspectorSection>
-
-                  <!-- What the agent said shows. Its tool calls, such as raw commands, wait behind a disclosure that each task
-                       keeps open or closed across its runs. -->
-                  <inspector:InspectorSection Key="Activity" Title="Activity" IsShown="{Binding LastRun.HasActivity, FallbackValue=False}">
-                    <StackPanel>
-                      <ContentControl Classes="activity" Content="{Binding LastRun}" Classes.showsTools="{Binding ShowsToolCalls}">
-                        <ContentControl.ContentTemplate>
-                          <DataTemplate DataType="execution:AttemptViewModel">
-                            <inspector:InspectorRow Layout="Full">
-                              <ItemsControl Classes="activity"
-                                            AutomationProperties.AutomationId="LastRunActivity"
-                                            AutomationProperties.Name="Recent activity">
-                                <ItemsControl.ItemTemplate>
-                                  <DataTemplate DataType="executionCore:ActivityLine">
-                                    <TextBlock Classes="activity" Classes.tool="{Binding IsTool}" Text="{Binding Text}" ToolTip.Tip="{Binding Text}" />
-                                  </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                              </ItemsControl>
-                            </inspector:InspectorRow>
-                          </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                      </ContentControl>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding LastRun.ToolCalls, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
-                        <ToggleButton Classes="disclosure" IsChecked="{Binding ShowsToolCalls}"
-                                      AutomationProperties.AutomationId="ToolCallsToggle"
-                                      AutomationProperties.Name="{Binding LastRun.ToolCalls}">
-                          <StackPanel Orientation="Horizontal" Spacing="4">
-                            <PathIcon Theme="{StaticResource Glyph}" />
-                            <TextBlock Text="{Binding LastRun.ToolCalls}" />
-                          </StackPanel>
-                        </ToggleButton>
                       </inspector:InspectorRow>
                     </StackPanel>
                   </inspector:InspectorSection>

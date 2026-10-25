@@ -84,13 +84,13 @@ public sealed class KindStyleTests
                 "#FF1E6EF4 #1A0088FF #FF1E6EF4 True",
             ],
             [
-                Paint(NodeState.Idle), Paint(NodeState.Running), Paint(NodeState.Waiting), Paint(NodeState.Failed),
-                Paint(NodeState.Succeeded), Paint(NodeState.Waiting, NodeRole.Proposing),
+                Paint(NodeState.Idle), Paint(NodeState.Running), Paint(NodeState.InputRequired), Paint(NodeState.Failed),
+                Paint(NodeState.Completed), Paint(NodeState.InputRequired, NodeRole.Proposing),
             ]);
     }
 
     [AvaloniaFact]
-    public void An_out_of_date_card_and_its_status_pill_share_one_warning_color_and_the_sync_glyph()
+    public void A_stale_card_and_its_status_pill_share_one_warning_color_and_the_sync_glyph()
     {
         var ring = new Border { Classes = { "stateStroke" } };
         var tint = new Border { Classes = { "stateTint" } };
@@ -101,7 +101,7 @@ public sealed class KindStyleTests
         foreach (var element in new StyledElement[] { ring, tint, glyph })
         {
             StyleClass.SetKind(element, NodeKind.Implement);
-            StyleClass.SetState(element, NodeState.OutOfDate);
+            StyleClass.SetState(element, NodeState.Stale);
         }
 
         Assert.Equal((Hex(ring.BorderBrush), Hex(tint.Background)), (Hex(pill.BorderBrush), Hex(pill.Background)));
@@ -132,13 +132,9 @@ public sealed class KindStyleTests
             return glyph.Data;
         }
 
-        string[] icons =
-        [
-            "IconStateNeedsSetup", "IconStateRunning", "IconStateElsewhere", "IconStop", "IconStateWaiting", "IconStateInReview",
-            "IconStateSucceeded", "IconStateFailed", "IconStateInterrupted", "IconStateCancelled", "IconStateOutOfDate", "IconSparkle",
-        ];
+        string[] icons = ["IconStateRunning", "IconStateWaiting", "IconStateSucceeded", "IconStateFailed", "IconStateOutOfDate", "IconSparkle"];
         Assert.Equal(
             icons.Select(key => Application.Current!.FindResource(key)),
-            [.. Enum.GetValues<NodeState>().Where(state => state != NodeState.Idle).Select(state => Glyph(state)), Glyph(NodeState.Waiting, NodeRole.Proposing)]);
+            [.. Enum.GetValues<NodeState>().Where(state => state != NodeState.Idle).Select(state => Glyph(state)), Glyph(NodeState.InputRequired, NodeRole.Proposing)]);
     }
 }

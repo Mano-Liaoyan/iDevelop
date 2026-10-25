@@ -1,106 +1,77 @@
 using IDevelop.Desktop.Canvas;
-using IDevelop.Execution;
-using static IDevelop.Desktop.Tests.ConversationFixtures;
+using EngineState = IDevelop.Engine.NodeState;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>An expanded card's first section and its peek's (ADR 0024): what each state shows, from what the app records.</summary>
+/// <summary>An expanded card's first section and its peek's (ADR 0024): what each engine state shows, from what the engine holds.</summary>
 public sealed class CardNowTests
 {
-    private static CardNow Of(NodeState state, AttemptRecord? latest = null, string status = "", string? detail = null, bool waits = false,
+    private static CardNow Of(EngineState state, string status = "", string? reply = null, string? report = null, string? detail = null,
         NodeRole role = NodeRole.None, bool hasAgent = true, string? proposal = null, string? review = null, string? field = "Draft the format.") =>
         CardNow.Of(new CardFacts(state, status)
         {
-            Latest = latest, Detail = detail, Waits = waits, Role = role, HasAgent = hasAgent, Proposal = proposal, Review = review,
+            LastReply = reply, Report = report, Detail = detail, Role = role, HasAgent = hasAgent, Proposal = proposal, Review = review,
             FieldLabel = "Instructions", FieldText = field,
         });
 
     [Fact]
-    public void A_running_task_shows_the_agents_latest_message_and_counts_its_tool_calls()
+    public void A_running_node_shows_the_agents_latest_message()
     {
-        var running = Record(A, At(1, new AgentEvent.Message("Reading the format.")), At(2, new AgentEvent.ToolStarted("command", "dotnet test")),
-            At(3, new AgentEvent.Message("Three of five tests pass.")));
-
-        var now = Of(NodeState.Running, running);
+        var now = Of(new EngineState.Running(), reply: "Reading the format.\n\nThree of five tests pass.");
 
         Assert.Equal((CardNowKind.Message, "Latest message", "Three of five tests pass."), (now.Kind, now.Heading, now.Text));
-        Assert.StartsWith("1 tool call · since ", now.Meta);
-        Assert.Equal("No message yet.", Of(NodeState.Running, Record(A)).Text);
+        Assert.Equal("No message yet.", Of(new EngineState.Running()).Text);
     }
 
     [Fact]
-    public void A_finished_task_shows_its_results_first_paragraph_and_a_stopped_one_why()
+    public void A_completed_node_shows_its_results_first_paragraph_and_a_failed_one_why()
     {
-        var done = Record(A, At(1, new AgentEvent.Succeeded("# Report\n\nOne JSON file per workflow.\n\n## Decisions\n\nStable keys.")), Exited(5));
-        var result = Of(NodeState.Succeeded, done);
-        var failed = Of(NodeState.Failed, status: "Failed", detail: "The test host could not start.");
+        var result = Of(new EngineState.Completed(), report: "# Report\n\nOne JSON file per workflow.\n\n## Decisions\n\nStable keys.");
+        var failed = Of(new EngineState.Failed("The test host could not start."), status: "Failed", detail: "The test host could not start.");
 
         Assert.Equal((CardNowKind.Result, "Result", "One JSON file per workflow."), (result.Kind, result.Heading, result.Text));
         Assert.Equal((CardNowKind.Stopped, "Failed", "The test host could not start."), (failed.Kind, failed.Heading, failed.Text));
+        Assert.Equal("Approved", Of(new EngineState.Completed(), report: "Fine.", review: "Approved").Text);
     }
 
     [Fact]
-    public void A_task_that_has_not_run_shows_its_first_field_or_what_a_run_holds_it_for()
+    public void A_node_that_has_not_run_shows_its_first_field()
     {
-        var idle = Of(NodeState.Idle);
-        var held = Of(NodeState.Idle, waits: true);
+        var idle = Of(new EngineState.Idle());
 
         Assert.Equal((CardNowKind.Task, "Instructions", "Draft the format."), (idle.Kind, idle.Heading, idle.Text));
-        Assert.Equal("Nothing written yet.", Of(NodeState.Idle, field: " ").Text);
-        Assert.Equal((CardNowKind.Waits, "Starts after", null), (held.Kind, held.Heading, held.Text));
+        Assert.Equal("Nothing written yet.", Of(new EngineState.Idle(), field: " ").Text);
     }
 
     [Fact]
-    public void An_approval_and_an_open_proposal_point_to_the_inspector_where_the_person_answers_them()
+    public void An_approval_and_a_reviewer_at_its_round_limit_wait_for_approval_and_an_open_proposal_points_to_the_inspector()
     {
-        var proposal = Of(NodeState.Succeeded, role: NodeRole.Proposing, proposal: "Proposal · 3 tasks");
+        var proposal = Of(new EngineState.InputRequired(EngineState.Reply), role: NodeRole.Proposing, proposal: "Proposal · 3 tasks");
 
-        Assert.Equal(CardNowKind.Approval, Of(NodeState.Waiting, hasAgent: false).Kind);
+        Assert.Equal(CardNowKind.Approval, Of(new EngineState.InputRequired(EngineState.Approval), hasAgent: false).Kind);
+        Assert.Equal(CardNowKind.Approval, Of(new EngineState.InputRequired(EngineState.RoundLimit)).Kind);
         Assert.Equal((CardNowKind.Proposal, "Proposal · 3 tasks. Review the tasks in the inspector, then accept or dismiss them."),
             (proposal.Kind, proposal.Text));
     }
 
     [Fact]
-    public void Between_runs_a_result_that_still_counts_shows_the_earlier_runs_report_and_says_where_it_comes_from()
+    public void A_reply_and_a_question_take_an_answer_and_an_interruption_or_a_conflict_says_what_to_do()
     {
-        var earlier = CardNow.Of(new CardFacts(NodeState.Succeeded, "Succeeded")
-        {
-            FromEarlierRun = true, EarlierReport = "# Report\n\nOne JSON file per workflow.\n\n## Decisions\n\nStable keys.",
-            Detail = "Its result from an earlier run still counts.",
-        });
-        var carried = CardNow.Of(new CardFacts(NodeState.Succeeded, "Succeeded") { FromEarlierRun = true });
+        var reply = Of(new EngineState.InputRequired(EngineState.Reply), reply: "I read the code.\n\nWhich file?");
+        var question = Of(new EngineState.InputRequired("Which branch?"));
+        var interrupted = Of(new EngineState.InputRequired(EngineState.Interrupted), status: "Input required · interrupted", detail: "Continue or retry.");
 
-        Assert.Equal((CardNowKind.Result, "Result", "One JSON file per workflow.", "From an earlier run"), (earlier.Kind, earlier.Heading, earlier.Text, earlier.Meta));
-        // A run that took the result from an earlier run has no report of it to show, so it says where the result comes from.
-        Assert.Equal(("Its result from an earlier run still counts.", "From an earlier run"), (carried.Text, carried.Meta));
+        Assert.Equal((CardNowKind.Reply, "The agent replied", "Which file?"), (reply.Kind, reply.Heading, reply.Text));
+        Assert.Equal((CardNowKind.Question, "The agent asks", "Which branch?"), (question.Kind, question.Heading, question.Text));
+        Assert.Equal((CardNowKind.Stopped, "Input required · interrupted", "Continue or retry."), (interrupted.Kind, interrupted.Heading, interrupted.Text));
     }
 
     [Fact]
-    public void An_out_of_date_result_says_why_once_and_names_what_to_run_first_when_Run_does()
+    public void A_stale_result_says_why_it_no_longer_counts()
     {
-        var changed = CardNow.Of(new CardFacts(NodeState.OutOfDate, "Out of date")
-        {
-            Detail = "Out of date because it changed since it ran.", Refusal = null,
-        });
-        var input = CardNow.Of(new CardFacts(NodeState.OutOfDate, "Out of date")
-        {
-            Refusal = "Out of date because \"B\" changed. Run \"B\" first.",
-        });
+        var stale = Of(new EngineState.Stale(), detail: "What it ran on changed.");
 
-        Assert.Equal((CardNowKind.OutOfDate, "Out of date", "Out of date because it changed since it ran."), (changed.Kind, changed.Heading, changed.Text));
-        Assert.Equal("Out of date because \"B\" changed. Run \"B\" first.", input.Text);
-    }
-
-    [Fact]
-    public void A_task_whose_newest_run_ended_it_says_how_and_a_waiting_one_which_tasks_only_the_person_runs()
-    {
-        var ended = CardNow.Of(new CardFacts(NodeState.Failed, "Failed") { Owner = "A run of the \"W\" workflow ran this task last." });
-        var waits = CardNow.Of(new CardFacts(NodeState.Idle, "Waits for 2 tasks") { Waits = true, WaitsNote = "\"B\" runs only when you run it." });
-
-        // Which run ended it is no reason, so it stays out of the failure's callout.
-        Assert.Equal((CardNowKind.Stopped, "Failed", "A run of the \"W\" workflow ran this task last.", true), (ended.Kind, ended.Heading, ended.Text, ended.Quiet));
-        Assert.False(Of(NodeState.Failed, status: "Failed", detail: "The test host could not start.").Quiet);
-        Assert.Equal((CardNowKind.Waits, "Starts after", "\"B\" runs only when you run it."), (waits.Kind, waits.Heading, waits.Text));
+        Assert.Equal((CardNowKind.Stale, "Stale", "What it ran on changed."), (stale.Kind, stale.Heading, stale.Text));
     }
 
     [Fact]

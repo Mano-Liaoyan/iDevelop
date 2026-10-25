@@ -537,23 +537,6 @@
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
   </Style>
 
-  <Style Selector="TextBlock.activity">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-  </Style>
-  <Style Selector="TextBlock.activity.tool">
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="Margin" Value="14,0,0,0" />
-  </Style>
-  <!-- The list holds the tool calls only while the person asks for them, so a long run builds only the lines it shows. -->
-  <Style Selector="ItemsControl.activity" x:DataType="execution:AttemptViewModel">
-    <Setter Property="ItemsSource" Value="{Binding Said}" />
-  </Style>
-  <Style Selector="ContentControl.activity.showsTools ItemsControl.activity" x:DataType="execution:AttemptViewModel">
-    <Setter Property="ItemsSource" Value="{Binding Activity}" />
-  </Style>
-
   <!-- A proposed task's agent under its title: plain secondary text that wraps rather than cuts a name off. -->
   <Style Selector="TextBlock.agentLine">
     <Setter Property="FontSize" Value="12" />

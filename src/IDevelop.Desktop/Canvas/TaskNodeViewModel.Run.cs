@@ -1,376 +1,325 @@
+using System.Windows.Input;
 using IDevelop.Desktop.Execution;
-using IDevelop.Execution;
+using IDevelop.Desktop.Mvvm;
+using IDevelop.Engine;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
+using EngineState = IDevelop.Engine.NodeState;
 
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// The node as a task of the canvas's workflow run. While the run is approved or stopping it owns the task, so the card,
-/// the inspector, and the conversation show the run's view of it. Once the run settles they keep showing it until the
-/// task runs on its own again.
+/// The node as the canvas's engine sees it: its state, why it cannot run, its results, its agent's latest reply, and the
+/// commands that act on it (ADR 0017, ADR 0042). The card, its menu, and the inspector share them.
 /// </summary>
 public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(RunTask), nameof(ShowsRunState), nameof(ShowsRunConversation), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(RunRefusal), nameof(LastAttempt),
-        nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
-        nameof(CanStartNewConversation), nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp), nameof(FindingsSummary), nameof(Findings),
-        nameof(HasFindings),
+        nameof(EngineState), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
+        nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
+        nameof(CanStopAndSend), nameof(Results), nameof(HasResults), nameof(LastReply), nameof(ReviewSummary), nameof(FindingsSummary),
+        nameof(Findings), nameof(HasFindings), nameof(Preview), nameof(SendProblem),
     ];
 
-    private TaskView? _runTask;
-    private TaskView? _shownRun;
-    private bool _runActive;
-    private AttemptId? _runBaseline;
-    private string? _runWorkflow;
-    private GateViewModel? _gate;
-    private RecoveryViewModel? _recovery;
-    private readonly Dictionary<(AttemptId Fix, FixChoice Choice), OperationId> _fixChoices = [];
-    private bool _choosingFix;
-    private AttemptRecord? _runReview;
-    private int _runReviewReads;
+    private EngineState _engineState = new EngineState.Idle();
+    private string? _runRefusal;
+    private IReadOnlyList<NodeResult> _history = [];
+    private (int Index, string Text)? _lastReply;
+    private (int Index, string Text)? _proposed;
+    private string _sendBackNote = "";
+    private RelayCommand _run = null!;
+    private RelayCommand _retry = null!;
+    private RelayCommand _stop = null!;
+    private RelayCommand _approve = null!;
+    private RelayCommand _sendBack = null!;
+    private RelayCommand _continue = null!;
+    private RelayCommand _markResolved = null!;
+    private RelayCommand _openWorktree = null!;
+    private RelayCommand _send = null!;
+    private RelayCommand _stopAndSend = null!;
+    private RelayCommand _openInTerminal = null!;
+
+    /// <summary>The node's state as the engine gives it, with why it waits for the person.</summary>
+    public EngineState EngineState => _engineState;
+
+    /// <summary>"Running", "Completed", or what the node needs, such as "Input required · approval".</summary>
+    public string StatusLabel => NodeStates.Label(_engineState);
+
+    /// <summary>What the node needs from the person, or why it failed or went stale, or null when its status says enough.</summary>
+    public string? StateDetail => NodeStates.Detail(_engineState);
+
+    public StatusTone Tone => NodeStates.Tone(State);
+
+    /// <summary>The node waits for the person.</summary>
+    public bool IsWaiting => State == NodeState.InputRequired;
+
+    /// <summary>Why the engine would not start the node now, which keeps Run and Retry off and is their tooltip, or null.</summary>
+    public string? RunRefusal => State == NodeState.Running ? null : _runRefusal;
+
+    /// <summary>Run starts a node that has not run yet.</summary>
+    public bool ShowsRun => State == NodeState.Idle;
+
+    /// <summary>Retry starts a fresh session once a turn has ended.</summary>
+    public bool ShowsRetry => State is NodeState.Completed or NodeState.Failed or NodeState.Stale or NodeState.InputRequired;
+
+    public bool ShowsStop => State == NodeState.Running;
 
     /// <summary>
-    /// The run's view of the task while the canvas's run shows it, or null. A settled run shows it until the task's own
-    /// attempt changes, and gives way at once to an attempt of its own that runs or waits for the person, which its own
-    /// commands answer.
+    /// Approve accepts what an Approval node or a reviewer at its round limit offers, or a Chat node's last reply. While a
+    /// planner's proposal is open, Accept and Finish approves it instead.
     /// </summary>
-    internal TaskView? RunTask => _runTask is not null && (_runActive || _attempt?.Id == _runBaseline && !OwnAttemptNeedsAttention) ? _runTask : null;
+    public bool ShowsApprove => Waits(EngineState.Approval, EngineState.RoundLimit, EngineState.Reply) && Role != NodeRole.Proposing;
 
-    /// <summary>The task's own latest attempt runs, waits for the person, or rests in review.</summary>
-    private bool OwnAttemptNeedsAttention => _attempt is { Status: AttemptStatus.Running or AttemptStatus.WaitingForInput or AttemptStatus.InReview };
+    /// <summary>Send back returns the person's note to the nodes before an Approval node or a reviewer at its round limit.</summary>
+    public bool ShowsSendBack => Waits(EngineState.Approval, EngineState.RoundLimit);
 
-    /// <summary>
-    /// The card, the inspector, and the conversation show the task as the canvas's run sees it, or where it stands between
-    /// runs (#90).
-    /// </summary>
-    public bool ShowsRunState => RunTask is not null || Standing is not null;
+    /// <summary>A turn that iDevelop's closing interrupted goes on in its session.</summary>
+    public bool ShowsContinue => Waits(EngineState.Interrupted);
 
-    /// <summary>
-    /// The task's conversation in the inspector opens the canvas's run's conversation with it: the active run holds the task,
-    /// or the settled one started it, and neither carried its result from an earlier run nor shows it only as where it
-    /// stands between runs (#90).
-    /// </summary>
-    public bool ShowsRunConversation => RunTask is { Carried: false } run && Standing is null && (_runActive || run.Attempt is not null);
+    /// <summary>The person resolved the conflict in the node's worktree.</summary>
+    public bool ShowsMarkResolved => Waits(EngineState.Conflict);
 
-    /// <summary>The canvas's active run owns the task, so its own Run, Cancel, and composer stand aside.</summary>
-    public bool IsRunOwned => RunTask is not null && _runActive;
-
-    /// <summary>
-    /// The canvas's active run started from another node and has not taken this task in, so its Run adds the task to that
-    /// run (#90).
-    /// </summary>
-    public bool JoinsRun => IsRunOwned && RunTask is { State: TaskState.Unrequested } && _canvas.Run is { View.Phase: RunPhase.Approved };
-
-    /// <summary>
-    /// Which run owns the task, or ran it last, while the inspector shows the run's state, and that the run uses the task
-    /// as it was when the run started once the document's version differs. Null while Run would refuse to add the task to
-    /// the run, since the line under Run then says why. Where the task stands between runs says which run left it there,
-    /// unless the active run can take the task in, which says so (#90).
-    /// </summary>
-    public string? RunOwner => !ShowsRunState || JoinsRun && RunRefusal is not null ? null
-        // Where the task stands between runs says it in its status and detail, and a run that ended it says it ran it last.
-        : Standing is { } standing && !IsRunOwned ? WorkflowRunText.Unbroken(standing.Owner(_canvas.Name, HasAgent))
-        : WorkflowRunText.Unbroken(_canvas.RunsAsApproved(this) ? $"{RunOwnedProblem} The run uses this task as it was when the run started." : RunOwnedProblem);
-
-    /// <summary>The task's state in the run, such as "Waits for "A"" or "Waiting for approval", or between runs.</summary>
-    public string? RunStatusLabel => Standing is { } standing ? standing.Card(TitleOf).Label
-        : RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : null;
-
-    public StatusTone RunTone => Standing is { } standing ? Tone(standing.Card(TitleOf).State)
-        : RunTask is { } run ? Tone(WorkflowRunText.Of(run, TitleOf, _runActive).State) : StatusTone.Neutral;
-
-    /// <summary>Why the task stands where it does in the run, or between runs, or null when its status says enough.</summary>
-    public string? RunDetail => WorkflowRunText.Unbroken(RunFix is { } fix ? FixDetail(fix)
-        : Standing is { } standing ? standing.Detail(TitleOf)
-        : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive, _canvas.Run?.View.Tasks) : null);
-
-    /// <summary>The run's status pill has a glyph, except for a task that has not started, which has nothing to mark.</summary>
-    public bool RunHasGlyph => Standing is { } standing ? standing.Card(TitleOf).State != NodeState.Idle
-        : RunTask is { } run && WorkflowRunText.Of(run, TitleOf, _runActive).State != NodeState.Idle;
-
-    /// <summary>An Approval node's request in the run, with Approve and Send back, or null.</summary>
-    public GateViewModel? Gate
+    /// <summary>The note that Send back returns, which the inspector writes.</summary>
+    public string SendBackNote
     {
-        get => _gate;
-        private set
+        get => _sendBackNote;
+        set
         {
-            var old = _gate;
-            if (SetProperty(ref _gate, value))
+            if (SetProperty(ref _sendBackNote, value ?? ""))
             {
-                old?.Dispose();
+                _sendBack.NotifyCanExecuteChanged();
             }
         }
     }
 
-    /// <summary>A block or an unresolved turn of the task in the run, with its evidence and the person's recovery, or null.</summary>
-    public RecoveryViewModel? Recovery
-    {
-        get => _recovery;
-        private set
-        {
-            var old = _recovery;
-            if (SetProperty(ref _recovery, value))
-            {
-                old?.Dispose();
-            }
-        }
-    }
+    /// <summary>The node's results, newest first, each with whether it is the current one.</summary>
+    public IReadOnlyList<ResultViewModel> Results => [.. _history.Select((result, index) => new ResultViewModel(result, index + 1,
+        current: index == _history.Count - 1 && State == NodeState.Completed)).Reverse()];
 
-    /// <summary>
-    /// The run needs the person in this task's inspector rather than in its conversation: a recovery, an interrupted fix,
-    /// or a stale result, whose inspector says why it needs attention.
-    /// </summary>
-    private bool NeedsRunPanel => Recovery is not null || RunFix is not null || _runActive && RunTask is { State: TaskState.Stale };
+    public bool HasResults => _history.Count > 0;
 
-    /// <summary>The review's fix round that closing iDevelop interrupted in the canvas's active run, or null.</summary>
-    private FixRecovery? RunFix => _runActive ? RunTask?.Fix : null;
+    /// <summary>The prose of the agent's latest complete message, without its result block, or null.</summary>
+    public string? LastReply => _lastReply is { Text: var text } ? ResultBlock.Prose(text) : null;
 
-    private bool CanChooseRunFix => !_choosingFix && _canvas.Run is { IsControlled: true, IsActive: true };
+    /// <summary>The verdict of a review's latest reply, or null.</summary>
+    private Verdict? Verdict => IsReview && _lastReply is { Text: var reply } ? ReviewLedger.ReadVerdict(reply).Verdict : null;
 
-    private string RunOwnedProblem => (_runActive, HasAgent) switch
-    {
-        // The run took the task's result from an earlier run and runs it no more (#90). The last word stays with the one
-        // before it, so no line holds a single word.
-        (true, _) when RunTask is { Carried: true } =>
-            $"A run of the \"{RunWorkflowName}\" workflow uses this task's result from an earlier run instead of running it\u00A0again.",
-        (false, _) when RunTask is { Carried: true } => $"The last run of the \"{RunWorkflowName}\" workflow used this task's result from an earlier\u00A0run.",
-        (true, true) when JoinsRun => $"A run of the \"{RunWorkflowName}\" workflow is active. Run this task to add it to that run.",
-        // A task the run has not started yet has no conversation to talk to.
-        (true, true) when _canvas.Run is { View.Phase: RunPhase.StopRequested } && NotStarted =>
-            $"A run of the \"{RunWorkflowName}\" workflow is stopping and will not start this task.",
-        (true, true) when NotStarted => $"A run of the \"{RunWorkflowName}\" workflow owns this task. It has not started it yet.",
-        (true, true) => $"A run of the \"{RunWorkflowName}\" workflow owns this task. Talk to it through its conversation, or stop the run.",
-        (true, false) => $"A run of the \"{RunWorkflowName}\" workflow owns this approval. " + (_runTask?.Gate switch
-        {
-            { Status: GateStatus.Waiting } => "Answer its request below, or stop the run.",
-            { Status: GateStatus.Approved } => "You approved its request.",
-            { Status: GateStatus.SentBack, AskedAgain: true } => "You asked again, so it opens a new request on the same inputs.",
-            { Status: GateStatus.SentBack, CanAskAgain: true } => "You sent its request back. Ask again below, or it asks again once its inputs change.",
-            { Status: GateStatus.SentBack } => "You sent its request back. It asks again once its inputs change.",
-            _ => "It asks for your approval once the tasks before it hand on.",
-        }),
-        (false, true) when NotStarted =>
-            $"The last run of the \"{RunWorkflowName}\" workflow did not start this task.",
-        // "last" stays with the word before it, so a narrow inspector never leaves it alone on a line (#85).
-        (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task\u00A0last.",
-        (false, false) => $"A run of the \"{RunWorkflowName}\" workflow asked for this approval\u00A0last.",
-    };
+    /// <summary>"Approved" or "2 open findings" for a review's latest verdict, or null, which its card shows.</summary>
+    public string? ReviewSummary => Verdict is { } verdict
+        ? verdict.Approves ? "Approved" : verdict.Findings.Length == 1 ? "1 open finding" : $"{verdict.Findings.Length} open findings"
+        : null;
 
-    private string RunWorkflowName => _runWorkflow ?? Workflow.UnnamedName;
+    public string? FindingsSummary => ReviewSummary;
 
-    /// <summary>The canvas's run holds the task but has not started it: it waits, it is ready, or nobody ran it.</summary>
-    private bool NotStarted => RunTask is { State: TaskState.Pending or TaskState.Ready or TaskState.Unrequested };
+    public IReadOnlyList<FindingViewModel> Findings => Verdict is { } verdict ? [.. verdict.Findings.Select(finding => new FindingViewModel(finding))] : [];
 
-    /// <summary>
-    /// Called on the UI thread with the task's view in the canvas's run, or null when the run does not hold it. A new run
-    /// remembers the task's own latest attempt, so a later attempt of its own, after the run settled, shows again.
-    /// </summary>
-    /// <param name="active">The run is approved or stopping.</param>
-    /// <param name="adopted">The canvas shows this run for the first time.</param>
-    internal void ShowRunTask(TaskView? task, bool active, bool adopted, string workflow)
-    {
-        if (adopted)
-        {
-            _runBaseline = _attempt?.Id;
-        }
+    public bool HasFindings => Findings.Count > 0;
 
-        var wasActive = _runActive;
-        _runTask = task;
-        _runActive = active;
-        _runWorkflow = workflow;
-        if (Equals(_shownRun, RunTask) && wasActive == active)
-        {
-            return;
-        }
+    public ICommand RunCommand => _run;
 
-        OnRunChanged();
-    }
+    public ICommand RetryCommand => _retry;
 
-    /// <summary>The task's own latest attempt changed, which ends the overlay of a settled run once the task ran on its own.</summary>
+    public ICommand StopCommand => _stop;
+
+    public ICommand ApproveCommand => _approve;
+
+    public ICommand SendBackCommand => _sendBack;
+
+    /// <summary>Continues an interrupted turn's session.</summary>
+    public ICommand ContinueCommand => _continue;
+
+    public ICommand MarkResolvedCommand => _markResolved;
+
+    /// <summary>Opens the node's worktree, where the person resolves a conflict.</summary>
+    public ICommand OpenWorktreeCommand => _openWorktree;
+
+    /// <summary>Continues the node's session with the draft, after the running turn ends.</summary>
+    public ICommand SendCommand => _send;
+
+    /// <summary>Stops the running turn and continues the session with the draft.</summary>
+    public ICommand StopAndSendCommand => _stopAndSend;
+
+    /// <summary>Copies the client's command that continues the node's session in a terminal.</summary>
+    public ICommand OpenInTerminalCommand => _openInTerminal;
+
+    public bool CanStopAndSend => HasAgent && State == NodeState.Running;
+
+    /// <summary>Why a message cannot go to the agent now, or null.</summary>
+    public string? SendProblem => !HasAgent ? null : State == NodeState.Idle ? "Run the node first. A message continues its session." : null;
+
     partial void InitializeRun()
     {
-        PropertyChanged += (_, e) =>
+        _run = new RelayCommand(() => Act(engine => engine.Run(Id)), () => ShowsRun && RunRefusal is null);
+        _retry = new RelayCommand(() => Act(engine => engine.Retry(Id)), () => ShowsRetry && RunRefusal is null);
+        _stop = new RelayCommand(() => Act(engine => engine.Stop(Id)), () => ShowsStop);
+        _approve = new RelayCommand(Approve, () => ShowsApprove);
+        _sendBack = new RelayCommand(SendBack, () => ShowsSendBack && !string.IsNullOrWhiteSpace(SendBackNote));
+        _continue = new RelayCommand(() => Act(engine => engine.Send(Id, "Continue where you left off.", interrupt: false)), () => ShowsContinue);
+        _markResolved = new RelayCommand(() => Act(engine => engine.MarkResolved(Id)), () => ShowsMarkResolved);
+        _openWorktree = new RelayCommand(async () =>
         {
-            if (e.PropertyName == nameof(LastAttempt) && !Equals(_shownRun, RunTask))
+            if (_canvas.Engine.Folder(Id) is not { } folder || !await _canvas.OpenFolder(folder))
             {
-                OnRunChanged();
+                _canvas.Notice("Couldn't open the node's worktree.");
             }
-        };
+        }, () => ShowsMarkResolved);
+        _send = new RelayCommand(() => Send(interrupt: false), () => HasAgent && State != NodeState.Idle && !string.IsNullOrWhiteSpace(Draft));
+        _stopAndSend = new RelayCommand(() => Send(interrupt: true), () => CanStopAndSend && !string.IsNullOrWhiteSpace(Draft));
+        _openInTerminal = new RelayCommand(OpenInTerminal, () => HasAgent && State is not (NodeState.Idle or NodeState.Running));
     }
 
-    private void OnRunChanged()
+    /// <summary>Reads the node from the engine again: its state, why it cannot run, its results, and its agent's latest reply.</summary>
+    internal void ShowEngine()
     {
-        _shownRun = RunTask;
-        _shownStanding = Standing;
-        ShowGate();
-        ShowPanels();
-        _ = ReadRunReviewAsync();
-        _ = ReadRunProposalAsync();
+        var engine = _canvas.Engine;
+        _engineState = engine.State(Id);
+        _runRefusal = engine.CanRun(Id);
+        _history = engine.History(Id);
+        (_lastReply, _proposed) = HasAgent ? ReadReplies(engine) : (null, null);
+        ShowProposal();
+        ShowState();
+        OnPropertyChanged(nameof(ShowsApprove));
         foreach (var property in RunDependents)
         {
             OnPropertyChanged(property);
         }
 
-        ShowState();
-        _run.NotifyCanExecuteChanged();
-        _cancel.NotifyCanExecuteChanged();
-        _markDone.NotifyCanExecuteChanged();
-        _send.NotifyCanExecuteChanged();
-        _stopAndSend.NotifyCanExecuteChanged();
-        _openInTerminal.NotifyCanExecuteChanged();
-        _newConversation.NotifyCanExecuteChanged();
-        _continueFix.NotifyCanExecuteChanged();
-        _retryFix.NotifyCanExecuteChanged();
-    }
-
-    /// <summary>
-    /// The Recovery section follows the task's state while the run is active. A shown section stays while the task
-    /// settles, as it does while the section's own command or a reconciliation runs, so what the person typed and the
-    /// command's outcome stay with it.
-    /// </summary>
-    private void ShowPanels()
-    {
-        var run = _canvas.Run;
-        var task = _runActive ? RunTask : null;
-        var settling = task is { State: TaskState.Settling };
-        if (_recovery is null || !settling)
+        foreach (var command in new[] { _run, _retry, _stop, _approve, _sendBack, _continue, _markResolved, _openWorktree, _send, _stopAndSend, _openInTerminal })
         {
-            if (run is null || task is not { State: TaskState.Blocked or TaskState.Uncertain })
-            {
-                Recovery = null;
-            }
-            else if (_recovery is { } shown && shown.Shows(run, task))
-            {
-                shown.Show(task);
-            }
-            else
-            {
-                Recovery = new RecoveryViewModel(run, task);
-            }
+            command.NotifyCanExecuteChanged();
         }
-
-        OnPropertyChanged(nameof(AttendCommand));
-        OnPropertyChanged(nameof(AttendHelp));
     }
 
-    /// <summary>How the review's fix round ended, by a closed app or a person's closure after a crash, and what each choice can do.</summary>
-    private string FixDetail(FixRecovery fix)
+    /// <summary>A review that runs on this node's result marks it, or nothing does.</summary>
+    internal void ShowReviewer(string? reviewer)
     {
-        // The fix belongs to the review's subject, or to an implementer behind its Merge node (ADR 0041).
-        var owner = fix.Task;
-        var end = _canvas.Run?.View.Tasks.GetValueOrDefault(owner) is { } view && view.Attempt == fix.Fix ? view.End : null;
-        return WorkflowRunText.FixChoice(fix, _canvas.Workflow.Tasks.ContainsKey(owner) ? TitleOf(owner) : "the task", end);
+        if (_reviewer != reviewer)
+        {
+            _reviewer = reviewer;
+            ShowState();
+            OnPropertyChanged(nameof(ReviewerTip));
+        }
     }
+
+    private string? _reviewer;
 
     /// <summary>
-    /// Continue fix or Retry fix of the run's review. One confirmation per round and choice, so a repeat or a retry after a
-    /// busy refusal reserves one attempt; the run's next decision shows it.
+    /// Shows the proposal of a planner's latest reply, unless the person closed it or accepting it would change nothing. An
+    /// open proposal keeps the person's choices while its reply stays the latest.
     /// </summary>
-    private async Task ChooseRunFixAsync(FixChoice choice)
+    internal void ShowProposal()
     {
-        if (RunFix is not { } fix || _canvas.Run is not { } run)
+        if (_task.Blueprint.Work is not WorkSpec.Agent { Proposes: true } || _proposed is not { } reply)
         {
+            Proposal = null;
             return;
         }
 
-        var key = (fix.Fix, choice);
-        var confirmation = _fixChoices.TryGetValue(key, out var known) ? known : _fixChoices[key] = new OperationId(Guid.NewGuid());
-        var (coordinator, address) = (run.Coordinator, run.Address);
-        _choosingFix = true;
-        _continueFix.NotifyCanExecuteChanged();
-        _retryFix.NotifyCanExecuteChanged();
-        FixReply reply;
+        var identity = (Id, reply.Index);
+        var shown = _proposal is { } open && open.Identity.Equals(identity) ? open
+            : IDevelop.Nodes.Proposal.Read(Id, reply.Index, reply.Text, _canvas.HandlesOf(Id), _canvas.FindBlueprint) switch
+            {
+                ProposalRead.None => null,
+                var read => new ProposalViewModel(_canvas, read, identity),
+            };
+        if (shown is not null && _canvas.IsClosed(shown))
+        {
+            shown = null;
+        }
+
+        shown?.Refresh();
+        Proposal = shown;
+    }
+
+    /// <summary>The agent's latest reply, and its latest reply that ends with a result block, which may hold a proposal.</summary>
+    private ((int, string)? Last, (int, string)? Proposed) ReadReplies(WorkflowEngine engine)
+    {
+        using var conversation = engine.Conversation(Id);
+        var lines = conversation.Lines;
+        (int, string)? last = null;
+        for (var index = lines.Count - 1; index >= 0; index--)
+        {
+            if (lines[index] is not ConversationLine.Agent { Subagent: null } agent) continue;
+            last ??= (index, agent.Text);
+            // A later reply that proposes nothing keeps the proposal before it.
+            if (ResultBlock.Read(agent.Text) is ResultBlock.Readable { Status: "proposal" } or ResultBlock.Unreadable) return (last, (index, agent.Text));
+        }
+
+        return (last, null);
+    }
+
+    private void ShowState()
+    {
+        State = NodeStates.Of(_engineState);
+        Role = _proposal is { HasItems: true } ? NodeRole.Proposing : _reviewer is not null ? NodeRole.UnderReview : NodeRole.None;
+    }
+
+    private bool Waits(params string[] why) => _engineState is EngineState.InputRequired waiting && why.Contains(waiting.Why);
+
+    private void Approve()
+    {
+        Act(engine => engine.Approve(Id));
+    }
+
+    private void SendBack()
+    {
+        var note = SendBackNote.Trim();
+        if (Act(engine => engine.SendBack(Id, note)))
+        {
+            SendBackNote = "";
+        }
+    }
+
+    private void Send(bool interrupt)
+    {
+        var text = Draft;
+        if (Act(engine => engine.Send(Id, text, interrupt)) && Draft == text)
+        {
+            Draft = "";
+        }
+    }
+
+    private async void OpenInTerminal()
+    {
+        using var conversation = _canvas.Engine.Conversation(Id);
+        if (conversation.TerminalCommand is not { } command)
+        {
+            _canvas.Notice("The node has no session to continue in a terminal.");
+            return;
+        }
+
         try
         {
-            reply = await WorkflowRunViewModel.Retrying(
-                () => choice == FixChoice.Continue
-                    ? coordinator.ContinueFix(address, Id, confirmation, fix: fix.Fix) : coordinator.RetryFix(address, Id, confirmation, fix: fix.Fix),
-                outcome => outcome is FixReply.Refused refused && WorkflowRunText.Transient(refused.Reason));
+            await _canvas.Copy(command);
+            _canvas.Notice($"Copied the command that continues \"{Title}\" in a terminal: {command}");
         }
-        finally
+        catch (Exception)
         {
-            _choosingFix = false;
-            _continueFix.NotifyCanExecuteChanged();
-            _retryFix.NotifyCanExecuteChanged();
-        }
-
-        _canvas.Notice(reply switch
-        {
-            FixReply.Blocked blocked => $"{blocked.Block.Detail} The fix did not start.",
-            FixReply.Refused refused => RecoveryText.Problem(refused.Reason),
-            FixReply.Unavailable unavailable => unavailable.Message,
-            _ => null,
-        });
-    }
-
-    /// <summary>
-    /// Reads the log of the task's review in the canvas's run off the window's thread, each time the run's view of the task
-    /// changes, so the inspector's Findings follow the review round by round. A read that a newer one overtook is dropped.
-    /// </summary>
-    private async Task ReadRunReviewAsync()
-    {
-        var read = ++_runReviewReads;
-        if (!IsReview || RunTask is null || _canvas.Run is not { } run)
-        {
-            ShowRunReview(null);
-            return;
-        }
-
-        var (coordinator, task) = (run.Coordinator, Id);
-        var review = await Task.Run(() => coordinator.ReviewLog(task));
-        if (read == _runReviewReads)
-        {
-            ShowRunReview(review);
+            _canvas.Notice($"Couldn't copy the command. Run it in a terminal: {command}");
         }
     }
 
-    private void ShowRunReview(AttemptRecord? review)
+    /// <summary>Runs an engine command, and says in the notice why the engine refused it. Returns whether it went through.</summary>
+    private bool Act(Func<WorkflowEngine, Task> command)
     {
-        if (ReferenceEquals(review, _runReview))
+        try
         {
-            return;
+            _ = command(_canvas.Engine);
+            _canvas.Notice(null);
+            _canvas.ShowEngine();
+            return true;
         }
-
-        _runReview = review;
-        OnPropertyChanged(nameof(FindingsSummary));
-        OnPropertyChanged(nameof(Findings));
-        OnPropertyChanged(nameof(HasFindings));
+        catch (InvalidOperationException e)
+        {
+            _canvas.Notice(e.Message);
+            return false;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _canvas.Notice($"Couldn't write the log of \"{Title}\". {e.Message}");
+            _canvas.ShowEngine();
+            return false;
+        }
     }
-
-    private void ShowGate()
-    {
-        if (RunTask is not { Gate: { } gate } || _canvas.Run is not { } run)
-        {
-            Gate = null;
-            return;
-        }
-
-        if (_gate is { } shown && shown.Shows(run, gate.Request.Id))
-        {
-            shown.Show(gate);
-            return;
-        }
-
-        Gate = new GateViewModel(run, gate);
-    }
-
-    private static bool WaitsInRun(TaskView run) => run.State == TaskState.Waiting &&
-        (run.Gate is { Status: GateStatus.Waiting } || run.Fix is not null || run.Status == AttemptStatus.WaitingForInput);
-
-    /// <summary>A task of the run by the title the workflow gives it now.</summary>
-    private string TitleOf(TaskId task) => _canvas.Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task";
-
-    private static StatusTone Tone(NodeState state) => state switch
-    {
-        NodeState.Running or NodeState.RunningElsewhere or NodeState.Stopping or NodeState.InReview => StatusTone.Running,
-        NodeState.Succeeded => StatusTone.Complete,
-        NodeState.Failed or NodeState.Interrupted or NodeState.NeedsSetup => StatusTone.Problem,
-        NodeState.Waiting => StatusTone.Waiting,
-        NodeState.OutOfDate => StatusTone.Warning,
-        NodeState.Idle or NodeState.Cancelled => StatusTone.Neutral,
-        _ => StatusTone.Neutral,
-    };
 }

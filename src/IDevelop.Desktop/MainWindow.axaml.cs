@@ -155,14 +155,14 @@ public partial class MainWindow : Window
 
         _waitingForUser = true;
         CommitRenames();
-        var ask = !ViewModel.ActiveRuns.IsEmpty || ViewModel.ActiveWorkflowRuns.Any() || ViewModel.Projects.Any(project => project.UnsavedDocuments.Any());
+        var ask = ViewModel.RunningNodes.Any() || ViewModel.Projects.Any(project => project.UnsavedDocuments.Any());
         if (ask && !await ConfirmLeaving([.. ViewModel.Projects], "leave"))
         {
             _waitingForUser = false;
             return;
         }
 
-        // A stopping runner refuses every start, so nothing in the window takes a click or a key while the runs stop.
+        // Nothing in the window takes a click or a key while the running nodes stop.
         ((Control)Content!).IsEnabled = false;
         var leaving = ViewModel.Leave();
         // With nothing to ask and nothing to stop, the window closes now.
@@ -372,27 +372,21 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Asks whether to stop the projects' running tasks and active workflow runs, then whether to save each project's
-    /// unsaved workflows. Every
-    /// question comes before any answer acts, so a Cancel at the last leaves every run going and saves nothing. The
+    /// Asks whether to stop the projects' running nodes, then whether to save each project's unsaved workflows. Every
+    /// question comes before any answer acts, so a Cancel at the last leaves every node running and saves nothing. The
     /// chosen saves then run, and a failed one keeps the projects open.
     /// </summary>
     /// <param name="leave">What the questions ask to do, such as "leave" or "close seed".</param>
     private async Task<bool> ConfirmLeaving(IReadOnlyList<ProjectViewModel> projects, string leave)
     {
-        var tasks = projects.SelectMany(project => project.Runs.Active).ToList();
-        var workflows = projects.SelectMany(project => project.ActiveWorkflowRuns).ToList();
-        var question = (tasks, workflows) switch
+        var running = projects.SelectMany(project => project.RunningNodes).ToList();
+        var question = running switch
         {
-            ([], []) => null,
-            ([var run], []) => $"\"{run.TaskTitle}\" is running. Stop it and {leave}?",
-            (_, []) => $"{tasks.Count} tasks are running. Stop them and {leave}?",
-            ([], [var workflow]) => $"A run of the \"{workflow.Name}\" workflow is active. Stop it and {leave}?",
-            ([], _) => $"Runs of {workflows.Count} workflows are active. Stop them and {leave}?",
-            _ => $"{Count(tasks.Count, "task")} and {Count(workflows.Count, "workflow run")} are running. Stop them and {leave}?",
+            [] => null,
+            [var node] => $"\"{node.Title}\" is running. Stop it and {leave}?",
+            _ => $"{running.Count} nodes are running. Stop them and {leave}?",
         };
-        if (question is not null
-            && await new RunningTaskDialog(question).ShowDialog<RunningTaskChoice?>(this) != RunningTaskChoice.StopAndLeave)
+        if (question is not null && await new RunningNodesDialog(question).ShowDialog<RunningNodesChoice?>(this) != RunningNodesChoice.StopAndLeave)
         {
             return false;
         }
@@ -414,8 +408,6 @@ public partial class MainWindow : Window
 
         return saves.Count == 0 || ViewModel.TrySave(saves);
     }
-
-    private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 
     private async Task<string?> PickFolderWithStorageProvider()
     {

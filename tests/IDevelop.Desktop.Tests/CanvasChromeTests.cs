@@ -120,7 +120,7 @@ public sealed class CanvasChromeTests : IDisposable
         var header = Shell.Around(shell.Find<TextBlock>("ConversationTitle"), "conversationHeader");
         Assert.All(header.GetVisualDescendants().OfType<SpillRow>(), row => Assert.True(row.IsMeasureValid && row.IsArrangeValid));
         var lines = Lines(header.GetVisualDescendants().OfType<Control>()
-            .Where(control => AutomationProperties.GetAutomationId(control) is "ConversationTitle" or "ConversationStatus" or "AttemptPicker"
+            .Where(control => AutomationProperties.GetAutomationId(control) is "ConversationTitle" or "ConversationStatus"
                 or "ConversationLayout" or "CloseConversation" or "ClientLimitationsInfo")
             .Where(control => control.IsEffectivelyVisible && control.Bounds.Width > 0)
             .Select(control => shell.Bounds(control)));
@@ -133,7 +133,7 @@ public sealed class CanvasChromeTests : IDisposable
         var limitations = shell.Window.ViewModel.DockedConversation!.Limitations;
         Assert.Equal((limitations, limitations), (AutomationProperties.GetName(info), ToolTip.GetTip(info)));
         var box = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer")).Deflate(1);
-        foreach (var id in new[] { "ConversationComposer", "ComposerHint", "ConversationMarkDone", "ConversationCancel", "ConversationSend" })
+        foreach (var id in new[] { "ConversationComposer", "ComposerHint", "ConversationApprove", "ConversationSend" })
         {
             Assert.True(box.Contains(shell.Bounds(shell.Find<Control>(id))), $"{id} at {shell.Bounds(shell.Find<Control>(id))} leaves the composer's box {box}.");
         }
@@ -204,41 +204,6 @@ public sealed class CanvasChromeTests : IDisposable
         shell.Drag(shell.Center(shell.Window.DockSplitter), shell.Center(shell.Window.DockSplitter) - new Vector(0, 30));
         Assert.True(shell.Window.MainArea.RowDefinitions[2].ActualHeight > 400, "The dock's splitter did not move.");
         Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
-    }
-
-    [AvaloniaFact]
-    public void A_run_that_carried_an_earlier_result_keeps_its_progress_whole_in_the_run_bar_at_every_size()
-    {
-        // A → C ← B: B runs on its own first, so A's run carries B's result.
-        var (a, b, c) = (TestTasks.Design, TestTasks.Build, TestTasks.Review);
-        using var f = new WorkflowRunFixture(
-            TaskAt(a, "A", 105, 90, WorkflowRunFixture.Codex, "Build A."), TaskAt(b, "B", 105, 250, WorkflowRunFixture.Codex, "Build B."),
-            TaskAt(c, "C", 405, 170, WorkflowRunFixture.Codex, "Build C."),
-            WorkflowRunFixture.Dependency(a, c), WorkflowRunFixture.Dependency(b, c));
-        f.Answer("A", f.Writes("out-a.txt", "A\n", "A ready.")).Answer("B", f.Writes("out-b.txt", "B\n", "B ready.")).Answer("C", f.Says("C ready."));
-        var shell = f.Window();
-        RunNode(shell, "B");
-        RunNode(shell, "A");
-        Assert.Equal("2 of 2 done · 1 from an earlier run", shell.Text("RunProgress"));
-
-        foreach (var (width, height, inspector) in Sizes)
-        {
-            Resize(shell, width, height, inspector);
-            AssertBottomRow(shell, $"{width}x{height}, inspector {inspector}");
-        }
-    }
-
-    /// <summary>Runs the node through its preflight, as its inspector's Run does, and waits until the run settles.</summary>
-    private static void RunNode(Shell shell, string title)
-    {
-        var earlier = shell.WorkflowRun?.Address;
-        shell.Click(shell.Header(shell.Node(title)));
-        shell.Click(shell.InView<Button>("RunTask"));
-        shell.WaitUntil(() => shell.Preflight is { IsReady: true }, $"the preflight of \"{title}\" reads the project", () => $"Notice: {shell.Status}");
-        shell.Click(shell.Find<Button>("PreflightStart"));
-        shell.WaitUntil(() => shell.WorkflowRun is { IsActive: false, View.PinsReleased: true } run && run.Address != earlier, $"the run of \"{title}\" settles",
-            () => $"Run: {shell.RunStatus}, notice: {shell.Status}");
-        Assert.Equal("Completed", shell.RunStatus);
     }
 
     [AvaloniaFact]

@@ -131,6 +131,7 @@ try {
     # The fake Codex goes on an otherwise empty PATH and waits at a gate that the check never opens.
     $project = Join-Path $run 'run-project'
     Copy-Item -Recurse -LiteralPath (Join-Path $PSScriptRoot '../samples/storage-change') -Destination $project
+    Initialize-ProjectRepository $project
     $fakeBin = Join-Path $run 'fake-bin'
     $sleeperPid = Join-Path $run 'sleeper.pid'
     $fakeAgent = New-FakeCodex $fakeBin (Join-Path $run 'never') $sleeperPid
@@ -152,16 +153,18 @@ try {
             Check ((Get-Value $reasoning) -eq 'medium') "the reasoning picker shows the second task's medium (found '$(Get-Value $reasoning)')"
             Check ($window.Current.Name -eq 'run-project - iDevelop') "choosing a task whose model offers the previous task's level edits nothing: '$($window.Current.Name)'"
             Invoke-Element (Find-ById $window 'RunTask')
-            $bar = Find-ById $window 'RunBar'
-            Check ($null -ne $bar) 'UI Automation finds the run bar'
-            Check ((Find-ById $window 'RunBarTask').Current.Name -eq 'Implement atomic save') "the run bar names the running task (found '$((Find-ById $window 'RunBarTask').Current.Name)')"
+            $bar = Find-ById $window 'WorkflowRunBar'
+            Check ($null -ne $bar) 'UI Automation finds the bar'
+            Check ((Wait-Until { (Find-ById $window 'RunStatus').Current.Name -eq '1 running' } 30) -eq $true) "the bar counts the running node (found '$((Find-ById $window 'RunStatus').Current.Name)')"
+            Check ((Find-ById $window 'RunActivity').Current.Name -eq '"Implement atomic save"') "the bar names the running node (found '$((Find-ById $window 'RunActivity').Current.Name)')"
+            Check ((Find-ById $window 'RunTaskStatus').Current.Name -eq 'Running') 'the inspector says the node runs'
             $sleeper = Wait-Until { if ([IO.File]::Exists($sleeperPid)) { [int]([IO.File]::ReadAllText($sleeperPid)) } } 30
             Check ($null -ne $sleeper) 'the fake Codex started a process whose parent exits'
             Save-Screenshot $window (Join-Path $run 'run-bar.png')
 
-            Invoke-Element (Find-ById $window 'RunBarCancel')
-            Check ((Wait-Until { (Find-ById $window 'LastRunStatus').Current.Name -eq 'Cancelled' } 30) -eq $true) 'Cancel records the run as cancelled'
-            Check ((Wait-Until { $null -eq (Get-Process -Id $sleeper -ErrorAction SilentlyContinue) } 30) -eq $true) "Cancel stops the process whose parent had exited (pid $sleeper)"
+            Invoke-Element (Find-ById $window 'StopAll')
+            Check ((Wait-Until { (Find-ById $window 'RunTaskStatus').Current.Name -eq 'Idle' } 30) -eq $true) 'Stop All ends the turn, and the node without a result is idle'
+            Check ((Wait-Until { $null -eq (Get-Process -Id $sleeper -ErrorAction SilentlyContinue) } 30) -eq $true) "Stop All stops the process whose parent had exited (pid $sleeper)"
             Check ($window.Current.Name -eq 'run-project - iDevelop') "choosing and running a task edits nothing: '$($window.Current.Name)'"
             Close-Window $window
         }

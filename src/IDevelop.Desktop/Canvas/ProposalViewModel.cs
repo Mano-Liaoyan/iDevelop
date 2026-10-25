@@ -81,18 +81,8 @@ public sealed class ProposalItemViewModel(
 }
 
 /// <summary>
-/// Where a proposal of a run's planner came from (#84): the run, the revision the person sees it against, and the planner's
-/// turn that waits on it.
-/// </summary>
-/// <param name="Revision">The run's revision when the proposal was read, which an amendment names as the one the person saw.</param>
-/// <param name="Turn">The planner's latest turn, which Mark done names.</param>
-/// <param name="Waits">The planner waits on this proposal, so accepting or dismissing it lets the tasks after it go on.</param>
-internal sealed record RunSource(RunAddress Address, RevisionId Revision, TurnKey Turn, bool Waits);
-
-/// <summary>
 /// A planner's latest proposal in its inspector: what it adds, fills, and connects, why accepting it would fail, and
-/// Accept and Dismiss. Its chosen tasks show as ghost cards until it is accepted or dismissed. A run's planner's proposal
-/// amends the run while the run goes on in this window, and otherwise edits only the workflow for the next run (#84).
+/// Accept and Dismiss. Its chosen tasks show as ghost cards until it is accepted or dismissed. Accept edits the workflow.
 /// </summary>
 public sealed class ProposalViewModel : ObservableObject
 {
@@ -100,21 +90,14 @@ public sealed class ProposalViewModel : ObservableObject
     private readonly string? _readProblem;
     private readonly RelayCommand _accept;
     private readonly RelayCommand _dismiss;
-    private RunSource? _run;
-    private RevisionId? _latest;
-    // The run refused an acceptance as stale before a reread brought the newer revision, so the next one takes it.
-    private bool _stale;
-    private bool _amending;
     private string? _problem;
     private IReadOnlyList<string> _connections = [];
 
-    /// <param name="attempt">The attempt the proposal was read from.</param>
-    /// <param name="run">For a run's planner, the run the proposal came from.</param>
-    internal ProposalViewModel(WorkflowCanvasViewModel canvas, ProposalRead read, AttemptId attempt, RunSource? run = null)
+    /// <param name="identity">Names the planner's reply the proposal was read from, which a new reply replaces.</param>
+    internal ProposalViewModel(WorkflowCanvasViewModel canvas, ProposalRead read, object identity)
     {
         _canvas = canvas;
-        _run = run;
-        Identity = IdentityOf(read, attempt);
+        Identity = identity;
         var workflow = canvas.Workflow;
         switch (read)
         {
@@ -136,59 +119,16 @@ public sealed class ProposalViewModel : ObservableObject
                 throw new ArgumentException("Only a proposal or its problem has a view.", nameof(read));
         }
 
-        _accept = new RelayCommand(Accept, () => !_amending && Proposal is not null && _problem is null && Items.Any(item => item.IsChosen));
-        _dismiss = new RelayCommand(Dismiss, () => !_amending);
+        _accept = new RelayCommand(Accept, () => Proposal is not null && _problem is null && Items.Any(item => item.IsChosen));
+        _dismiss = new RelayCommand(() => _canvas.CloseProposal(this));
         Refresh();
     }
 
-    /// <summary>
-    /// Accept amends the run: the proposal is a run's planner's, and this window controls the run, which is neither stopping
-    /// nor ended.
-    /// </summary>
-    public bool IntoRun => _run is { } run && _canvas.Run is { IsControlled: true, View.Phase: RunPhase.Approved } shown && shown.Address == run.Address;
+    public string AcceptLabel => "Accept";
 
-    /// <summary>"Accept", or "Accept for Next Run" for a run's planner whose run Accept no longer amends.</summary>
-    public string AcceptLabel => _run is not null && !IntoRun ? "Accept for Next Run" : "Accept";
+    public string AcceptTip => "Adds and fills the chosen tasks in one change";
 
-    public string AcceptTip => IntoRun ? "Adds and fills the chosen tasks in the run, and the workflow follows"
-        : _run is not null ? "Adds and fills the chosen tasks in the workflow only, for its next run"
-        : "Adds and fills the chosen tasks in one change";
-
-    public string DismissTip => IntoRun && _run!.Waits ? "Hides the proposal and lets the tasks after the planner go on"
-        : "Hides the proposal until the planner proposes again";
-
-    /// <summary>Why Accept changes only the workflow for the next run, or null while it amends the run or the proposal is no run's.</summary>
-    public string? RunNote => _run is null || IntoRun ? null
-        : _canvas.Run is { } shown && shown.Address == _run.Address && !shown.IsControlled
-            ? "Another window controls this run, so Accept changes only the workflow for its next run."
-        : _canvas.Run is { View.Phase: RunPhase.StopRequested } or { View.Status: RunStatus.Stopped } ? "The run has stopped, so Accept changes only the workflow for its next run."
-        : "The run has ended, so Accept changes only the workflow for its next run.";
-
-    /// <summary>The proposal came from a run's planner.</summary>
-    internal bool FromRun => _run is not null;
-
-    /// <summary>
-    /// The proposal reread from the run, or the run's phase changed. Accept keeps naming the revision the person first saw
-    /// it against, so a run that another amendment moved refuses it, and the view then takes the newer one.
-    /// </summary>
-    internal void ShowRun(RunSource? run)
-    {
-        if (run is not null)
-        {
-            _latest = run.Revision;
-            var adopts = _stale && _run is { } stale && run.Revision != stale.Revision;
-            _run = _run is { } shown && !adopts ? run with { Revision = shown.Revision } : run;
-            _stale &= !adopts;
-        }
-
-        OnPropertyChanged(nameof(IntoRun));
-        OnPropertyChanged(nameof(AcceptLabel));
-        OnPropertyChanged(nameof(AcceptTip));
-        OnPropertyChanged(nameof(DismissTip));
-        OnPropertyChanged(nameof(RunNote));
-        Refresh();
-        _dismiss.NotifyCanExecuteChanged();
-    }
+    public string DismissTip => "Hides the proposal until the planner proposes again";
 
     public IReadOnlyList<ProposalItemViewModel> Items { get; }
 
@@ -249,7 +189,7 @@ public sealed class ProposalViewModel : ObservableObject
 
     public ICommand AcceptCommand => _accept;
 
-    /// <summary>Hides the proposal until the planner proposes again, and lets a run's planner that waits on it go on.</summary>
+    /// <summary>Hides the proposal until the planner proposes again.</summary>
     public ICommand DismissCommand => _dismiss;
 
     internal Proposal? Proposal { get; }
@@ -262,15 +202,8 @@ public sealed class ProposalViewModel : ObservableObject
 
     internal ClientStatus Status(ClientId client) => _canvas.Clients.Current[client];
 
-    /// <summary>The proposal's attempt and turn, or the problem and its attempt, which a new turn replaces.</summary>
+    /// <summary>The planner's reply the proposal was read from, which a new reply replaces.</summary>
     internal object Identity { get; }
-
-    internal static object IdentityOf(ProposalRead read, AttemptId attempt) => read switch
-    {
-        ProposalRead.Ready ready => (ready.Proposal.Attempt, ready.Proposal.Turn),
-        ProposalRead.Problem problem => (attempt, problem.Text),
-        _ => throw new ArgumentException("Only a proposal or its problem has an identity.", nameof(read)),
-    };
 
     /// <summary>Accepting all of it would change nothing, as after an accept: its nodes exist and its fills are in place.</summary>
     internal bool IsSettled(Workflow workflow) => Proposal is { } proposal &&
@@ -411,22 +344,11 @@ public sealed class ProposalViewModel : ObservableObject
 
     private HashSet<TaskId> Chosen() => [.. Items.Where(item => item.IsChosen).Select(item => item.Id)];
 
-    /// <summary>
-    /// Whether a fill's task has started, so it stays as it is: in the run that Accept amends, once the run has started or
-    /// readied it, and otherwise once it has an attempt of its own.
-    /// </summary>
-    private bool HasStarted(TaskId task) => IntoRun
-        ? _canvas.Run!.View.Tasks.GetValueOrDefault(task) is { } view && (view.Attempt is not null || view.State is not (TaskState.Pending or TaskState.Unrequested))
-        : _canvas.HasStarted(task);
+    /// <summary>Whether a fill's task has started, so it stays as it is.</summary>
+    private bool HasStarted(TaskId task) => _canvas.HasStarted(task);
 
     private void Accept()
     {
-        if (IntoRun)
-        {
-            _ = AcceptIntoRunAsync(finish: false);
-            return;
-        }
-
         var workflow = _canvas.Workflow;
         var chosen = Chosen();
         if (_canvas.Edit(AcceptEdit(workflow, chosen), Title) is EditResult.Applied)
@@ -436,107 +358,6 @@ public sealed class ProposalViewModel : ObservableObject
             _canvas.CloseProposal(this);
             _canvas.Notice(AcceptedNotice(added, filled));
         }
-    }
-
-    /// <summary>
-    /// Amends the run with the chosen tasks against the revision the person saw, and the document follows as one edit that
-    /// Undo can reverse (#84). Then a planner that waits on its proposal, or one the person finishes, is marked done.
-    /// </summary>
-    internal async Task AcceptIntoRunAsync(bool finish)
-    {
-        if (_canvas.Run is not { } run || _run is not { } source || Proposal is not { } proposal)
-        {
-            return;
-        }
-
-        var chosen = Chosen();
-        var agents = Agents().ToArray();
-        var amendment = new RunAmendment(source.Revision, proposal, [.. proposal.Items.Where(chosen.Contains)], Fallback, new OperationId(Guid.NewGuid()))
-        {
-            Planned = agents.Where(agent => agent.Planned is not null).ToImmutableDictionary(agent => agent.Id, agent => agent.Planned!),
-            Changed = agents.Where(agent => agent.Changed is not null).ToImmutableDictionary(agent => agent.Id, agent => agent.Changed!),
-        };
-        var (coordinator, address) = (run.Coordinator, run.Address);
-        SetAmending(true);
-        try
-        {
-            var outcome = await WorkflowRunViewModel.Retrying(() => coordinator.Amend(address, amendment),
-                result => result is RunCommand.Refused refused && WorkflowRunText.Transient(refused.Reason));
-            // The proposal's next reread of the run brings the newer revision, if it has not yet.
-            if (outcome is RunCommand.Refused { Reason.Problem: RunProblem.RevisionConflict })
-            {
-                if (_latest is { } latest && latest != source.Revision)
-                {
-                    _run = source with { Revision = latest };
-                    Refresh();
-                }
-                else
-                {
-                    _stale = true;
-                }
-
-                _canvas.Notice("The run changed since this proposal showed. Check it again, then accept it.");
-                return;
-            }
-
-            if (outcome is not RunCommand.Accepted)
-            {
-                _canvas.Notice(outcome switch
-                {
-                    RunCommand.Unavailable unavailable => unavailable.Message,
-                    RunCommand.Refused refused => $"The run did not take the proposal. {WorkflowRunText.Problem(refused.Reason)}",
-                    _ => null,
-                });
-                return;
-            }
-
-            var followed = await _canvas.FollowRunAsync(coordinator);
-            var notice = AcceptedNotice(proposal.Nodes.Count(node => chosen.Contains(node.Id)), proposal.Fills.Count(fill => chosen.Contains(fill.Slot)));
-            if (!followed)
-            {
-                notice = $"The run took the proposal. {notice[..^1]} there, but the workflow has other changes, so it stays as it is.";
-            }
-
-            _canvas.CloseProposal(this);
-            _canvas.Notice(finish || source.Waits ? await FinishAsync(coordinator, address, proposal.Planner, source.Turn) ?? notice : notice);
-        }
-        finally
-        {
-            SetAmending(false);
-        }
-    }
-
-    /// <summary>Hides the proposal, and marks a run's planner done that waits on it, so the tasks after it go on.</summary>
-    private async void Dismiss()
-    {
-        _canvas.CloseProposal(this);
-        if (IntoRun && _run is { Waits: true } source && Proposal is { } proposal && _canvas.Run is { } run)
-        {
-            SetAmending(true);
-            try
-            {
-                _canvas.Notice(await FinishAsync(run.Coordinator, run.Address, proposal.Planner, source.Turn));
-            }
-            finally
-            {
-                SetAmending(false);
-            }
-        }
-    }
-
-    /// <summary>Marks the run's planner done, and says why when the run refuses, else null.</summary>
-    private static async Task<string?> FinishAsync(WorkflowRunCoordinator coordinator, RunAddress address, TaskId planner, TurnKey turn)
-    {
-        var done = await WorkflowRunViewModel.Retrying(() => coordinator.MarkDone(address, planner, turn),
-            result => result.Outcome == CommandOutcome.Refused && result.Detail == WorkflowRunCoordinator.BusyMessage);
-        return done.Outcome == CommandOutcome.Applied ? null : done.Detail;
-    }
-
-    private void SetAmending(bool amending)
-    {
-        _amending = amending;
-        _accept.NotifyCanExecuteChanged();
-        _dismiss.NotifyCanExecuteChanged();
     }
 
     /// <summary>

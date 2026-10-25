@@ -138,7 +138,7 @@ public sealed class AgentPickerTests : IDisposable
     public void While_its_client_is_being_checked_a_task_shows_its_model_plainly()
     {
         var checking = new ClientDirectory(CommandResolver.Create([], []));
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" })), checking);
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" }, "Draft it.")), checking);
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal(["Codex · checking", "gpt-5.5", "high"], Pickers(shell));

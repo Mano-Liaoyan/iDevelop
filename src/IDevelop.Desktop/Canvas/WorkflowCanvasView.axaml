@@ -140,7 +140,7 @@
 
     <canvas:AddNodePopover x:Name="AddPopover" />
 
-    <!-- The zoom controls, the run bars, and the minimap share the canvas's bottom edge, 12 px above it. On a compact or a
+    <!-- The zoom controls, the bar, and the minimap share the canvas's bottom edge, 12 px above it. On a compact or a
          short canvas the code-behind hides the minimap. -->
     <canvas:CanvasBottomBar x:Name="BottomBar" VerticalAlignment="Bottom" Margin="12">
       <Border x:Name="ZoomPanel" Classes="floating" canvas:CanvasBottomBar.Slot="Leading">
@@ -178,131 +178,62 @@
         </Border>
       </Border>
 
-      <!-- UI Automation shows no plain border, so a user control carries each bar's id. The workflow run's bar sits above the
-           bar of a task that runs on its own. On a compact canvas their buttons show only their glyphs. -->
+      <!-- The bar counts the nodes that run and wait for the person, with Stop All, and Merge into my branch while every
+           node is completed and nothing is stale (ADR 0017). UI Automation shows no plain border, so a user control carries
+           its id. On a compact canvas its buttons show only their glyphs. -->
       <StackPanel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" VerticalAlignment="Bottom" Spacing="8">
         <UserControl HorizontalAlignment="Center"
-                     IsVisible="{Binding Run, Converter={x:Static ObjectConverters.IsNotNull}}"
+                     IsVisible="{Binding ShowsBar}"
                      AutomationProperties.AutomationId="WorkflowRunBar"
-                     AutomationProperties.Name="{Binding Run.Summary, FallbackValue='Workflow run'}">
+                     AutomationProperties.Name="{Binding BarSummary}">
           <Border Classes="floating">
             <Border Padding="12,6,6,6">
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <StackPanel VerticalAlignment="Center" Spacing="2">
-                  <WrapPanel ItemSpacing="8" LineSpacing="2">
-                    <!-- While the run needs attention, the pill selects the task that keeps it from going on. -->
-                    <Button Classes="ghost" Padding="2" Command="{Binding ShowRunAttentionCommand}"
-                            IsHitTestVisible="{Binding ShowsRunAttention}" Focusable="{Binding ShowsRunAttention}"
-                            ToolTip.Tip="Show the task that needs attention"
-                            AutomationProperties.AutomationId="RunAttention"
-                            AutomationProperties.Name="Show the task that needs attention">
-                      <Border Classes="pill" HorizontalAlignment="Left"
-                              Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
-                              Classes.complete="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}, FallbackValue=False}"
-                              Classes.problem="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}, FallbackValue=False}"
-                              Classes.waiting="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}, FallbackValue=False}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                          <PathIcon Theme="{StaticResource Glyph}" />
-                          <TextBlock Text="{Binding Run.StatusLabel}" AutomationProperties.AutomationId="RunStatus" />
-                        </StackPanel>
-                      </Border>
-                    </Button>
-                    <TextBlock Classes="caption" Text="{Binding Run.Progress}" VerticalAlignment="Center"
-                               AutomationProperties.AutomationId="RunProgress" />
-                  </WrapPanel>
-                  <!-- Several running tasks' titles wrap to a second line, between titles, before they are cut. -->
-                  <TextBlock Classes="caption" Text="{Binding Run.Activity}" MaxWidth="360" HorizontalAlignment="Left"
-                             TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity}"
-                             IsVisible="{Binding Run.Activity, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
+                  <!-- While nodes wait, the pill selects the next one that waits for the person. -->
+                  <Button Classes="ghost" Padding="2" Command="{Binding NextWaitingCommand}"
+                          IsHitTestVisible="{Binding HasWaiting}" Focusable="{Binding HasWaiting}"
+                          ToolTip.Tip="Show the next node that waits for you"
+                          AutomationProperties.AutomationId="RunAttention"
+                          AutomationProperties.Name="Show the next node that waits for you">
+                    <Border Classes="pill" HorizontalAlignment="Left"
+                            Classes.running="{Binding BarTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                            Classes.complete="{Binding BarTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                            Classes.waiting="{Binding BarTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Theme="{StaticResource Glyph}" />
+                        <TextBlock Text="{Binding BarSummary}" AutomationProperties.AutomationId="RunStatus" />
+                      </StackPanel>
+                    </Border>
+                  </Button>
+                  <!-- Several running nodes' titles wrap to a second line, between titles, before they are cut. -->
+                  <TextBlock Classes="caption" Text="{Binding BarActivity}" MaxWidth="360" HorizontalAlignment="Left"
+                             TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding BarActivity}"
+                             IsVisible="{Binding BarActivity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                              AutomationProperties.AutomationId="RunActivity" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                  <!-- The final merge conflicts and no Merge node takes it: the person fixes it in its worktree. -->
-                  <Button Classes="ghost glyph" Height="32"
-                          Command="{Binding OpenRunConflictCommand}" IsVisible="{Binding ShowsRunConflict}"
-                          ToolTip.Tip="Open worktree&#10;Open the conflict's worktree to fix its files"
-                          AutomationProperties.AutomationId="RunOpenConflict"
-                          AutomationProperties.Name="Open worktree">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
-                      <TextBlock Classes="label" Text="Open worktree" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="ghost glyph" Height="32"
-                          Command="{Binding MarkRunConflictResolvedCommand}" IsVisible="{Binding ShowsRunConflict}"
-                          ToolTip.Tip="Mark resolved&#10;Commit the worktree's files as the merge"
-                          AutomationProperties.AutomationId="RunMarkResolved"
-                          AutomationProperties.Name="Mark resolved">
+                  <Button Classes="primary glyph" Height="32"
+                          Command="{Binding MergeIntoBranchCommand}" IsVisible="{Binding CanMergeIntoBranch}"
+                          ToolTip.Tip="Merge into my branch&#10;Merge the end nodes' work into the branch you have checked out"
+                          AutomationProperties.AutomationId="MergeIntoBranch"
+                          AutomationProperties.Name="Merge into my branch">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
-                      <TextBlock Classes="label" Text="Mark resolved" />
+                      <TextBlock Classes="label" Text="Merge into my branch" />
                     </StackPanel>
                   </Button>
                   <Button Classes="ghost glyph" Height="32"
-                          Command="{Binding Run.ResumeCommand}" IsVisible="{Binding Run.ShowsResume, FallbackValue=False}"
-                          ToolTip.Tip="Resume run&#10;Start the run's next tasks in this window"
-                          AutomationProperties.AutomationId="ResumeRun"
-                          AutomationProperties.Name="Resume run">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
-                      <TextBlock Classes="label" Text="Resume" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="ghost glyph" Height="32"
-                          Command="{Binding Run.StopCommand}" IsVisible="{Binding Run.ShowsStop, FallbackValue=False}"
-                          ToolTip.Tip="Stop Workflow&#10;Start no more tasks and stop the running ones. Finished work stays."
-                          AutomationProperties.AutomationId="StopWorkflow"
-                          AutomationProperties.Name="Stop Workflow">
+                          Command="{Binding StopAllCommand}" IsVisible="{Binding !!RunningCount}"
+                          ToolTip.Tip="Stop All&#10;Stop every running node. Finished results stay."
+                          AutomationProperties.AutomationId="StopAll"
+                          AutomationProperties.Name="Stop All">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                      <TextBlock Classes="label" Text="Stop Workflow" />
+                      <TextBlock Classes="label" Text="Stop All" />
                     </StackPanel>
                   </Button>
-                  <Button Classes="icon" Height="32"
-                          Command="{Binding DismissRunCommand}" IsVisible="{Binding ShowsRunWorkflow}"
-                          ToolTip.Tip="Hide this run. Its records stay."
-                          AutomationProperties.AutomationId="DismissRun"
-                          AutomationProperties.Name="Hide the run">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
-                  </Button>
                 </StackPanel>
-              </Grid>
-            </Border>
-          </Border>
-        </UserControl>
-        <UserControl x:Name="RunBar" HorizontalAlignment="Center"
-                     IsVisible="{Binding ActiveRun.IsVisible}"
-                     AutomationProperties.AutomationId="RunBar"
-                     AutomationProperties.Name="Running task">
-          <Border Classes="floating">
-            <Border Padding="12,6,6,6">
-              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}" Width="14" Height="14"
-                          Foreground="{DynamicResource StateRunningBrush}" />
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                    <TextBlock Text="{Binding ActiveRun.TaskTitle}" MaxWidth="200" TextTrimming="CharacterEllipsis"
-                               FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}"
-                               AutomationProperties.AutomationId="RunBarTask" />
-                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ActiveRun.AgentLabel}" TextTrimming="CharacterEllipsis"
-                               AutomationProperties.AutomationId="RunBarAgent" />
-                    <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ActiveRun.Elapsed}"
-                               AutomationProperties.AutomationId="RunBarElapsed" />
-                  </Grid>
-                  <TextBlock Classes="caption" Text="{Binding ActiveRun.LastActivity}" MaxWidth="360" HorizontalAlignment="Left"
-                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ActiveRun.LastActivity}"
-                             AutomationProperties.AutomationId="RunBarActivity" />
-                </StackPanel>
-                <Button Grid.Column="2" Classes="ghost glyph" Height="32" VerticalAlignment="Center"
-                        Command="{Binding ActiveRun.CancelCommand}"
-                        ToolTip.Tip="Cancel run"
-                        AutomationProperties.AutomationId="RunBarCancel"
-                        AutomationProperties.Name="Cancel run">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                    <TextBlock Classes="label" Text="Cancel" />
-                  </StackPanel>
-                </Button>
               </Grid>
             </Border>
           </Border>

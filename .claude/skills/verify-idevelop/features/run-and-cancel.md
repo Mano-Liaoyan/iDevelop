@@ -1,43 +1,39 @@
-# Run and cancel a task
+# Run and stop a node
 
-A user runs a task with its agent client from the inspector. While it runs, the card, the inspector, and a run bar at the bottom of the canvas say so. Cancel stops the client and every process it started. A run that ends on its own shows its result. A task whose client cannot start shows why and starts nothing. Every attempt is recorded in `.idp/attempts/<task-id>/<attempt-id>/events.jsonl`.
+A user runs a node from the inspector, its expanded card, or its menu. The engine starts it once its predecessors are completed, and each node after it runs by itself once all of its own predecessors are completed. While a node runs, its card, its inspector, and the bar at the bottom of the canvas say so. Stop ends the turn and every process the client started. A turn that ends on its own leaves a result, which the inspector lists under `Results`. A node that the engine cannot start says why and starts nothing. Each node's log is `.idp/nodes/<node-id>.jsonl`.
 
 ## Sub-features
 
-- `run-start` starts the selected task's client and shows `Running` on the card, in the inspector, and in the run bar.
-- `run-cancel` stops the client and the processes it started, and records the run as `Cancelled`.
-- `run-succeed` shows `Succeeded`, the result, and the recent activity of a run that ends on its own.
-- `run-refused` shows why a task whose client is not ready cannot start, and starts nothing.
-- `run-leave` asks before closing the window during a run, and `Stop and leave` records the run as interrupted.
+- `run-start` starts the selected node and shows `Running` on the card, in `RunTaskStatus`, and in the bar's `RunStatus` as `1 running`.
+- `run-stop` stops the client and the processes it started. A node without a result goes back to `Idle`.
+- `run-complete` shows `Completed`, and the result's first paragraph under `Results`.
+- `run-refused` keeps `RunTask` off for a node whose client is not ready, or whose predecessors are not completed, and says why in `StartProblem`.
+- `run-retry` offers `RetryTask` once a turn has ended, which starts a fresh session.
+- `run-leave` asks before closing the window while a node runs. `Stop and leave` stops it, and it reopens as `Input required · interrupted`.
 
 ## How to get to it (user POV)
 
-- Choose a task in the sidebar or on the canvas, then choose `Run` in the `Run` section of the inspector.
-- Choose `Cancel` in the run bar, or `Cancel` beside `Run` in the inspector.
-- Close the window or open another folder while a task runs.
+- Choose a node in the sidebar or on the canvas, then choose `Run` in the `Run` section of the inspector.
+- Choose `Stop` in the inspector, or `Stop All` in the bar.
+- Close the window or the project while a node runs.
 
 ## Driving it with real-window.psm1
 
 Preconditions:
 
-- A new session on the sample, started with `$s = Start-IDevelop`, so runs go through the fake Codex.
+- A new session on the sample, started with `$s = Start-IDevelop`, so runs go through the fake Codex. `Start-IDevelop` makes the sample's copy a Git repository, because a node that edits the project works in its own worktree.
 - `Wait-Until { (Find-ById $s.Window 'AgentCodex').Current.Name -like 'Ready*' } 60` has returned `$true`.
 - `$s.Gate` does not exist. The fake Codex starts a sleeper process, writes its id to `$s.Run\fake-bin\sleeper.pid`, and waits until `$s.Gate` exists. Then it replays a successful turn that ends with `DONE`.
 
-- **Refused start.** Choose the first task, whose client is Claude Code, and run it. Run `Select-Element (Get-SidebarTasks $s.Window)[0]` and `Invoke-Element (Find-ById $s.Window 'RunTask')`. `(Find-ById $s.Window 'StartProblem').Current.Name` and `(Find-ById $s.Window 'Status').Current.Name` both start with `Claude Code is not ready.`, and `Find-ById $s.Window 'RunBar' 1` returns `$null`.
-- **Start.** Choose the second task and run it. Run `Select-Element (Get-SidebarTasks $s.Window)[1]` and `Invoke-Element (Find-ById $s.Window 'RunTask')`. `RunBar` appears. `RunBarTask` reads `Implement atomic save`, `RunBarAgent` reads `Codex · GPT-6-Sol · medium`, `LastRunStatus` reads `Running`, and the second card's `CardStatus` reads `Running`.
-- **Sleeper.** Run `$sleeper = Wait-Until { $f = "$($s.Run)\fake-bin\sleeper.pid"; if (Test-Path $f) { [int](Get-Content $f) } } 30`. `Get-Process -Id $sleeper` finds the process. Run `Save-Evidence $s 'running'`.
-- **Cancel.** In a new shell, read the id again with `$sleeper = [int](Get-Content "$($s.Run)\fake-bin\sleeper.pid")`. Run `Invoke-Element (Find-ById $s.Window 'RunBarCancel')`. `Wait-Until { (Find-ById $s.Window 'LastRunStatus').Current.Name -eq 'Cancelled' } 30` returns `$true`. `Wait-Until { -not (Get-Process -Id $sleeper -ErrorAction SilentlyContinue) } 30` returns `$true`. `Find-ById $s.Window 'RunBar' 1` returns `$null`, the card reads `Cancelled`, and the window title stays `project - iDevelop`. Run `Save-Evidence $s 'cancelled'`.
-- **Cancelled record.** Read the attempt. Run `Get-ChildItem "$($s.Run)\cancelled\attempts" -Recurse -Filter events.jsonl | Get-Content | ForEach-Object { $_ | ConvertFrom-Json } | Select-Object type, command`. The types are `requested`, `launched`, `cancelRequested`, and `exited`. The `requested` line's `command` is `$s.Run\fake-bin\codex.CMD`, which proves the fake ran.
-- **Succeed.** Open the gate and run again. Run `New-Item -ItemType File $s.Gate` and `Invoke-Element (Find-ById $s.Window 'RunTask')`. `Wait-Until { (Find-ById $s.Window 'LastRunStatus').Current.Name -eq 'Succeeded' } 30` returns `$true`. `Get-Value (Find-ById $s.Window 'LastRunResult')` is `DONE`. `LastRunActivity` lists `DONE`, and `(Find-ById $s.Window 'ToolCallsToggle').Current.Name` is `1 tool call`. After `(Find-ById $s.Window 'ToolCallsToggle').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()`, `LastRunActivity` lists a `command:` line and then `DONE`. Run `Save-Evidence $s 'succeeded'`. The new attempt's types are `requested`, `launched`, four `agent` lines, and `exited`.
-- **Close the gate.** Run `Remove-Item $s.Gate`, so the next run waits again.
-- **Leave during a run.** Run the task again with `Invoke-Element (Find-ById $s.Window 'RunTask')`, then `Close-Window $s.Window`. Run `Invoke-Element (Find-InProcessWindows $s.Process 'KeepRunning')`. The window stays open and `LastRunStatus` still reads `Running`. Close again and run `Invoke-Element (Find-InProcessWindows $s.Process 'StopAndLeave')`. `$s.Process.WaitForExit(15000)` returns `$true`. Run `Save-Evidence $s 'interrupted'`, which copies the files without a screenshot once the window is closed. The newest attempt's types end with `interruptRequested` and `exited`.
+- **Refused start.** Choose the first node, whose client is Claude Code. Run `Select-Element (Get-SidebarTasks $s.Window)[0]`. `(Find-ById $s.Window 'RunTask').Current.IsEnabled` is `$false`, and `(Find-ById $s.Window 'StartProblem').Current.Name` starts with `Claude Code is not ready.`.
+- **Start.** Choose the second node and run it. Run `Select-Element (Get-SidebarTasks $s.Window)[1]` and `Invoke-Element (Find-ById $s.Window 'RunTask')`. `WorkflowRunBar` appears, `RunStatus` reads `1 running`, `RunActivity` reads `"Implement atomic save"`, `RunTaskStatus` reads `Running`, and the second card's `CardStatus` reads `Running`. Run `Save-Evidence $s 'running'`.
+- **Stop.** Read the sleeper with `$sleeper = [int](Get-Content "$($s.Run)\fake-bin\sleeper.pid")`. Run `Invoke-Element (Find-ById $s.Window 'StopTask')`. `Wait-Until { (Find-ById $s.Window 'RunTaskStatus').Current.Name -eq 'Idle' } 30` returns `$true`, and `Wait-Until { -not (Get-Process -Id $sleeper -ErrorAction SilentlyContinue) } 30` returns `$true`. Run `Save-Evidence $s 'stopped'`. The node's log ends with a `stopped` entry.
+- **Complete.** Open the gate and run again. Run `New-Item -ItemType File $s.Gate` and `Invoke-Element (Find-ById $s.Window 'RunTask')`. `Wait-Until { (Find-ById $s.Window 'RunTaskStatus').Current.Name -eq 'Completed' } 30` returns `$true`, and `Results` lists `Result 1 · Current`. Run `Save-Evidence $s 'completed'`. The log has `turnStarted`, `agent` lines, and `completed`, whose result names a commit.
+- **Retry.** Run `Invoke-Element (Find-ById $s.Window 'RetryTask')`. `Results` then lists `Result 2 · Current` above `Result 1`.
+- **Leave during a run.** Remove the gate with `Remove-Item $s.Gate`, retry once more, then `Close-Window $s.Window`. Run `Invoke-Element (Find-InProcessWindows $s.Process 'KeepRunning')`. The window stays open and `RunTaskStatus` still reads `Running`. Close again and run `Invoke-Element (Find-InProcessWindows $s.Process 'StopAndLeave')`. `$s.Process.WaitForExit(15000)` returns `$true`. Reopen with `$s = Start-IDevelop -Reopen`; the card reads `Input required · interrupted`, and the inspector offers `ContinueTask` and `RetryTask`.
 
 ## Gotchas
 
-- Run only Codex tasks in a fake session. The other clients are blocked on purpose, so their tasks reach only `run-refused`.
-- The gate stays open until it is removed. While it exists, every run of the session succeeds at once, and a cancel cannot be caught.
-- Each run rewrites `sleeper.pid`. Read it after the run starts and before the next one.
-- A run that ends on its own leaves its sleeper running, as a real client leaves a dev server. `Stop-IDevelop` stops it. Cancel and `Stop and leave` stop it themselves.
-- `RunBar` appears only while a task runs, so `Find-ById` returns `$null` for it afterward. Pass a short timeout, such as `Find-ById $s.Window 'RunBar' 1`.
-- Two tasks running at once, a second window, and opening another folder during a run need two windows or the folder picker. `RunTests` covers them headlessly.
+- The gate stays open until it is removed. While it exists, every turn ends at once, and a stop cannot be caught.
+- A turn that ends on its own leaves its sleeper running, as a real client leaves a dev server. `Stop-IDevelop` stops it. Stop and `Stop and leave` stop it themselves.
+- `WorkflowRunBar` shows only while a node runs or waits, or while Merge into my branch is offered, so pass a short timeout to `Find-ById`.

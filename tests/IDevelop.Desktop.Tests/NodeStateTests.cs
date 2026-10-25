@@ -1,128 +1,47 @@
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Execution;
-using IDevelop.Execution;
-using IDevelop.TestSupport;
-using IDevelop.Workflows;
+using EngineState = IDevelop.Engine.NodeState;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>A node's state from its newest attempt and why it cannot start, and its role.</summary>
+/// <summary>What a card shows of each engine state (ADR 0017): its state class, its status, its tone, and what it needs.</summary>
 public sealed class NodeStateTests
 {
-    private static readonly StartProblem NoAgent = new StartProblem.NoAgent();
-
-    private static AttemptRecord Attempt(AttemptStatus status, bool stopping = false) =>
-        AttemptReducer.Start(new AttemptEvent.Requested(
-            DateTimeOffset.UnixEpoch, AttemptId.New(), TestTasks.Design, "Design", new ExecutionSettings(ClientId.Codex), "", "codex", []))
-        with { Status = status, Stopping = stopping };
-
-    private static readonly (string Name, AttemptRecord? Attempt, bool Elsewhere)[] Attempts =
-    [
-        ("none", null, false),
-        ("running", Attempt(AttemptStatus.Running), false),
-        ("running elsewhere", Attempt(AttemptStatus.Running), true),
-        ("stopping", Attempt(AttemptStatus.Running, stopping: true), true),
-        ("waiting", Attempt(AttemptStatus.WaitingForInput), false),
-        ("in review", Attempt(AttemptStatus.InReview), false),
-        ("succeeded", Attempt(AttemptStatus.Succeeded), false),
-        ("failed", Attempt(AttemptStatus.Failed), false),
-        ("interrupted", Attempt(AttemptStatus.Interrupted), false),
-        ("cancelled", Attempt(AttemptStatus.Cancelled), false),
-    ];
-
-    private static (string, NodeState)[] States(StartProblem? problem) =>
-        [.. Attempts.Select(row => (row.Name, NodeStates.Of(row.Attempt, row.Elsewhere, problem)))];
-
-    [Fact]
-    public void Without_a_problem_the_state_is_the_attempts()
+    public static TheoryData<EngineState, NodeState, string, StatusTone> States() => new()
     {
-        Assert.Equal(
-            [
-                ("none", NodeState.Idle), ("running", NodeState.Running), ("running elsewhere", NodeState.RunningElsewhere),
-                ("stopping", NodeState.Stopping), ("waiting", NodeState.Waiting), ("in review", NodeState.InReview),
-                ("succeeded", NodeState.Succeeded), ("failed", NodeState.Failed), ("interrupted", NodeState.Interrupted),
-                ("cancelled", NodeState.Cancelled),
-            ],
-            States(null));
+        { new EngineState.Idle(), NodeState.Idle, "Idle", StatusTone.Neutral },
+        { new EngineState.Running(), NodeState.Running, "Running", StatusTone.Running },
+        { new EngineState.InputRequired(EngineState.Approval), NodeState.InputRequired, "Input required · approval", StatusTone.Waiting },
+        { new EngineState.InputRequired(EngineState.Reply), NodeState.InputRequired, "Input required · reply", StatusTone.Waiting },
+        { new EngineState.InputRequired(EngineState.Conflict), NodeState.InputRequired, "Input required · conflict", StatusTone.Waiting },
+        { new EngineState.InputRequired(EngineState.Interrupted), NodeState.InputRequired, "Input required · interrupted", StatusTone.Waiting },
+        { new EngineState.InputRequired(EngineState.RoundLimit), NodeState.InputRequired, "Input required · round limit", StatusTone.Waiting },
+        { new EngineState.InputRequired("Which file?"), NodeState.InputRequired, "Input required · question", StatusTone.Waiting },
+        { new EngineState.Completed(), NodeState.Completed, "Completed", StatusTone.Complete },
+        { new EngineState.Failed("Exited with code 2."), NodeState.Failed, "Failed", StatusTone.Problem },
+        { new EngineState.Stale(), NodeState.Stale, "Stale", StatusTone.Warning },
+    };
+
+    [Theory]
+    [MemberData(nameof(States))]
+    public void Each_engine_state_maps_onto_one_card_state_whose_status_names_why_it_needs_the_person(
+        EngineState engine, NodeState state, string label, StatusTone tone)
+    {
+        Assert.Equal(state, NodeStates.Of(engine));
+        Assert.Equal(label, NodeStates.Label(engine));
+        Assert.Equal(tone, NodeStates.Tone(state));
     }
 
     [Fact]
-    public void A_missing_setting_shows_unless_a_run_goes_on_or_ended_in_a_way_the_person_must_see()
+    public void The_detail_says_what_the_person_does_next_and_a_question_or_a_failure_in_its_own_words()
     {
-        Assert.Equal(
-            [
-                ("none", NodeState.NeedsSetup), ("running", NodeState.Running), ("running elsewhere", NodeState.RunningElsewhere),
-                ("stopping", NodeState.Stopping), ("waiting", NodeState.Waiting), ("in review", NodeState.InReview),
-                ("succeeded", NodeState.NeedsSetup), ("failed", NodeState.Failed), ("interrupted", NodeState.Interrupted),
-                ("cancelled", NodeState.NeedsSetup),
-            ],
-            States(NoAgent));
-    }
-
-    [Fact]
-    public void A_wait_for_something_else_is_not_a_missing_setting()
-    {
-        Assert.Equal([("none", NodeState.Idle), ("succeeded", NodeState.Succeeded)],
-            States(new StartProblem.SubjectNotDone("Build")).Where(row => row.Item1 is "none" or "succeeded"));
-    }
-
-    [Fact]
-    public void Only_a_setting_the_person_gives_is_a_setup_problem()
-    {
-        StartProblem[] setup =
-        [
-            NoAgent, new StartProblem.FieldMissing("Instructions"), new StartProblem.NoModel(ClientId.Codex),
-            new StartProblem.ModelNotOffered(ClientId.Codex, "gpt-x"), new StartProblem.ModelUnready(ClientId.Codex, "gpt-x", "Sign in."),
-            new StartProblem.ReasoningNotOffered(ClientId.Codex, "gpt-x", "max", ["low"]), new StartProblem.NoReadOnlyMode(ClientId.Pi),
-            new StartProblem.NoSubject(), new StartProblem.ClientMissing(ClientId.Codex, "Not found."), new StartProblem.ClientUnready(ClientId.Codex, "Sign in."),
-        ];
-        StartProblem[] other =
-        [
-            new StartProblem.Waiting("Design"), new StartProblem.RunsInWorkflow(), new StartProblem.SubjectNotDone("Build"),
-            new StartProblem.InReview("Review"), new StartProblem.UnderReview("Review"), new StartProblem.ClientChecking(ClientId.Codex),
-            new StartProblem.AlreadyRunning(TestTasks.Design, "Design"), new StartProblem.RunInAnotherWindow(), new StartProblem.RunOwned("Delivery"),
-            new StartProblem.SkillsChecking(ClientId.Codex),
-        ];
-
-        Assert.All(setup, problem => Assert.True(NodeStates.IsSetup(problem), problem.ToString()));
-        Assert.All(other, problem => Assert.False(NodeStates.IsSetup(problem), problem.ToString()));
-    }
-
-    [Fact]
-    public void A_review_whose_subject_has_no_readable_change_says_how_to_record_one()
-    {
-        Assert.Equal(
-            "iDevelop could not record or read what \"Build\" changed. Run it again in a Git project, then review it. If the project is a sparse checkout, check out every file first.",
-            RunText.Describe(new StartProblem.NoChange("Build")));
-    }
-
-    [Fact]
-    public void An_interrupted_fix_round_names_the_choice_the_review_waits_for()
-    {
-        Assert.Equal("Closing iDevelop interrupted fix round 2 of \"Build\". Continue the fix in its session, or retry it in a fresh one.",
-            RunText.Describe(new StartProblem.FixInterrupted("Build", 2, CanContinue: true)));
-        Assert.Equal("Closing iDevelop interrupted fix round 2 of \"Build\". Its session cannot go on, so retry the fix in a fresh session.",
-            RunText.Describe(new StartProblem.FixInterrupted("Build", 2, CanContinue: false)));
-        Assert.Equal("\"Review\" has no interrupted fix round to continue or retry.", RunText.Describe(new StartProblem.NoFixChoice("Review")));
-    }
-
-    [Fact]
-    public void A_run_owned_task_has_the_same_plain_reason_for_start_send_and_terminal_handoff()
-    {
-        var problem = new StartProblem.RunOwned("Delivery");
-        Assert.Equal("A run of the \"Delivery\" workflow owns this task.", RunText.Describe(problem));
-        Assert.Equal("A run of the \"Delivery\" workflow owns this task.", RunText.Describe(new SendProblem.CannotStart(problem)));
-        Assert.Equal("A run of the \"Delivery\" workflow owns this task.", RunText.Describe(new TerminalProblem.Blocked(problem)));
-    }
-
-    [Fact]
-    public void An_open_proposal_outranks_a_review_in_progress()
-    {
-        var underReview = new StartProblem.UnderReview("Review the change");
-
-        Assert.Equal(
-            [NodeRole.None, NodeRole.UnderReview, NodeRole.Proposing, NodeRole.Proposing],
-            new[] { (null, false), (underReview, false), (null, true), (underReview, true) }
-                .Select(row => NodeStates.RoleOf(row.Item1, row.Item2)));
+        Assert.Null(NodeStates.Detail(new EngineState.Idle()));
+        Assert.Null(NodeStates.Detail(new EngineState.Completed()));
+        Assert.Equal("Which file?", NodeStates.Detail(new EngineState.InputRequired("Which file?")));
+        Assert.Equal("Exited with code 2.", NodeStates.Detail(new EngineState.Failed("Exited with code 2.")));
+        Assert.StartsWith("Approve what the nodes before it handed on", NodeStates.Detail(new EngineState.InputRequired(EngineState.Approval)));
+        Assert.Contains("mark it resolved", NodeStates.Detail(new EngineState.InputRequired(EngineState.Conflict)));
+        Assert.Contains("Continue the session, or retry", NodeStates.Detail(new EngineState.InputRequired(EngineState.Interrupted)));
+        Assert.Contains("Run it again", NodeStates.Detail(new EngineState.Stale()));
     }
 }

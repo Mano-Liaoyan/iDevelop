@@ -247,6 +247,16 @@ function New-FakeCodex([string] $Bin, [string] $Gate, [string] $SleeperPidFile, 
     $Agent
 }
 
+# A node that edits the project works in its own Git worktree, so the sample becomes a repository with one commit. The
+# engine's data folder and the worktrees stay out of it.
+function Initialize-ProjectRepository([string] $Project) {
+    [IO.File]::WriteAllText((Join-Path $Project '.gitignore'), ".idp/`n.worktrees/`n")
+    foreach ($arguments in @(@('init', '-q', '-b', 'main'), @('add', '-A'), @('-c', 'user.name=verify', '-c', 'user.email=verify@example.test', 'commit', '-q', '-m', 'sample'))) {
+        & git -C $Project @arguments
+        if ($LASTEXITCODE -ne 0) { throw "git $($arguments -join ' ') failed in $Project." }
+    }
+}
+
 # A verify-idevelop session spans many shells. Its run folder under .verify holds session.json, which records the
 # process it started, and every piece of evidence. Stop-IDevelop never deletes the folder.
 $Repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -323,6 +333,7 @@ function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $
             [IO.Directory]::CreateDirectory($Project) | Out-Null
         } elseif (-not [IO.Directory]::Exists($Project)) {
             Copy-Item -Recurse -LiteralPath (Join-Path $Repo 'samples\storage-change') -Destination $Project
+            Initialize-ProjectRepository $Project
         }
     }
     if (-not $RealClients) {
@@ -414,7 +425,7 @@ function Save-Evidence($Session, [string] $Name) {
     $idp = Get-Item -LiteralPath (Join-Path $Session.Project '.idp') -ErrorAction SilentlyContinue
     $copied = 0
     foreach ($file in $(if ($idp) { Get-ChildItem -LiteralPath $idp.FullName -Recurse -File })) {
-        if ($file.Name -eq 'events.jsonl' -or ($file.Extension -eq '.json' -and $file.Directory.Name -eq 'workflows')) {
+        if (($file.Extension -eq '.jsonl' -and $file.Directory.Name -eq 'nodes') -or ($file.Extension -eq '.json' -and $file.Directory.Name -eq 'workflows')) {
             $target = Join-Path (Join-Path $Session.Run $Name) ($file.FullName.Substring($idp.FullName.Length + 1))
             [IO.Directory]::CreateDirectory((Split-Path -LiteralPath $target)) | Out-Null
             [IO.File]::Copy($file.FullName, $target, $true)

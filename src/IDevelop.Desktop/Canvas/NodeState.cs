@@ -1,41 +1,70 @@
-using IDevelop.Execution;
+using IDevelop.Desktop.Execution;
+using EngineState = IDevelop.Engine.NodeState;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>Where a node's run stands, which its ring, tint, glyph, and subtitle show.</summary>
-/// <remarks><see cref="OutOfDate"/>: a result from an earlier run no longer counts, so the task needs to run again (#90).</remarks>
-public enum NodeState { Idle, NeedsSetup, Running, RunningElsewhere, Stopping, Waiting, InReview, Succeeded, Failed, Interrupted, Cancelled, OutOfDate }
+/// <summary>The engine's state of a node, which its ring, tint, glyph, and status show (ADR 0017).</summary>
+public enum NodeState { Idle, Running, InputRequired, Completed, Failed, Stale }
 
-/// <summary>What the node is to another node, drawn over its state: a review's subject, or a planner with an open proposal.</summary>
+/// <summary>What the node is to another node, drawn over its state: a running review's subject, or a planner with an open proposal.</summary>
 public enum NodeRole { None, UnderReview, Proposing }
 
 public static class NodeStates
 {
-    /// <summary>A run that goes on comes first, then an ending that needs the person, then a missing setting.</summary>
-    /// <param name="runsElsewhere">Another window started the running attempt.</param>
-    /// <param name="problem">Why the node cannot start now, or null.</param>
-    public static NodeState Of(AttemptRecord? attempt, bool runsElsewhere, StartProblem? problem)
+    public static NodeState Of(EngineState state) => state switch
     {
-        var needsSetup = problem is not null && IsSetup(problem);
-        return attempt?.Status switch
-        {
-            AttemptStatus.Running => attempt.Stopping ? NodeState.Stopping : runsElsewhere ? NodeState.RunningElsewhere : NodeState.Running,
-            AttemptStatus.WaitingForInput => NodeState.Waiting,
-            AttemptStatus.InReview => NodeState.InReview,
-            AttemptStatus.Failed => NodeState.Failed,
-            AttemptStatus.Interrupted => NodeState.Interrupted,
-            AttemptStatus.Succeeded => needsSetup ? NodeState.NeedsSetup : NodeState.Succeeded,
-            AttemptStatus.Cancelled => needsSetup ? NodeState.NeedsSetup : NodeState.Cancelled,
-            null => needsSetup ? NodeState.NeedsSetup : NodeState.Idle,
-        };
-    }
+        EngineState.Running => NodeState.Running,
+        EngineState.InputRequired => NodeState.InputRequired,
+        EngineState.Completed => NodeState.Completed,
+        EngineState.Failed => NodeState.Failed,
+        EngineState.Stale => NodeState.Stale,
+        _ => NodeState.Idle,
+    };
 
-    /// <summary>An open proposal outranks a review in progress.</summary>
-    public static NodeRole RoleOf(StartProblem? problem, bool hasOpenProposal) =>
-        hasOpenProposal ? NodeRole.Proposing : problem is StartProblem.UnderReview ? NodeRole.UnderReview : NodeRole.None;
+    /// <summary>The card's status, which names why a node needs the person, such as "Input required · approval".</summary>
+    public static string Label(EngineState state) => state switch
+    {
+        EngineState.Running => "Running",
+        EngineState.InputRequired waiting => $"Input required · {Reason(waiting.Why)}",
+        EngineState.Completed => "Completed",
+        EngineState.Failed => "Failed",
+        EngineState.Stale => "Stale",
+        _ => "Idle",
+    };
 
-    /// <summary>A setting the person must give before the node can start, as opposed to a wait for something else.</summary>
-    public static bool IsSetup(StartProblem problem) => problem is StartProblem.NoAgent or StartProblem.FieldMissing
-        or StartProblem.NoModel or StartProblem.ModelNotOffered or StartProblem.ModelUnready or StartProblem.ReasoningNotOffered
-        or StartProblem.NoReadOnlyMode or StartProblem.NoSubject or StartProblem.ClientMissing or StartProblem.ClientUnready;
+    /// <summary>What the node needs from the person, or why it stopped, in a sentence, or null when its status says enough.</summary>
+    public static string? Detail(EngineState state) => state switch
+    {
+        EngineState.InputRequired { Why: EngineState.Approval } => "Approve what the nodes before it handed on, or send it back with a note.",
+        EngineState.InputRequired { Why: EngineState.Reply } => "The agent replied. Write back, or approve its reply as the result.",
+        EngineState.InputRequired { Why: EngineState.Conflict } =>
+            "The work handed on conflicts. Resolve the conflict in the node's worktree, then mark it resolved.",
+        EngineState.InputRequired { Why: EngineState.Interrupted } => "iDevelop closed during its turn. Continue the session, or retry.",
+        EngineState.InputRequired { Why: EngineState.RoundLimit } =>
+            "The review reached its round limit. Approve the work, send it back with a note, or edit the workflow.",
+        EngineState.InputRequired waiting => waiting.Why,
+        EngineState.Failed failed => failed.Reason,
+        EngineState.Stale => "What it ran on changed: its inputs, its instruction, or its model. Run it again for a current result.",
+        _ => null,
+    };
+
+    public static StatusTone Tone(NodeState state) => state switch
+    {
+        NodeState.Running => StatusTone.Running,
+        NodeState.Completed => StatusTone.Complete,
+        NodeState.Failed => StatusTone.Problem,
+        NodeState.InputRequired => StatusTone.Waiting,
+        NodeState.Stale => StatusTone.Warning,
+        _ => StatusTone.Neutral,
+    };
+
+    private static string Reason(string why) => why switch
+    {
+        EngineState.Approval => "approval",
+        EngineState.Reply => "reply",
+        EngineState.Conflict => "conflict",
+        EngineState.Interrupted => "interrupted",
+        EngineState.RoundLimit => "round limit",
+        _ => "question",
+    };
 }

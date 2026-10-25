@@ -98,12 +98,12 @@ public sealed class NodeMenuTests : IDisposable
         FakeAgents.Install(fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
         var shell = Shell.Open(DesignThenBuild(), fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Id == Design).State == NodeState.Succeeded, "the run succeeds");
+        shell.RunNode();
+        shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Id == Design).State == NodeState.Completed, "the run succeeds");
 
         shell.RightClick(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["Run", "Rename", "Duplicate", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"], shell.MenuHeaders());
+        Assert.Equal(["Retry", "Rename", "Duplicate", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"], shell.MenuHeaders());
     }
 
     [AvaloniaFact]
