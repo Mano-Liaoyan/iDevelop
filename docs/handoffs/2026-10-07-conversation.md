@@ -64,7 +64,7 @@ Codex moved to app-server because it alone supported all nine of D0's interactio
 
 For Claude Code and Codex, Stop and send and Cancel first send the client's own interrupt, keep reading until the turn's final result, and then stop the process tree. Pi and Antigravity CLI have no interrupt, so iDevelop stops their process tree at once. A stop or a deferral gives the client 5 seconds, `ProjectRuns.ShutdownTime`, to exit. A Claude Code or Codex client that reported success gets 60 seconds, `ProjectRuns.SuccessExitTime`, to exit after its input closes. Pi and Antigravity CLI have no deadline after success. A fake client that exited 6.5 seconds after its input closed failed both Claude Code and Codex turns under the old 5 second limit.
 
-### Questions surface, and permission requests are declined
+### Questions surface, and permission requests are declined or never asked
 
 `ClientPolicy.For` is the one table that launch arguments, request handling, and capability text read.
 
@@ -75,7 +75,7 @@ For Claude Code and Codex, Stop and send and Cancel first send the client's own 
 | May ask or Chat, host questions on | `--permission-prompt-tool stdio` | Surfaced | Declined, including `ExitPlanMode` |
 | Host questions `Disabled` | `--permission-prompts none` | Declined | Declined |
 
-Access still picks `plan` or `acceptEdits`, and a question channel grants no extra tool permission. The design review found that surfacing permissions in May ask would relax the command rules by conversation mode, and that built-in Plan and Architect are read-only May ask nodes that could reach an `ExitPlanMode` approval. Codex always runs with approval policy `never`, reviewer `user`, the access sandbox, and `features.default_mode_request_user_input=false`, so its questions arrive as message text. A declined permission closes as `Denied` and needs no action from the person. The view shows the exact action and that iDevelop denied it, with no Allow button.
+Access picks `plan`, or `bypassPermissions` for an editing node, which then runs every tool without asking ([ADR 0039](../adr/0039-claude-code-in-an-editing-node-runs-with-bypass-permissions.md)). A question channel grants no extra tool permission. The design review found that surfacing permissions in May ask would relax the command rules by conversation mode, and that built-in Plan and Architect are read-only May ask nodes that could reach an `ExitPlanMode` approval. Codex always runs with approval policy `never`, reviewer `user`, the access sandbox, and `features.default_mode_request_user_input=false`, so its questions arrive as message text. A declined permission closes as `Denied` and needs no action from the person. The view shows the exact action and that iDevelop denied it, with no Allow button.
 
 ### A structured question is deferred at once into a text question
 
@@ -134,7 +134,7 @@ The [workspace session](2026-10-07-workspace-sessions.md) owns conversation view
 
 ## Open issues
 
-1. Real-client checks still need the user's approval, because each spends subscription quota. Claude Code needs `AskUserQuestion` under `acceptEdits` and `plan`, a denied `ExitPlanMode`, Autonomous and review turns with `--permission-prompts none`, an interrupt with trailing output, resume after a deferred question, and the exit time of a client with SessionEnd hooks. Codex needs app-server with the question feature off, `thread/resume` with `excludeTurns` of a session that `codex exec` created, and fresh and resumed read-only turns.
+1. Real-client checks still need the user's approval, because each spends subscription quota. Claude Code needs `AskUserQuestion` under `bypassPermissions` and `plan`, a denied `ExitPlanMode`, Autonomous and review turns with `--permission-prompts none`, an interrupt with trailing output, resume after a deferred question, and the exit time of a client with SessionEnd hooks. Codex needs app-server with the question feature off, `thread/resume` with `excludeTurns` of a session that `codex exec` created, and fresh and resumed read-only turns.
 2. No client ran on Windows, so npm shims holding stdin open, shutdown after the final result, Job Object stopping, and continuation are unverified. The Windows recipe for the view has not run.
 3. The bounded live hold for structured questions waits for the user's confirmation of its timeout.
 4. A log-write failure can change a run's in-memory status without advancing its durable revision, at `ProjectRuns.ActiveRun.cs`. The Astra review found it and marked it as older than C1a.
