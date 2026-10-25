@@ -374,6 +374,20 @@ public sealed class WorkflowDocumentTests : IDisposable
     }
 
     [Fact]
+    public void A_round_limit_other_than_the_default_saves_and_reopens_and_the_default_writes_nothing()
+    {
+        var review = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000066"));
+        var workflow = IDevelop.Workflows.Workflow.Empty(WorkflowId.New())
+            .Must(new PlaceNode(review, BuiltInBlueprints.Review, new CanvasPoint(0, 0)) { Title = "Review" });
+
+        var limited = WorkflowFile.Serialize(workflow.Must(new SetRoundLimit(review, 5)));
+
+        Assert.DoesNotContain("roundLimit", Encoding.UTF8.GetString(WorkflowFile.Serialize(workflow)));
+        Assert.Equal(5, WorkflowFile.Parse(limited, "file").Workflow.Tasks[review].RoundLimit);
+        Assert.Equal(1, workflow.Must(new SetRoundLimit(review, 0)).Tasks[review].RoundLimit);
+    }
+
+    [Fact]
     public void A_file_whose_graph_breaks_a_rule_fails_with_the_rule()
     {
         var json = Workflow(

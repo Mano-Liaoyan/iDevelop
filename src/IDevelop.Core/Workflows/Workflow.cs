@@ -109,6 +109,11 @@ public sealed record TaskDefinition
 
     public ConversationMode Conversation { get; init; }
 
+    /// <summary>How many feedback rounds the node's agent sends before it waits for the person (ADR 0040).</summary>
+    public int RoundLimit { get; init; } = DefaultRoundLimit;
+
+    public const int DefaultRoundLimit = 3;
+
     public string Field(string key) => Fields[key];
 
     /// <summary>Null when the blueprint has no such field. The same instance when the value does not change.</summary>
@@ -126,7 +131,8 @@ public sealed record TaskDefinition
     // The fields compare by content, which a dictionary does not.
     public bool Equals(TaskDefinition? other) =>
         other is not null && Id == other.Id && Blueprint.Equals(other.Blueprint) && Title == other.Title &&
-        Fields.SequenceEqual(other.Fields) && Execution == other.Execution && Conversation == other.Conversation;
+        Fields.SequenceEqual(other.Fields) && Execution == other.Execution && Conversation == other.Conversation &&
+        RoundLimit == other.RoundLimit;
 
     public override int GetHashCode() => HashCode.Combine(Id, Blueprint.Key, Title);
 
@@ -161,6 +167,9 @@ public abstract record WorkflowEdit
     public sealed record SetField(TaskId Task, string Key, string Text) : WorkflowEdit;
 
     public sealed record SetConversation(TaskId Task, ConversationMode Mode) : WorkflowEdit;
+
+    /// <summary>Sets a task's round limit, at least 1.</summary>
+    public sealed record SetRoundLimit(TaskId Task, int Limit) : WorkflowEdit;
 
     /// <summary>Sets or clears a task's agent. A running attempt keeps the settings it started with.</summary>
     public sealed record SetExecution(TaskId Task, ExecutionSettings? Execution) : WorkflowEdit;
@@ -271,6 +280,7 @@ public sealed class Workflow
         WorkflowEdit.SetField e => Edit(e.Task, task => task.WithField(e.Key, e.Text), new EditRejection.UnknownField(e.Task, e.Key)),
         WorkflowEdit.SetExecution e => Edit(e.Task, task => task with { Execution = e.Execution }),
         WorkflowEdit.SetConversation e => Edit(e.Task, task => task with { Conversation = e.Mode }),
+        WorkflowEdit.SetRoundLimit e => Edit(e.Task, task => task with { RoundLimit = Math.Max(1, e.Limit) }),
         WorkflowEdit.MoveTasks e => MoveTasks(e),
         WorkflowEdit.Connect e => Connect(e),
         WorkflowEdit.SetConnectionKind e => SetConnectionKind(e),

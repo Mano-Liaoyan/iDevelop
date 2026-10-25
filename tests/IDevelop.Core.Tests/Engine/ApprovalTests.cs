@@ -35,6 +35,7 @@ public sealed class ApprovalTests : IAsyncLifetime
         await engine.SendBack(p, "Fix the typo.");
 
         Assert.Equal(new NodeState.Running(), engine.State(a));
+        Assert.Equal(new NodeEntry.Feedback("Fix the typo."), engine.Entries(p)[^1]);
         await Until<NodeState.InputRequired>(engine, p);
         Assert.Equal("Fix the typo.", _f.Prompt("note.txt"));
         await engine.Approve(p);

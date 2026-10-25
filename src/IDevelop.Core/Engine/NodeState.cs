@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Engine;
@@ -24,6 +26,12 @@ public abstract record NodeState
     /// </summary>
     public const string Conflict = "conflict";
 
+    /// <summary>
+    /// Why a reviewer waits once its round limit is reached: the person approves its subject's result, sends back a note, or
+    /// edits the workflow.
+    /// </summary>
+    public const string RoundLimit = "roundLimit";
+
     private NodeState() { }
 
     /// <summary>The node has no result and nothing runs.</summary>
@@ -33,7 +41,8 @@ public abstract record NodeState
 
     /// <summary>
     /// The node waits for the person. <paramref name="Why"/> is <see cref="Interrupted"/>, <see cref="Approval"/>,
-    /// <see cref="Reply"/>, <see cref="Conflict"/>, the agent's question, or why iDevelop could not read the agent's result block.
+    /// <see cref="Reply"/>, <see cref="Conflict"/>, <see cref="RoundLimit"/>, the agent's question, or why iDevelop could not read the
+    /// agent's result block or verdict.
     /// </summary>
     public sealed record InputRequired(string Why) : NodeState;
 
@@ -70,4 +79,9 @@ public sealed record Basis(ImmutableArray<BasisInput> Inputs, string Instruction
 /// What a node hands on: a report and, for a node that edits the project, the commit of its worktree, on the basis it was
 /// made from.
 /// </summary>
-public sealed record NodeResult(string Id, string Report, string? Commit, Basis Basis);
+public sealed record NodeResult(string Id, string Report, string? Commit, Basis Basis)
+{
+    /// <summary>The verdict a review's report ends with, or null for a report without one.</summary>
+    [JsonIgnore]
+    public Verdict? Verdict => ReviewLedger.ReadVerdict(Report).Verdict;
+}

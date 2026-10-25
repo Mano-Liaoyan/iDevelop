@@ -66,8 +66,22 @@ public static class BuiltInBlueprints
     };
 
     /// <summary>
-    /// Reviews the change of the one node before it that edits the project, with a reviewer that only reads, and sends
-    /// each finding back to that node's own session until the two agree. Its agent is the reviewer.
+    /// The Review blueprint's output format, which ends every reviewer prompt: a verdict, approve or changes, whose findings
+    /// each carry a severity and a location (ADR 0029).
+    /// </summary>
+    public const string VerdictFormat =
+        "End your final message with your verdict in this block, and nothing after it:\n\n" +
+        "```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", " +
+        "\"findings\": [{\"id\": \"1\", \"severity\": \"high\", \"location\": \"src/Calc.cs:12\", \"text\": \"what is wrong\", " +
+        "\"change\": \"the exact change that would settle it\"}]}\n```\n\n" +
+        "Write \"approve\" with no findings when nothing stands. Otherwise write \"changes\" and list every finding, each with the " +
+        "exact change that would settle it. Give each finding a severity, \"high\", \"medium\", or \"low\", and its location, the " +
+        "file and line it concerns, such as src/Calc.cs:12.";
+
+    /// <summary>
+    /// Reviews the change of the node before it with a reviewer that only reads: its reviewer template, then
+    /// <see cref="VerdictFormat"/>. A reject renders its fix template with the findings and sends it back to that node's own
+    /// session, and the reviewer runs again on the node's new result.
     /// </summary>
     public static Blueprint Review { get; } = new(
         new BlueprintKey("idevelop.review", 1),
@@ -100,9 +114,8 @@ public static class BuiltInBlueprints
     };
 
     /// <summary>
-    /// A run's merge agent. Its step merges the code of the nodes before it and hands on their reports and artifacts, and its
-    /// agent resolves the merge conflicts the run meets, its own and those it takes for other nodes and for the run's final
-    /// merge into the branch it started from.
+    /// Merges the commits of the nodes before it in its worktree, and its agent resolves each conflict among them. Its
+    /// template names the conflict, and its output is a report and the merge's commit (ADR 0033).
     /// </summary>
     public static Blueprint Merge { get; } = new(
         new BlueprintKey("idevelop.merge", 1),
