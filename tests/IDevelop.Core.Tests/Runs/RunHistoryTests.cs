@@ -62,7 +62,7 @@ public sealed class RunHistoryTests
         // The second run starts from U, whose attempt fails. T's carried result counts as the same result as before.
         var seed = new RunRecord(OtherRun, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [U] };
         var operation = f.Op();
-        var carried = Carrying.Build(seed, History(f), operation);
+        var carried = Carrying.Build(seed, History(f), operation, _ => true);
         Assert.Equal([T], carried.Carried.Select(item => item.Result.Task));
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, OtherRun, operation, Revision.Capture(f.Workflow), new(Base), node: U,
             carried: carried.Carried));
@@ -195,7 +195,7 @@ public sealed class RunHistoryTests
         var operation = f.Op();
         var seed = new RunRecord(Third, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [U] };
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base), node: U,
-            carried: Carrying.Build(seed, History(f), operation).Carried));
+            carried: Carrying.Build(seed, History(f), operation, _ => true).Carried));
         f.Complete(f.Reserve(U, run: Third), run: Third);
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.PermitFor(Third), f.Op(), RunOutcome.Stopped));
         f.ReleaseControl();
@@ -221,7 +221,7 @@ public sealed class RunHistoryTests
         var operation = f.Op();
         var seed = new RunRecord(Third, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [D] };
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base), node: D,
-            carried: Carrying.Build(seed, History(f), operation).Carried));
+            carried: Carrying.Build(seed, History(f), operation, _ => true).Carried));
         Settle(f, Third);
 
         Assert.Empty(History(f).WaitsFor(C));

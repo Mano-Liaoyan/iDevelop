@@ -38,7 +38,7 @@ public sealed class CarriedJournalTests
 
     /// <summary>What <paramref name="run"/>, started from <paramref name="node"/>, carries under <paramref name="operation"/>.</summary>
     private static ImmutableArray<IncludedResult> Built(RunFixtures f, RunId run, TaskId node, OperationId operation) => Carrying.Build(
-        new RunRecord(run, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [node] }, History(f), operation).Carried;
+        new RunRecord(run, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [node] }, History(f), operation, _ => true).Carried;
 
     private static RunDecision Approve(RunFixtures f, RunId run, OperationId operation, TaskId? node, ImmutableArray<IncludedResult> carried) =>
         f.Store.Approve(W, run, operation, Revision.Capture(f.Workflow), new(Base), node: node, carried: carried);
@@ -119,7 +119,7 @@ public sealed class CarriedJournalTests
         First(f);
         var seed = new RunRecord(OtherRun, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [C] };
         var operation = f.Op();
-        var carried = Carrying.Build(seed, History(f), operation).Carried;
+        var carried = Carrying.Build(seed, History(f), operation, _ => true).Carried;
         var withT = RunReducer.WithCarried(seed, carried[0]);
         Assert.Null(RunReducer.CarriedProblem(withT, carried[1], operation));
 
@@ -143,7 +143,7 @@ public sealed class CarriedJournalTests
         Settle(f, Run);
 
         var build = Carrying.Build(new RunRecord(OtherRun, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [x] },
-            History(f), f.Op());
+            History(f), f.Op(), _ => true);
 
         Assert.Empty(build.Carried);
         Assert.Equal(new CarryRefusal.InputRefused(y), build.Refused[w]);
@@ -165,7 +165,7 @@ public sealed class CarriedJournalTests
         f.Complete(f.Reserve(x, run: OtherRun), run: OtherRun);
         var record = f.Read(OtherRun);
 
-        var build = Carrying.Build(record with { Requested = [x, z] }, History(f), f.Op());
+        var build = Carrying.Build(record with { Requested = [x, z] }, History(f), f.Op(), _ => true);
 
         Assert.Empty(build.Carried);
         Assert.Equal(new CarryRefusal.InputRuns(x), build.Refused[q]);
@@ -180,7 +180,7 @@ public sealed class CarriedJournalTests
         f.Approve(run: OtherRun, node: D);
         var record = f.Read(OtherRun);
         var operation = f.Op();
-        var built = Carrying.Build(record with { Requested = [D, U] }, History(f), operation).Carried;
+        var built = Carrying.Build(record with { Requested = [D, U] }, History(f), operation, _ => true).Carried;
         Assert.Equal([T], built.Select(item => item.Result.Task));
 
         Assert.Equal(new RunRejection(RunProblem.MissingDependencyResult, Task: T), Refused(f.Store.Request(f.PermitFor(OtherRun), f.Op(), U)));

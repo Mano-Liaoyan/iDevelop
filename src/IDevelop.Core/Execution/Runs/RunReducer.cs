@@ -840,7 +840,10 @@ internal static partial class RunValidation
         Revision.IsHash(result.Revision.Sha256) && result.Inputs.Value != Guid.Empty && result.Report is not null &&
         result.Supersedes?.Value != Guid.Empty && !result.Artifacts.IsDefault && result.Artifacts.All(Artifact) &&
         (result.Code is null || result.Code is CodeOutput.Forwarded forwarded && forwarded.Inputs.Value != Guid.Empty ||
-            result.Code is CodeOutput.Produced produced && Owned(produced.Code)) && (result.Origin switch
+            result.Code is CodeOutput.Produced produced && Owned(produced.Code) ||
+            result.Code is CodeOutput.Carried code && result.Origin is ResultOrigin.Carried && !code.Owners.IsDefaultOrEmpty &&
+            code.Owners.All(owner => owner.Value != Guid.Empty) && Revision.IsCommit(code.AttemptBase.Hex) && Revision.IsCommit(code.Commit.Hex)) &&
+            (result.Origin switch
         {
             ResultOrigin.Executed executed => executed.Attempt.Value != Guid.Empty,
             ResultOrigin.Human human => human.Request.Value != Guid.Empty,

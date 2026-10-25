@@ -76,7 +76,7 @@ internal sealed class RunApprovals
         ImmutableArray<PreflightCarried> carried = [];
         if (node is { } started && workflow.Tasks.ContainsKey(started))
         {
-            try { carried = Carried(revision, found, started); }
+            try { carried = Carried(revision, found, started, repository); }
             catch (IOException error) { gaps.Add(new PreflightGap.Records(error.Message)); }
             if (RunScope.Predecessors(workflow)[started].Order()
                 .Where(predecessor => !carried.Any(item => item.Task == predecessor && item.Refusal is null)).ToImmutableArray() is { IsEmpty: false } missing)
@@ -99,11 +99,12 @@ internal sealed class RunApprovals
     /// The results of earlier runs a run of <paramref name="node"/> would carry as their reports and artifacts, and the needed
     /// ones it could not carry and why (#90). Throws <see cref="IOException"/> when a run record cannot be read.
     /// </summary>
-    private ImmutableArray<PreflightCarried> Carried(ApprovedRevision revision, PreflightBase? found, TaskId node)
+    private ImmutableArray<PreflightCarried> Carried(ApprovedRevision revision, PreflightBase? found, TaskId node, GitRepository? repository)
     {
-        if (found is null) return [];
+        if (found is null || repository is null) return [];
         var history = RunHistory.Of(_store.Records(revision.Snapshot.Id), revision.Snapshot);
-        var build = Carrying.Build(Seed(PreviewRun, revision, new(found.Head), node), history, PreviewConfirmation);
+        var build = Carrying.Build(Seed(PreviewRun, revision, new(found.Head), node), history, PreviewConfirmation,
+            Carrying.Held(repository, found.Head));
         var rows = ImmutableArray.CreateBuilder<PreflightCarried>();
         foreach (var task in build.Carried.Select(item => item.Result.Task).Concat(build.Refused.Keys).Distinct().Order())
         {
@@ -314,7 +315,8 @@ internal sealed class RunApprovals
             if (chosen.Node is { } node)
             {
                 var history = RunHistory.Of(_store.Records(live.Workflow), chosen.Revision.Snapshot);
-                carried = Carrying.Build(Seed(chosen.Run, chosen.Revision, codeBase, node), history, chosen.Operation);
+                carried = Carrying.Build(Seed(chosen.Run, chosen.Revision, codeBase, node), history, chosen.Operation,
+                    Carrying.Held(repository, codeBase.Commit));
                 _probe?.Invoke("approval.carry.built");
                 if (Carrying.Copy(_project, chosen.Run, live.Workflow, carried, history) is { } failure)
                     return new RunApproval.Refused(ApprovalProblem.StorageUnavailable, failure);

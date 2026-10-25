@@ -131,6 +131,7 @@ internal sealed partial class Materializer
             {
                 CodeOutput.Produced produced => produced.Code.Commit,
                 CodeOutput.Forwarded forwarded => record.Inputs[forwarded.Inputs].CodeBase,
+                CodeOutput.Carried carried => carried.Commit,
                 _ => (CommitId?)null,
             }).OfType<CommitId>().Where(commit => commit != record.Base.Commit).Distinct().OrderBy(commit => commit.Hex, StringComparer.Ordinal)];
         return [.. commits.Where(commit => !commits.Any(other => other != commit && Ancestor(repository, commit, other)))];

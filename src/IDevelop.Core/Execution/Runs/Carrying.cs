@@ -28,8 +28,9 @@ internal sealed record CarryBuild(ImmutableArray<IncludedResult> Carried, Immuta
 /// Carrying earlier results into a run that a node's Run started (#90). A run needs a result of each dependency predecessor
 /// of the tasks it may start that it cannot start itself. When the workflow's history has a current result of such a
 /// task, the run carries it, with every result that one took that the run has none of. A carried result brings its report
-/// and its artifacts. The earlier run's work is already in the branch the run starts from, so it brings no code. Run
-/// Workflow carries nothing.
+/// and its artifacts. When the branch the run starts from holds the earlier result's commit, as after its run merged, it
+/// brings no code. Otherwise, as after a run that was stopped before it merged, it brings that commit, so the tasks after
+/// it start from it and the run's final merge takes it. Run Workflow carries nothing.
 /// </summary>
 internal static class Carrying
 {
@@ -49,9 +50,10 @@ internal static class Carrying
     /// <summary>
     /// Builds the results <paramref name="record"/> would carry for each of <see cref="Needed"/> that <paramref name="history"/>
     /// has a current result of, under the event <paramref name="carrying"/>. It records and writes nothing, so a preview
-    /// builds exactly what the approval does.
+    /// builds exactly what the approval does. <paramref name="held"/> says whether the run's base holds a commit, or null
+    /// when the repository cannot read it; <see cref="Held"/> asks Git.
     /// </summary>
-    public static CarryBuild Build(RunRecord record, RunHistory history, OperationId carrying)
+    public static CarryBuild Build(RunRecord record, RunHistory history, OperationId carrying, Func<CommitId, bool?> held)
     {
         var needed = Needed(record);
         if (needed.IsEmpty) return CarryBuild.Empty;
@@ -93,7 +95,7 @@ internal static class Carrying
                 refused[task] = new CarryRefusal.InputRefused(failed.Edge.From);
                 continue;
             }
-            switch (Carry(working, source, task, carrying))
+            switch (Carry(working, source, task, carrying, held))
             {
                 case (IncludedResult item, null):
                     if (RunReducer.CarriedProblem(working, item, carrying) is { } problem)
@@ -160,8 +162,24 @@ internal static class Carrying
         }
     }
 
-    /// <summary>The result <paramref name="working"/> would carry for <paramref name="task"/> from <paramref name="source"/>: its report and artifacts, or why not.</summary>
-    private static (IncludedResult? Item, CarryRefusal? Refusal) Carry(RunRecord working, EarlierResult source, TaskId task, OperationId carrying)
+    /// <summary>
+    /// Whether the run's base <paramref name="runBase"/> holds a commit of <paramref name="repository"/>, as
+    /// <see cref="Build"/> asks it: null when Git cannot read the commit.
+    /// </summary>
+    public static Func<CommitId, bool?> Held(GitRepository repository, CommitId runBase) => commit =>
+        commit == runBase ? true : repository.IsAncestor(commit, runBase) switch
+        {
+            GitAncestry.Yes => true,
+            GitAncestry.No => false,
+            _ => null,
+        };
+
+    /// <summary>
+    /// The result <paramref name="working"/> would carry for <paramref name="task"/> from <paramref name="source"/>: its report
+    /// and artifacts, and its code when the run's base does not hold it, or why not.
+    /// </summary>
+    private static (IncludedResult? Item, CarryRefusal? Refusal) Carry(RunRecord working, EarlierResult source, TaskId task, OperationId carrying,
+        Func<CommitId, bool?> held)
     {
         var (resultId, inputsId) = RunReducer.CarriedIds(carrying, task);
         var snapshot = working.Revision.Snapshot;
@@ -174,13 +192,22 @@ internal static class Carrying
         InputRecord inputs;
         try
         {
-            inputs = InputMaterial.Build(working, inputsId, task, working.Revision.Id, bindings, InputMaterial.Sources(working, bindings),
-                InputMaterial.Review(snapshot, task, bindings));
+            inputs = InputMaterial.Build(working, inputsId, task, working.Revision.Id, bindings, [], InputMaterial.Review(snapshot, task, bindings));
         }
         catch (ArgumentException error) { return (null, new CarryRefusal.Unavailable(error.Message)); }
+        CodeOutput? code = null;
+        if (InputMaterial.Code(source.Run, source.Result, task) is { } earlier)
+        {
+            switch (held(earlier.Commit))
+            {
+                case null: return (null, new CarryRefusal.Unavailable($"The repository no longer has its commit {earlier.Commit.Hex}."));
+                case false: code = new CodeOutput.Carried(earlier.Owners, earlier.AttemptBase, earlier.Commit); break;
+            }
+        }
         var result = new ResultRecord(resultId, task, working.Revision.Id, inputsId, new ResultOrigin.Carried(source.Run.Id, source.Result.Id),
             source.Result.Report, null)
         {
+            Code = code,
             Artifacts = [.. source.Result.Artifacts.Select(artifact => artifact with { StoredPath = RunStorage.ArtifactPath(resultId, artifact.Name) })],
         };
         return (new(result, inputs), null);

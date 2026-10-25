@@ -121,6 +121,7 @@ internal static class RunReviews
     private static (CommitId Base, CommitId Commit)? Change(RunRecord record, ResultRecord result) => result.Code switch
     {
         CodeOutput.Produced produced => (produced.Code.AttemptBase, produced.Code.Commit),
+        CodeOutput.Carried carried => (carried.AttemptBase, carried.Commit),
         CodeOutput.Forwarded forwarded when result.Origin is ResultOrigin.Merged && record.Inputs.GetValueOrDefault(forwarded.Inputs) is { } inputs =>
             (inputs.Code switch
             {
