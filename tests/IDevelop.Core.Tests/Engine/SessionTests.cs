@@ -57,7 +57,35 @@ public sealed class SessionTests : IAsyncLifetime
 
         await Until<NodeState.Completed>(engine, a);
         Assert.Equal("Interrupted and done", Assert.Single(engine.History(a)).Report);
-        Assert.Contains(new NodeEntry.Stopped(Stale: false), engine.Entries(a));
+        Assert.Contains(new NodeEntry.Stopped(), engine.Entries(a));
+    }
+
+    [Fact]
+    public async Task A_message_that_waits_for_a_turn_the_person_stops_is_dropped_and_the_log_says_so()
+    {
+        var a = _f.Node("A");
+        _f.Install(On().Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-a")).WaitForFile(_f.File("never")));
+        var engine = await _f.Open();
+        await engine.Run(a);
+
+        await engine.Send(a, "Later.", interrupt: false);
+        await engine.Stop(a);
+
+        Assert.Equal(new NodeEntry.MessageDropped("Later."), engine.Entries(a)[^1]);
+        Assert.Equal(new NodeState.Idle(), engine.State(a));
+    }
+
+    [Fact]
+    public async Task Approve_refuses_a_May_ask_node_that_asks_a_question()
+    {
+        var a = _f.Node("A", ConversationMode.MayAsk);
+        _f.Install(Reply("s-a", "I need to know.\n\n```idevelop\n{\"status\": \"asking\", \"question\": \"Which file?\"}\n```"));
+        var engine = await _f.Open();
+        await engine.Run(a);
+
+        Assert.Equal(new NodeState.InputRequired("Which file?"), await Until<NodeState.InputRequired>(engine, a));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => engine.Approve(a));
+        Assert.Empty(engine.History(a));
     }
 
     [Fact]
@@ -98,5 +126,7 @@ public sealed class SessionTests : IAsyncLifetime
         await Until<NodeState.Completed>(engine, a);
         await using var reopened = new WorkflowEngine(_f.Project, _f.Workflow, await _f.Fakes.DiscoverAsync());
         Assert.Equal((new NodeState.Completed(), engine.History(a)[0]), (reopened.State(a), Assert.Single(reopened.History(a))));
+        Assert.Contains(new NodeEntry.PersonMessage("Go on."), reopened.Entries(a));
+        Assert.Contains("nodes/\n", File.ReadAllText(Path.Combine(_f.Project, ".idp", ".gitignore")), StringComparison.Ordinal);
     }
 }

@@ -43,7 +43,15 @@ internal sealed class CliAgent(ClientDirectory clients, string folder) : IAgent
 
         using (process)
         {
-            return await Drive(node, plan, process, report, stop);
+            try
+            {
+                return await Drive(node, plan, process, report, stop);
+            }
+            finally
+            {
+                // A drain that failed leaves no client behind.
+                if (!process.HasExited) process.StopTree();
+            }
         }
     }
 

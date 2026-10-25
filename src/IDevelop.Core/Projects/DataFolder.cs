@@ -7,7 +7,7 @@ internal static class DataFolder
 {
     public const string Name = ".idp";
 
-    private static readonly string[] IgnoredLines = ["*.tmp", "attempts/", "runs/"];
+    private static readonly string[] IgnoredLines = ["*.tmp", "attempts/", "runs/", "nodes/", "window.lock"];
 
     public static string Workflows(string projectFolder) => Path.Combine(projectFolder, Name, "workflows");
 
@@ -19,7 +19,7 @@ internal static class DataFolder
     public static string Blueprints(string projectFolder) => Path.Combine(projectFolder, Name, "blueprints");
 
     /// <summary>
-    /// Makes <c>.idp/.gitignore</c> ignore temporary files, attempts, and runs. It keeps the user's lines and appends the
+    /// Makes <c>.idp/.gitignore</c> ignore temporary files, attempts, runs, node logs, and the window lock. It keeps the user's lines and appends the
     /// missing ones when an older project gains execution records.
     /// </summary>
     public static void EnsureGitIgnore(string projectFolder)

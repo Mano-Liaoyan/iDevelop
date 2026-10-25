@@ -20,6 +20,8 @@ public sealed class WorkflowEngine : IAsyncDisposable
     private readonly CliAgent _cli;
     private readonly Dictionary<TaskId, NodeLog> _logs = [];
     private readonly Dictionary<TaskId, Live> _live = [];
+    private readonly Lock _dispatch = new();
+    private readonly Queue<(TaskId Node, NodeState State)> _events = [];
     private Workflow _workflow;
     private ImmutableDictionary<TaskId, NodeState> _published;
 
@@ -34,7 +36,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         _published = States();
     }
 
-    /// <summary>Raised after a node's state changes, on the thread that changed it.</summary>
+    /// <summary>Raised after a node's state changes, in the order the changes happened, one at a time.</summary>
     public event Action<TaskId, NodeState>? NodeChanged;
 
     private enum Halt { None, Person, Message, Upstream, Edited, Closing }
@@ -153,7 +155,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         Change(() =>
         {
             var log = Log(node);
-            if (Waiting(node) is not { } waiting || log.Record.SessionBasis is not { } basis)
+            if (Waiting(node) is not { Why: NodeState.Approval or NodeState.Reply } waiting || log.Record.SessionBasis is not { } basis)
             {
                 throw new InvalidOperationException("The node waits for no approval.");
             }
@@ -178,8 +180,13 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 throw new InvalidOperationException("The node waits for no approval.");
             }
 
+            foreach (var predecessor in Predecessors(_workflow, node))
+            {
+                if (_live.ContainsKey(predecessor)) throw new InvalidOperationException($"{Title(predecessor)} is running.");
+            }
+
             Log(node).Append(new NodeEntry.PersonMessage(note));
-            Log(node).Append(new NodeEntry.Stopped(Stale: false));
+            Log(node).Append(new NodeEntry.Stopped());
             foreach (var predecessor in Predecessors(_workflow, node).Where(id => Log(id).Record.Session is not null))
             {
                 Continue(predecessor, note);
@@ -247,16 +254,22 @@ public sealed class WorkflowEngine : IAsyncDisposable
         {
             _live.Remove(id);
             if (live.Halt == Halt.Closing) return;
-            log.Append(live.Halt != Halt.None ? new NodeEntry.Stopped(live.Halt is Halt.Upstream or Halt.Edited) : outcome switch
+            log.Append(live.Halt != Halt.None ? new NodeEntry.Stopped() : outcome switch
             {
                 TurnOutcome.Done done => new NodeEntry.Completed(new NodeResult(NewId(), done.Report, null, basis)),
                 TurnOutcome.Waits waits => new NodeEntry.Waiting(waits.Why, waits.Text),
                 TurnOutcome.Failed failed => new NodeEntry.Failed(failed.Reason),
-                _ => new NodeEntry.Stopped(Stale: false),
+                _ => new NodeEntry.Stopped(),
             });
-            if (live.Queued is { } message && live.Halt is Halt.None or Halt.Message && log.Record.Session is not null && _workflow.Tasks.ContainsKey(id))
+            var continues = live.Halt is Halt.None or Halt.Message && log.Record.Session is not null && _workflow.Tasks.ContainsKey(id);
+            if (live.Queued is { } message && continues)
             {
                 Continue(id, message);
+            }
+            else if (live.Queued is { } dropped)
+            {
+                // A stop, an upstream change, or an edit ends the session's turn, so the message never reaches the agent.
+                log.Append(new NodeEntry.MessageDropped(dropped));
             }
             else if (log.Record.End is NodeEntry.Completed && _workflow.Tasks.ContainsKey(id))
             {
@@ -324,7 +337,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             { Open: true } => new NodeState.InputRequired(NodeState.Interrupted),
             { End: NodeEntry.Waiting waiting } => new NodeState.InputRequired(waiting.Why),
             { End: NodeEntry.Failed failed } => new NodeState.Failed(failed.Reason),
-            { End: NodeEntry.Stopped { Stale: true } } => new NodeState.Stale(),
+            { End: NodeEntry.Stopped, TurnBasis: { } turn } when turn != BasisIn(_workflow, id) => new NodeState.Stale(),
             { History: [.., var latest] } => latest.Basis == BasisIn(_workflow, id) ? new NodeState.Completed() : new NodeState.Stale(),
             _ => new NodeState.Idle(),
         };
@@ -336,7 +349,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         var instruction = node.Blueprint.Work is WorkSpec.Agent
             ? AgentWork.Prompt(new NodeContext(node, ""))
             : string.Join("\n", node.Fields.Select(field => $"{field.Key}: {field.Value}"));
-        return new Basis([.. Predecessors(workflow, id).Select(p => Log(p).Record.History.LastOrDefault()?.Id).OfType<string>()], instruction,
+        return new Basis([.. Predecessors(workflow, id).Select(p => new BasisInput(p, Log(p).Record.History.LastOrDefault()?.Id))], instruction,
             node.Execution is { } settings ? new AgentModel(settings.Client, settings.Model, settings.Reasoning) : null);
     }
 
@@ -388,10 +401,12 @@ public sealed class WorkflowEngine : IAsyncDisposable
 
     private ImmutableDictionary<TaskId, NodeState> States() => _workflow.Tasks.Keys.ToImmutableDictionary(id => id, StateOf);
 
-    /// <summary>Changes state under the lock, then tells each node whose state changed, outside it.</summary>
+    /// <summary>
+    /// Changes state under the lock and queues each node whose state changed in that order. Then one thread at a time
+    /// raises what is queued, outside the state lock, so the events keep their order and a handler may call the engine.
+    /// </summary>
     private void Change(Action action)
     {
-        List<(TaskId Node, NodeState State)> changed = [];
         lock (_gate)
         {
             try
@@ -401,12 +416,28 @@ public sealed class WorkflowEngine : IAsyncDisposable
             finally
             {
                 var now = States();
-                changed.AddRange(now.Where(pair => _published.GetValueOrDefault(pair.Key) != pair.Value).Select(pair => (pair.Key, pair.Value)));
+                foreach (var (node, state) in now.Where(pair => _published.GetValueOrDefault(pair.Key) != pair.Value))
+                {
+                    _events.Enqueue((node, state));
+                }
+
                 _published = now;
             }
         }
 
-        foreach (var (node, state) in changed) NodeChanged?.Invoke(node, state);
+        lock (_dispatch)
+        {
+            while (true)
+            {
+                (TaskId Node, NodeState State) next;
+                lock (_gate)
+                {
+                    if (!_events.TryDequeue(out next)) return;
+                }
+
+                NodeChanged?.Invoke(next.Node, next.State);
+            }
+        }
     }
 
     private sealed class Live

@@ -14,8 +14,12 @@ public sealed class ProjectLock : IDisposable
     private ProjectLock(HeldFile file) => _file = file;
 
     /// <summary>The lock, or null when another window holds it.</summary>
-    public static ProjectLock? TryTake(string projectFolder) =>
-        HeldFile.TryOpen(Path.Combine(projectFolder, DataFolder.Name, "window.lock")) is { } file ? new(file) : null;
+    public static ProjectLock? TryTake(string projectFolder)
+    {
+        var file = HeldFile.TryOpen(Path.Combine(projectFolder, DataFolder.Name, "window.lock"));
+        DataFolder.EnsureGitIgnore(projectFolder);
+        return file is null ? null : new(file);
+    }
 
     public void Dispose() => _file.Dispose();
 }

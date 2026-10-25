@@ -42,4 +42,24 @@ public sealed class ApprovalTests : IAsyncLifetime
         Assert.Equal("### A\n\nReport A fixed", Assert.Single(engine.History(p)).Report);
         Assert.Contains("### Check\n\n### A\n\nReport A fixed", _f.Prompt("c.txt"), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task A_send_back_while_a_predecessor_runs_is_refused_and_writes_nothing()
+    {
+        var (a, p) = (_f.Node("A"), _f.Approval("Check"));
+        _f.Connect(a, p);
+        var gate = _f.File("gate");
+        File.WriteAllText(gate, "");
+        _f.Install(Reply("s-a", "Report A", On().WaitForFile(gate)));
+        var engine = await _f.Open();
+        await engine.RunWorkflow();
+        await Until<NodeState.InputRequired>(engine, p);
+        File.Delete(gate);
+        await engine.Retry(a);
+        var entries = engine.Entries(p);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => engine.SendBack(p, "Fix the typo."));
+
+        Assert.Equal(entries, engine.Entries(p));
+    }
 }

@@ -41,7 +41,7 @@ public sealed class SchedulingTests : IAsyncLifetime
         await Until<NodeState.Completed>(engine, d);
         var prompt = _f.Prompt("d.txt");
         Assert.Contains("### B\n\nReport B\n\n### C\n\nReport C", prompt, StringComparison.Ordinal);
-        Assert.Equal([engine.History(b)[0].Id, engine.History(c)[0].Id], engine.History(d)[0].Basis.Inputs.AsEnumerable());
+        Assert.Equal([new BasisInput(b, engine.History(b)[0].Id), new BasisInput(c, engine.History(c)[0].Id)], engine.History(d)[0].Basis.Inputs.AsEnumerable());
         Assert.Equal("Report D", engine.History(d)[0].Report);
     }
 
@@ -57,7 +57,7 @@ public sealed class SchedulingTests : IAsyncLifetime
         await engine.Run(a);
 
         await Until<NodeState.Completed>(engine, b);
-        Assert.Equal([engine.History(a)[0].Id], engine.History(b)[0].Basis.Inputs.AsEnumerable());
+        Assert.Equal([new BasisInput(a, engine.History(a)[0].Id)], engine.History(b)[0].Basis.Inputs.AsEnumerable());
     }
 
     private static FakeRule Gated(string gate, string session, string reply) => Reply(session, reply, On().WaitForFile(gate));

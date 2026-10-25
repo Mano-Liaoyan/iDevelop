@@ -61,7 +61,7 @@ public sealed class ReportReuseTests
         Assert.Equal("Checked.", record.CurrentResults[T].Report);
         Assert.Equal(source, Assert.IsType<ResultOrigin.Reused>(record.CurrentResults[T].Origin).Source);
         Assert.Equal(2, record.Sequence);
-        Assert.Equal("*.tmp\nattempts/\nruns/\n", File.ReadAllText(Path.Combine(f.Project, ".idp", ".gitignore")));
+        Assert.Equal("*.tmp\nattempts/\nruns/\nnodes/\nwindow.lock\n", File.ReadAllText(Path.Combine(f.Project, ".idp", ".gitignore")));
         Assert.Equal(RunProblem.StartConflict, Problem(f.Store.Reserve(f.Lease(T), f.Op(), new(V1), new AttemptCause.Initial())));
     }
 

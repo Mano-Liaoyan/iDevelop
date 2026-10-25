@@ -72,8 +72,8 @@ public sealed class StalenessTests : IAsyncLifetime
         File.WriteAllText(gate, "");
 
         await Until(engine, b, state => state is NodeState.Completed && engine.History(a).Count == 2);
-        Assert.Equal([engine.History(a)[1].Id], Assert.Single(engine.History(b)).Basis.Inputs.AsEnumerable());
-        Assert.Contains(new NodeEntry.Stopped(Stale: true), engine.Entries(b));
+        Assert.Equal([new BasisInput(a, engine.History(a)[1].Id)], Assert.Single(engine.History(b)).Basis.Inputs.AsEnumerable());
+        Assert.Contains(new NodeEntry.Stopped(), engine.Entries(b));
         Assert.All(engine.Entries(b).OfType<NodeEntry.TurnStarted>(), start => Assert.Null(start.Session));
         Assert.DoesNotContain("--conversation", _f.Arguments("b.json"));
     }
@@ -90,8 +90,26 @@ public sealed class StalenessTests : IAsyncLifetime
         engine.Update(_f.Workflow.Must(new WorkflowEdit.SetField(a, "instructions", "Do more.")));
 
         await Until<NodeState.Stale>(engine, a);
-        Assert.Equal(new NodeEntry.Stopped(Stale: true), engine.Entries(a)[^1]);
+        Assert.Equal(new NodeEntry.Stopped(), engine.Entries(a)[^1]);
         Assert.Null(engine.CanRun(a));
         Assert.Empty(engine.History(a));
+        engine.Update(_f.Workflow);
+        Assert.Equal(new NodeState.Idle(), engine.State(a));
+    }
+
+    [Fact]
+    public async Task A_new_edge_from_a_node_without_a_result_stops_a_running_node()
+    {
+        var (a, b) = (_f.Node("A"), _f.Node("B"));
+        _f.Install(On().WaitForFile(_f.File("never")));
+        var engine = await _f.Open();
+        await engine.Run(b);
+        await Until<NodeState.Running>(engine, b);
+
+        _f.Connect(a, b);
+        engine.Update(_f.Workflow);
+
+        await Until<NodeState.Stale>(engine, b);
+        Assert.Equal(new NodeState.Idle(), engine.State(a));
     }
 }

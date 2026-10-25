@@ -36,21 +36,24 @@ public abstract record NodeState
 
     public sealed record Failed(string Reason) : NodeState;
 
-    /// <summary>The node's latest result, or the turn the engine stopped, rests on a basis that is no longer current.</summary>
+    /// <summary>The node's latest result, or the turn that was stopped, rests on a basis that is no longer current.</summary>
     public sealed record Stale : NodeState;
 }
 
 /// <summary>The client, model, and effort a node's agent runs with.</summary>
 public sealed record AgentModel(ClientId Client, string? Model, string? Effort);
 
+/// <summary>A dependency predecessor and the id of its latest result, or null while it has none.</summary>
+public sealed record BasisInput(TaskId Node, string? Result);
+
 /// <summary>
-/// Everything a node's output depends on: the ids of its inputs (the latest results of its dependency predecessors, in
-/// predecessor order), its instruction (the rendered template and fields), and its model. A result is stale when the basis
-/// it recorded differs from the current one.
+/// Everything a node's output depends on: its inputs (each dependency predecessor with its latest result, in predecessor
+/// order), its instruction (the rendered template and fields), and its model. A result is stale when the basis it recorded
+/// differs from the current one.
 /// </summary>
-public sealed record Basis(ImmutableArray<string> Inputs, string Instruction, AgentModel? Model)
+public sealed record Basis(ImmutableArray<BasisInput> Inputs, string Instruction, AgentModel? Model)
 {
-    // ImmutableArray compares by reference, so equality compares the ids themselves.
+    // ImmutableArray compares by reference, so equality compares the inputs themselves.
     public bool Equals(Basis? other) =>
         other is not null && Inputs.SequenceEqual(other.Inputs) && Instruction == other.Instruction && Model == other.Model;
 
