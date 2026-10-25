@@ -12,9 +12,10 @@ namespace IDevelop.Core.Tests.Approval;
 /// <summary>
 /// A node's run counts a current result from an earlier run as complete (#90, the owner's decision of 2026-10-09): it
 /// carries that result into the new run as its report and artifacts, so the tasks after the node start once all of their
-/// predecessors are complete. The earlier run's work is already in the branch the run starts from (#144), which these
-/// tests put there with <see cref="ApprovalFixture.MergeResult"/>. A result that no longer counts is not carried, and its
-/// task must run again. Run Workflow carries nothing.
+/// predecessors are complete. After a finished run, the earlier run's work is already in the branch the run starts from
+/// (#144), which most of these tests put there with <see cref="ApprovalFixture.MergeResult"/>, and a carried result brings
+/// no code. After a run stopped before it merged, a carried result brings its commit, and the tasks after it start from it.
+/// A result that no longer counts is not carried, and its task must run again. Run Workflow carries nothing.
 /// </summary>
 public sealed class CarriedResultTests
 {
@@ -353,6 +354,84 @@ public sealed class CarriedResultTests
 
         Assert.Equal(second, Assert.Single(changed.Current.Carried).Run);
         Assert.Equal(2, f.ApprovedRuns().Length);
+    }
+
+    /// <summary>A turn that fails, so its run stays open with the results it has until the person stops it.</summary>
+    private static FakeRule Fails(TaskId task) => FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-" + Name(task))).Exit(1);
+
+    /// <summary>
+    /// Runs <paramref name="node"/> until <paramref name="failing"/> fails, then stops the run, so the results it has stay
+    /// current and their work never merges into the branch.
+    /// </summary>
+    private static async Task<RunId> RunAndStop(ApprovalFixture f, TaskId node, TaskId failing, int command)
+    {
+        var started = await Start(f, f.Runs.Preflight(f.Workflow, node), Command(command));
+        var coordinator = started.Coordinator;
+        await coordinator.Until(view => view.Tasks[failing].State == TaskState.Failed).WaitAsync(Bound);
+        Assert.IsType<RunCommand.Accepted>(await coordinator.Stop(coordinator.Address, new(Guid.NewGuid())).WaitAsync(Bound));
+        await coordinator.Until(view => view.Status == RunStatus.Stopped).WaitAsync(Bound);
+        return coordinator.Address.Run;
+    }
+
+    /// <summary>Runs <paramref name="node"/> until <paramref name="last"/> is done, and then until the run completes.</summary>
+    private static async Task<RunId> RunUntilSettled(ApprovalFixture f, TaskId node, TaskId last, int command)
+    {
+        var started = await Start(f, f.Runs.Preflight(f.Workflow, node), Command(command));
+        var view = await started.Coordinator.Until(view => view.Tasks[last].State is TaskState.Done or TaskState.Failed).WaitAsync(Bound);
+        Assert.Equal(TaskState.Done, view.Tasks[last].State);
+        await Completed(started.Coordinator);
+        return started.Coordinator.Address.Run;
+    }
+
+    [Fact]
+    public async Task A_node_whose_predecessor_s_result_is_carried_from_a_stopped_run_starts_from_that_result_s_commit()
+    {
+        // A → B: the first run's A succeeds, B fails, and the person stops it, so A's work never reaches the branch.
+        await using var f = new ApprovalFixture(Graph([Agent(A), Agent(B)], (A, B)));
+        f.Answer(A, Writes(A, "out-a.txt", "A\n")).Answer(B, Fails(B), Copies(f, B, "out-a.txt"));
+        await f.Open();
+        var first = await RunAndStop(f, A, B, 1);
+        var earlier = f.Read(first).CurrentResults[A];
+        var commit = Assert.IsType<CodeOutput.Produced>(earlier.Code).Code.Commit;
+        Assert.False(File.Exists(f.Git.PathOf("out-a.txt")));
+
+        var preview = f.Runs.Preflight(f.Workflow, B);
+
+        Assert.Equal(new PreflightCarried(A, first, earlier.Id, null), Assert.Single(preview.Carried));
+        var second = await RunUntilSettled(f, B, B, 2);
+        Assert.Equal("A\n", Copied(f, B, "out-a.txt"));
+        var record = f.Read(second);
+        var carried = record.CurrentResults[A];
+        Assert.Equal(new ResultOrigin.Carried(first, earlier.Id), carried.Origin);
+        Assert.Equal(commit, Assert.IsType<CodeOutput.Carried>(carried.Code).Commit);
+        var attempt = record.Attempts.Values.Single(attempt => attempt.Task == B);
+        var prepared = record.Preparations.Values.Single(prepared => prepared.Launch.Attempt == attempt.Id);
+        Assert.Equal(commit, prepared.Location.AttemptBase);
+        Assert.Equal("A\n", f.ResultFile(second, B, "out-a.txt"));
+        // The run's final merge brings A's work into the branch with B's.
+        Assert.Equal("A\n", f.Text("out-a.txt"));
+    }
+
+    [Fact]
+    public async Task A_join_merges_a_result_carried_from_a_stopped_run_with_a_result_of_its_own_run()
+    {
+        // A → C ← B, and A → D: the first run's A succeeds, D fails, C waits for B, and the person stops it.
+        await using var f = new ApprovalFixture(Graph([Agent(A), Agent(B), Agent(C), Agent(D)], (A, C), (B, C), (A, D)));
+        f.Answer(A, Writes(A, "out-a.txt", "A\n")).Answer(D, Fails(D)).Answer(B, Writes(B, "out-b.txt", "B\n"))
+            .Answer(C, Copies(f, C, "out-a.txt", "out-b.txt"));
+        await f.Open();
+        var first = await RunAndStop(f, A, D, 1);
+        var commit = Assert.IsType<CodeOutput.Produced>(f.Read(first).CurrentResults[A].Code).Code.Commit;
+
+        var second = await RunUntilSettled(f, B, C, 2);
+
+        Assert.Equal([1, 1, 1, 1], Launches(f, A, B, C, D));
+        Assert.Equal(("A\n", "B\n"), (Copied(f, C, "out-a.txt"), Copied(f, C, "out-b.txt")));
+        var record = f.Read(second);
+        Assert.Equal(commit, Assert.IsType<CodeOutput.Carried>(record.CurrentResults[A].Code).Commit);
+        var joined = Assert.IsType<CodeSelection.Joined>(record.Inputs[record.CurrentResults[C].Inputs].Code);
+        Assert.Contains(commit, joined.Join.Sources.Select(source => source.Commit));
+        Assert.Equal(("A\n", "B\n"), (f.ResultFile(second, C, "out-a.txt"), f.ResultFile(second, C, "out-b.txt")));
     }
 
     [Fact]

@@ -21,9 +21,10 @@ internal static partial class RunReducer
     /// Why a result carried from an earlier run (#90) does not fit <paramref name="record"/>, the run as it is just before
     /// it, or null. The run must have started from a node, and the task must be one it cannot start. Each result the
     /// carried one took must already be the current, non-stale result of this run, so a carried chain comes in the order its
-    /// inputs need. Its inputs are what the run's own materialization would build from those results, it brings no code,
-    /// and its artifacts are stored under its own id. Whether the earlier result still counts is checked before the event is written; a replay
-    /// cannot read it.
+    /// inputs need. Its inputs are what the run's own materialization would build from those results, with no code of
+    /// their own, since the task does not run here. It brings the earlier result's commit only when the run's base lacks it,
+    /// and its artifacts are stored under its own id. Whether the earlier result still counts, and whether the base holds its
+    /// commit, is checked before the event is written; a replay cannot read it.
     /// </summary>
     /// <param name="carrying">The operation of the approval or request that carries it.</param>
     internal static RunProblem? CarriedProblem(RunRecord record, IncludedResult carried, OperationId carrying)
@@ -37,7 +38,7 @@ internal static partial class RunReducer
             record.Gates.Values.Any(gate => gate.Request.Task == result.Task))
             return RunProblem.StartConflict;
         if ((result.Id, result.Inputs) != CarriedIds(carrying, result.Task) || result.Revision != record.Revision.Id || inputs.Task != result.Task ||
-            inputs.Revision != result.Revision || result.Supersedes is not null || result.Code is not null)
+            inputs.Revision != result.Revision || result.Supersedes is not null || result.Code is not (null or CodeOutput.Carried))
             return RunProblem.InputConflict;
         if (InputProblem(record, inputs, fresh: false) is { } input) return input.Problem;
         var stale = record.StaleResults;
@@ -47,8 +48,8 @@ internal static partial class RunReducer
             return RunProblem.StaleInput;
         try
         {
-            var expected = InputMaterial.Build(record, inputs.Id, result.Task, inputs.Revision, inputs.Bindings,
-                InputMaterial.Sources(record, inputs.Bindings), InputMaterial.Review(snapshot, result.Task, inputs.Bindings));
+            var expected = InputMaterial.Build(record, inputs.Id, result.Task, inputs.Revision, inputs.Bindings, [],
+                InputMaterial.Review(snapshot, result.Task, inputs.Bindings));
             if (!SameInput(expected, inputs)) return RunProblem.InputConflict;
         }
         catch (ArgumentException)

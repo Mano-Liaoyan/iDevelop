@@ -108,21 +108,25 @@ internal static class InputMaterial
             binding.Edge.From == subject && binding.Kind == ConnectionKind.Dependency) is { } provided
             ? new(subject, provided.Result) : null;
 
-    private static CodeSource? Source(RunRecord record, InputBinding.Provided binding)
+    private static CodeSource? Source(RunRecord record, InputBinding.Provided binding) =>
+        Code(record, record.Results.Single(result => result.Id == binding.Result), binding.Edge.From);
+
+    /// <summary>
+    /// The code <paramref name="result"/> of <paramref name="task"/> hands on in <paramref name="record"/>: its own change,
+    /// the code its inputs selected, or the commit of an earlier run's result that it carries. Null when it hands on none.
+    /// </summary>
+    internal static CodeSource? Code(RunRecord record, ResultRecord result, TaskId task) => result.Code switch
     {
-        var result = record.Results.Single(result => result.Id == binding.Result);
-        return result.Code switch
+        CodeOutput.Produced produced => new(task, result.Id, [produced.Code.Owner], produced.Code.AttemptBase, produced.Code.Commit),
+        CodeOutput.Forwarded forwarded => record.Inputs[forwarded.Inputs].Code switch
         {
-            CodeOutput.Produced produced => new(binding.Edge.From, result.Id, [produced.Code.Owner], produced.Code.AttemptBase, produced.Code.Commit),
-            CodeOutput.Forwarded forwarded => record.Inputs[forwarded.Inputs].Code switch
-            {
-                CodeSelection.Single single => new(binding.Edge.From, result.Id, single.Source.Owners, single.Source.AttemptBase, single.Source.Commit),
-                CodeSelection.Joined joined => new(binding.Edge.From, result.Id,
-                    [.. joined.Join.Sources.SelectMany(source => source.Owners).Distinct().OrderBy(owner => owner.ToString(), StringComparer.Ordinal)],
-                    joined.Join.Commit, joined.Join.Commit),
-                _ => null,
-            },
+            CodeSelection.Single single => new(task, result.Id, single.Source.Owners, single.Source.AttemptBase, single.Source.Commit),
+            CodeSelection.Joined joined => new(task, result.Id,
+                [.. joined.Join.Sources.SelectMany(source => source.Owners).Distinct().OrderBy(owner => owner.ToString(), StringComparer.Ordinal)],
+                joined.Join.Commit, joined.Join.Commit),
             _ => null,
-        };
-    }
+        },
+        CodeOutput.Carried carried => new(task, result.Id, carried.Owners, carried.AttemptBase, carried.Commit),
+        _ => null,
+    };
 }

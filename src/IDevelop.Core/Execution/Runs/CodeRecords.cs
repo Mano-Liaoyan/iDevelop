@@ -36,6 +36,7 @@ internal sealed record OwnedCode(TaskId Owner, AttemptId Attempt, CommitId Attem
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Produced), "produced")]
 [JsonDerivedType(typeof(Forwarded), "forwarded")]
+[JsonDerivedType(typeof(Carried), "carried")]
 internal abstract record CodeOutput
 {
     private CodeOutput() { }
@@ -43,6 +44,18 @@ internal abstract record CodeOutput
     internal sealed record Produced(OwnedCode Code) : CodeOutput;
 
     internal sealed record Forwarded(InputId Inputs) : CodeOutput;
+
+    /// <summary>
+    /// The code of a result carried from an earlier run whose work the branch the run started from does not hold: the
+    /// earlier result's <paramref name="Commit"/>, which its <paramref name="Owners"/> changed from <paramref name="AttemptBase"/>.
+    /// </summary>
+    internal sealed record Carried(ImmutableArray<TaskId> Owners, CommitId AttemptBase, CommitId Commit) : CodeOutput
+    {
+        public bool Equals(Carried? other) => other is not null && Owners.SequenceEqual(other.Owners) && AttemptBase == other.AttemptBase &&
+            Commit == other.Commit;
+
+        public override int GetHashCode() => HashCode.Combine(AttemptBase, Commit);
+    }
 }
 
 /// <summary>

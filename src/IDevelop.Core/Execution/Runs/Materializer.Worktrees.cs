@@ -23,6 +23,13 @@ internal sealed partial class Materializer
         if (Value(repository.ReadRef(change.Ref)) != change.Target)
             throw Fault(MaterializationProblem.UncertainOwnership, "Approved base ref has an unexpected value.", new BlockScope.Refs([change.Ref]));
         ApprovalPin.Release(repository, run, change.Target, change.Ref);
+        // The code of a result carried from an earlier run stays on that run's branch, which the run does not own, so a pin
+        // keeps it until the run settles.
+        foreach (var commit in record.Results.Select(result => result.Code).OfType<CodeOutput.Carried>().Select(code => code.Commit).Distinct())
+        {
+            var pin = RunLayout.CarriedPin(record.RunKey!, commit);
+            if (Value(repository.ReadRef(pin)) != commit) Pin(repository, pin, commit);
+        }
         record = Read(workflow, run);
         if (!record.TaskKeys.ContainsKey(task))
         {

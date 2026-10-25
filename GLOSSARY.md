@@ -80,7 +80,7 @@ A task's result from a run of its workflow that has settled. It still counts as 
 _Avoid_: old result, cached result
 
 **Carried result**:
-An earlier result that a node run takes for a task it does not run, recorded in its own journal with its report and its artifacts. The earlier run's work is already in the branch the run starts from, so a carried result brings no code. Run Workflow carries nothing.
+An earlier result that a node run takes for a task it does not run, recorded in its own journal with its report and its artifacts. When the branch the run starts from already holds the earlier result's commit, as after its run merged, a carried result brings no code. Otherwise, as after a run stopped before its final merge, it brings that commit, so the nodes after it start from it. Run Workflow carries nothing.
 _Avoid_: imported result, reused result, which names a standalone report a run reuses
 
 **Stale result**:
