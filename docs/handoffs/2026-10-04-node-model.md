@@ -2,59 +2,45 @@
 
 ## Task
 
-On 2026-10-04 the user made the node model the top priority, ahead of workflow execution: "once the node is designed well, executing the rest is comparatively easy." A node today holds a title, instructions, acceptance criteria, and an agent setting. The user asked for typed nodes, node types that users define and save as blueprints, a review loop between two agents, and a way to talk to a running agent. This record holds the design. The user accepted it on 2026-10-04 and changed the review loop, as [What the user decided](#what-the-user-decided) records.
-
-## Checklist
-
-The Feature playbook drove the design. Each delivery slice runs the remaining steps in its own pull request.
-
-- [x] 1. `how` over the affected subsystem. A fresh read-only Opus 5.5 session at xhigh mapped the workflow model and the single-task engine against workflow execution.
-- [x] The user answered three product questions. See [What the user decided](#what-the-user-decided).
-- [x] The coordinator ran a two-turn conversation on all four real clients. See [Commands and observed results](#commands-and-observed-results).
-- [x] 2. `architect` for parallel design exploration. Two fresh Opus 5.5 runners at xhigh designed from opposing starting directions. A fresh Opus 5.5 cross-judge at xhigh scored them. See [The design arena](#the-design-arena).
-- [x] The user accepted the design, kept the defaults for three open questions, and changed the review loop.
-- [ ] 3. Throughput checkpoint. Slice 1 writes it in its pull request.
-- [ ] 4. Delegate code writing, one slice at a time.
-- [ ] 5. to 8. Verify, rebase, interrogate, and open the pull requests, one per slice.
+On 2026-10-04 the user made the node model the top priority, ahead of workflow execution: "once the node is designed well, executing the rest is comparatively easy." The user asked for typed nodes, node types that users define and save as blueprints, a review loop between two agents, and a way to talk to a running agent. This record holds the design. The user accepted it on 2026-10-04 with their own review loop, as [What the user decided](#what-the-user-decided) records.
 
 ## What the user decided
 
 The user wrote in Chinese. This summary keeps the meaning.
 
-- Nodes have types. An implement node reads a plan and executes it with the agent, model, and reasoning setting the user chose. A plan node makes a plan and hands it to implement nodes. An architect node designs. A review node is probably better than the review connection. Connections still express relationships.
-- iDevelop does not depend on PStack. A user may prefer their own commands or another skill set, such as Matt Pocock's skills.
-- Nodes are built on interfaces, with a base node interface. A node that needs a capability, such as interaction, implements that capability's interface.
+- Nodes have types. An implement node reads a plan and executes it with the agent, model, and reasoning setting the user chose. A plan node makes a plan and hands it to implement nodes. An architect node designs. A review is a node. Connections express relationships.
+- A user may bring their own commands or skill set, such as Matt Pocock's skills, into a node.
+- Nodes are built on interfaces. A node that needs a capability, such as interaction, implements that capability's interface.
 - Users define their own nodes and node types. Any node can be saved as a blueprint. Built-in blueprints are read-only, and a user changes one by deriving a new blueprint and saving it.
-- A review is two agents that iterate until both are satisfied, then hand the result on. The user rejected a fixed limit on rounds. Each agent's context window stays clean, because not every model has a large window and a bloated one makes the model worse.
-- Interaction matters most. When an agent asks how to proceed, the user answers, guides, or corrects it. Some nodes only implement and never ask. A live terminal is acceptable but not required if it costs too much. The solution must cost little, work with all four clients, and leave room to extend.
-- The current canvas look is fine.
-- How a plan reaches implement nodes "depends". A planner usually creates the nodes, but sometimes the nodes exist already, or the user draws an architect and three to five empty nodes and fills them later. The long-term goal is a button where the user talks to one agent and the whole workflow appears. Waiting for a plan node to finish running before any implement node exists is not ideal. The user left the design to the coordinator.
+- A review is two agents that iterate until both are satisfied, then hand the result on. Each agent's context window stays clean, because not every model has a large window and a bloated one makes the model worse.
+- Interaction matters most. When an agent asks how to proceed, the user answers, guides, or corrects it. Some nodes only implement and never ask. The solution must cost little, work with all four clients, and leave room to extend.
+- How a plan reaches implement nodes "depends". A planner usually creates the nodes, but sometimes the nodes exist already, or the user draws an architect and three to five empty nodes and fills them later. The long-term goal is a button where the user talks to one agent and the whole workflow appears.
 - Placing a node copies its blueprint and records which blueprint and version it came from. A later edit of the blueprint changes only nodes placed afterwards.
 - Blueprints live in a personal library in the user's folder and in a project library under `.idp/blueprints/`.
 
-After reading the proposal on 2026-10-04, the user kept the defaults for three questions:
+The user also decided these on 2026-10-04:
 
 - An accepted proposal only adds nodes and fills nodes that have not started.
 - Changing one node's fields, template, or work means deriving a blueprint first.
 - The Approval node stays in the first release.
-
-The user changed the review loop. The proposal started both agents in fresh sessions each round and paused for the user when a round repeated an earlier one. The user wants the implement node to do its work and tell the reviewer what it changed. The reviewer judges and says what is wrong. The implement node fixes it and hands it back. They go back and forth until both agree. Each agent keeps its own session. On 2026-10-25 the owner decided that the reviewer waits for the person after a set number of rounds ([ADR 0040](../adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)).
+- The implement node does its work and tells the reviewer what it changed. The reviewer judges and says what is wrong. The implement node fixes it and hands it back. They go back and forth until both agree, and each agent keeps its own session. On 2026-10-25 the owner decided that the reviewer waits for the person after a set number of rounds ([ADR 0040](../adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)).
 
 ## Design
 
-### A node type is a blueprint over one of three works
+### A node type is a blueprint over one work
 
-A blueprint is data. It has an id and a version, a name, a description, the blueprint it was derived from, a work, a list of fields, and default settings. The work says what the node does, and it is a closed set:
+A blueprint is data. It has an id and a version, a name, a description, the blueprint it was derived from, a work, a list of fields, and default settings. The work says what the node does, and it is a closed set, `WorkKind`:
 
-| Work | Holds | Implemented by |
+| Work | Holds | Run by |
 | --- | --- | --- |
-| Agent | Read-only or edit access, whether it proposes graph edits, a prompt template | `AgentWork` |
-| Review | A reviewer template and a fix template | `ReviewWork` |
-| Person | Nothing. A person approves or sends back | `PersonWork` |
+| Agent | Read-only or edit access, whether it proposes graph edits, a prompt template | `CliAgent` |
+| Review | A reviewer template and a fix template | `CliAgent` |
+| Merge | A prompt template for the merge agent | `CliAgent` |
+| Person | Nothing. A person approves or sends back | `PersonAgent` |
 
-A field has a key, a label, a shape (one line or several), a required flag, and a default. A prompt template uses `{{title}}`, the field keys, `{{inputs}}`, and the work's own variables. The work appends iDevelop's result contract after the rendered template, so no blueprint can remove it.
+A field has a key, a label, a shape (one line or several), a required flag, and a default. A prompt template uses `{{title}}`, the field keys, `{{inputs}}`, and the work's own variables. iDevelop appends its result contract after the rendered template, so no blueprint can remove it.
 
-A node keeps today's id and title. It gains the key of the blueprint it came from (`id@version`), its field values, and its settings: the agent, model, and reasoning, plus a conversation mode. The workflow embeds one copy of every blueprint version its nodes use. Placing a node copies the blueprint in, so a later edit of the library blueprint changes nothing already placed, and the file opens on a machine without the author's library. `Workflow.Apply` drops a copy that no node uses, so the two collections never need to be kept in sync.
+A node has an id and a title, the key of the blueprint it came from (`id@version`), its field values, and its settings: the agent, model, and reasoning, plus a conversation mode. The workflow embeds one copy of every blueprint version its nodes use. Placing a node copies the blueprint in, so a later edit of the library blueprint changes nothing already placed, and the file opens on a machine without the author's library. `Workflow.Apply` drops a copy that no node uses, so the two collections never need to be kept in sync.
 
 | Part | Fixed by the blueprint version | A node may change it |
 | --- | --- | --- |
@@ -63,202 +49,93 @@ A node keeps today's id and title. It gains the key of the blueprint it came fro
 | The title and the field values | Seeds the defaults | Yes |
 | The agent, model, reasoning, and conversation mode | Seeds the defaults | Yes |
 
-The rule is "the blueprint fixes the structure, the node sets the values". A node's connections and attempt history keep their meaning because its work never changes under them. To change the structure, the user derives a blueprint, which is one click from any node. "Save as blueprint" turns a node's values and settings into the defaults of a new blueprint.
+The rule is "the blueprint fixes the structure, the node sets the values". A node's connections and results keep their meaning because its work never changes under them. To change the structure, the user derives a blueprint, which is one click from any node. "Save as blueprint" turns a node's values and settings into the defaults of a new blueprint.
 
-### Interfaces where behavior varies, data where users customize
+A user-defined node type is a blueprint, made in the window without code. It sets the name, the description, the work, the access, whether the agent proposes, its own fields, its prompt templates, and its default agent and conversation mode. It cannot add a work, change the result contract, change graph rules, or run a script. A new work needs code: one `WorkSpec` case and one `WorkKind` value, and the build fails on an enum switch that misses it.
 
-The test for an interface is that implementations behave differently and more are coming. Otherwise data or a closed union is better, because an exhaustive switch shows the next developer every place a new case must go.
+### Six built-in types
 
-- `INodeWork` is the base node interface. Its one method, `Next(context, history)`, is a pure decider. It reads the node, what earlier nodes handed on, and the node's history, and it returns one step: run a turn, wait for the person with a reason, finish with a handoff, or fail. It starts no process and touches no file. A single node's Run and the later workflow scheduler call it the same way, and the same history gives the same step, so a crash between a turn's end and the recorded step converges on reopen.
-- `IConverses` is the interaction capability. `AgentWork` continues the client's session with the person's message. `ReviewWork` adds the message to its ledger as guidance. `PersonWork` has no agent and does not implement it.
-- Each work carries a `WorkKind` enum value. The build already fails on a non-exhaustive enum switch, so a new work breaks every mapping that must handle it.
-- Each client stays a row of pure functions, as phase 3 decided. A row gains the arguments that resume a session. The exit policy stays in one reducer and settles a turn instead of an attempt.
-- Proposing graph edits is a flag on the agent work, because it has one behavior. Waiting for a person is a closed union, `Pending`, with one inspector section per case.
-
-A user-defined node type is a blueprint, made in the window without code. It sets the name, the description, the work, the access, whether the agent proposes, its own fields, its prompt templates, and its default agent and conversation mode. It cannot add a work, change the result contract, change graph rules, or run a script. A new work needs code: one `INodeWork`, one `WorkSpec` case, and one `WorkKind` value.
-
-### Five built-in types
-
-Built-ins live in the app under the reserved `idevelop.` id prefix, so they are read-only by construction. Their templates are plain English and name no skill library. A PStack or Matt Pocock user derives a blueprint and writes a command or skill name into its template or a field.
+Built-ins live in the app under the reserved `idevelop.` id prefix, so they are read-only by construction. Their templates are plain English and name no skill library. A user who wants a command or a skill derives a blueprint and writes its name into the template or a field.
 
 | Type | Work | Consumes | Produces | Default conversation |
 | --- | --- | --- | --- | --- |
-| Implement | Agent, edit | Its fields and the reports of earlier nodes | Its final report | Autonomous. The prompt is today's, byte for byte |
+| Implement | Agent, edit | Its fields and the reports of earlier nodes | Its final report and a commit | Autonomous |
 | Plan | Agent, read-only, proposes | A goal, constraints, earlier reports, the empty nodes after it | A proposal of nodes and connections, and a report | May ask |
 | Architect | Agent, read-only, proposes | A brief, earlier reports, the empty nodes after it | A design as its report, and a proposal that fills the empty nodes | May ask |
-| Review | Review | One subject's ticket and final report, other inputs as context | A verdict | Not applicable |
-| Approval | Person | Its inputs | The person's decision, passing the inputs on | Not applicable |
+| Review | Review | Its subject's ticket, report, and change, other inputs as context | A verdict | Autonomous |
+| Approval | Person | Its inputs | The person's decision, passing the inputs on | Autonomous |
+| Merge | Merge | The commits of the nodes before it | A merge commit and a report | Autonomous |
 
 ### Review is a node, and connections express flow
 
-`ConnectionKind.Review` goes away, which settles what a review connection blocks. Connections are `dependency`, which waits for its source and receives its result, and `context`, which reads the source's latest result without waiting. In `Implement → Review → Next`, the review's subject is its one dependency predecessor whose agent may edit. `Workflow.Apply` rejects a second one. The loop runs as attempts, never as edges, so the dependency graph stays acyclic under today's rule.
+Connections are `dependency`, which waits for its source and receives its result, and `context`, which reads the source's latest result without waiting. In `Implement → Review → Next`, the review's subject is its one dependency predecessor that changes the project, an editing agent or a Merge node ([ADR 0037](../adr/0037-a-review-after-a-merge-node-reviews-the-merge.md)). `Workflow.Apply` rejects a second one. The loop runs along a feedback edge, never as a connection, so the dependency graph stays acyclic.
 
-The implement node runs first, as any node does. Then the review node starts a back-and-forth between two sessions, and each session keeps its own history.
+1. The reviewer's turn starts its session with the reviewer template, the subject's ticket, its report of what it changed and why, and its change. It answers with a verdict: approve, or reject with findings, each with a severity and a location ([ADR 0029](../adr/0029-a-finding-has-a-severity-and-a-location.md)).
+2. A reject sends the findings, in the fix template, along the feedback edge to the subject, which continues its own session with them ([ADR 0041](../adr/0041-feedback-goes-to-the-direct-predecessor.md)).
+3. Once the subject completes again, the reviewer reviews its new result. Then step 2 repeats.
 
-1. The reviewer's first turn starts its session with the reviewer template, the subject's ticket, and the implementer's final report of what it changed and why. It answers with a verdict: approve, or findings.
-2. If the reviewer found problems, iDevelop resumes the implementer's own session with the findings. The implementer fixes each one, or disputes it with a reason, and reports what it changed.
-3. iDevelop resumes the reviewer's session with that report. The reviewer approves, raises new findings, or answers each dispute by withdrawing the finding or explaining why it stands. Then step 2 repeats.
-
-Each fix round is a **Continue** of the implement node, a new attempt whose first turn resumes the implementer's session. Each review round is a new turn in the review node's own session. Neither agent reads the other's transcript. Each reads its own history plus the other side's short message, so a round adds one message to each session. Small tickets keep both sessions small.
-
-The loop ends when the two agents agree. The reviewer approves with no open finding, and the implementer's last reply disputes nothing. iDevelop keeps agreement reachable:
-
-- Every finding names the change that would settle it.
-- A disputed finding goes back to the reviewer, who withdraws it or answers the reason.
-- After the review's round limit, 3 by default, the reviewer waits for the person's guidance ([ADR 0040](../adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)).
-
-The user can add guidance at any time, which reaches both agents in their next message, and can stop the review as any node can be stopped.
-
-iDevelop folds a findings ledger from the verdicts and replies. The card shows the round and the open findings. The inspector lists each finding with both sides' latest words. The ledger is a record and a view, and the agents talk through their sessions. If a session cannot resume, for example after the user changed the node's client, the next turn starts a fresh session with the ticket and the ledger.
-
-A read-only turn that changed the project fails with that reason, which checks read-only access on every client, including Pi, which has no permission system.
+Each agent reads its own history plus the other side's short message, so a round adds one message to each session. Small tickets keep both sessions small. Every finding names the change that would settle it. The loop ends when the reviewer approves. After the review's round limit, 3 by default, the reviewer waits for the person's guidance ([ADR 0040](../adr/0040-after-three-review-rounds-the-reviewer-waits-for-the-person.md)). A verdict that iDevelop cannot read makes the reviewer wait for the person with the reason.
 
 ### Planning produces graph edits the person approves
 
-Every agent that plans produces one `Proposal`. A Plan node, an Architect node, and the future "talk to one agent" button all produce it. A proposal can add nodes, fill nodes, and add connections. It cannot delete, move, or retype anything. Filling an empty node the person drew and creating a new node are the same mechanism.
+Every agent that plans produces one `Proposal`. A Plan node, an Architect node, and Generate Workflow all produce it. A proposal can add nodes, fill nodes, and add connections. It cannot delete, move, or retype anything. Filling an empty node the person drew and creating a new node are the same mechanism.
 
-- The prompt lists the empty nodes after the planner as handles such as `slot-1`, and the blueprints the planner may place as handles such as `type-2`. The agent writes only handles. It never writes ids and never chooses agents. A new node takes its blueprint's default agent, model, and reasoning, so the person's choices come with it.
-- iDevelop parses the proposal once, where it arrives, and mints the new ids then. A second Accept is rejected by the existing duplicate-id rule.
-- A dry run through `Workflow.Apply` draws the proposed nodes as dashed ghost cards and fills the drawn ones in place. The person accepts all of them or unticks some first. Accepting applies one `Batch` edit: all or nothing, one undo step, and later one synchronized operation. A proposal that would close a cycle names the cycle and changes nothing.
+- The prompt lists the empty nodes after the planner as handles such as `slot-1`, and the blueprints the planner may place as handles such as `type-2`. The agent writes only handles and never writes ids. A new node whose blueprint has an agent of its own takes that agent, so the person's choices come with it. For any other new node, the planner proposes an agent ([ADR 0019](../adr/0019-a-planner-chooses-each-new-task-s-agent.md)).
+- iDevelop parses the proposal once, where it arrives, and mints the new ids from the plan's id, so the same log always gives the same ids.
+- A dry run through `Workflow.Apply` draws the proposed nodes as dashed ghost cards and fills the drawn ones in place. The person accepts all of them or unticks some first. Accepting applies one `Batch` edit: all or nothing, and one undo step. A proposal that would close a cycle names the cycle and changes nothing.
 - Planning is design time. A person who wants the shape early draws empty nodes first, or sets the planner to Chat, where the first proposal appears after one turn and changes after each reply. The graph stays editable at any time ([ADR 0042](../adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md)).
-- The "talk to one agent" button places a Plan node in Chat mode and opens its conversation. Only the entry point is new.
+- Generate Workflow places a Plan node in Chat mode and runs it.
 
 ### Interaction resumes the client's own session
 
-A turn is one client process. An attempt holds one or more turns that share the client's own session. No process runs between turns, so a waiting node costs nothing and survives quitting iDevelop. All four clients passed this in the probe.
-
-| Client | First turn | Next turn |
-| --- | --- | --- |
-| Claude Code | `--session-id <id>` that iDevelop chooses | `--resume <id>` |
-| Codex | The id in `thread.started` | `codex exec resume --json <id> -` |
-| Pi | `--session-id <id>` that iDevelop chooses | The same `--session-id <id>` |
-| Antigravity CLI | The `conversation_id` it reports | `--conversation <id>` |
+A turn is one client process. An attempt holds one or more turns that share the client's own session. No process runs between turns, so a waiting node costs nothing and survives quitting iDevelop. All four clients passed this in the probe. The [agent client reference](../agent-clients.md#sessions) lists each client's session id and resume arguments.
 
 Each node has a conversation mode:
 
 - **Autonomous** never waits for the person. The person can still write to it.
-- **May ask** lets the agent end a turn with a question. The node then waits with "Waiting for you" and the question.
-- **Chat** waits after every turn. The person replies or marks the node done.
+- **May ask** lets the agent end a turn with a question. The node then waits with the question.
+- **Chat** waits after every turn. The person replies, or approves the last reply as the node's result.
 
-The agent signals a question, a proposal, a verdict, or its answers to findings in one fenced JSON block at the end of its final message. One parser, `ResultBlock`, reads it for all four clients, without each client's schema flag, because Pi has none. A required block that is missing or unreadable gets one repair turn that asks only for the block.
+The agent signals a question, a proposal, or a verdict in one fenced `idevelop` JSON block at the end of its final message. One parser, `ResultBlock`, reads it for all four clients, without each client's schema flag, because Pi has none.
 
-The person acts from the inspector:
+The person acts from the inspector, the expanded card, or the conversation view:
 
-- **Send** queues a message as the next turn.
-- **Stop and send** stops the running turn's process tree and resumes the session with the message.
-- **Continue** on a finished or interrupted node starts a new attempt whose first turn resumes the old session.
-- **Open in terminal** is offered only while the node waits. Slice 1 offers it whenever no turn of the task runs in this window, until conversation modes add a waiting state. It copies the client's own command for its terminal UI on the same session, such as `claude --resume <id>`, after a change into the project folder. iDevelop records the hand-off, and its record says that turns taken in the terminal are not in it.
+- **Send** queues a message as the next turn of the session.
+- **Stop and send** stops the running turn and resumes the session with the message.
+- **Open in terminal** copies the client's own command for its terminal UI on the same session, such as `claude --resume <id>`, after a change into the project folder. iDevelop records the hand-off in the node's log.
 
-The card's status pill gains "Waiting for you" in a PlanWeave status color. The run bar counts the waiting nodes and jumps to the next one. The inspector shows each turn as the person's message and the agent's final text, with tool activity folded, then a composer, then the section of the current `Pending` case.
-
-| State | Client processes | Basis |
-| --- | --- | --- |
-| A turn runs | One client tree, as in phase 3 | Phase 3 |
-| The node waits for the person | None | The design. Every probed turn exited |
-| The next turn starts | One process start | Probed turns took 3.2 to 6.5 seconds including model time |
-
-An embedded terminal was rejected. It needs a PTY on three operating systems and hides the structured event stream that decides success and drives the card. A live process per conversation was deferred. Claude Code and Antigravity CLI took two turns in one process, but Pi's RPC mode and Codex's app server were not probed, and a live process holds memory while the person thinks. A client row can add live input later without changing the node model.
+An embedded terminal was rejected. It needs a PTY on three operating systems and hides the structured event stream that decides success and drives the card. A live process per conversation was rejected too, because it holds a process while the person thinks ([ADR 0026](../adr/0026-a-continued-session-reads-as-one-conversation.md)).
 
 ### Storage
 
-- A blueprint file is `idevelop.blueprint/1`, strict like the workflow file, with one file per blueprint. The project library is `.idp/blueprints/`, which Git tracks. The personal library is `iDevelop/blueprints/` in the per-user application data folder that already holds `settings.json`.
+- A blueprint file is `idevelop.blueprint/1`, strict like the workflow file, with one file per blueprint. The project library is `.idp/blueprints/`, which Git tracks. The personal library is `iDevelop/blueprints/` in the per-user application data folder that holds `settings.json`.
 - **Derive** creates a new id at version 1 and records the parent. A save writes the next version only if the file still holds the version the editor opened. Otherwise it reports that the file changed, which covers two windows editing one blueprint.
 - An app update that changes a built-in ships it as its next version. A saved workflow keeps the version it embedded, so an update never changes its prompts.
-- The workflow file moves to `idevelop.workflow/3`. It adds the embedded blueprints, and each task gains its blueprint key, field values, and settings. Connection kinds are `dependency` and `context`. Opening a format 2 file converts it: each task becomes a node of the built-in Implement with the same text and agent, and each review connection becomes a dependency, which blocked the same way and did nothing at run time. The window says what it converted. The app writes only format 3. The format 2 reader goes once no format 2 file remains, as format 1 did.
-- Attempt logs gain new event types, and `Requested` gains optional properties, never positional ones, so every phase 3 log folds as before. `AttemptStatus` gains `WaitingForInput`, the status the product direction already lists.
+- The workflow file is `idevelop.workflow/3`. It embeds the blueprints, and each task holds its blueprint key, field values, and settings. Connection kinds are `dependency` and `context`. Opening a format 2 file converts it: each task becomes a node of the built-in Implement with the same text and agent, and each of its review connections becomes a dependency. The window says what it converted. The app writes only format 3. The format 2 reader goes once no format 2 file remains.
 
 ### Delivery
 
-Each slice ends in a check that a reviewer can rerun. The real-window checks use the `verify-idevelop` skill on Windows.
-
-1. **Talk to a node.** First, commit the conversation probe as a real-client check and extend it: the result block from each client, a turn stopped mid-tool-call and resumed, each client's read-only mode, and whether a slash command at the start of a non-interactive prompt runs. Then each client row resumes a session, attempts hold turns, and the inspector gains the composer with Send, Stop and send, Continue, and Open in terminal. No file format changes. *Check.* The probe passes on all four clients. The two-turn exchange runs through the Release window on each client. Every recorded phase 3 fixture folds to the same record.
-
-   *Built.* Each client row maps an optional session to its resume arguments and names its terminal command, as [agent client behavior](../agent-clients.md#sessions) lists. Every Codex run passes `-c approval_policy=never`, because a user's approval policy let a read-only probe run write a file. Attempt logs gain three event types, a queued message, a later turn's request, and a hand-off to the terminal, and `Requested` gains an optional continuation. The reducer folds them into the attempt's turns, its waiting messages, and its hand-off. An exit ends the turn. A waiting message keeps the attempt running for the next turn unless a cancel or leave came first, and otherwise the phase 3 exit policy settles it. A stopped turn is Stopped, and the attempt goes on. A failed turn keeps its reason, which the inspector shows under it. A crash between turns reconciles to Interrupted without checking the ended turn's process. The reducer ignores a session id that is not a plain id, whether a client printed it or an attempt log holds it, because a shared repository can carry attempt logs. `ProjectRuns.Send` queues the message on a running attempt, or continues the latest session in a new attempt, and refuses with a reason when the latest attempt has no session, the task's client changed, or the start check refuses. The run loop starts each turn under the same log, lock, and channel. It closes the run to messages when a turn exits with none waiting or the next turn does not start. Cancel and Stop and send after the turn's client exited stop nothing, so what the turn left running stays up, and Cancel still records the attempt as Cancelled. `ProjectRuns.OpenInTerminal` records the hand-off under the task's lock and refuses while a turn of the task runs in the window. The copied command changes into the project folder first, and when the clipboard fails, the notice shows the command and the folder. Thirteen phase 3 logs fold to the records the phase 3 engine folded. The engine wrote twelve of them whole. In the crashed case, the first three lines were planted to simulate the crash, and only its `reconciled` line and its fold came from the engine. Slice 1 adds no `WaitingForInput` status, because no node type asks yet. Messages sent during one turn reach the next turn together, separated by a blank line. After Continue, the inspector shows the turns of every attempt in the chain, oldest first, each attempt with its own status line, so a question stays above the answer that continued it.
-2. **Typed nodes and format 3.** The node record, embedded blueprints, the built-in Implement, the new `Workflow.Apply` rules, the conversation modes, and the format 2 conversion. *Check.* A test shows that the Implement template renders today's prompt byte for byte. The format 2 sample opens, says what it converted, saves as format 3, and reopens. A May ask node asks and waits on each client.
-
-   *Built.* A node holds its own embedded `Blueprint`, a value for each of the blueprint's fields, its agent, and its conversation mode. `Workflow.Blueprints` is the set of copies its nodes hold, so a copy goes with its last node and the two never need syncing. `WorkflowEdit.PlaceNode` is the one way to add a node. It seeds the blueprint's field defaults and settings, takes optional title, field values, and settings, and rejects a field the blueprint lacks or a different blueprint under a key the workflow already holds. `EditTitle`, `SetField`, and `SetConversation` edit a node. `ConnectionKind.Review` is gone already, because format 3 cannot store it. `BuiltInBlueprints` is the catalog of built-ins and holds only Implement, `idevelop.implement@1`. Its template uses `{{name}}` and `{{#name}}…{{/name}}` sections, and a test renders it against the phase 3 prompt function for five inputs, byte for byte. `INodeWork.Next` is the pure decider, `IConverses` the interaction capability, and `AgentWork` implements both. An Agent work's read-only access selects each client's read-only mode, plan mode for Claude Code and Antigravity CLI and a read-only sandbox for Codex. Pi has none. The workflow file is `idevelop.workflow/3`, strict like format 2: a task must give exactly its blueprint's fields, every embedded blueprint must be used, and a built-in copy must match the shipped one. A format 2 file opens converted, the window says what it converted, the document reads as unsaved, and the first save writes format 3. `AttemptStatus.WaitingForInput` holds no process and no lock, so a waiting node survives quitting. The reducer decides it at a successful turn's exit from the conversation mode that `Requested`, or a later `TurnRequested`, carries. Every phase 3 and slice 1 log folds as before, because a missing mode reads as Autonomous. A reply to a waiting node is the next turn of the same attempt, with the model and reasoning that attempt started with. **Mark done** settles it as succeeded with the agent's last reply, and **Cancel** settles it as cancelled. Run is refused while a node waits. **Open in terminal** is offered only while a node waits, as this record decided. May ask asks through the same `idevelop` result block that slice 1's probe read, `{"status": "asking", "question": "..."}`. Its block is optional, so a missing block means done, and an unreadable one makes the node wait with the reason instead of taking a repair turn: the person can answer a question the parser missed, and a repair turn would spend quota to recover what the person can see. A turn that asks without a session fails, because no answer could reach it. The card shows the node's type and the status Waiting for you in PlanWeave's selected color, the inspector shows the question with **Mark done**, and a button at the top of the canvas counts the waiting nodes and selects the next one. A real-client test, opt-in through `IDEVELOP_REAL_CLIENTS`, ran a May ask node on all four clients on Linux on 2026-10-05. Each asked, waited, took the answer as a second turn of the same attempt, and wrote `banana`.
-3. **Blueprint libraries.** Both libraries, **Save as blueprint**, **Derive**, the blueprint editor with fields and templates, and the palette in the right panel. *Check.* Derive a type into the project library, place it, edit the blueprint to version 2, and place it again. After a save and a reopen, the first node keeps version 1. A built-in offers only **Derive**.
-
-   *Built.* `BlueprintLibrary` reads and writes one library folder: `.idp/blueprints/` for the project, and `blueprints/` beside `settings.json` for the person. A file is `idevelop.blueprint/1`, named by its blueprint's id, and holds the blueprint's latest version in the shape the workflow file embeds, with `format` first. A new id is the name in lowercase id letters and eight random hex digits, so two libraries do not share an id. A save writes version 1 of a new id, or the next version only while the file still holds the version before it. Otherwise it names the version the file holds now. A built-in id is never saved or read from a library. A file that does not read, holds a built-in id, or has another id than its name is listed under the palette with the reason, and the rest still load. With nothing selected, the right panel shows the palette: the built-ins, then the project library, then the personal library, each blueprint with its version and **Place** and **Derive**, and **Edit** for a library blueprint. **Place** places a node at the top left of the view through `WorkflowEdit.PlaceNode`. The inspector names the node's type and version and offers **Derive** and **Save as blueprint**. Derive opens the editor on the type's fields, template, and defaults, and Save as blueprint opens it with the node's field values, agent, and conversation mode as the defaults. Neither changes the node. The editor takes the right panel until it saves or cancels. It edits the name, the description, read-only access, the fields, the template, the default client, model, reasoning, and conversation mode, and for a new blueprint the library. It keeps whether the agent proposes as the source has it, because planning defines that flag. It checks the blueprint on every change and names the first problem, and Save stays off until there is none. Core tests run the check, and a Release window on Linux under Xvfb ran it by hand on 2026-10-05: Implement derived into the project library as Bug fix, placed, edited to version 2, and placed again. After a save and a reopen, the first node read Version 1 and the second Version 2.
-4. **Planning.** Proposals, the Plan and Architect built-ins, slot and type handles, ghost cards, and accepting a subset as one batch. *Check.* An Architect with two drawn empty nodes fills both and adds one. Accept applies as one undo step. A proposal that would close a cycle names it and applies nothing. A Chat planner shows nodes after its first turn.
-
-   *Built.* `BuiltInBlueprints` gains Plan, `idevelop.plan@1`, with a goal and constraints, and Architect, `idevelop.architect@1`, with a brief. Both are read-only Agent works that propose, and both default to May ask. A planner's slots are the nodes its dependency connections reach whose fields are all blank and that have not started, in id order, and its types are the blueprints the palette offers: the built-ins, then the project library, then the personal library. The prompt appends a proposal contract after the template, which lists each slot with its title, type, and fields, and each type with its description and fields. The contract asks a Chat planner to end every message with the whole plan as it stands. `Requested` gains optional handles: a plan id that is new at each Run, the slot ids, and the type keys. A continuation copies them. `Proposal.Read` reads the latest turn whose block has status `proposal`, and the inspector reads the attempts a continuation continues, newest first, when the latest attempt has none. It mints each new node's id from a hash of the plan id and the agent's own id for it. The same log always gives the same ids, and a Chat planner that proposes an accepted node again under its id names the same node, which Accept leaves in place instead of placing it twice. A proposal fills slots, adds nodes, and connects the planner, slots, and new nodes, A handle it was not given, a new task under the name of a slot or the planner, an empty fill, a connection from a task to itself, or a field key the type lacks makes it a problem the inspector shows, and a repeated connection counts once. `Proposal.Accept` returns one `WorkflowEdit.Batch`, which applies every edit or none. It places the chosen new nodes in a column to the right of the planner and its slots, fills the chosen slots that have not started, and adds each connection that touches no unticked item and that the workflow does not already hold. The canvas draws each chosen item as a dashed ghost card, a fill over its slot, through Nodify's decorator layer, which takes no input. The planner's inspector lists the items with a box each, and a fill of a slot the person has written in since starts unticked, and one whose slot has started cannot be ticked, the connections, why accepting would fail, such as the cycle it would close, and Accept and Dismiss. Dismiss lasts until the planner proposes again, in this window only. A read-only node does not start on a client without a read-only mode, which is Pi today, because Pi would run it with write access. iDevelop has no undo yet, so "one undo step" holds as one `Batch` and one document change, which a later undo reverts in one step. Tests drive scripted planner replies through the fake agent: an Architect with two drawn empty nodes fills both and adds one, Accept is one document change, a subset leaves out its unticked items, a proposal that would close a cycle names it and applies nothing, and a Chat planner proposes after its first turn, and its reply's proposal places only the node the first Accept did not. A real-client test, opt-in through `IDEVELOP_REAL_CLIENTS`, ran an Autonomous Architect on Claude Code with Claude Haiku 4.5 and on Codex with GPT-5.6 Luna on Linux on 2026-10-05. Each filled both slots, added a test task, and changed no file in the project. A Chat Architect on Claude Code then ran in the Release window under Xvfb, which drew three ghost cards and kept them after a restart. A second run on the final build accepted two of the three after one fill was unticked, as one change. Claude Code's plan mode wrote its plan to its own plans folder in the user's home, outside the project. In a verification run on 2026-10-05, Claude Haiku 4.5 in plan mode read the workflow file and wrote a task's real id in a connection, which the inspector showed as a problem with Accept off. After one reply asking for handles only, its proposal read, and Accept with one fill unticked added one task and filled one.
-5. **Review and approval.** `ReviewWork`, the two continuing sessions, the ledger, the repeat check over every earlier round, fix rounds as attempts of the subject, the read-only check, the Review and Approval built-ins, and the removal of `ConnectionKind.Review`. *Check.* Tests drive the loop through scripted replies that agree in one round and in three, settle a dispute that the reviewer withdraws, repeat an earlier round, and receive guidance. A seeded defect is found, fixed, and approved with a Codex implementer and a Claude Code reviewer, and every round resumes the same two sessions.
-
-   *Built.* A review's subject is its one dependency predecessor whose agent may edit, and `Workflow.Apply` rejects a second one. Slice 2 had already removed `ConnectionKind.Review`. `BuiltInBlueprints` adds Review, `idevelop.review@1`, with a What to check field, and Approval, `idevelop.approval@1`. A format 3 file stores a review work as its reviewer and fix templates, and a person work as its kind alone. The review attempt holds the reviewer's turns in one session, which runs in the client's read-only mode, and its `Requested` names the subject. After each reviewer turn it rests as `InReview`, which holds no process and no lock, like a waiting node. `ReviewWork.Next` decides every resting review's step: a repair turn, a fix round, the reviewer's next turn, a wait, or the end. A fix round is a new attempt of the subject that continues its latest session. Its `Requested` links it to the review attempt and the round, so the step is never taken twice, and a quit at any point converges when the project opens again. A fix round that quitting interrupted goes on in the same session. One that failed or was cancelled fails the review. While a review goes on, its subject takes no other new attempt, so Run and Continue on it are refused, and only an answer to a fix round that asks goes through. A second review of the same subject starts only once the first ends, and a review deleted from the workflow frees its subject. When the subject's session cannot continue, because the client changed or reported none, the fix round starts a fresh session with the ticket and the findings. The reviewer's next turn carries the fix's report, so `ReviewLedger` folds every verdict and every answer from the review attempt alone. The loop ends when the reviewer approves with no finding standing. A finding the reviewer leaves out is settled: withdrawn if the implementer disputed it, otherwise resolved. A round's position is each standing finding with the implementer's answer to it. When a round's position equals any earlier round's, the reviewer's next message names that round and asks for the exact change that would settle each finding, and the implementer's next message says the same. Guidance sent to a review is an attempt event, and the reviewer's next turn and the next fix round each carry the guidance that side has not read. The verdict block is required, so a missing or unreadable one gets one repair turn and then fails the review. The answers block is optional, because the reviewer reads the report either way. A reviewer turn resumes the session the review attempt started with, and a review runs on Pi only once Pi has a read-only mode, as slice 4 decided for read-only nodes. A read-only turn that changed the project outside `.idp` fails. This covers every read-only node, a planner or architect too, so a resumed Antigravity CLI turn that writes a file fails. A review starts only once its subject succeeded. Cancelling a review also cancels its running fix round. The card shows the round and the open findings, and the inspector lists each finding with both sides' latest words, takes guidance, and marks iDevelop's messages as its own. `PersonWork` decides an approval's steps, but an approval has no agent and runs only once workflow execution reaches it, so Run says so. The blueprint editor edits a review's two templates and hides what a work does not take. Tests drive the loop with a scripted Codex implementer and Claude Code reviewer in a project: agreement in one round, and in three with guidance, a dispute the reviewer withdraws, round 3 repeating round 1, a repaired and a failed verdict, a reviewer that writes a file, and a cancel during a fix round. A real-client test, opt-in through `IDEVELOP_REAL_REVIEW`, ran on Linux on 2026-10-05 in a scratch project. Codex on `gpt-5.6-luna` wrote the leap-year rule the ticket seeded, Claude Code on `claude-haiku-4-5` found that it ignores centuries, Codex fixed it in one round, and the reviewer approved. Every reviewer turn resumed one Claude Code session, and every fix round resumed the Codex session that wrote the code. In the first run Codex also answered a finding 2 that nobody raised, so the fix contract now asks for one answer per finding above it, and a second run answered only finding 1. A Release window on Linux under Xvfb ran the loop with fake clients: the card and the inspector showed round 1 with two open findings while the fix ran, took guidance, and ended approved in round 2.
-
-Workflow execution follows. Its scheduler marks a node ready when every dependency predecessor finished with a handoff, calls `Next` for each ready node, and runs the step it returns. The scheduler stays with that phase.
-
-## The design arena
-
-Both runners received one brief with the user's requirements, the code map, and the probe results. Each also received a different starting direction.
-
-- **Runner A, closed kinds.** Three sealed node records (Implement, Plan, Review) implement capability interfaces such as `IConversational` and `IReviewing`. A blueprint is a template node over one kind, and a user type can change its role text, agent, access, and interaction, but not its fields. The review keeps its own loop log.
-- **Runner B, capability composition.** One node record points to an embedded, versioned blueprint. A blueprint picks one of three works and declares its own fields and prompt templates. `INodeWork` is a pure decider, and `IConverses` is the one capability interface.
-
-The two converged on review as a node, planning as approved graph edits, conversation through each client's session resume, one file per blueprint, and format 3 with a format 2 conversion.
-
-| Criterion | A | B |
-| --- | --- | --- |
-| Requirement coverage | 4 | 5 |
-| Data shape | 5 | 4 |
-| Interfaces and extensibility | 3 | 4 |
-| Interaction | 3 | 4 |
-| Review and planning | 5 | 4 |
-| Reader load and delivery | 3 | 4 |
-| Total | 23 | 25 |
-
-The cross-judge and the coordinator chose B as the base. Its extension point is one pure decider per work, which a single node's Run and the scheduler call the same way. Its user types declare their own fields, which meets the user's request for richer, user-defined nodes. Its first slice delivers interaction without a file format change.
-
-These parts came from A or from the judge:
-
-- The repeat check compares against every earlier round, not only the last one, so it catches a loop that goes back and forth. From A. After the user's change, a repeat prompts both agents instead of pausing for the user.
-- A `WorkKind` enum tag makes a new work fail the build. B's switch over records would only throw at run time. From A.
-- Planners write slot and type handles and never choose agents, and the person can accept a subset. B let a planner set a new node's agent and accepted only all or nothing. From A.
-- Reconcile still reports Interrupted, and Continue resumes in a new attempt. B had replaced the phase 3 Interrupted case with a waiting state. From the judge.
-- A check at each turn's start and end fails a read-only turn that changed the project. Both candidates trusted read-only modes. From the judge.
-- The terminal hand-off is offered only while a node waits and is recorded. Both candidates let the client's terminal add turns silently. From the judge.
-- The probe extension comes first in slice 1, before Stop and send depends on a resumable stopped turn. From A's delivery order.
-
-These parts were rejected:
-
-- A's per-kind node records, because a user type could not declare fields, and a node without an agent, such as an approval gate, had no way to run.
-- A's six-call plan acceptance, which the judge flagged as a shallow module, and its id minting on every translation, which could place nodes twice after a crash.
-- A's Architect with edit access. A user who wants design files in the repository derives an Architect with edit access.
-- B's two-verdict stall rule and B's all-or-nothing acceptance, replaced as listed above.
-- Fresh sessions for every review round, which both runners chose to keep each prompt small. The user chose continuing sessions on 2026-10-04, with small tickets keeping them small.
-- Typed ports, which both runners rejected. They would add a port to every connection to express one rule, a review's single subject.
-- One class per node type implementing `INode`, which users cannot write, and which would split the exit policy across classes as phase 3 rejected.
+The five slices are built: talking to a node, typed nodes with workflow format 3 and conversation modes, blueprint libraries with **Save as blueprint**, **Derive**, and the blueprint editor, planning with slot and type handles, ghost cards, and accepting a subset as one batch, and review and approval. Real-client tests, opt-in through `IDEVELOP_REAL_CLIENTS`, ran a May ask node and an Autonomous Architect on Linux on 2026-10-05. The engine of [ADR 0042](../adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md) runs these nodes.
 
 ## Commands and observed results
 
 | Command | Result |
 | --- | --- |
-| A scratch `probe-conversation.py` on Linux, two turns per client in a fresh Git repository | Claude Code, Codex, Pi, and Antigravity CLI each asked one question in turn 1, resumed the same session in a new process in turn 2, and wrote `banana` to `answer.txt`. Turns took 3.2 to 6.5 seconds. Claude Code and Antigravity CLI also took both turns in one live process over stdin, in 7.1 and 8.7 seconds. These are the first real client runs on Linux, through a script and not through iDevelop |
+| A scratch `probe-conversation.py` on Linux, two turns per client in a fresh Git repository | Claude Code, Codex, Pi, and Antigravity CLI each asked one question in turn 1, resumed the same session in a new process in turn 2, and wrote `banana` to `answer.txt`. Turns took 3.2 to 6.5 seconds. Claude Code and Antigravity CLI also took both turns in one live process over stdin, in 7.1 and 8.7 seconds. |
 | The same probe with Pi on `deepseek/deepseek-flash` | The provider answered 401 while `pi auth check --provider deepseek --json` printed `ready`, and Pi exited 0. Pi passed on `openai-codex/gpt-5.6-luna` |
-| `--help` of each client | Claude Code has `--json-schema` and `--permission-prompts host`. Codex has `exec --output-schema`, `codex queue`, and an experimental `app-server`. Pi has `--mode rpc`. Antigravity CLI has `--json-schema` and `--conversation`. Each client can open a session in its own terminal UI |
-| Two architect runners and a cross-judge, fresh Opus 5.5 sessions at xhigh | Both packages were complete. The judge scored A 23 and B 25 and recommended B with three grafts from A |
-| `node scripts/check-handoffs.mjs` | Exit 0 |
+| `--help` of each client | Claude Code has `--json-schema` and `--permission-prompts host`. Codex has `exec --output-schema`, `codex queue`, and `app-server`. Pi has `--mode rpc`. Antigravity CLI has `--json-schema` and `--conversation`. Each client can open a session in its own terminal UI |
 
 ## Open issues
 
-Slice 1's probe answered four questions on Linux on 2026-10-04 and 2026-10-05:
+The probe answered four questions on Linux on 2026-10-04 and 2026-10-05:
 
 - Each client ended its final message with a readable result block in 2 of 2 samples.
 - Each client resumed its session after a turn was stopped mid-tool-call.
-- A fresh read-only turn wrote nothing on Claude Code in plan mode, Codex with a read-only sandbox and approvals off, and Antigravity CLI with `--mode plan`. Without a mode, Antigravity CLI starts in request-review and wrote the file in 2 of 3 runs. Pi has no read-only mode. On a resumed session, Claude Code and Codex held read-only, but Antigravity CLI resumed with `--mode plan` still wrote the file in 4 of 4 runs. A reviewer or planner session must therefore start read-only, and the read-only check catches a write.
-- A project-local command ran on each client in one sample: `.claude/commands/` through `/name` on Claude Code, `.agents/skills/` through `$name` on Codex and `/name` on Antigravity CLI, and `.pi/prompts/` through `/name` on Pi. An agent could also have read the command file on its own, so one sample does not rule that out.
+- A fresh read-only turn wrote nothing on Claude Code in plan mode, Codex with a read-only sandbox and approvals off, and Antigravity CLI with `--mode plan`. Without a mode, Antigravity CLI starts in request-review and wrote the file in 2 of 3 runs. Pi has no read-only mode. On a resumed session, Claude Code and Codex held read-only, but Antigravity CLI resumed with `--mode plan` still wrote the file in 4 of 4 runs. A reviewer or planner session must therefore start read-only.
+- A project-local command ran on each client in one sample: `.claude/commands/` through `/name` on Claude Code, `.agents/skills/` through `$name` on Codex and `/name` on Antigravity CLI, and `.pi/prompts/` through `/name` on Pi. An agent could also have read the command file on its own, so one sample does not settle that.
 
 These remain unverified:
 
-- Whether each client keeps a long resumed session usable, for example by compacting it. A review loop resumes the same two sessions for as many rounds as agreement takes.
-- Two agents that never agree keep the loop running, because the user chose agreement as the only end. The card shows the round count.
+- Whether each client keeps a long resumed session usable, for example by compacting it. A review loop resumes the same two sessions for each round.
 - `pi auth check` reported a provider ready that then answered 401. iDevelop uses that check for Pi's readiness.
-- The shipped Antigravity CLI row reads the conversation id from the `init` event, and the probe read it from the `result` event. In the probe both events reported the same id, so the row keeps `init`.
-- A reviewer whose session cannot resume, or whose client is gone, has no fresh-session fallback. The review rests and says why until the person cancels it. The fallback exists only on the implementer's side.
-- A reviewer that reuses the id of a settled finding reopens it with the implementer's earlier answer, and the repeat check reads the reused id as the old finding. The verdict contract asks for a new id for each new finding.
-- A quit during a reviewer's turn leaves the review Interrupted. Only a fix round goes on after a quit, and Run starts a new review with a fresh reviewer session at round 1.
-
-## Next action
-
-Slices 1 to 5 are built: talking to a node, typed nodes with workflow format 3, blueprint libraries, planning, and review and approval. Workflow execution follows as the engine that [ADR 0042](../adr/0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md) describes. A node is ready when all its predecessors are completed and none of their results is stale. A review hands on when it approves. A subject hands on to the nodes connected directly to it as any node does, because this record gives a review no hold over them. A Windows session runs `.claude/skills/verify-idevelop/features/conversation.md` against slices 1 and 2, which no Windows machine has run yet, and checks the palette, the editor, ghost cards, and a review node in the real window.
+- The Antigravity CLI row reads the conversation id from the `init` event, and the probe read it from the `result` event. In the probe both events reported the same id, so the row keeps `init`.

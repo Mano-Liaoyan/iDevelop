@@ -491,7 +491,7 @@ function Stop-IDevelop([string] $Run) {
     try {
         $process = Get-SessionProcess $state
         if ($process) {
-            # A run in progress asks first, and unsaved edits ask next. The answers stop the run and keep the last save.
+            # A running node asks first, and unsaved edits ask next. The answers stop the running nodes and keep the last save.
             try {
                 $window = Find-MainWindow $process
                 if ($window) { Close-Window $window }

@@ -49,7 +49,7 @@ public sealed class CommandResolverTests : IDisposable
             resolver.Resolve("pi"));
     }
 
-    // A relative folder in the child's PATH would make it look in its current folder, which for a run is the project.
+    // A relative folder in the child's PATH would make it look in its current folder, which for a turn is the agent's working folder in the project.
     [Fact]
     public void The_path_a_command_gets_holds_only_the_fully_qualified_folders_it_was_searched_in()
     {

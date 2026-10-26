@@ -1,6 +1,6 @@
 # A planner chooses each new task's agent
 
-A planner, whether Generate Workflow placed it or the person placed a Plan or an Architect, proposes a client, a model, a reasoning level, and a one-line reason for each task it adds, chosen from the clients that are ready on the machine. This supersedes the [node model record](../handoffs/2026-10-04-node-model.md#planning-produces-graph-edits-the-person-approves) at its line 120, which says a planner "never chooses agents", and at its line 218, which kept "Planners write slot and type handles and never choose agents" from design A. It keeps that line's other rule: a new node takes its blueprint's default agent, "so the person's choices come with it". The owner asked for it on 2026-10-09 in issue [#91](https://github.com/Mano-Liaoyan/iDevelop/issues/91), after every task that Generate Workflow created got the same client and model, because the product direction asks Generate to draft "agents, models, and reasoning settings".
+A planner, whether Generate Workflow placed it or the person placed a Plan or an Architect, proposes a client, a model, a reasoning level, and a one-line reason for each task it adds, chosen from the clients that are ready on the machine. A blueprint's own agent still comes first, as the [node model record](../handoffs/2026-10-04-node-model.md#planning-produces-graph-edits-the-person-approves) says, so the person's choices come with it. The owner asked for it on 2026-10-09 in issue [#91](https://github.com/Mano-Liaoyan/iDevelop/issues/91), after every task that Generate Workflow created got the same client and model, because the product direction asks Generate to draft "agents, models, and reasoning settings".
 
 ## How it works
 
@@ -9,7 +9,7 @@ A planner, whether Generate Workflow placed it or the person placed a Plan or an
 - **A choice is checked, never trusted.** The review checks each choice against the clients as they are now, and again when they refresh.
 - **A choice that cannot run falls back, visibly.** The task's ghost card and review row say why, and the task takes the agent it would have without a choice.
 - **The person decides before anything joins the workflow.** Each ghost card and review row shows the task's agent and the planner's reason, the person can change any of them, and Accept writes exactly the agent each row shows.
-- **"Fall back to the planner's agent"**, the box the owner confirmed on 2026-10-06 as "New tasks use the planner's agent", now applies only to a new task that has no usable choice of its own.
+- **"Fall back to the planner's agent"**, the box the owner confirmed on 2026-10-06, applies only to a new task that has no usable choice of its own.
 
 ## Considered options
 
@@ -18,7 +18,6 @@ A planner, whether Generate Workflow placed it or the person placed a Plan or an
 ## Consequences
 
 - A fill keeps the agent of the task the person drew. A fill whose task has no agent takes the planner's choice, else the planner's agent while the box is ticked (issue [#99](https://github.com/Mano-Liaoyan/iDevelop/issues/99)). An Approval ignores a choice, since it takes no agent.
-- A proposal without agents, from an older build, reads as before.
 - A planner is design time. Its proposal edits the workflow document, which the person can edit at any time ([ADR 0042](0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md)).
 
 Source: pull request [#98](https://github.com/Mano-Liaoyan/iDevelop/pull/98), its Decisions 1 to 6.

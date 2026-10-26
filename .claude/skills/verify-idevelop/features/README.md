@@ -23,7 +23,7 @@ This directory is the maintained source for verifying iDevelop's user-facing beh
 
 - Record each expectation with `Assert-Step`, so `transcript.txt` holds the PASS and FAIL lines.
 - Run `Save-Evidence` before and after the action. The screenshots show the action and the resulting state.
-- Check side effects with a second view. Read the saved workflow JSON after a save, and `events.jsonl` after a run.
+- Check side effects with a second view. Read the saved workflow JSON after a save, and the node's log, `.idp/nodes/<node-id>.jsonl`, after a run.
 - Report the run folder `.verify/<run>/` and what it holds.
 - Report a sub-feature that needs a pointer or a key as covered by the named headless test, not as verified in the real window.
 

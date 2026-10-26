@@ -4,9 +4,7 @@
 
 W1 is the slice "Open multiple projects and workflows" of the workspace milestone the owner approved on 2026-10-06. Its completion condition is that two projects with several workflows each stay open, and workflow rows hide their nodes by default. Switching keeps unsaved state, undo history, and running nodes, and existing projects still load.
 
-Pull request [#37](https://github.com/Mano-Liaoyan/iDevelop/pull/37) built it and merged to `main` as `e9c8f5c`. The sidebar is a project tree. Each project lists its workflows, and a workflow row lists its tasks only when expanded. **Open Folder** adds a project. Each project row has **New workflow** and **Close project**, and F2 or **Rename** renames a workflow inline. The [D0 record](2026-10-06-d0-design-validation.md) placed the blueprint icon and color fields in W1's format review.
-
-GPT-6 Astra critiqued the design note before implementation and made six findings, all accepted in full or in part. An Opus frontend verification made seven findings and an Astra difficult-task review made three on head `d387412`. The fix round at `c1b489e` closed all ten. A later commit, `6305ea2`, closed two low findings from the re-verification.
+Pull request [#37](https://github.com/Mano-Liaoyan/iDevelop/pull/37) built it and merged to `main` as `e9c8f5c`. The sidebar is a project tree. Each project lists its workflows, and a workflow row lists its tasks only when expanded. **Open Folder** adds a project. Each project row has **New workflow** and **Close project**, and F2 or **Rename** renames a workflow inline. The blueprint icon and color fields that the [D0 record](2026-10-06-d0-design-validation.md) approved are part of W1's format.
 
 ## Decisions and reasons
 
@@ -36,11 +34,11 @@ The format stays `idevelop.workflow/3`, and blueprint files stay `idevelop.bluep
 
 The values are closed sets that the reader parses into `BlueprintIcon` and `BlueprintColor`. The icons are `code`, `taskList`, `ruler`, `glasses`, `personAvailable`, and `documentSearch`. The colors are `indigo`, `cyan`, `purple`, `mint`, `brown`, and `gray`. Each set is the six node kinds' existing glyphs or hues. An unknown name fails the open with a message that names the file and the value. `Blueprint.Equals` compares both fields, so an embedded copy and a library copy still conflict on any difference.
 
-Existing files need no migration. A file that uses none of the new properties saves byte for byte as before, and a test pins that with the sample.
+Files need no migration. A file that uses none of these properties saves byte for byte, and a test pins that with the sample.
 
-The downgrade limit is that an older build refuses a file that uses any new property. The reader already rejects unknown properties, so the older build refuses the file rather than dropping the value. Its message says the property could not be mapped instead of naming a newer format. A bump would have made every save unreadable by older builds, even a save that sets nothing new, and would have added a third reader path.
+An older build refuses a file that uses any of these properties. The reader rejects unknown properties, so the older build refuses the file rather than dropping the value. Its message says the property could not be mapped. A format bump would make every save unreadable by older builds, even a save that sets none of them, and would add a third reader path.
 
-W1 carries the fields through the model, both file formats, library saves, and the blueprint editor's edit and derive paths. Drawing a tile in the custom look and the editor's pickers come later. Until then a library blueprint keeps its kind's tile.
+W1 carries the fields through the model, both file formats, library saves, and the blueprint editor's edit and derive paths. A library blueprint shows its kind's tile.
 
 ### Rejected alternatives
 
@@ -48,27 +46,9 @@ W1 carries the fields through the model, both file formats, library saves, and t
 | --- | --- |
 | A Core `Workspace` that owns projects, documents, selection, and persistence | Selection, expansion, viewport, and drafts are view state. Moving them into Core leaks presentation into Core or splits each one across two layers. |
 | Create a canvas only when its workflow is first selected | Eager canvases are simpler, and expanded tree rows read their outline from the canvas. Their cost at 500 tasks is unmeasured. |
-| Bump to `idevelop.workflow/4` | It makes every save unreadable by older builds and adds a reader path, and it only improves the downgrade message. |
+| A new format, `idevelop.workflow/4` | It makes every save unreadable by older builds and adds a reader path, and it only improves the downgrade message. |
 | Persist nothing and reopen projects by hand | The plan places the open-project list in local app settings, and reopening is in its verification table. |
 | Store the workflow name outside the file | A name belongs with the workflow it names, travels with Git, and is shared by everyone who opens the project. |
-
-## Changed artifacts
-
-- `src/IDevelop.Core/Workflows/` adds `Workflow.Name` with an undoable rename, `BlueprintIcon` and `BlueprintColor`, and the optional file properties.
-- `WorkflowDocument.OpenProject` and `WorkflowDocument.Create` replace the single-workflow open, and `Save` no longer refuses to write beside another workflow file.
-- `src/IDevelop.Desktop/` adds the project tree, `ProjectViewModel`, `WorkspaceSession` for the session file, and the close questions across projects.
-- `.claude/skills/verify-idevelop/features/workspace.md` is the workspace navigation guide.
-
-## Commands and observed results
-
-| Command or check | Observed result |
-| --- | --- |
-| `dotnet build -c Release` at `c1b489e` | 0 warnings. |
-| `dotnet test -c Release` at `c1b489e` | Core passed 371 tests with 9 platform skips. Desktop passed 356. |
-| Each fix-round behavior test against `d387412` | Each failed before its fix and passes after it. A mutation check that made `Rename` and `Save` do nothing failed both strengthened Core tests. |
-| The two low fixes at `6305ea2` | The button alignment test failed at -8 px before the fix and passes at 0. The **Forget** test failed before the fix. |
-| Release build under Xvfb with a fake Codex | Screenshots in light and dark show collapsed workflow rows, a running task kept across switches and a kept-open close, unsaved marks, and a restart that restores projects, selection, and expansion. |
-| Landing check at `01cdc44`, rebased onto U1 | One conflict in `InspectorView.axaml`, resolved with U1's grid and W1's workflow name. Build with 0 warnings. Core passed 371 with 9 skipped, and Desktop passed 365. The license, token, icon, handoff, and PStack checks pass. |
 
 ## Open issues
 
@@ -78,9 +58,5 @@ W1 carries the fields through the model, both file formats, library saves, and t
 4. No test runs an older build against a file with a new property.
 5. The cost of eager canvases at 500 tasks is unmeasured.
 6. Window close prompts are proven headless only, because the close request never reached the app on bare Xvfb.
-7. **Close project** reuses the run dialog's **Stop and leave** and **Keep running** buttons, so its stop button says leave.
+7. **Close project** reuses the running-nodes dialog's **Stop and leave** and **Keep running** buttons, so its stop button says leave.
 8. A workflow file copied in by hand that shares a task ID is caught only when the project next opens.
-
-## Next action
-
-C1 routes each conversation through the open-project session, as the [conversation record](2026-10-07-conversation.md) describes. A later slice draws custom blueprint tiles and adds the icon and color pickers.
