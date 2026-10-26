@@ -21,7 +21,7 @@ In #88 the owner found that the Overview's counts did not line up with the Libra
 
 - **One right edge, with revert and info placed between the label and the value, as Godot places them.** The label column would need about 130 px, so every picker would stack at the default width.
 - **Keeping the switch at 320 px.** Real model names were cut short beside their labels at the default width, for example "Claude Sonnet 5…".
-- **A label column that grows with the panel.** Such as a `2*`/`3*` split. At 520 px it pushed values 168 px away from their labels.
+- **A label column that grows with the panel.** For example, a `2*`/`3*` split pushed values 168 px away from their labels at 520 px.
 - **Aligning counts by their layout boxes.** Each glyph's drawing sits inset in its button, so the counts looked 4 to 7 px further right than the glyphs.
 
 ## Consequences

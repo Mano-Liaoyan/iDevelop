@@ -31,7 +31,7 @@ codex plugin add mattpocock-skills@mattpocock
 
 ## Writing skills
 
-Two project skills set how agents write. [`ste`](../.agents/skills/ste/SKILL.md) applies to all Chinese text, replies to the owner included. [`asd-ste100`](../.agents/skills/asd-ste100/SKILL.md) applies to all other English text. The files are copies of [dualface/ste-zh](https://github.com/dualface/ste-zh) at commit `27d57e4d6609ce88e14dd15cbae355223a83b246` and [danyuchn/asd-ste100-skill](https://github.com/danyuchn/asd-ste100-skill) at commit `8da6b6340aa22faf46fd07db8efbdea010cd38d9`. Each folder keeps its MIT `LICENSE`.
+Two project skills set how agents write. [`ste`](../.agents/skills/ste/SKILL.md) applies to all Chinese text, replies to the owner included. [`asd-ste100`](../.agents/skills/asd-ste100/SKILL.md) applies to all English text. The files are copies of [dualface/ste-zh](https://github.com/dualface/ste-zh) at commit `27d57e4d6609ce88e14dd15cbae355223a83b246` and [danyuchn/asd-ste100-skill](https://github.com/danyuchn/asd-ste100-skill) at commit `8da6b6340aa22faf46fd07db8efbdea010cd38d9`. Each folder keeps its MIT `LICENSE`.
 
 The skills live in `.agents/skills/`, which Codex and Pi read. `.claude/skills/<name>` (Claude Code) and `.agent/skills/<name>` (Antigravity) are relative symbolic links to the same folders. On Windows, Git creates the links only when Developer Mode is on and `core.symlinks` is `true`:
 
