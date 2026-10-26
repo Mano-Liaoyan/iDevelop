@@ -56,9 +56,9 @@ internal sealed class EngineFixture : IAsyncDisposable
     /// <summary>Installs the fake agy with these turn rules, most specific first.</summary>
     public void Install(params FakeRule[] turns) => FakeAgents.Install(Fakes, ClientId.Antigravity, turns);
 
-    public TaskId Node(string title, ConversationMode mode = ConversationMode.Autonomous)
+    public TaskId Node(string title, ConversationMode mode = ConversationMode.Autonomous, ExecutionSettings? execution = null)
     {
-        var node = TestNodes.Implement(NextId(), title, $"Do {title}.", execution: Agy, conversation: mode);
+        var node = TestNodes.Implement(NextId(), title, $"Do {title}.", execution: execution ?? Agy, conversation: mode);
         Workflow = Workflow.Must(TestNodes.Place(node, new CanvasPoint(0, 0)));
         return node.Id;
     }

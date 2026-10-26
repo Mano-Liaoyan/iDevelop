@@ -1,6 +1,6 @@
 # Talk to a node's agent
 
-A user writes to a node's agent from the composer in the `Talk to the Agent` section of the inspector. A message continues the node's session: while a turn runs it waits for that turn to end, and Stop and send stops the turn first. A Chat node waits for the person after each turn, and `Approve` makes its last reply the result. Open in terminal copies the client's own command for the session, after a change into the node's folder. A question the agent asks arrives as text in its reply, and the person answers it with a message.
+A user writes to a node's agent from the composer in the `Talk to the Agent` section of the inspector. A message continues the node's session: while a turn runs it waits for that turn to end, and Stop and send stops the turn first. A Chat node waits for the person after each turn, and `Approve` makes its last reply the result. Open in terminal copies the client's own command for the session, after a change into the node's folder. Claude Code in a May ask or Chat node asks while its turn runs, and Send answers with the chosen choices and the draft. Any other client asks as text in its reply, and the person answers it with a message.
 
 ## Sub-features
 

@@ -121,6 +121,20 @@ internal static class FakeAgents
         $$$"""{"type":"result","subtype":"success","is_error":false,"result":{{{JsonSerializer.Serialize(answer)}}},"origin":{"kind":"task-notification"}}""",
     ];
 
+    /// <summary>
+    /// Claude Code's request that the person answer <paramref name="question"/>, one choice of <paramref name="options"/>, as
+    /// its AskUserQuestion tool sends it on the control channel.
+    /// </summary>
+    public static string ClaudeAsks(string question, params string[] options) => JsonSerializer.Serialize(new
+    {
+        type = "control_request", request_id = "ask-1",
+        request = new
+        {
+            subtype = "can_use_tool", tool_name = "AskUserQuestion", tool_use_id = "toolu_ask",
+            input = new { questions = new[] { new { header = "Choice", question, multiSelect = false, options = options.Select(label => new { label, description = $"Use {label}." }) } } },
+        },
+    });
+
     public static string AppLine(string line)
     {
         using var json = JsonDocument.Parse(line);

@@ -39,7 +39,7 @@ A node whose predecessors are all completed and none of whose predecessors' resu
 _Avoid_: unblocked
 
 **Input required**:
-A node's state while it waits for the person: a question, an approval, a conflict to resolve, a turn the app's closing interrupted, or a review that reached its round limit. No client process runs while a node waits.
+A node's state while it waits for the person: a question, an approval, a conflict to resolve, a turn the app's closing interrupted, or a review that reached its round limit. No client process runs while a node waits, except a turn whose agent asked a question on its client's own channel, which waits for the answer.
 _Avoid_: blocked, paused
 
 **Attempt**:

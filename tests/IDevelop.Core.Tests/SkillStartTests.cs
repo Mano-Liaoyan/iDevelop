@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json;
+using System.Threading.Channels;
 using IDevelop.Clients;
 using IDevelop.Engine;
 using IDevelop.TestSupport;
@@ -155,7 +156,7 @@ public sealed class SkillStartTests : IDisposable
     private static async Task<(TurnOutcome Outcome, AgentEvent[] Events)> Turn(ClientDirectory clients, string project, string folder, TaskDefinition task)
     {
         var events = new System.Collections.Concurrent.ConcurrentQueue<AgentEvent>();
-        var outcome = await new CliAgent(clients, project).Turn(task, folder, "Deploy it. Then reply with DONE.", null, events.Enqueue, CancellationToken.None)
+        var outcome = await new CliAgent(clients, project).Turn(task, folder, "Deploy it. Then reply with DONE.", null, events.Enqueue, Channel.CreateUnbounded<QuestionReply>().Reader, CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(60));
         return (outcome, [.. events]);
     }

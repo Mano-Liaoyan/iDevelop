@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Threading.Channels;
 using IDevelop.Clients;
 using IDevelop.Git;
 using IDevelop.Nodes;
@@ -503,7 +504,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         TurnOutcome outcome;
         try
         {
-            outcome = await agent.Turn(node, folder, prompt, session, e => log.Append(new NodeEntry.Agent(e)), live.Stop.Token);
+            outcome = await agent.Turn(node, folder, prompt, session, e => Report(log, live, e), live.Replies.Reader, live.Stop.Token);
         }
         catch (Exception e)
         {
@@ -555,6 +556,52 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 StartFresh(id);
             }
         });
+    }
+
+    /// <summary>Logs what the agent said. A question waits for the person, under a key of the engine's own, until it is answered.</summary>
+    private void Report(NodeLog log, Live live, AgentEvent e)
+    {
+        if (e is not AgentEvent.QuestionAsked asked)
+        {
+            log.Append(new NodeEntry.Agent(e));
+            return;
+        }
+
+        Change(() =>
+        {
+            var question = new AgentQuestion(NewId(), asked.Questions);
+            live.Asked.Add((question, asked.RequestId));
+            log.Append(new NodeEntry.Asked(question));
+        });
+    }
+
+    /// <summary>
+    /// Sends the person's answer to the question of <paramref name="key"/> into the node's running turn. It answers each
+    /// question asked once, with its choices, one unless the question takes several, and any words of the person's own.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The turn waits for no such question, or the answer does not fit it.</exception>
+    public Task Answer(TaskId node, string key, QuestionsReply reply)
+    {
+        Change(() =>
+        {
+            var live = _live.GetValueOrDefault(node);
+            if (live?.Asked.FindIndex(pending => pending.Question.Key == key) is not (>= 0 and var index))
+            {
+                throw new InvalidOperationException("The agent no longer waits for this answer.");
+            }
+
+            var (question, request) = live.Asked[index];
+            string? Words(AskedQuestion item) => reply.Answers.Where(answer => answer.QuestionId == item.Id).ToList() is [var answer]
+                && (item.MultiSelect || answer.OptionIds.Length <= 1) && answer.OptionIds.All(id => item.Options.Any(option => option.Id == id))
+                && string.Join(", ", item.Options.Where(option => answer.OptionIds.Contains(option.Id)).Select(option => option.Label)
+                    .Append(answer.Text?.Trim() ?? "").Where(word => word.Length > 0)) is { Length: > 0 } words ? words : null;
+            var words = question.Questions.Select(Words).ToList();
+            if (reply.Answers.Length != words.Count || words.Contains(null)) throw new InvalidOperationException("The answer does not fit the question.");
+            live.Asked.RemoveAt(index);
+            Log(node).Append(new NodeEntry.Answered(key, reply, string.Join("\n", words)));
+            live.Replies.Writer.TryWrite(new QuestionReply(request, reply));
+        });
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -696,7 +743,11 @@ public sealed class WorkflowEngine : IAsyncDisposable
 
     private NodeState StateOf(TaskId id)
     {
-        if (_live.ContainsKey(id)) return new NodeState.Running();
+        if (_live.TryGetValue(id, out var live))
+        {
+            return live.Asked is [var (question, _), ..] ? new NodeState.InputRequired(question.Text) { Question = question } : new NodeState.Running();
+        }
+
         return Log(id).Record switch
         {
             { Open: true } => new NodeState.InputRequired(NodeState.Interrupted),
@@ -867,6 +918,11 @@ public sealed class WorkflowEngine : IAsyncDisposable
         public Halt Halt { get; set; }
 
         public string? Queued { get; set; }
+
+        /// <summary>The questions the agent waits on, oldest first, each with the client's own request id.</summary>
+        public List<(AgentQuestion Question, string RequestId)> Asked { get; } = [];
+
+        public Channel<QuestionReply> Replies { get; } = Channel.CreateUnbounded<QuestionReply>();
 
         public Task Done { get; set; } = Task.CompletedTask;
     }

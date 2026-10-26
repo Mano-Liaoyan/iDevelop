@@ -115,8 +115,8 @@ internal sealed class NodeConversation : IConversation
         NodeEntry.TurnStarted { Session: null } => [new ConversationLine.Marker(MarkerKind.Fresh, null)],
         NodeEntry.PersonMessage message => [new ConversationLine.Person(message.Text)],
         NodeEntry.Agent { Event: AgentEvent.Message { Partial: false } message } => [new ConversationLine.Agent(message.Text) { Subagent = message.Subagent }],
-        NodeEntry.Agent { Event: AgentEvent.QuestionAsked question } =>
-            [new ConversationLine.Agent(string.Join("\n\n", question.Questions.Select(asked => asked.Text)))],
+        NodeEntry.Asked asked => [new ConversationLine.Agent(asked.Question.Text)],
+        NodeEntry.Answered answered => [new ConversationLine.Person(answered.Text)],
         NodeEntry.Agent { Event: AgentEvent.ToolStarted tool } =>
             [new ConversationLine.Activity(tool.Detail is { Length: > 0 } detail ? $"{tool.Tool} {detail}" : tool.Tool, IsTool: true)],
         NodeEntry.Agent { Event: AgentEvent.Notice notice } => [new ConversationLine.Activity(notice.Text, IsTool: false)],

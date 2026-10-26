@@ -28,10 +28,13 @@ internal sealed record EffectivePolicy(NativePolicy Native, QuestionHandling Que
 
 internal static class ClientPolicy
 {
-    /// <param name="liveQuestions">Claude Code's questions and permission requests come to iDevelop on its own channel.</param>
-    public static EffectivePolicy For(ClientId client, bool readOnly, ConversationMode mode, bool reviewer, bool liveQuestions = false)
+    /// <summary>
+    /// Claude Code's questions and permission requests come to iDevelop on its own channel, unless the node never asks the
+    /// person: an Autonomous node and a reviewer.
+    /// </summary>
+    public static EffectivePolicy For(ClientId client, bool readOnly, ConversationMode mode, bool reviewer)
     {
-        var surfaces = client == ClientId.ClaudeCode && !reviewer && liveQuestions && mode switch
+        var surfaces = client == ClientId.ClaudeCode && !reviewer && mode switch
         {
             ConversationMode.Autonomous => false,
             ConversationMode.MayAsk or ConversationMode.Chat => true,

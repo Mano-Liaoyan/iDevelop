@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
+using IDevelop.Clients;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -44,7 +45,11 @@ public abstract record NodeState
     /// <see cref="Reply"/>, <see cref="Conflict"/>, <see cref="RoundLimit"/>, the agent's question, or why iDevelop could not read the
     /// agent's result block or verdict.
     /// </summary>
-    public sealed record InputRequired(string Why) : NodeState;
+    public sealed record InputRequired(string Why) : NodeState
+    {
+        /// <summary>The question the running turn waits on, which <see cref="WorkflowEngine.Answer"/> answers, or null when no turn runs.</summary>
+        public AgentQuestion? Question { get; init; }
+    }
 
     /// <summary>The node's latest result is current.</summary>
     public sealed record Completed : NodeState;
@@ -53,6 +58,15 @@ public abstract record NodeState
 
     /// <summary>The node's latest result, or the turn that was stopped, rests on a basis that is no longer current.</summary>
     public sealed record Stale : NodeState;
+}
+
+/// <summary>
+/// What a running turn's agent asks the person on its client's own channel, each question with its choices. The engine
+/// owns <paramref name="Key"/>, which an answer names.
+/// </summary>
+public sealed record AgentQuestion(string Key, ImmutableArray<AskedQuestion> Questions)
+{
+    public string Text => string.Join("\n\n", Questions.Select(question => question.Text));
 }
 
 /// <summary>The client, model, and effort a node's agent runs with.</summary>

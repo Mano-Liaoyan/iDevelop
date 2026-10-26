@@ -11,8 +11,9 @@ namespace IDevelop.Engine;
 /// A node whose agent is Claude Code, Codex, Pi, or Antigravity CLI. Each turn is one client process through the client
 /// layer: <see cref="LaunchPlan"/> builds the launch, <see cref="ChildProcess"/> runs it, and the client's <see cref="TurnProtocol"/>
 /// reads its output and writes its input. A turn runs in the folder the engine gives it: an editing node's worktree, or
-/// the project folder for a node that only reads. Questions and permission requests are declined, so a question reaches
-/// the person as text in the agent's reply.
+/// the project folder for a node that only reads. A question the client asks on its own channel, which only Claude Code
+/// does and only for a node that may ask the person, is reported while the turn waits for its answer. Every other
+/// question and every permission request is declined.
 /// </summary>
 internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : IAgent
 {
@@ -33,7 +34,8 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
             ? $"{missing.Label} is empty."
             : LaunchPlan.For(node, projectFolder, "", null, clients.Current, Skills(node) is SkillListing.Checking or null ? new SkillListing.Listed([]) : Skills(node)).Problem;
 
-    public async Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop)
+    public async Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report,
+        ChannelReader<QuestionReply> replies, CancellationToken stop)
     {
         // Each turn uses the project folder's skill listing, the one the person chose from (ADR 0025).
         var skills = node.Execution is { Skills: not null } chosen ? await clients.SkillsAsync(chosen.Client, projectFolder, SkillWait, stop) : null;
@@ -63,7 +65,7 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
         {
             try
             {
-                return await Drive(node, plan, process, report, stop);
+                return await Drive(node, plan, process, report, replies, stop);
             }
             finally
             {
@@ -78,23 +80,37 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
     /// <summary>
     /// One drain owns the turn: stdout lines, a stop, and the exit arrive on one channel in order, and it writes the
     /// protocol's frames to stdin one at a time. A stop sends the client's own interrupt when it has one and stops the
-    /// process tree after <see cref="ShutdownTime"/>, or at once without one. After a success, a client that lists no background
-    /// work and does not exit within <see cref="SuccessExitTime"/> is stopped, and the turn fails.
+    /// process tree after <see cref="ShutdownTime"/>, or at once without one. The person's answers join the channel too. After
+    /// a success, a client that lists no background work and does not exit within <see cref="SuccessExitTime"/> is stopped,
+    /// and the turn fails.
     /// </summary>
-    private async Task<TurnOutcome> Drive(TaskDefinition node, LaunchPlan plan, ChildProcess process, Action<AgentEvent> report, CancellationToken stop)
+    private async Task<TurnOutcome> Drive(TaskDefinition node, LaunchPlan plan, ChildProcess process, Action<AgentEvent> report,
+        ChannelReader<QuestionReply> replies, CancellationToken stop)
     {
         var protocol = plan.Client.Protocol(plan.Request);
         var inbox = Channel.CreateUnbounded<object>(new UnboundedChannelOptions { SingleReader = true });
         string? lastError = null;
         process.ReadStdout(line => inbox.Writer.TryWrite(line));
         process.ReadStderr(line => lastError = string.IsNullOrWhiteSpace(line) ? lastError : line);
+        // The person's answers join the channel until the client exits.
+        var exited = new CancellationTokenSource();
         _ = Task.Run(async () =>
         {
             var code = await process.WaitForExitAsync();
             await process.WaitForOutputAsync();
+            exited.Cancel();
             inbox.Writer.TryWrite(code);
         });
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var reply in replies.ReadAllAsync(exited.Token)) inbox.Writer.TryWrite(reply);
+            }
+            catch (OperationCanceledException) { }
+        });
         using var registration = stop.Register(() => inbox.Writer.TryWrite(stop));
+        var asks = plan.Request.Policy?.Questions == QuestionHandling.Surface;
 
         AgentEvent? verdict = null;
         string? lastMessage = null;
@@ -134,8 +150,11 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
                         background = !tasks.Tasks.IsEmpty;
                         report(e);
                         break;
-                    case AgentEvent.QuestionAsked question:
+                    case AgentEvent.QuestionAsked when asks:
                         report(e);
+                        break;
+                    case AgentEvent.QuestionAsked question:
+                        report(new AgentEvent.Notice($"iDevelop declined the question, because this node does not ask the person: {string.Join(" ", question.Questions.Select(asked => asked.Text))}"));
                         await Output(protocol.Decline(question.RequestId));
                         break;
                     case AgentEvent.PermissionRequested permission:
@@ -188,6 +207,9 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
                     }
 
                     Clock();
+                    break;
+                case QuestionReply answer when !stopping:
+                    await Output(protocol.Answer(answer.RequestId, answer.Reply));
                     break;
                 case CancellationToken when !stopping:
                     stopping = true;

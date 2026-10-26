@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:IDevelop.Desktop"
              xmlns:conversation="using:IDevelop.Desktop.Conversation"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
              xmlns:execution="using:IDevelop.Desktop.Execution"
              xmlns:theme="using:IDevelop.Desktop.Theme"
              x:Class="IDevelop.Desktop.Conversation.ConversationView"
@@ -140,6 +141,30 @@
 
     <Border Grid.Row="4" Classes="composer">
       <StackPanel Spacing="6">
+        <!-- The choices of a question the running turn waits on, which Send answers with the draft. -->
+        <ItemsControl ItemsSource="{Binding Questions}" IsVisible="{Binding IsAsking}" AutomationProperties.AutomationId="ConversationQuestions">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="canvas:QuestionViewModel">
+              <StackPanel Spacing="4" Margin="4,0,0,4">
+                <TextBlock Classes="caption" Text="{Binding Header}" TextWrapping="Wrap" />
+                <ItemsControl ItemsSource="{Binding Choices}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="canvas:ChoiceViewModel">
+                      <ToggleButton Content="{Binding Label}" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Detail}"
+                                    Height="28" Padding="10,0" Margin="0,0,6,6"
+                                    AutomationProperties.AutomationId="ConversationChoice" AutomationProperties.Name="{Binding Label}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
         <TextBox x:Name="Composer" Classes="composerBox" Text="{Binding Draft}"
                  AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
                  Watermark="{Binding Watermark}"

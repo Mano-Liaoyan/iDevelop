@@ -28,7 +28,7 @@ string? CanRun(NodeId)                      // null or the reason it cannot run
 Task Run(NodeId); Task RunWorkflow()        // RunWorkflow = every node not completed or stale, in dependency order
 Task Retry(NodeId); Task Stop(NodeId); Task StopAll()
 Task Send(NodeId, string text, bool interrupt)
-Task Answer(NodeId, RequestKey, Reply)
+Task Answer(NodeId, string key, QuestionsReply) // key: the engine's own, from InputRequired.Question
 Task Approve(NodeId); Task SendBack(NodeId, string note)
 Task MarkResolved(NodeId)
 bool CanMergeIntoBranch; Task MergeIntoBranch()

@@ -113,6 +113,30 @@
             <TextBlock Classes="cardBody" Text="{Binding Text}" IsVisible="{Binding HasText}"
                        Foreground="{DynamicResource TextStrongBrush}"
                        AutomationProperties.AutomationId="CardNowText" />
+            <!-- The choices of a question the running turn waits on, which Send answers with the draft. -->
+            <ItemsControl ItemsSource="{Binding Questions}" IsVisible="{Binding IsAsking}" AutomationProperties.AutomationId="CardQuestions">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="canvas:QuestionViewModel">
+                  <StackPanel Spacing="4" Margin="0,0,0,4">
+                    <TextBlock Classes="cardMeta" Text="{Binding Header}" TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding Choices}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="canvas:ChoiceViewModel">
+                          <ToggleButton Content="{Binding Label}" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Detail}"
+                                        FontSize="12" Height="28" Padding="10,0" Margin="0,0,6,6"
+                                        AutomationProperties.AutomationId="CardChoice" AutomationProperties.Name="{Binding Label}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
             <!-- The person's words to the agent, which the conversation's composer shares as its draft. -->
             <StackPanel Spacing="8" IsVisible="{Binding IsAnswerable}">
               <TextBox Text="{Binding Draft}" Watermark="{Binding AnswerWatermark}" TextWrapping="Wrap" AcceptsReturn="True"
