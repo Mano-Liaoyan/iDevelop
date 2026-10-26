@@ -14,7 +14,7 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
         nameof(Now), nameof(Heading), nameof(Text), nameof(HasText), nameof(Meta), nameof(Kind), nameof(IsMessage), nameof(IsAnswerable),
         nameof(IsApproval), nameof(IsResult), nameof(IsStale), nameof(IsStopped), nameof(IsTask), nameof(IsProposal), nameof(Problem),
         nameof(HasProblem), nameof(IsProblem), nameof(IsQuietStop), nameof(IsInspectorRequest), nameof(IsCallout), nameof(NeedsInspector),
-        nameof(AnswerWatermark),
+        nameof(AnswerWatermark), nameof(Questions), nameof(IsAsking),
     ];
 
     private readonly TaskNodeViewModel _node;
@@ -78,6 +78,11 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
         get => _node.Draft;
         set => _node.Draft = value;
     }
+
+    /// <summary>The questions the running turn waits on, each with its choices.</summary>
+    public IReadOnlyList<QuestionViewModel> Questions => _node.Questions;
+
+    public bool IsAsking => _node.IsAsking;
 
     public string AnswerWatermark => Kind == CardNowKind.Question ? "Answer the agent" : "Reply to the agent";
 

@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using IDevelop.Clients;
 using IDevelop.Workflows;
 
@@ -19,6 +20,9 @@ internal abstract record TurnOutcome
     public sealed record Stopped : TurnOutcome;
 }
 
+/// <summary>The person's answer to the question the client asked as <paramref name="RequestId"/>.</summary>
+internal sealed record QuestionReply(string RequestId, QuestionsReply Reply);
+
 /// <summary>A node's agent: it runs one turn at a time, and the engine keeps everything else.</summary>
 internal interface IAgent
 {
@@ -27,9 +31,11 @@ internal interface IAgent
 
     /// <summary>
     /// Runs one turn in <paramref name="folder"/> with <paramref name="prompt"/>, continuing <paramref name="session"/> when it
-    /// is set. It reports what the agent says as it goes, and <paramref name="stop"/> stops the turn.
+    /// is set. It reports what the agent says as it goes, a question it asks the person among it, and takes each answer from
+    /// <paramref name="replies"/> into the turn. <paramref name="stop"/> stops the turn.
     /// </summary>
-    Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop);
+    Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report,
+        ChannelReader<QuestionReply> replies, CancellationToken stop);
 }
 
 /// <summary>An Approval node's agent is the person: each turn waits for them to approve or send back.</summary>
@@ -41,6 +47,7 @@ internal sealed class PersonAgent : IAgent
 
     public string? Problem(TaskDefinition node) => null;
 
-    public Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop) =>
+    public Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report,
+        ChannelReader<QuestionReply> replies, CancellationToken stop) =>
         Task.FromResult<TurnOutcome>(new TurnOutcome.Waits(NodeState.Approval, prompt));
 }

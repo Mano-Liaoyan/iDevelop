@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Threading.Channels;
 using IDevelop.Clients;
 using IDevelop.Engine;
 using IDevelop.TestSupport;
@@ -86,7 +87,7 @@ public sealed class CliAgentTests : IDisposable
             execution: new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" });
         var events = new ConcurrentQueue<AgentEvent>();
         var agent = new CliAgent(await _fakes.DiscoverAsync(), _project) { SuccessExitTime = TimeSpan.FromMilliseconds(200) };
-        var outcome = await agent.Turn(node, _project, "Survey the files", null, events.Enqueue, CancellationToken.None).WaitAsync(Patience);
+        var outcome = await agent.Turn(node, _project, "Survey the files", null, events.Enqueue, Channel.CreateUnbounded<QuestionReply>().Reader, CancellationToken.None).WaitAsync(Patience);
         return (outcome, [.. events]);
     }
 }

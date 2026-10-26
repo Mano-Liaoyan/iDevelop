@@ -1,6 +1,6 @@
 # The conversation view
 
-A user reads and continues a node's whole conversation in the main area, or in a dock under the canvas. The view shows every line of the node's log in order, renders Markdown, folds tool activity into one-line rows, and marks new sessions, waits, failures, stops, and send backs. The composer keeps one draft per node across node, workflow, and layout switches. The header names the node, its project and workflow, and its state. A line under the header says that the agent's questions arrive in its reply.
+A user reads and continues a node's whole conversation in the main area, or in a dock under the canvas. The view shows every line of the node's log in order, renders Markdown, folds tool activity into one-line rows, and marks new sessions, waits, failures, stops, and send backs. The composer keeps one draft per node across node, workflow, and layout switches. The header names the node, its project and workflow, and its state. A line under the header says how the agent asks: Claude Code with its choices while its turn runs, any other client in its reply.
 
 ## Sub-features
 
@@ -33,7 +33,7 @@ Preconditions:
 
 ## Gotchas
 
-- iDevelop asks no live question. A question a client asks arrives as text in its reply, and the person answers with a message.
+- Only Claude Code, in a May ask or Chat node, asks while its turn runs. Its choices show above the composer as `ConversationChoice` toggles and on the card as `CardChoice`, and `ConversationSend` answers with the chosen ones and the draft. Any other client asks as text in its reply, and the person answers with a message.
 - `CardAttention` exists only while a card needs the person, so `Find-ById $s.Window 'CardAttention' 1` returns `$null` otherwise. UI Automation may not reach a button inside a card; `ConversationWindowTests.A_failed_card_opens_its_conversation_from_its_attention_glyph` covers it headlessly.
 - `ConversationStopAndSend`, `ConversationApprove`, `ConversationStop`, `LoadEarlier`, and `JumpToLatest` exist only while shown. Pass a short timeout.
 - Message text is Markdown rendered into several text elements, so read a message's whole source with its `CopyMessage` button and the clipboard, not from one element.

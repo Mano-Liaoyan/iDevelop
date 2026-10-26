@@ -26,7 +26,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     private static readonly string[] NodeDependents =
     [
-        nameof(StatusLabel), nameof(Tone), nameof(ShowsStopAndSend), nameof(ShowsApprove), nameof(ShowsStop), nameof(ComposerHint),
+        nameof(StatusLabel), nameof(Tone), nameof(ShowsStopAndSend), nameof(ShowsApprove), nameof(ShowsStop), nameof(ComposerHint), nameof(Questions), nameof(IsAsking),
     ];
 
     private readonly IConversation _conversation;
@@ -73,8 +73,18 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public StatusTone Tone => _node?.Tone ?? StatusTone.Neutral;
 
-    /// <summary>What no client does here: an agent's question arrives in its reply, and the person answers it with a message.</summary>
-    public string Limitations => "The agent's questions arrive in its reply. Answer them with your message.";
+    /// <summary>
+    /// How the agent asks: Claude Code asks with its choices while its turn runs, and any other client asks in its reply,
+    /// which the person answers with a message.
+    /// </summary>
+    public string Limitations => _node?.SelectedClient.Id == ClientId.ClaudeCode
+        ? "Claude Code asks with its choices while its turn runs. Choose, or answer in your own words."
+        : "The agent's questions arrive in its reply. Answer them with your message.";
+
+    /// <summary>What the agent asks while its turn runs, each question with its choices, which Send answers.</summary>
+    public IReadOnlyList<Canvas.QuestionViewModel> Questions => _node?.Questions ?? [];
+
+    public bool IsAsking => _node?.IsAsking ?? false;
 
     public ObservableCollection<ConversationItemViewModel> Items { get; } = [];
 
@@ -84,7 +94,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         set => State.Draft = value;
     }
 
-    public string ComposerHint => _node?.State switch
+    public string ComposerHint => IsAsking ? "Sending answers the agent's question with your choices and your words." : _node?.State switch
     {
         NodeState.Running => "Your message waits for this turn to end. Stop and send ends the turn first.",
         NodeState.Idle => "Run the node first. A message continues its session.",
@@ -214,6 +224,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         {
             OnPropertyChanged(nameof(AgentName));
             OnPropertyChanged(nameof(Watermark));
+            OnPropertyChanged(nameof(Limitations));
         }
         else if (e.PropertyName is nameof(TaskNodeViewModel.EngineState))
         {

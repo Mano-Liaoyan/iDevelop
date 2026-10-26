@@ -15,6 +15,8 @@ namespace IDevelop.Engine;
 [JsonDerivedType(typeof(TurnStarted), "turnStarted")]
 [JsonDerivedType(typeof(Agent), "agent")]
 [JsonDerivedType(typeof(PersonMessage), "personMessage")]
+[JsonDerivedType(typeof(Asked), "asked")]
+[JsonDerivedType(typeof(Answered), "answered")]
 [JsonDerivedType(typeof(Completed), "completed")]
 [JsonDerivedType(typeof(Waiting), "waiting")]
 [JsonDerivedType(typeof(Failed), "failed")]
@@ -44,6 +46,12 @@ internal abstract record NodeEntry
     public sealed record Agent(AgentEvent Event) : NodeEntry;
 
     public sealed record PersonMessage(string Text) : NodeEntry;
+
+    /// <summary>The running turn's agent asks the person <paramref name="Question"/> and waits for the answer.</summary>
+    public sealed record Asked(AgentQuestion Question) : NodeEntry;
+
+    /// <summary>The person answered the agent's question with <paramref name="Text"/>, the choices and words of each answer.</summary>
+    public sealed record Answered(string Text) : NodeEntry;
 
     public sealed record Completed(NodeResult Result) : NodeEntry;
 

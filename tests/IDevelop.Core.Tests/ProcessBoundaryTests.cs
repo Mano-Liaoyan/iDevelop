@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Threading.Channels;
 using IDevelop.Clients;
 using IDevelop.Engine;
 using IDevelop.Processes;
@@ -167,7 +168,7 @@ public sealed class ProcessBoundaryTests : IDisposable
         var clients = await _fakes.DiscoverAsync().WaitAsync(Patience);
         Assert.Equal(0, LaunchMarkers.Runs(folder, ClientId.Codex));
 
-        var outcome = await new CliAgent(clients, _project).Turn(TaskDefinition(), _project, "Say DONE.", null, _ => { }, CancellationToken.None).WaitAsync(Patience);
+        var outcome = await new CliAgent(clients, _project).Turn(TaskDefinition(), _project, "Say DONE.", null, _ => { }, Channel.CreateUnbounded<QuestionReply>().Reader, CancellationToken.None).WaitAsync(Patience);
 
         Assert.Equal(new TurnOutcome.Done("DONE"), outcome);
 

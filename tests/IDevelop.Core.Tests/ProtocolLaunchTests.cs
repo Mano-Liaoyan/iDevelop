@@ -18,24 +18,18 @@ public sealed class ProtocolLaunchTests
     [Fact]
     public void Every_client_launches_with_literal_arguments_for_each_policy_row()
     {
-        (bool ReadOnly, ConversationMode Mode, bool Reviewer, bool Host, string[] Claude, string[] Agy)[] rows =
+        (bool ReadOnly, ConversationMode Mode, bool Reviewer, string[] Claude, string[] Agy)[] rows =
         [
-            (false, ConversationMode.Autonomous, false, false, ClaudeEditNone, AgyEdit),
-            (true, ConversationMode.Autonomous, false, false, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.Autonomous, false, true, ClaudeEditNone, AgyEdit),
-            (true, ConversationMode.Autonomous, false, true, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.MayAsk, false, true, ClaudeEditHost, AgyEdit),
-            (true, ConversationMode.MayAsk, false, true, ClaudePlanHost, AgyPlan),
-            (false, ConversationMode.Chat, false, true, ClaudeEditHost, AgyEdit),
-            (true, ConversationMode.Chat, false, true, ClaudePlanHost, AgyPlan),
-            (false, ConversationMode.MayAsk, false, false, ClaudeEditNone, AgyEdit),
-            (true, ConversationMode.MayAsk, false, false, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.Chat, false, false, ClaudeEditNone, AgyEdit),
-            (true, ConversationMode.Chat, false, false, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.Autonomous, true, true, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.MayAsk, true, true, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.Chat, true, true, ClaudePlanNone, AgyPlan),
-            (true, ConversationMode.Chat, true, false, ClaudePlanNone, AgyPlan),
+            (false, ConversationMode.Autonomous, false, ClaudeEditNone, AgyEdit),
+            (true, ConversationMode.Autonomous, false, ClaudePlanNone, AgyPlan),
+            (false, ConversationMode.MayAsk, false, ClaudeEditHost, AgyEdit),
+            (true, ConversationMode.MayAsk, false, ClaudePlanHost, AgyPlan),
+            (false, ConversationMode.Chat, false, ClaudeEditHost, AgyEdit),
+            (true, ConversationMode.Chat, false, ClaudePlanHost, AgyPlan),
+            (false, ConversationMode.Autonomous, true, ClaudePlanNone, AgyPlan),
+            (false, ConversationMode.MayAsk, true, ClaudePlanNone, AgyPlan),
+            (false, ConversationMode.Chat, true, ClaudePlanNone, AgyPlan),
+            (true, ConversationMode.Chat, true, ClaudePlanNone, AgyPlan),
         ];
         foreach (var row in rows)
         {
@@ -44,7 +38,7 @@ public sealed class ProtocolLaunchTests
                 var request = new LaunchRequest("m", "high", "banana")
                 {
                     ReadOnly = row.ReadOnly, ResumeSession = "session-1",
-                    Policy = ClientPolicy.For(client, row.ReadOnly, row.Mode, row.Reviewer, row.Host),
+                    Policy = ClientPolicy.For(client, row.ReadOnly, row.Mode, row.Reviewer),
                 };
                 var actual = ClientCatalog.Get(client).Launch(request);
                 Assert.Equal(client switch
