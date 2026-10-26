@@ -352,8 +352,9 @@ public sealed partial class TaskNodeViewModel
         var text = Draft;
         if (!interrupt && _asked is { } asked)
         {
-            // The draft goes with each question's choices, as the person's own words.
-            var reply = new IDevelop.Clients.QuestionsReply([.. _questions.Select(question => question.Answer(text.Trim()))]);
+            // The draft answers each question without a choice, or the last one when every question has a choice.
+            var open = _questions.Where(question => !question.HasChoice).DefaultIfEmpty(_questions[^1]).ToHashSet();
+            var reply = new IDevelop.Clients.QuestionsReply([.. _questions.Select(question => question.Answer(open.Contains(question) ? text.Trim() : ""))]);
             if (Act(engine => engine.Answer(Id, asked.Key, reply)) && Draft == text) Draft = "";
             return;
         }

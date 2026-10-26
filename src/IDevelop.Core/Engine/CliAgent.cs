@@ -92,22 +92,16 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
         string? lastError = null;
         process.ReadStdout(line => inbox.Writer.TryWrite(line));
         process.ReadStderr(line => lastError = string.IsNullOrWhiteSpace(line) ? lastError : line);
-        // The person's answers join the channel until the client exits.
-        var exited = new CancellationTokenSource();
         _ = Task.Run(async () =>
         {
             var code = await process.WaitForExitAsync();
             await process.WaitForOutputAsync();
-            exited.Cancel();
             inbox.Writer.TryWrite(code);
         });
+        // The person's answers join the channel until the engine completes them at the turn's end.
         _ = Task.Run(async () =>
         {
-            try
-            {
-                await foreach (var reply in replies.ReadAllAsync(exited.Token)) inbox.Writer.TryWrite(reply);
-            }
-            catch (OperationCanceledException) { }
+            await foreach (var reply in replies.ReadAllAsync()) inbox.Writer.TryWrite(reply);
         });
         using var registration = stop.Register(() => inbox.Writer.TryWrite(stop));
         var asks = plan.Request.Policy?.Questions == QuestionHandling.Surface;

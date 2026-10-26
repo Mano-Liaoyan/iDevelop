@@ -125,13 +125,23 @@ internal static class FakeAgents
     /// Claude Code's request that the person answer <paramref name="question"/>, one choice of <paramref name="options"/>, as
     /// its AskUserQuestion tool sends it on the control channel.
     /// </summary>
-    public static string ClaudeAsks(string question, params string[] options) => JsonSerializer.Serialize(new
+    public static string ClaudeAsks(string question, params string[] options) => ClaudeAsksAll((question, options));
+
+    /// <summary>Claude Code's AskUserQuestion request with several questions, each with its choices.</summary>
+    public static string ClaudeAsksAll(params (string Question, string[] Options)[] questions) => JsonSerializer.Serialize(new
     {
         type = "control_request", request_id = "ask-1",
         request = new
         {
             subtype = "can_use_tool", tool_name = "AskUserQuestion", tool_use_id = "toolu_ask",
-            input = new { questions = new[] { new { header = "Choice", question, multiSelect = false, options = options.Select(label => new { label, description = $"Use {label}." }) } } },
+            input = new
+            {
+                questions = questions.Select(asked => new
+                {
+                    header = "Choice", question = asked.Question, multiSelect = false,
+                    options = asked.Options.Select(label => new { label, description = $"Use {label}." }),
+                }),
+            },
         },
     });
 

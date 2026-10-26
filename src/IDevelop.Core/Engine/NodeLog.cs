@@ -50,8 +50,8 @@ internal abstract record NodeEntry
     /// <summary>The running turn's agent asks the person <paramref name="Question"/> and waits for the answer.</summary>
     public sealed record Asked(AgentQuestion Question) : NodeEntry;
 
-    /// <summary>The person answered the question of <paramref name="Key"/> with <paramref name="Reply"/>, which <paramref name="Text"/> words.</summary>
-    public sealed record Answered(string Key, QuestionsReply Reply, string Text) : NodeEntry;
+    /// <summary>The person answered the agent's question with <paramref name="Text"/>, the choices and words of each answer.</summary>
+    public sealed record Answered(string Text) : NodeEntry;
 
     public sealed record Completed(NodeResult Result) : NodeEntry;
 

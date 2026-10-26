@@ -258,8 +258,7 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
             var index = int.Parse(answer.QuestionId.AsSpan(2));
             var question = questions[index];
             var options = question.Items("options").ToArray();
-            var labels = answer.OptionIds.Select(id => options[int.Parse(id.AsSpan(2))].String("label")!);
-            answers[question.String("question")!] = string.Join(", ", labels.Concat(answer.Text is { Length: > 0 } text ? [text] : []));
+            answers[question.String("question")!] = answer.Words(answer.OptionIds.Select(id => options[int.Parse(id.AsSpan(2))].String("label")!));
         }
 
         input["answers"] = answers;

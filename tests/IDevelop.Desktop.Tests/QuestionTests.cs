@@ -21,11 +21,11 @@ public sealed class QuestionTests
 {
     private static readonly ExecutionSettings Claude = new(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" };
 
-    private static NodeFixture Asking()
+    private static NodeFixture Asking(string? ask = null)
     {
         var f = new NodeFixture(AppTempFolder.TaskAt(TestTasks.Design, "Paint", 105, 90, Claude, "Paint the door.", ConversationMode.MayAsk));
         FakeAgents.Install(f.Fakes, ClientId.ClaudeCode, On().Print(FakeAgents.SessionLine(ClientId.ClaudeCode, "s-1"))
-            .Print(FakeAgents.ClaudeAsks("Which color?", "Red", "Blue")).ReadLine(Path.Combine(f.Evidence, "answer.json"))
+            .Print(ask ?? FakeAgents.ClaudeAsks("Which color?", "Red", "Blue")).ReadLine(Path.Combine(f.Evidence, "answer.json"))
             .Print(FakeAgents.ReplyLines(ClientId.ClaudeCode, "Painted it.")));
         return f;
     }
@@ -60,6 +60,23 @@ public sealed class QuestionTests
 
         shell.WaitForState("Paint", NodeState.Completed);
         Assert.Contains("\"Which color?\":\"Blue\"", Answered(f));
+    }
+
+    [AvaloniaFact]
+    public void With_several_questions_the_draft_answers_only_the_question_without_a_choice()
+    {
+        using var f = Asking(FakeAgents.ClaudeAsksAll(("Which color?", ["Red", "Blue"]), ("Which finish?", ["Matte", "Gloss"])));
+        var shell = f.Open();
+        var node = shell.NodeModel("Paint");
+        node.RunCommand.Execute(null);
+        shell.WaitUntil(() => node.IsAsking, "the agent asks");
+
+        node.Questions[0].Choices[0].IsChosen = true;
+        node.Draft = "Satin";
+        node.SendCommand.Execute(null);
+
+        shell.WaitForState("Paint", NodeState.Completed);
+        Assert.Contains("\"answers\":{\"Which color?\":\"Red\",\"Which finish?\":\"Satin\"}", Answered(f));
     }
 
     [AvaloniaFact]

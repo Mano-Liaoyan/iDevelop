@@ -72,6 +72,23 @@ public sealed class QuestionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_stopped_turn_takes_no_answer_and_no_longer_shows_its_question()
+    {
+        var a = _f.Node("A", ConversationMode.MayAsk, Claude);
+        FakeAgents.Install(_f.Fakes, ClientId.ClaudeCode, Asks("Done."));
+        var engine = await _f.Open();
+        await engine.Run(a);
+        var waiting = (NodeState.InputRequired)await Until(engine, a, state => state is NodeState.InputRequired { Question: not null });
+
+        var stopped = engine.Stop(a);
+
+        Assert.IsNotType<NodeState.InputRequired>(engine.State(a));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => engine.Answer(a, waiting.Question!.Key, Choose("o:0")));
+        await stopped.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Empty(engine.Entries(a).OfType<NodeEntry.Answered>());
+    }
+
+    [Fact]
     public async Task A_question_still_waiting_when_iDevelop_closes_reopens_as_an_interrupted_turn()
     {
         var a = _f.Node("A", ConversationMode.MayAsk, Claude);

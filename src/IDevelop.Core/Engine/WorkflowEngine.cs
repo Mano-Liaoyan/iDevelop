@@ -510,6 +510,10 @@ public sealed class WorkflowEngine : IAsyncDisposable
         {
             outcome = new TurnOutcome.Failed(e.Message);
         }
+        finally
+        {
+            live.Replies.Writer.TryComplete();
+        }
 
         Change(() =>
         {
@@ -593,12 +597,11 @@ public sealed class WorkflowEngine : IAsyncDisposable
             var (question, request) = live.Asked[index];
             string? Words(AskedQuestion item) => reply.Answers.Where(answer => answer.QuestionId == item.Id).ToList() is [var answer]
                 && (item.MultiSelect || answer.OptionIds.Length <= 1) && answer.OptionIds.All(id => item.Options.Any(option => option.Id == id))
-                && string.Join(", ", item.Options.Where(option => answer.OptionIds.Contains(option.Id)).Select(option => option.Label)
-                    .Append(answer.Text?.Trim() ?? "").Where(word => word.Length > 0)) is { Length: > 0 } words ? words : null;
+                && answer.Words(answer.OptionIds.Select(id => item.Options.First(option => option.Id == id).Label)) is { Length: > 0 } words ? words : null;
             var words = question.Questions.Select(Words).ToList();
             if (reply.Answers.Length != words.Count || words.Contains(null)) throw new InvalidOperationException("The answer does not fit the question.");
             live.Asked.RemoveAt(index);
-            Log(node).Append(new NodeEntry.Answered(key, reply, string.Join("\n", words)));
+            Log(node).Append(new NodeEntry.Answered(string.Join("\n", words)));
             live.Replies.Writer.TryWrite(new QuestionReply(request, reply));
         });
         return Task.CompletedTask;
@@ -705,6 +708,8 @@ public sealed class WorkflowEngine : IAsyncDisposable
 
     private static void RequestStop(Live live, Halt halt)
     {
+        // A turn that stops waits for no answer.
+        live.Asked.Clear();
         if (live.Halt == Halt.Closing) return;
         live.Halt = halt;
         live.Stop.Cancel();

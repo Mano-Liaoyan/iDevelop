@@ -10,7 +10,11 @@ public sealed record AskedQuestion(
     bool MultiSelect, bool AllowsOther);
 
 public sealed record QuestionAnswer(
-    string QuestionId, ImmutableArray<string> OptionIds, string? Text);
+    string QuestionId, ImmutableArray<string> OptionIds, string? Text)
+{
+    /// <summary>The chosen <paramref name="labels"/> and the person's own text, as the agent reads the answer.</summary>
+    public string Words(IEnumerable<string> labels) => string.Join(", ", labels.Concat(string.IsNullOrWhiteSpace(Text) ? [] : [Text!]));
+}
 
 public sealed record QuestionsReply(ImmutableArray<QuestionAnswer> Answers);
 
