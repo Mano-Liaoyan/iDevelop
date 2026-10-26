@@ -23,6 +23,8 @@ public sealed class SkillPickerViewModel : ObservableObject
 
     private readonly TaskNodeViewModel _node;
     private bool _isOpen;
+    private ImmutableArray<SkillEntry>? _entries;
+    private IReadOnlyList<SkillChoiceViewModel> _choices = [];
 
     internal SkillPickerViewModel(TaskNodeViewModel node)
     {
@@ -60,10 +62,23 @@ public sealed class SkillPickerViewModel : ObservableObject
     /// <summary>The chosen skills' names, which the picker's tooltip lists.</summary>
     public string? SummaryTip => CanChoose && Settings?.Skills is { Count: > 0 } chosen ? string.Join(", ", chosen) : null;
 
-    /// <summary>The listed skills, then each chosen skill that the client no longer lists, marked not installed.</summary>
-    public IReadOnlyList<SkillChoiceViewModel> Choices => ShowsList && Listing is SkillListing.Listed listed
-        ? [.. SkillChoices.Entries(Settings!.Client, Settings.Skills, listed.Skills).Select(entry => new SkillChoiceViewModel(this, entry))]
-        : [];
+    /// <summary>
+    /// The listed skills, then each chosen skill that the client no longer lists, marked not installed. Entries that came
+    /// out the same, as after another listing of the same skills lands, keep their rows, so a click on one is not lost.
+    /// </summary>
+    public IReadOnlyList<SkillChoiceViewModel> Choices
+    {
+        get
+        {
+            var entries = ShowsList && Listing is SkillListing.Listed listed ? SkillChoices.Entries(Settings!.Client, Settings.Skills, listed.Skills) : [];
+            if (_entries is not { } shown || !entries.SequenceEqual(shown))
+            {
+                (_entries, _choices) = (entries, [.. entries.Select(entry => new SkillChoiceViewModel(this, entry))]);
+            }
+
+            return _choices;
+        }
+    }
 
     /// <summary>What the open list shows in place of skills: that it is listing them, why it cannot, or that there are none.</summary>
     public string? ListNote => !ShowsList ? null : Listing switch
@@ -122,6 +137,8 @@ public sealed class SkillPickerViewModel : ObservableObject
 
     internal void Choose(string name, bool tick)
     {
+        // Every row shows its entry again, the toggled box too when the choice changes nothing or is refused.
+        _entries = null;
         if (Settings is { } settings && CanChoose && Listing is SkillListing.Listed listed)
         {
             var chosen = SkillChoices.Toggle(settings.Skills, listed.Skills, name, tick);
