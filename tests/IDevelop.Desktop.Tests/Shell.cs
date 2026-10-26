@@ -51,6 +51,9 @@ internal sealed partial class Shell
     // Every window a test opened, so a window that opens a project again first lets the earlier one go of it.
     private static readonly List<Shell> Opened = [];
 
+    /// <summary>Forgets every window the test opened, at its end, so none outlives the test.</summary>
+    public static void Forget() => Opened.Clear();
+
     /// <summary>
     /// Opens the folder in a new window. A project is open in one window at a time, so each earlier window of this test
     /// that has it open closes its projects first, as quitting does, and the new window reopens what it saved.
@@ -277,6 +280,17 @@ internal sealed partial class Shell
             Window.KeyTextInput(character.ToString());
         }
 
+        Render();
+    }
+
+    /// <summary>
+    /// Enters the text as one text input, as a paste does, where no test needs each character. Each input event draws
+    /// frames until the window settles. A node that runs or waits animates without end, so the window never settles, and
+    /// each event took about a second on Windows: typing a sentence one character at a time took a minute.
+    /// </summary>
+    public void Enter(string text)
+    {
+        Window.KeyTextInput(text);
         Render();
     }
 

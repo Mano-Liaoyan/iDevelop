@@ -57,7 +57,7 @@ internal static class FanOut
     public static void Generate(Shell shell)
     {
         shell.Click(shell.Find<Avalonia.Controls.Button>("GenerateWorkflow"));
-        shell.Type(Goal);
+        shell.Enter(Goal);
         shell.Click(shell.Find<Avalonia.Controls.Button>("GenerateSubmit"));
         shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.GenerateProgress == GenerateProgress.Reviewing, "the proposal shows");
     }

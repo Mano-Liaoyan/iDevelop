@@ -7,5 +7,7 @@
     <VSTestBlameHangDumpType>mini</VSTestBlameHangDumpType>
     <!-- A project's whole run ends with an error after 30 minutes, for a run that slows to a crawl without one test hanging (#165). -->
     <RunSettingsFilePath>$(MSBuildThisFileDirectory)test.runsettings</RunSettingsFilePath>
+    <!-- The Desktop tests build a whole window for each test, and the server collector runs them about a fifth faster on Windows. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
 </Project>
