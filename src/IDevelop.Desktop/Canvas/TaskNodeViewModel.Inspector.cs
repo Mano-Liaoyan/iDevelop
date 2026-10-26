@@ -16,30 +16,16 @@ public sealed partial class TaskNodeViewModel
         [nameof(Preview)] = [nameof(TaskChanges)],
         [nameof(AgentLabel)] = [nameof(AgentChanges), nameof(CanRevertAgent)],
         [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
-        [nameof(IsWaiting)] = [nameof(ShowsAcceptAndFinish)],
+        [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish)],
         [nameof(Proposal)] = [nameof(ShowsAcceptAndFinish)],
         [nameof(PermissionNote)] = [nameof(PermissionSummary)],
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
-        [nameof(Role)] = [nameof(ShowsRunControls), nameof(ShowsCancel)],
-        [nameof(State)] = [nameof(ShowsCancel)],
-        [nameof(IsRunOwned)] = [nameof(ShowsRunControls), nameof(ShowsCancel), nameof(ShowsCancelButton), nameof(ShowsAcceptAndFinish)],
-        [nameof(JoinsRun)] = [nameof(ShowsRunControls), nameof(ShowsCancel)],
-        [nameof(ShowsRunState)] = [nameof(ShowsAcceptAndFinish)],
     };
 
     private RelayCommand? _acceptAndFinish;
     private ProposalViewModel? _watchedProposal;
-    private AttemptViewModel? _lastRun;
-    private bool _showsToolCalls;
 
     public string AgentSectionTitle => IsReview ? "Reviewer" : "Agent";
-
-    /// <summary>Whether the inspector lists this task's tool calls in its activity. Each task keeps its own choice across its runs.</summary>
-    public bool ShowsToolCalls
-    {
-        get => _showsToolCalls;
-        set => SetProperty(ref _showsToolCalls, value);
-    }
 
     public string ComposerSectionTitle => IsReview ? "Guide the Review" : "Talk to the Agent";
 
@@ -73,12 +59,6 @@ public sealed partial class TaskNodeViewModel
 
     public ICommand RevertConversationCommand { get; private set; } = null!;
 
-    /// <summary>
-    /// The last run as the inspector shows it, built once for each new attempt record, because the run, conversation,
-    /// and activity sections each read it.
-    /// </summary>
-    public AttemptViewModel? LastRun => _lastRun ??= LastAttempt;
-
     /// <summary>The blueprint's version, and that it is built in.</summary>
     public string BlueprintVersion => _task.Blueprint.IsBuiltIn ? $"{_task.Blueprint.Key.Version} · Built-in" : $"{_task.Blueprint.Key.Version}";
 
@@ -88,28 +68,12 @@ public sealed partial class TaskNodeViewModel
         : null;
 
     /// <summary>
-    /// Run and the reason it cannot start. While a proposal is open, accepting it is the node's one primary action, so
-    /// the Run section keeps only the run's status.
+    /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the inspector
+    /// offers both in one button.
     /// </summary>
-    public bool ShowsRunControls => Role != NodeRole.Proposing && (!IsRunOwned || JoinsRun);
+    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && Proposal is { HasItems: true } && Waits(IDevelop.Engine.NodeState.Reply);
 
-    /// <summary>
-    /// The row of Run and Cancel. Cancel shows with Run, and while a proposal is open only during a turn that this window
-    /// runs. A task that the canvas's run owns has its own Cancel row, so this row keeps only the Run that adds it to the run.
-    /// </summary>
-    public bool ShowsCancel => ShowsRunControls || !IsRunOwned && State is NodeState.Running or NodeState.Stopping;
-
-    /// <summary>Cancel stops this task's own run, which a task that the canvas's run owns does not have.</summary>
-    public bool ShowsCancelButton => !IsRunOwned;
-
-    /// <summary>
-    /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the
-    /// inspector offers both in one button. A Chat planner in the canvas's run takes it while Accept amends that run (#84).
-    /// </summary>
-    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && Proposal is { HasItems: true } proposal &&
-        (proposal.IntoRun ? RunTask is { State: TaskState.Waiting, Status: AttemptStatus.WaitingForInput } : StandaloneWaiting);
-
-    /// <summary>Accepts the proposal, and once it is accepted, marks the planner done.</summary>
+    /// <summary>Accepts the proposal, and once it is accepted, approves the planner's reply as its result.</summary>
     public ICommand AcceptAndFinishCommand => _acceptAndFinish!;
 
     /// <summary>Selects the node, as clicking it in the connection inspector does.</summary>
@@ -122,18 +86,13 @@ public sealed partial class TaskNodeViewModel
         SelectCommand = new RelayCommand(() => _canvas.Inspect(this));
         _acceptAndFinish = new RelayCommand(
             AcceptAndFinish,
-            () => ShowsAcceptAndFinish && Proposal!.AcceptCommand.CanExecute(null) && (Proposal.IntoRun || _markDone.CanExecute(null)));
+            () => ShowsAcceptAndFinish && Proposal!.AcceptCommand.CanExecute(null));
         PropertyChanged += OnInspectedChanged;
     }
 
     private void OnInspectedChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(LastAttempt))
-        {
-            _lastRun = null;
-            OnPropertyChanged(nameof(LastRun));
-        }
-        else if (e.PropertyName == nameof(Proposal))
+        if (e.PropertyName == nameof(Proposal))
         {
             WatchProposal();
         }
@@ -165,26 +124,25 @@ public sealed partial class TaskNodeViewModel
 
     private void OnAcceptChanged(object? sender, EventArgs e) => _acceptAndFinish?.NotifyCanExecuteChanged();
 
-    // The notice keeps what Accept added, so only a refused Mark Done replaces it.
+    // The notice keeps what Accept added, so only a refused approval replaces it.
     private void AcceptAndFinish()
     {
         var proposal = Proposal!;
-        if (proposal.IntoRun)
-        {
-            _ = proposal.AcceptIntoRunAsync(finish: true);
-            return;
-        }
-
-        // A run's planner that Accept no longer amends the run of has no finish of its own here.
-        if (proposal.FromRun)
-        {
-            return;
-        }
-
         proposal.AcceptCommand.Execute(null);
-        if (!ReferenceEquals(Proposal, proposal) && _canvas.Runs.MarkDone(Id) is { } problem)
+        if (ReferenceEquals(Proposal, proposal))
         {
-            _canvas.Notice(RunText.Describe(problem));
+            return;
         }
+
+        try
+        {
+            _canvas.Engine.Approve(Id);
+        }
+        catch (InvalidOperationException e)
+        {
+            _canvas.Notice(e.Message);
+        }
+
+        _canvas.ShowEngine();
     }
 }

@@ -1,355 +1,212 @@
+using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Windows.Input;
+using Avalonia.Threading;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Engine;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// Run Workflow: the preflight sheet, and the run that the toolbar, the cards, and the inspector follow. The canvas keeps
-/// its run while the project stays open, so switching to another workflow or project stops nothing.
+/// The workflow's engine and the controls that act on it (ADR 0017): Run Workflow beside Generate, and the bar at the
+/// bottom center that counts what runs and waits, with Stop All, and Merge into my branch while the engine offers it.
+/// The canvas keeps its engine while the project stays open, so switching to another workflow or project stops nothing.
 /// </summary>
 public sealed partial class WorkflowCanvasViewModel
 {
-    private WorkflowRunViewModel? _run;
-    private RunPreflightViewModel? _preflight;
+    private readonly ConcurrentDictionary<TaskId, ImmutableArray<ClientId>> _checkingAtStart = [];
+    private readonly ConcurrentDictionary<TaskId, PlanningHandles> _handles = [];
+    private ImmutableArray<Blueprint> _placeable = [];
     private RelayCommand? _runWorkflow;
-    private RelayCommand? _dismissRun;
-    private RelayCommand? _showRunAttention;
-    private bool _standaloneRunning;
+    private RelayCommand? _stopAll;
+    private RelayCommand? _merge;
+    private int _engineChanged;
+    private int _runningCount;
+    private bool _canMerge;
 
-    /// <summary>The workflow's run in this window: the one it started, or the active one it found when the project opened.</summary>
-    public WorkflowRunViewModel? Run
+    /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
+    internal Func<string, Task<bool>> OpenFolder { get; set; } = _ => Task.FromResult(false);
+
+    /// <summary>The engine that runs this workflow's nodes and routes their results.</summary>
+    internal WorkflowEngine Engine { get; private set; } = null!;
+
+    /// <summary>Runs every node that has no current result, in dependency order. No node needs to be selected.</summary>
+    public ICommand RunWorkflowCommand => _runWorkflow ??= new RelayCommand(RunWorkflow, () => Sheet is null && Nodes.Count > 0);
+
+    /// <summary>Stops every running node. Finished results stay.</summary>
+    public ICommand StopAllCommand => _stopAll ??= new RelayCommand(() => _ = Engine.StopAll(), () => RunningCount > 0);
+
+    /// <summary>Merges the end nodes' commits into the checked-out branch, offered only while every node is completed and current.</summary>
+    public ICommand MergeIntoBranchCommand => _merge ??= new RelayCommand(MergeIntoBranch, () => CanMergeIntoBranch);
+
+    /// <summary>How many nodes run now.</summary>
+    public int RunningCount
     {
-        get => _run;
-        private set => SetProperty(ref _run, value);
+        get => _runningCount;
+        private set => SetProperty(ref _runningCount, value);
     }
 
-    /// <summary>The open preflight sheet, or null.</summary>
-    public RunPreflightViewModel? Preflight
+    /// <summary>Every node is completed and nothing is stale, so the bar offers Merge into my branch.</summary>
+    public bool CanMergeIntoBranch
     {
-        get => _preflight;
-        private set => SetProperty(ref _preflight, value);
+        get => _canMerge;
+        private set => SetProperty(ref _canMerge, value);
     }
 
-    /// <summary>Opens the preflight of the whole workflow. No node needs to be selected.</summary>
-    public ICommand RunWorkflowCommand => _runWorkflow ??= new RelayCommand(OpenPreflight, () => Preflight is null && Sheet is null);
+    /// <summary>The bar shows while a node runs or waits for the person, or while Merge into my branch is offered.</summary>
+    public bool ShowsBar => RunningCount > 0 || WaitingCount > 0 || CanMergeIntoBranch;
 
-    /// <summary>
-    /// Hides a run that has settled, so the cards show their tasks' own runs again, or where each task stands between runs
-    /// (#90). The run's records stay.
-    /// </summary>
-    public ICommand DismissRunCommand => _dismissRun ??= new RelayCommand(DismissRun);
-
-    /// <summary>Run Workflow shows until a run of this workflow is active; then the run's own controls take its place.</summary>
-    public bool ShowsRunWorkflow => Run is not { IsActive: true };
-
-    /// <summary>The run needs attention, so its status pill selects the first task that keeps it from going on.</summary>
-    public bool ShowsRunAttention => Run is { View.Status: RunStatus.NeedsAttention } && AttentionNode() is not null;
-
-    /// <summary>Selects the first task, in the outline's order, that keeps the run from going on, and shows it in the inspector.</summary>
-    public ICommand ShowRunAttentionCommand => _showRunAttention ??= new RelayCommand(() =>
+    /// <summary>"2 running · 1 waits for you", "Every node is complete", or empty.</summary>
+    public string BarSummary => string.Join(" · ", new[]
     {
-        if (AttentionNode() is { } node) Select(node);
-    }, () => ShowsRunAttention);
+        RunningCount > 0 ? $"{RunningCount} running" : null,
+        WaitingCount switch { 0 => null, 1 => "1 waits for you", var count => $"{count} wait for you" },
+        RunningCount == 0 && WaitingCount == 0 && CanMergeIntoBranch ? "Every node is complete" : null,
+    }.OfType<string>());
 
-    private TaskNodeViewModel? AttentionNode() => Outline.FirstOrDefault(node => node.RunTask is
+    public StatusTone BarTone => RunningCount > 0 ? StatusTone.Running : WaitingCount > 0 ? StatusTone.Waiting : StatusTone.Complete;
+
+    /// <summary>The running nodes' titles, or null.</summary>
+    public string? BarActivity => RunningCount == 0 ? null
+        : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
+
+    private void InitializeEngine(IReadOnlyDictionary<string, string> git)
     {
-        State: TaskState.Failed or TaskState.Stale or TaskState.Blocked or TaskState.Uncertain or TaskState.Refused or TaskState.Unsupported or TaskState.SentBack,
-    });
-
-    /// <summary>Raised when the coordinator that the canvas's run goes through changes, so an open conversation can follow it.</summary>
-    internal event EventHandler? RunRouteChanged;
-
-    /// <summary>Shows <paramref name="coordinator"/>'s run. A run the canvas already shows stays as it is.</summary>
-    internal void Adopt(WorkflowRunCoordinator coordinator)
-    {
-        if (Run is { } shown && (shown.Coordinator == coordinator || shown.Address == coordinator.Address && shown.IsControlled && !coordinator.Controlled))
-        {
-            return;
-        }
-
-        if (Run is { } old)
-        {
-            old.ViewChanged -= OnRunViewChanged;
-            old.Replaced -= OnRunReplaced;
-            old.Dispose();
-        }
-
-        var run = new WorkflowRunViewModel(Runs, coordinator, task => Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task",
-            task => Nodes.FirstOrDefault(node => node.Id == task)?.Standing is TaskStanding.OutOfDate);
-        run.ViewChanged += OnRunViewChanged;
-        run.Replaced += OnRunReplaced;
-        Run = run;
-        ShowRun(adopted: true);
-        ReadSettledRun();
-        RunRouteChanged?.Invoke(this, EventArgs.Empty);
+        Engine = new WorkflowEngine(Project.Folder, Document.Current, Clients, TimeSpan.FromSeconds(5), git) { Planning = Planning };
+        Engine.NodeChanged += (_, _) => PostShowEngine();
     }
 
-    internal void ClosePreflight()
+    /// <summary>Stops every node's turn, which reopens as interrupted, as the project's closing does.</summary>
+    internal ValueTask DisposeEngineAsync()
     {
-        Preflight?.Detach();
-        Preflight = null;
-        _runWorkflow?.NotifyCanExecuteChanged();
-    }
-
-    /// <summary>Gives every card its task's view in the run, and the sidebar the run's activity.</summary>
-    internal void ShowRun(bool adopted = false)
-    {
-        var run = Run;
         foreach (var node in Nodes)
         {
-            node.ShowRunTask(run?.View.Tasks.GetValueOrDefault(node.Id), run?.IsActive ?? false, adopted, Name);
-            node.NotifyRunCommands();
-            // An open proposal follows the run's phase, and its revision once another proposal amended the run.
-            if (node.Proposal is { } proposal && node.RunTask is not null)
-            {
-                _ = node.ReadRunProposalAsync();
-            }
+            node.StopFollowingLog();
         }
 
-        ShowActivity();
-        OnPropertyChanged(nameof(ShowsRunWorkflow));
-        OnPropertyChanged(nameof(ShowsRunAttention));
-        _showRunAttention?.NotifyCanExecuteChanged();
-        NotifyConflictCommands();
-    }
-
-    /// <summary>Stops the canvas's run follow its coordinator, as the project does when it closes.</summary>
-    internal void DisposeRun()
-    {
-        ClosePreflight();
-        if (Run is { } run)
-        {
-            run.ViewChanged -= OnRunViewChanged;
-            run.Replaced -= OnRunReplaced;
-            run.Dispose();
-        }
-    }
-
-    private void DismissRun()
-    {
-        if (Run is not { IsActive: false } run)
-        {
-            return;
-        }
-
-        run.ViewChanged -= OnRunViewChanged;
-        run.Replaced -= OnRunReplaced;
-        run.Dispose();
-        Run = null;
-        ShowRun();
-        RunRouteChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OpenPreflight()
-    {
-        Preflight ??= new RunPreflightViewModel(this);
-        _runWorkflow?.NotifyCanExecuteChanged();
+        return Engine.DisposeAsync();
     }
 
     /// <summary>
-    /// A node's Run (#90). It runs the node in a workflow run, as Run Workflow runs every root: without an active run it
-    /// opens the node's preflight, and in the canvas's active run it adds the node, which starts once each task before it
-    /// has a result. Each task after it starts by itself once all of its own predecessors have results. A node that
-    /// <see cref="RunRefusal"/> refuses starts nothing, and the notice says why.
+    /// Reads every node from the engine again, and what the bar and the sidebar show. A node's change can change what the
+    /// nodes after it may do, so every node reads.
     /// </summary>
-    internal void RunNode(TaskNodeViewModel node)
+    internal void ShowEngine()
     {
-        if (RunRefusal(node) is { } refusal)
+        _placeable = [.. Blueprints.Placeable];
+        foreach (var node in Nodes)
         {
-            Notice(refusal);
-            return;
+            node.ShowEngine();
         }
 
-        if (Run is { IsActive: true } run)
+        foreach (var node in Nodes)
         {
-            if (run.View.Tasks.GetValueOrDefault(node.Id) is { State: TaskState.Unrequested })
-            {
-                _ = JoinRunAsync(run, node);
-            }
-            else if (AddsMergeNode(run, node))
-            {
-                _ = AddMergeAsync(run, node);
-            }
-
-            return;
+            node.ShowReviewer(Nodes.FirstOrDefault(other => other.IsReview && other.State == NodeState.Running && Precedes(node.Id, other.Id))?.Title);
         }
 
-        OpenNodePreflight(node.Id);
-    }
-
-    /// <summary>
-    /// Why a node's Run would start nothing now, or null (#90). In the canvas's active run: a node added after the run
-    /// started, a node whose predecessors have no results in the run, or a node that the run's approved version of it
-    /// keeps from starting. Without one: the node's predecessors, since a new run has no results yet, or what keeps the node
-    /// from starting in a run as configured. Null too for a node the active run already holds, whose Run does not show.
-    /// </summary>
-    internal string? RunRefusal(TaskNodeViewModel node)
-    {
-        if (Run is not { IsActive: true } run)
-        {
-            return NewRunRefusal(node);
-        }
-
-        if (AddsMergeNode(run, node))
-        {
-            return Runs.CheckRun(node.Definition) is { } unready ? RunText.Describe(unready) : null;
-        }
-
-        // A Merge node's agent runs only on a conflict that goes to it.
-        if (node.Definition.Blueprint.Work is WorkSpec.Merge)
-        {
-            return RunText.Describe(new StartProblem.MergesInRun());
-        }
-
-        if (run.View.Tasks.GetValueOrDefault(node.Id) is not { } view || run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is not { } approved)
-        {
-            return "Added after this run started. Run it once the run\u00A0finishes.";
-        }
-
-        if (view.State != TaskState.Unrequested)
-        {
-            return null;
-        }
-
-        // A predecessor whose earlier run left it a result that still counts is complete: the run carries that result.
-        if (RunsAfter(node, Incomplete(view.HeldBy)) is { } after)
-        {
-            return after;
-        }
-
-        // The run starts the task as it approved it, so that version decides, not the document's.
-        return Runs.CheckRun(approved) is not { } problem ? null
-            : SameDefinition(approved, node.Definition) ? RunText.Describe(problem)
-            : WorkflowRunText.AsApproved(node.Title, problem);
-    }
-
-    /// <summary>
-    /// Whether the node is a Merge node the active run lacks while the run waits on a conflict that no Merge node takes, so
-    /// its Run adds it to the run and the conflict goes to it.
-    /// </summary>
-    private static bool AddsMergeNode(WorkflowRunViewModel run, TaskNodeViewModel node) =>
-        node.Definition.Blueprint.Work is WorkSpec.Merge && run.View.Snapshot?.Tasks.ContainsKey(node.Id) == false && run.WaitsForMergeNode;
-
-    /// <summary>Adds the Merge node to the waiting run, and says why when the run refuses.</summary>
-    internal async Task AddMergeAsync(WorkflowRunViewModel run, TaskNodeViewModel node)
-    {
-        var outcome = await run.AddMergeAsync(Workflow, node.Id);
-        Notice(outcome switch
-        {
-            RunCommand.Unavailable unavailable => unavailable.Message,
-            RunCommand.Refused refused => WorkflowRunText.Problem(refused.Reason),
-            RunCommand.Untaken untaken => WorkflowRunText.Untaken(untaken.Node, untaken.Branches, TitleOf),
-            _ => null,
-        });
-    }
-
-    /// <summary>
-    /// Brings the document up to the run's amendments, as one edit that Undo can reverse, while it holds a revision of the
-    /// run's amendment chain (#84). Otherwise it applies nothing, and the run goes on as amended. Returns false then.
-    /// </summary>
-    internal async Task<bool> FollowRunAsync(WorkflowRunCoordinator coordinator)
-    {
-        var document = Workflow;
-        var follow = await Task.Run(() => coordinator.Follow(document));
-        if (!ReferenceEquals(document, Workflow))
-        {
-            follow = coordinator.Follow(Workflow);
-        }
-
-        return follow switch
-        {
-            AmendmentProjection.Apply apply => Edit(apply.Edit) is EditResult.Applied,
-            AmendmentProjection.Current => true,
-            _ => false,
-        };
-    }
-
-    /// <summary>Whether the canvas's active run runs the task as the document now holds it, or as it was when the run started.</summary>
-    internal bool RunsAsApproved(TaskNodeViewModel node) => Run is { IsActive: true } run &&
-        run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is { } approved && !SameDefinition(approved, node.Definition);
-
-    /// <summary>
-    /// Why a new run of the node would start nothing: each predecessor without a current result from an earlier run, since a
-    /// new run has no results of its own yet, or its configuration.
-    /// </summary>
-    private string? NewRunRefusal(TaskNodeViewModel node) => node.Definition.Blueprint.Work is WorkSpec.Merge
-        ? RunText.Describe(new StartProblem.MergesInRun())
-        : RunsAfter(node, Incomplete([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
-            .Select(connection => connection.Key.From)]))
-        ?? (Runs.CheckRun(node.Definition) is { } problem ? RunText.Describe(problem) : null);
-
-    /// <summary>
-    /// "Runs after "A". Run "A" first." for the predecessors without a current result, or null. A task that is out of date
-    /// because its one such predecessor is out of date says that once instead (#90).
-    /// </summary>
-    private string? RunsAfter(TaskNodeViewModel node, TaskId[] incomplete) =>
-        incomplete is [var only] && node.Standing?.RunsAfter(only, History?[only], TitleOf) is { } outOfDate ? outOfDate
-        : WorkflowRunText.RunsAfter(incomplete, TitleOf);
-
-    /// <summary>The predecessors among <paramref name="predecessors"/> that have no current result from an earlier run (#90).</summary>
-    private TaskId[] Incomplete(IEnumerable<TaskId> predecessors) => [.. predecessors.Where(predecessor => History?.CurrentOf(predecessor) is null)];
-
-    private static bool SameDefinition(TaskDefinition approved, TaskDefinition current) =>
-        ReferenceEquals(approved, current) || Revision.CanonicalTask(approved) == Revision.CanonicalTask(current);
-
-    private string TitleOf(TaskId task) => Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task";
-
-    private void OpenNodePreflight(TaskId node)
-    {
-        if (Preflight is null && Sheet is null)
-        {
-            Preflight = new RunPreflightViewModel(this, node);
-            _runWorkflow?.NotifyCanExecuteChanged();
-        }
-    }
-
-    /// <summary>
-    /// Adds the node to the active run, once per run, and says why when the run refuses. A run that completed meanwhile
-    /// takes nothing more, so the Run then opens a new run's preflight, as it does without an active run.
-    /// </summary>
-    internal async Task JoinRunAsync(WorkflowRunViewModel run, TaskNodeViewModel node)
-    {
-        var outcome = await run.JoinAsync(node.Id);
-        if (outcome is RunCommand.Refused { Reason.Problem: RunProblem.RunStopped } && run.Coordinator.View.Phase == RunPhase.Completed)
-        {
-            var refusal = NewRunRefusal(node);
-            Notice(refusal);
-            if (refusal is null)
-            {
-                OpenNodePreflight(node.Id);
-            }
-
-            return;
-        }
-
-        Notice(outcome switch
-        {
-            RunCommand.Unavailable unavailable => unavailable.Message,
-            RunCommand.Refused { Reason: { Problem: RunProblem.MissingDependencyResult, Task: { } missing } } => WorkflowRunText.RunsAfter([missing], TitleOf),
-            RunCommand.Refused refused => WorkflowRunText.Problem(refused.Reason),
-            _ => null,
-        });
-    }
-
-    private void OnRunViewChanged(object? sender, EventArgs e)
-    {
-        ShowRun();
-        ReadSettledRun();
-    }
-
-    private void OnRunReplaced(object? sender, EventArgs e)
-    {
-        ShowRun();
-        RunRouteChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>The workflow row's running dot follows this window's own runs of its tasks and its workflow run's clients.</summary>
-    private void ShowActivity()
-    {
-        IsRunning = _standaloneRunning || Run is { HasActivity: true };
+        RunningCount = Nodes.Count(node => node.State == NodeState.Running);
+        CanMergeIntoBranch = Engine.CanMergeIntoBranch;
+        IsRunning = RunningCount > 0;
         OnWaitingChanged();
+        OnPropertyChanged(nameof(ShowsBar));
+        OnPropertyChanged(nameof(BarSummary));
+        OnPropertyChanged(nameof(BarTone));
+        OnPropertyChanged(nameof(BarActivity));
+        _runWorkflow?.NotifyCanExecuteChanged();
+        _stopAll?.NotifyCanExecuteChanged();
+        _merge?.NotifyCanExecuteChanged();
+        ShowGhosts();
     }
+
+    /// <summary>
+    /// What a planner may fill and place, which its prompt names: the palette's blueprints are its types, and the clients
+    /// ready on this machine are the agents it chooses from for each task it adds. The engine asks for it when the planner
+    /// starts, on any thread.
+    /// </summary>
+    internal PlanningContext? Planning(TaskId planner)
+    {
+        var clients = Clients.Current;
+        _checkingAtStart[planner] = [.. IDevelop.Execution.Clients.All.Where(id => clients[id] is ClientStatus.Checking)];
+        var context = PlanningFor(planner) with { Agents = IDevelop.Nodes.PlanningContext.Offers(clients) };
+        _handles[planner] = context.Handles(planner.Value);
+        return context;
+    }
+
+    /// <summary>
+    /// The handles the planner's prompt named, which its proposal's slots and types refer to: those of its last start in
+    /// this window, else those of the workflow as it is now.
+    /// </summary>
+    internal PlanningHandles HandlesOf(TaskId planner) => _handles.GetValueOrDefault(planner) ?? PlanningFor(planner).Handles(planner.Value);
+
+    /// <summary>What a planner may fill and place in the workflow as it is now, which reading its proposal names again.</summary>
+    internal PlanningContext PlanningFor(TaskId planner) => IDevelop.Nodes.PlanningContext.For(Workflow, planner, _placeable, HasStarted);
+
+    /// <summary>
+    /// The clients that this window was still checking when it last started the planner, which its prompt therefore left
+    /// out, so the proposal can say so. Empty for a planner this window has not started.
+    /// </summary>
+    internal ImmutableArray<ClientId> CheckingAtStart(TaskId planner) => _checkingAtStart.GetValueOrDefault(planner, []);
+
+    /// <summary>Whether the node has run: it runs, waits, or has a result.</summary>
+    internal bool HasStarted(TaskId task) => Workflow.Tasks.ContainsKey(task) && Engine.State(task) is not IDevelop.Engine.NodeState.Idle;
+
+    private void RunWorkflow() => Act(() =>
+    {
+        _ = Engine.RunWorkflow();
+        return null;
+    }, "Couldn't run the workflow.");
+
+    private void MergeIntoBranch() => Act(() =>
+    {
+        _ = Engine.MergeIntoBranch();
+        return "Merged the workflow's work into your branch.";
+    }, "Couldn't merge into your branch.");
+
+    /// <summary>
+    /// Runs an engine command and shows its notice, or why the engine refused it, or what kept it from writing, as a node's
+    /// own commands do. Nothing it throws reaches the window.
+    /// </summary>
+    private void Act(Func<string?> command, string failure)
+    {
+        try
+        {
+            Notice(command());
+        }
+        catch (InvalidOperationException e)
+        {
+            Notice(e.Message);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Notice($"{failure} {e.Message}");
+        }
+
+        ShowEngine();
+    }
+
+    /// <summary>The engine tells of each change, often several at once and off the UI thread, so the canvas reads once per batch.</summary>
+    private void PostShowEngine()
+    {
+        if (Interlocked.Exchange(ref _engineChanged, 1) == 1)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            Interlocked.Exchange(ref _engineChanged, 0);
+            if (Workflow.Tasks.Keys.All(id => Nodes.Any(node => node.Id == id)))
+            {
+                ShowEngine();
+            }
+        });
+    }
+
+    /// <summary>Whether <paramref name="before"/> is a dependency predecessor of <paramref name="after"/>.</summary>
+    private bool Precedes(TaskId before, TaskId after) =>
+        Workflow.Connections.TryGetValue(new ConnectionKey(before, after), out var kind) && kind == ConnectionKind.Dependency;
 }

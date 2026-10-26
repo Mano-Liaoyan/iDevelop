@@ -91,14 +91,14 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
         {
             ClientStatus.Ready ready => (planner.Model, ExecutionChoices.OfferedModel(ready, planner.Model)) switch
             {
-                (null, _) => RunText.Describe(new StartProblem.NoModel(planner.Client)),
-                ({ } id, null) => RunText.Describe(new StartProblem.ModelNotOffered(planner.Client, id)),
-                ({ } id, { Problem: { } problem }) => RunText.Describe(new StartProblem.ModelUnready(planner.Client, id, problem)),
+                (null, _) => $"Choose a {Clients.Name(planner.Client)} model first.",
+                ({ } id, null) => $"{Clients.Name(planner.Client)} does not offer {id} on this machine. Choose another model.",
+                ({ } id, { Problem: { } problem }) => $"{id} cannot run now. {problem}",
                 _ => null,
             },
-            ClientStatus.Missing missing => RunText.Describe(new StartProblem.ClientMissing(planner.Client, missing.Reason)),
-            ClientStatus.Unready unready => RunText.Describe(new StartProblem.ClientUnready(planner.Client, unready.Reason)),
-            _ => RunText.Describe(new StartProblem.ClientChecking(planner.Client)),
+            ClientStatus.Missing missing => $"{Clients.Name(planner.Client)} is not installed. {missing.Reason}",
+            ClientStatus.Unready unready => $"{Clients.Name(planner.Client)} is not ready. {unready.Reason}",
+            _ => $"iDevelop is still checking {Clients.Name(planner.Client)}.",
         };
 
     /// <summary>Places the planner and runs it. Off while the description is blank or the agent cannot plan.</summary>

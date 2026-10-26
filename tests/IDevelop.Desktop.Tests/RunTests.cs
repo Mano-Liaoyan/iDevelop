@@ -1,308 +1,83 @@
-using Avalonia;
-using Avalonia.Automation.Peers;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
-using Avalonia.Input;
-using Avalonia.Media;
-using IDevelop.Execution;
+using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using Nodify;
-using static IDevelop.Desktop.Tests.AppTempFolder;
+using static IDevelop.Desktop.Tests.NodeFixture;
 using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>Runs go through the fake agent behind on-disk shims, resolved and launched like a real client.</summary>
+/// <summary>
+/// Run Workflow and the bar at the bottom center (ADR 0017): the bar counts what runs and waits, Stop All stops every
+/// running node, and Merge into my branch shows only while every node is completed and nothing is stale.
+/// </summary>
 [Collection(ProcessCollection.Name)]
-public sealed class RunTests : IDisposable
+public sealed class RunTests
 {
-    private static readonly TaskId SayHi = TestTasks.Design;
-    private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" };
+    private static readonly TaskId A = TestTasks.Design;
+    private static readonly TaskId B = TestTasks.Build;
+    private static readonly TaskId C = TestTasks.Review;
 
-    private readonly TempFolder _temp = AppTempFolder.New();
-    private readonly FakeClients _fakes;
-    private readonly string _gate;
-
-    public RunTests()
+    [AvaloniaFact]
+    public void Run_Workflow_starts_every_ready_node_the_bar_counts_them_and_Stop_All_stops_them()
     {
-        _fakes = new FakeClients(_temp.Create("bin"));
-        _gate = Path.Combine(_temp.Create("evidence"), "go");
-    }
+        using var f = new NodeFixture(Plan(A, "A", 105), Plan(B, "B", 105 + 300), Plan(C, "C", 405 + 300), Dependency(B, C));
+        f.Install(Reply("s-1", "Done.", On().WaitForFile(f.Gate("never"))));
+        var shell = f.Open();
+        Assert.False(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
 
-    // A fake client that a failed test left waiting at the gate ends here, at the gate or at the deleted folder, or dotnet
-    // test would wait for it. Leaving the project instead would touch the window after the headless session ended the test.
-    public void Dispose()
-    {
-        File.WriteAllText(_gate, "");
-        _temp.Dispose();
-    }
+        shell.Click(shell.Find<Button>("RunWorkflow"));
 
-    /// <summary>The client waits at the gate until it is stopped or the test opens the gate.</summary>
-    private FakeRule Waits() => On("exec", "--json")
-        .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
-        .WaitForFile(_gate);
+        shell.WaitForState("A", NodeState.Running);
+        shell.WaitForState("B", NodeState.Running);
+        Assert.Equal(NodeState.Idle, shell.NodeModel("C").State);
+        Assert.True(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
+        Assert.Equal("2 running", shell.Text("RunStatus"));
+        Assert.Equal("\"A\", \"B\"", shell.Text("RunActivity"));
+        Assert.False(shell.Find<Button>("MergeIntoBranch").IsEffectivelyVisible);
 
-    private static WorkflowEdit.PlaceNode SayHiTask(ExecutionSettings execution) =>
-        TaskAt(SayHi, "Say hi", 105, 90, execution, "Create hello.txt containing hi. Then reply with DONE.");
+        shell.Click(shell.Find<Button>("StopAll"));
 
-    private static Color CardRing(Shell shell) =>
-        ((ISolidColorBrush)shell.CardLayer("Say hi", "stateStroke").BorderBrush!).Color;
-
-    /// <summary>A window whose task runs and waits at the gate.</summary>
-    private (Shell Shell, string Folder, ClientDirectory Clients) StartWaitingRun()
-    {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(SayHiTask(Codex));
-        var clients = _fakes.DiscoverAsync().Result;
-        var shell = Shell.Open(folder, clients);
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.RunOnItsOwn();
-        Assert.Equal("Running", shell.CardText("Say hi", "CardStatus"));
-        return (shell, folder, clients);
+        shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.RunningCount == 0, "every node stops");
+        Assert.False(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
-    public void A_task_whose_client_is_not_ready_keeps_Run_off_says_why_and_launches_nothing()
+    public void Merge_into_my_branch_shows_once_every_node_is_completed_and_merges_the_end_nodes_work()
     {
-        _fakes.Install("claude", On("auth", "status").Print("""{"loggedIn":false}""").Exit(1));
-        var folder = _temp.Seed(SayHiTask(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "high" }));
-        var shell = Shell.Open(folder, _fakes.DiscoverAsync().Result);
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        const string reason = "Claude Code is not ready. Claude Code is not signed in. Run claude in a terminal and sign in.";
-        Assert.Equal(reason, shell.InView<TextBlock>("StartProblem").Text);
-        var run = shell.InView<Button>("RunTask");
-        Assert.Equal((false, reason), (run.IsEffectivelyEnabled, ToolTip.GetTip(run)));
+        using var f = new NodeFixture(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
+        f.Install(On().Choose(
+            (Fresh("A"), Reply("s-a", "A ready.", On().Write("a.txt", "A\n"))),
+            (Fresh("B"), Reply("s-b", "B ready.", On().WaitForFile(f.Gate("b")).Write("b.txt", "B\n")))));
+        var shell = f.Open();
+        shell.Click(shell.Find<Button>("RunWorkflow"));
+        shell.WaitForState("B", NodeState.Running);
+        Assert.False(shell.Find<Button>("MergeIntoBranch").IsEffectivelyVisible);
 
-        shell.Click(run);
+        f.Release("b");
+        shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.CanMergeIntoBranch, "Merge into my branch is offered");
+        Assert.Equal("Every node is complete", shell.Text("RunStatus"));
+        Assert.True(shell.Find<Button>("MergeIntoBranch").IsEffectivelyVisible);
 
-        Assert.Equal("", shell.Status);
-        Assert.Null(shell.Preflight);
-        Assert.Equal("Claude Code isn't ready", shell.CardText("Say hi", "CardStatus"));
-        Assert.False(Directory.Exists(Path.Combine(folder, ".idp", "attempts")));
+        shell.Click(shell.Find<Button>("MergeIntoBranch"));
+
+        Assert.Equal("Merged the workflow's work into your branch.", shell.Status);
+        Assert.Equal(("A\n", "B\n"), (File.ReadAllText(Path.Combine(f.Project, "a.txt")), File.ReadAllText(Path.Combine(f.Project, "b.txt"))));
     }
 
     [AvaloniaFact]
-    public void A_task_shows_that_it_runs_and_then_its_result_on_its_card_and_in_the_inspector()
+    public void Run_Workflow_that_cannot_write_the_nodes_logs_says_why_and_runs_nothing()
     {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits().Replay(Fixture.Path("codex-success.jsonl")));
-        var shell = Shell.Open(_temp.Seed(SayHiTask(Codex)), _fakes.DiscoverAsync().Result);
-        shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        // The pointer rests on the card, so its neutral ring shows at full strength.
-        Assert.Equal(("Not run", Color.Parse("#E5E5E5")), (shell.CardText("Say hi", "CardStatus"), CardRing(shell)));
+        using var f = new NodeFixture(Plan(A, "A", 105));
+        f.Install(Reply("s-a", "A ready."));
+        // A file where the node logs go keeps them from being written.
+        File.WriteAllText(Path.Combine(f.Project, ".idp", "nodes"), "");
+        var shell = f.Open();
 
-        shell.RunOnItsOwn();
+        shell.Click(shell.Find<Button>("RunWorkflow"));
 
-        Assert.Equal(("Running", Color.Parse("#564ADE")), (shell.CardText("Say hi", "CardStatus"), CardRing(shell)));
-        Assert.Equal((false, true), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
-        Assert.Equal("", shell.Status);
-        Assert.True(shell.Find<Control>("RunBar").IsEffectivelyVisible);
-        var bar = ControlAutomationPeer.CreatePeerForElement(shell.Find<Control>("RunBar"));
-        Assert.Equal(("RunBar", "Running task", true), (bar.GetAutomationId(), bar.GetName(), bar.IsControlElement()));
-        Assert.Equal(
-            ["Say hi", "Codex · GPT-5.5 · high", "Waiting for Codex…"],
-            new[] { "RunBarTask", "RunBarAgent", "RunBarActivity" }.Select(id => shell.Find<TextBlock>(id).Text));
-        Assert.Matches(@"^\d+ s$", shell.Find<TextBlock>("RunBarElapsed").Text);
-
-        File.WriteAllText(_gate, "");
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
-
-        Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
-        Assert.Equal(Color.Parse("#008932"), CardRing(shell));
-        Assert.Equal(Color.Parse("#25292E"), ((ISolidColorBrush)shell.InCard<TextBlock>("Say hi", "CardStatus").Foreground!).Color);
-        Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
-        Assert.Equal("DONE", shell.Find<TextBox>("LastRunResult").Text);
-        var agent = shell.Find<ItemsControl>("LastRunConfiguration");
-        Assert.Equal(["Codex", "GPT-5.5", "high"], Shell.Texts(agent));
-        Assert.Equal("Requested Codex · gpt-5.5 · high.", ToolTip.GetTip(agent));
-        Assert.Equal(["DONE"], Shell.Texts(shell.InView<ItemsControl>("LastRunActivity")));
-        shell.Click(shell.InView<ToggleButton>("ToolCallsToggle"));
-        Assert.Equal(
-            ["command: pwsh.exe -Command \"Set-Content -LiteralPath .\\\\hello.txt -Value 'hi' -NoNewline\"", "DONE"],
-            Shell.Texts(shell.Find<ItemsControl>("LastRunActivity")));
-        Assert.Equal((true, false), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
-    }
-
-    [AvaloniaFact]
-    public void Cancelling_a_running_task_stops_it_and_records_it_as_cancelled()
-    {
-        var (shell, folder, clients) = StartWaitingRun();
-
-        shell.Click(shell.InView<Button>("CancelRun"));
-
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
-        Assert.Equal("Cancelled", shell.InView<TextBlock>("LastRunStatus").Text);
-        Assert.Equal(Color.Parse("#6C6C70"), CardRing(shell));
-        Assert.Equal("Cancelled", Shell.Open(folder, clients).CardText("Say hi", "CardStatus"));
-    }
-
-    [AvaloniaFact]
-    public void Closing_the_window_during_a_run_asks_first_and_stop_and_leave_records_the_run_as_interrupted()
-    {
-        var (shell, folder, clients) = StartWaitingRun();
-
-        shell.Window.Close();
-        shell.Render();
-
-        Assert.Equal(["\"Say hi\" is running. Stop it and leave?", "Stop and leave", "Keep running"], shell.DialogTexts());
-        shell.Choose("StopAndLeave");
-        shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes");
-        var reopened = Shell.Open(folder, clients);
-        Assert.Equal("Interrupted", reopened.CardText("Say hi", "CardStatus"));
-        reopened.Click(reopened.Header(reopened.Node("Say hi")));
-        Assert.Equal("The project was closed while this task ran.", reopened.InView<TextBlock>("LastRunDetail").Text);
-    }
-
-    [AvaloniaFact]
-    public void Two_tasks_run_at_once_and_closing_asks_about_both_and_stops_both()
-    {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(SayHiTask(Codex), TaskAt(TestTasks.Review, "Review", 405, 90, Codex, "Review hello.txt."));
-        var clients = _fakes.DiscoverAsync().Result;
-        var shell = Shell.Open(folder, clients);
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.RunOnItsOwn();
-        shell.Click(shell.Header(shell.Node("Review")));
-        shell.RunOnItsOwn();
-
-        Assert.Equal(["Running", "Running"], new[] { "Say hi", "Review" }.Select(title => shell.CardText(title, "CardStatus")));
-        Assert.Equal("Review and 1 more", shell.Find<TextBlock>("RunBarTask").Text);
-        shell.Window.Close();
-        shell.Render();
-        Assert.Equal(["2 tasks are running. Stop them and leave?", "Stop and leave", "Keep running"], shell.DialogTexts());
-        shell.Choose("StopAndLeave");
-        shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes");
-
-        var reopened = Shell.Open(folder, clients);
-        Assert.Equal(["Interrupted", "Interrupted"], new[] { "Say hi", "Review" }.Select(title => reopened.CardText(title, "CardStatus")));
-    }
-
-    [AvaloniaFact]
-    public void Keep_running_cancels_the_close_and_leaves_the_run_going()
-    {
-        var (shell, _, _) = StartWaitingRun();
-        shell.Window.Close();
-        shell.Render();
-
-        shell.Choose("KeepRunning");
-
-        Assert.Null(shell.Dialog);
-        Assert.True(shell.Window.IsVisible);
-        Assert.Equal("Running", shell.CardText("Say hi", "CardStatus"));
-        shell.Click(shell.Find<Button>("RunBarCancel"));
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
-    }
-
-    [AvaloniaFact]
-    public void The_running_prompt_comes_before_the_save_prompt_and_cancelling_the_save_prompt_stops_nothing()
-    {
-        var (shell, _, _) = StartWaitingRun();
-        shell.AddNode();
-        shell.Window.Close();
-        shell.Render();
-        Assert.IsType<RunningTaskDialog>(shell.Dialog);
-        shell.Choose("StopAndLeave");
-        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
-
-        shell.Choose("CancelChanges");
-
-        Assert.Null(shell.Dialog);
-        Assert.True(shell.Window.IsVisible);
-        Assert.Equal(("Running", "seed* - iDevelop"), (shell.CardText("Say hi", "CardStatus"), shell.Window.Title));
-        shell.Click(shell.Find<Button>("RunBarCancel"));
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
-    }
-
-    [AvaloniaFact]
-    public void Opening_another_folder_during_a_run_asks_nothing_and_the_run_goes_on_in_its_own_project()
-    {
-        var (shell, _, _) = StartWaitingRun();
-        var other = _temp.Create("other");
-        shell.Window.PickFolder = () => Task.FromResult<string?>(other);
-
-        shell.Click(shell.Find<Button>("OpenFolder"));
-
-        Assert.Null(shell.Dialog);
-        Assert.Equal("other - iDevelop", shell.Window.Title);
-        Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
-        shell.Click(shell.WorkflowRow("seed", "Workflow"));
-        Assert.Equal(("Running", "Say hi"), (shell.CardText("Say hi", "CardStatus"), shell.Find<TextBlock>("RunBarTask").Text));
-        shell.Click(shell.Find<Button>("RunBarCancel"));
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
-    }
-
-    [AvaloniaFact]
-    public void A_second_window_shows_the_other_windows_runs_and_learns_how_they_ended_when_it_tries_to_start_a_task()
-    {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(SayHiTask(Codex), TaskAt(TestTasks.Review, "Review", 405, 90, Codex, "Review hello.txt."));
-        var clients = _fakes.DiscoverAsync().Result;
-        var first = Shell.Open(folder, clients);
-        first.Click(first.Header(first.Node("Say hi")));
-        first.RunOnItsOwn();
-        var second = Shell.Open(folder, clients);
-        second.Click(second.Header(second.Node("Say hi")));
-
-        Assert.Equal(("Running in another window", "Running in another window"), (second.CardText("Say hi", "CardStatus"), second.InView<TextBlock>("LastRunStatus").Text));
-        Assert.Equal((true, false), (second.Find<Button>("RunTask").IsEffectivelyEnabled, second.Find<Button>("CancelRun").IsEffectivelyEnabled));
-        second.RunOnItsOwn();
-        Assert.Equal("\"Say hi\" is already running.", second.Status);
-
-        first.Click(first.Find<Button>("RunBarCancel"));
-        first.WaitUntil(() => first.CardText("Say hi", "CardStatus") == "Cancelled", "the first window's run is cancelled");
-        first.Click(first.Header(first.Node("Review")));
-        first.RunOnItsOwn();
-        second.RunOnItsOwn();
-
-        Assert.Equal(["Running", "Running in another window"], new[] { "Say hi", "Review" }.Select(title => second.CardText(title, "CardStatus")));
-
-        first.Click(first.Find<Button>("RunBarCancel"));
-        first.WaitUntil(() => first.CardText("Review", "CardStatus") == "Cancelled", "the first window's second run is cancelled");
-        second.Click(second.Find<Button>("RunBarCancel"));
-        second.WaitUntil(() => second.CardText("Say hi", "CardStatus") == "Cancelled", "the second window's run is cancelled");
-    }
-
-    [AvaloniaTheory]
-    [InlineData(1280, 800)]
-    [InlineData(900, 600)]
-    public void The_run_bar_covers_neither_the_zoom_controls_nor_the_minimap(double width, double height)
-    {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var shell = Shell.Open(_temp.Seed(SayHiTask(Codex)), _fakes.DiscoverAsync().Result);
-        shell.Window.Width = width;
-        shell.Window.Height = height;
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.RunOnItsOwn();
-
-        var bar = shell.Bounds(shell.Find<Control>("RunBar"));
-        Assert.Equal(new Size(width, height), shell.Window.ClientSize);
-        // The minimap hides on a compact canvas.
-        Assert.All(
-            new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating") }
-                .Where(control => control.IsEffectivelyVisible).Select(shell.Bounds),
-            other => Assert.False(bar.Intersects(other), $"The run bar at {bar} covers {other}"));
-        Assert.True(shell.Bounds(shell.Editor).Contains(bar), $"The run bar at {bar} leaves the canvas");
-        var (title, cancel) = (shell.Bounds(shell.Find<TextBlock>("RunBarTask")), shell.Bounds(shell.Find<Button>("RunBarCancel")));
-        Assert.True(bar.Contains(title) && bar.Contains(cancel) && !title.Intersects(cancel), $"The bar at {bar} squeezes {title} and {cancel}");
-
-        shell.Click(shell.Find<Button>("RunBarCancel"));
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
-    }
-
-    [AvaloniaFact]
-    public void The_run_bar_still_cancels_a_run_whose_task_was_deleted()
-    {
-        var (shell, folder, clients) = StartWaitingRun();
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.Press(Key.Delete);
-        Assert.Empty(shell.Nodes());
-        Assert.Equal("Say hi", shell.Find<TextBlock>("RunBarTask").Text);
-
-        shell.Click(shell.Find<Button>("RunBarCancel"));
-
-        shell.WaitUntil(() => !shell.Find<Control>("RunBar").IsEffectivelyVisible, "the run bar goes away");
-        Assert.Equal("Cancelled", Shell.Open(folder, clients).CardText("Say hi", "CardStatus"));
+        Assert.StartsWith("Couldn't run the workflow.", shell.Status);
+        Assert.Equal(NodeState.Idle, shell.NodeModel("A").State);
     }
 }

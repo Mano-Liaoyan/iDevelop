@@ -81,7 +81,7 @@ public sealed record Proposal(
                 case ResultBlock.Readable { Status: "proposal" } block:
                     try
                     {
-                        return new ProposalRead.Ready(Parse(block.Value, attempt, turn.Number, handles, blueprint));
+                        return new ProposalRead.Ready(Parse(block.Value, attempt.Task, attempt.Id, turn.Number, handles, blueprint));
                     }
                     catch (ProposalException e)
                     {
@@ -94,6 +94,31 @@ public sealed record Proposal(
         }
 
         return new ProposalRead.None();
+    }
+
+    /// <summary>
+    /// Reads the proposal a planner's reply ends with. <paramref name="turn"/> numbers the reply, so a later reply reads as
+    /// another proposal, and the plan in <paramref name="handles"/> mints the same ids for the same names.
+    /// </summary>
+    public static ProposalRead Read(TaskId planner, int turn, string reply, PlanningHandles handles, Func<BlueprintKey, Blueprint?> blueprint)
+    {
+        switch (ResultBlock.Read(reply))
+        {
+            case ResultBlock.Readable { Status: "proposal" } block:
+                try
+                {
+                    return new ProposalRead.Ready(Parse(block.Value, planner, new AttemptId(handles.Plan), turn, handles, blueprint));
+                }
+                catch (ProposalException e)
+                {
+                    return new ProposalRead.Problem(e.Message);
+                }
+
+            case ResultBlock.Unreadable unreadable:
+                return new ProposalRead.Problem($"The agent's last block could not be read. {unreadable.Problem}");
+            default:
+                return new ProposalRead.None();
+        }
     }
 
     /// <summary>The ids of the slots it fills and the nodes it adds, in the order the agent wrote them.</summary>
@@ -255,9 +280,9 @@ public sealed record Proposal(
         ];
     }
 
-    private static Proposal Parse(JsonElement block, AttemptRecord attempt, int turn, PlanningHandles handles, Func<BlueprintKey, Blueprint?> blueprint)
+    private static Proposal Parse(JsonElement block, TaskId planner, AttemptId attempt, int turn, PlanningHandles handles, Func<BlueprintKey, Blueprint?> blueprint)
     {
-        var ends = new Dictionary<string, TaskId>(StringComparer.Ordinal) { [PlannerHandle] = attempt.Task };
+        var ends = new Dictionary<string, TaskId>(StringComparer.Ordinal) { [PlannerHandle] = planner };
         var fills = ImmutableArray.CreateBuilder<ProposedFill>();
         foreach (var item in Entries(block, "fill"))
         {
@@ -349,7 +374,7 @@ public sealed record Proposal(
             throw new ProposalException("The proposal fills and adds no task.");
         }
 
-        return new Proposal(attempt.Task, attempt.Id, turn, fills.ToImmutable(), nodes.ToImmutable(), connections.ToImmutable());
+        return new Proposal(planner, attempt, turn, fills.ToImmutable(), nodes.ToImmutable(), connections.ToImmutable());
     }
 
     /// <summary>

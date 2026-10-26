@@ -21,4 +21,19 @@ public sealed class ProjectLockTests
         Assert.Null(second);
         Assert.NotNull(third);
     }
+
+    [Fact]
+    public void A_lock_that_cannot_keep_its_folder_out_of_Git_lets_the_project_go()
+    {
+        using var temp = new TempFolder();
+        var project = temp.Create("project");
+        // A folder where the data folder's .gitignore goes keeps it from being written.
+        var ignore = Directory.CreateDirectory(Path.Combine(project, ".idp", ".gitignore")).FullName;
+
+        Assert.ThrowsAny<Exception>(() => ProjectLock.TryTake(project));
+
+        Directory.Delete(ignore);
+        using var again = ProjectLock.TryTake(project);
+        Assert.NotNull(again);
+    }
 }

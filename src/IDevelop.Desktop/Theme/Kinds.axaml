@@ -153,89 +153,65 @@
     <Setter Property="Foreground" Value="{DynamicResource KindReadOnlyAgentStrongBrush}" />
   </Style>
 
-  <!-- A running, stopping, or in-review node keeps its kind's hue. Every other state has its own. -->
-  <Style Selector="Border.stateStroke.state-idle, Border.stateStroke.state-needssetup">
+  <!-- A running node keeps its kind's hue. Every other state has its own. -->
+  <Style Selector="Border.stateStroke.state-idle">
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <Style Selector="Border.stateStroke.state-waiting">
+  <Style Selector="Border.stateStroke.state-inputrequired">
     <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateStroke.state-succeeded">
+  <Style Selector="Border.stateStroke.state-completed">
     <Setter Property="BorderBrush" Value="{DynamicResource StateSuccessStrokeBrush}" />
   </Style>
   <Style Selector="Border.stateStroke.state-failed">
     <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateStroke.state-interrupted, Border.stateStroke.state-outofdate">
+  <Style Selector="Border.stateStroke.state-stale">
     <Setter Property="BorderBrush" Value="{DynamicResource StateWarningStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateStroke.state-cancelled">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateNeutralStrokeBrush}" />
-  </Style>
 
-  <Style Selector="Border.stateTint.state-idle, Border.stateTint.state-needssetup, Border.stateTint.state-runningelsewhere, Border.stateTint.state-succeeded, Border.stateTint.state-cancelled">
+  <Style Selector="Border.stateTint.state-idle, Border.stateTint.state-completed">
     <Setter Property="Background" Value="Transparent" />
   </Style>
-  <Style Selector="Border.stateTint.state-waiting">
+  <Style Selector="Border.stateTint.state-inputrequired">
     <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
   </Style>
   <Style Selector="Border.stateTint.state-failed">
     <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
   </Style>
-  <Style Selector="Border.stateTint.state-interrupted, Border.stateTint.state-outofdate">
+  <Style Selector="Border.stateTint.state-stale">
     <Setter Property="Background" Value="{DynamicResource StateWarning10Brush}" />
   </Style>
 
   <Style Selector="PathIcon.stateIcon.state-idle">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-needssetup">
-    <Setter Property="Data" Value="{StaticResource IconStateNeedsSetup}" />
-  </Style>
   <Style Selector="PathIcon.stateIcon.state-running">
     <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-runningelsewhere">
-    <Setter Property="Data" Value="{StaticResource IconStateElsewhere}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-stopping">
-    <Setter Property="Data" Value="{StaticResource IconStop}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-waiting">
+  <Style Selector="PathIcon.stateIcon.state-inputrequired">
     <Setter Property="Data" Value="{StaticResource IconStateWaiting}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-inreview">
-    <Setter Property="Data" Value="{StaticResource IconStateInReview}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-succeeded">
+  <Style Selector="PathIcon.stateIcon.state-completed">
     <Setter Property="Data" Value="{StaticResource IconStateSucceeded}" />
   </Style>
   <Style Selector="PathIcon.stateIcon.state-failed">
     <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-interrupted">
-    <Setter Property="Data" Value="{StaticResource IconStateInterrupted}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-cancelled">
-    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-outofdate">
+  <Style Selector="PathIcon.stateIcon.state-stale">
     <Setter Property="Data" Value="{StaticResource IconStateOutOfDate}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-needssetup, PathIcon.stateIcon.state-interrupted, PathIcon.stateIcon.state-outofdate">
+  <Style Selector="PathIcon.stateIcon.state-stale">
     <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-waiting">
+  <Style Selector="PathIcon.stateIcon.state-inputrequired">
     <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-succeeded">
+  <Style Selector="PathIcon.stateIcon.state-completed">
     <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
   </Style>
   <Style Selector="PathIcon.stateIcon.state-failed">
     <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-cancelled">
-    <Setter Property="Foreground" Value="{DynamicResource StateNeutralStrongBrush}" />
   </Style>
 
   <!-- A planner with an open proposal takes the accent instead of its state, and does not pulse. -->
@@ -252,7 +228,7 @@
   </Style>
 
   <!-- A running or waiting node's ring pulses. Tests read its class, because its pixels depend on the time. -->
-  <Style Selector="Border.stateStroke.state-running:not(.role-proposing), Border.stateStroke.state-waiting:not(.role-proposing)">
+  <Style Selector="Border.stateStroke.state-running:not(.role-proposing), Border.stateStroke.state-inputrequired:not(.role-proposing)">
     <Style.Animations>
       <Animation Duration="0:0:1.6" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
         <KeyFrame Cue="0%">

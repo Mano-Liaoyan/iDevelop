@@ -65,7 +65,7 @@
   <Style Selector="nodify|ItemContainer:pointerover Border.card">
     <Setter Property="BoxShadow" Value="{DynamicResource NodeHoverShadow}" />
   </Style>
-  <Style Selector="nodify|ItemContainer:pointerover Border.stateStroke.state-idle:not(.role-proposing), nodify|ItemContainer:pointerover Border.stateStroke.state-needssetup:not(.role-proposing)">
+  <Style Selector="nodify|ItemContainer:pointerover Border.stateStroke.state-idle:not(.role-proposing)">
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
   </Style>
   <Style Selector="Border.roleBadge">
@@ -275,7 +275,7 @@
     <Setter Property="BorderThickness" Value="16" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
   </Style>
-  <Style Selector="Border.minimapRing.state-idle:not(.role-proposing), Border.minimapRing.state-needssetup:not(.role-proposing)">
+  <Style Selector="Border.minimapRing.state-idle:not(.role-proposing)">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Rectangle.minimapRing">

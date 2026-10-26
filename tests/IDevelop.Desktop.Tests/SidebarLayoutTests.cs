@@ -52,6 +52,7 @@ public sealed class SidebarLayoutTests : IDisposable
     private Shell OpenBoth(ClientDirectory? clients = null)
     {
         var reports = _temp.Create(Reports);
+        AppTempFolder.InitGit(reports);
         Save(reports, ReleaseNotes, 2);
         Save(reports, Quarterly, 11);
         var onboarding = _temp.Create(Onboarding);
@@ -214,7 +215,7 @@ public sealed class SidebarLayoutTests : IDisposable
         // Release notes runs a task, so it and reports-service show the running dot, and Quarterly gets a 12th task and
         // shows the unsaved dot. Release notes counts 2.
         shell.Click(shell.WorkflowRow(Reports, ReleaseNotes));
-        shell.RunOnItsOwn("Task 1");
+        shell.RunNode("Task 1");
         shell.Click(shell.WorkflowRow(Reports, Quarterly));
         shell.AddNode();
         shell.SizeSidebar(width);

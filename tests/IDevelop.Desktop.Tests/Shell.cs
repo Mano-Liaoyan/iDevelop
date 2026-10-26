@@ -41,19 +41,32 @@ internal sealed partial class Shell
         // thread's jobs, and then presses, so on a busy machine the tooltip opened in between and the press missed the
         // control (#86). A test that rests the pointer on a control turns the service back on.
         ToolTip.SetServiceEnabled(window, false);
+        window.ViewModel.GitEnvironment = AppTempFolder.Git;
         window.Show();
         var shell = new Shell(window);
         shell.Render();
         return shell;
     }
 
-    public static Shell Open(string folder, ClientDirectory? clients = null) => Open(folder, clients, null);
+    // Every window a test opened, so a window that opens a project again first lets the earlier one go of it.
+    private static readonly List<Shell> Opened = [];
 
-    /// <param name="configure">Called with each project's runner before the project shows.</param>
-    public static Shell Open(string folder, ClientDirectory? clients, Action<ProjectRuns>? configure)
+    /// <summary>
+    /// Opens the folder in a new window. A project is open in one window at a time, so each earlier window of this test
+    /// that has it open closes its projects first, as quitting does, and the new window reopens what it saved.
+    /// </summary>
+    public static Shell Open(string folder, ClientDirectory? clients = null)
     {
+        foreach (var earlier in Opened.Where(shell => shell.Window.ViewModel.Projects.Any(project =>
+            IDevelop.Projects.ProjectFolders.Comparer.Equals(project.Folder, IDevelop.Projects.ProjectFolders.Identity(folder)))).ToList())
+        {
+            var leaving = earlier.Window.ViewModel.Leave();
+            earlier.WaitUntil(() => leaving.IsCompleted, "the earlier window lets the project go");
+            Opened.Remove(earlier);
+        }
+
         var shell = Show(clients);
-        shell.Window.ViewModel.RunsOpened = configure;
+        Opened.Add(shell);
         shell.Window.ViewModel.Open(folder);
         shell.Render();
         return shell;

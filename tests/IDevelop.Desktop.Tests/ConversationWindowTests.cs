@@ -3,19 +3,22 @@ using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.Desktop.Tests.ConversationFixtures;
+using static IDevelop.Desktop.Tests.NodeFixture;
+using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>The conversation in the real window over the project's own attempt logs, opened from the inspector and the card.</summary>
+/// <summary>The conversation in the real window over the node's own log, opened from the inspector and the card.</summary>
+[Collection(ProcessCollection.Name)]
 public sealed class ConversationWindowTests : IDisposable
 {
-    private const string Prompt = "# Design\n\nDraft it.";
     private readonly TempFolder _temp = AppTempFolder.New();
 
     public void Dispose() => _temp.Dispose();
@@ -29,131 +32,65 @@ public sealed class ConversationWindowTests : IDisposable
     private static ConversationViewModel Conversation(Shell shell) =>
         shell.Window.ViewModel.Conversation ?? throw new InvalidOperationException("No conversation is open.");
 
-    private static string[] Messages(Shell shell) =>
-        [.. Conversation(shell).Items.OfType<MessageItemViewModel>().Select(message => $"{message.AuthorLabel}: {message.Text}")];
+    private static string[] Lines(Shell shell) => [.. Conversation(shell).Items.Select(item => item switch
+    {
+        MessageItemViewModel message => $"{message.AuthorLabel}: {message.Text}",
+        MarkerItemViewModel marker => $"[{marker.Title}]",
+        _ => "",
+    })];
 
     private static void OpenFromInspector(Shell shell, string title)
     {
         shell.Click(shell.Header(shell.Node(title)));
         Invoke(shell.InView<Button>("OpenConversation"));
-        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Idle.IsCompleted && Conversation(shell).Items.Count > 0,
-            "the conversation shows its history");
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Items.Count > 0, "the conversation shows its history");
         shell.Render();
-    }
-
-    // Attempt A ran two turns, the second from a queued message. B ran on its own and failed. C continues A's session.
-    private static void WriteThreeAttempts(string project)
-    {
-        WriteAttempt(project, Requested(A, TestTasks.Design, 0, Prompt), Launched(1), At(2, new AgentEvent.SessionStarted("thread-1")),
-            At(3, new AgentEvent.Message("Which fruit?")), new AttemptEvent.MessageQueued(T0.AddSeconds(4), "banana", false) { Id = "q1" },
-            At(5, new AgentEvent.Succeeded("Which fruit?")), Exited(6),
-            new AttemptEvent.TurnRequested(T0.AddSeconds(7), "banana", "codex", ["exec", "resume"]) { Consumed = ["q1"] }, Launched(8),
-            At(9, new AgentEvent.Message("Wrote banana.")), At(10, new AgentEvent.Succeeded("Wrote banana.")), Exited(11));
-        WriteAttempt(project, Requested(B, TestTasks.Design, 100, Prompt), Launched(101),
-            At(102, new AgentEvent.Failed("The model is not available.")), Exited(103, 1));
-        WriteAttempt(project, Requested(C, TestTasks.Design, 200, "Use the fixture", new Continuation(A, "thread-1")), Launched(201),
-            At(202, new AgentEvent.SessionStarted("thread-1")), At(203, new AgentEvent.Message("Used the fixture.")),
-            At(204, new AgentEvent.Succeeded("Used the fixture.")), Exited(205));
     }
 
     [AvaloniaFact]
-    public void Several_turns_and_a_continuation_read_in_order_with_every_attempt_listed_and_read_again_after_a_restart()
+    public void A_continued_session_reads_in_order_and_reads_the_same_after_the_project_opens_again()
     {
-        var project = Project();
-        WriteThreeAttempts(project);
-        string[] expected = ["iDevelop: " + Prompt, "Codex: Which fruit?", "You: banana", "Codex: Wrote banana.", "You: Use the fixture", "Codex: Used the fixture."];
-        var shell = Shell.Open(project);
+        using var f = new NodeFixture(NodeFixture.Task(TestTasks.Design, "Design", 105, ConversationMode.Chat));
+        f.Install(Reply("s-1", "Wrote banana.", FakeAgents.Resuming(ClientId.Antigravity, "s-1")), Reply("s-1", "Which fruit?"));
+        var shell = f.Open();
+        shell.NodeModel("Design").RunCommand.Execute(null);
+        shell.WaitForState("Design", NodeState.InputRequired);
         OpenFromInspector(shell, "Design");
+        shell.Find<TextBox>("ConversationComposer").Focus();
+        shell.Type("banana");
+        shell.Press(Key.Enter, RawInputModifiers.Control);
+        shell.WaitUntil(() => Lines(shell).Contains("Antigravity CLI: Wrote banana."), "the second turn ends");
+        string[] expected = ["[New session]", "Antigravity CLI: Which fruit?", "[Waiting for you]", "You: banana", "Antigravity CLI: Wrote banana.", "[Waiting for you]"];
+        shell.WaitUntil(() => Lines(shell).SequenceEqual(expected), "the turns read in order", () => string.Join(" | ", Lines(shell)));
 
-        Assert.Equal(expected, Messages(shell));
-        Assert.Equal("Design", shell.Find<TextBlock>("ConversationTitle").Text);
-        Assert.Equal(3, Conversation(shell).Attempts.Count);
-        Assert.Equal("Attempt 3 (current) · Succeeded · Codex, continues 1", shell.Picked("AttemptPicker"));
-        Assert.Equal(["iDevelop", "Codex", "You", "Codex", "You", "Codex"],
-            Conversation(shell).Items.OfType<MessageItemViewModel>().Select(message => message.AuthorLabel));
-        Assert.Contains("Wrote banana.", Blocks(shell.Find<ConversationView>("ConversationView")));
-        shell.Window.ViewModel.Leave().Wait();
+        var leaving = shell.Window.ViewModel.Leave();
+        shell.WaitUntil(() => leaving.IsCompleted, "the window's nodes stop");
+        var again = f.Open();
+        OpenFromInspector(again, "Design");
 
-        var restarted = Shell.Open(project);
-        OpenFromInspector(restarted, "Design");
-        Assert.Equal(expected, Messages(restarted));
-    }
-
-    [AvaloniaFact]
-    public void A_continuation_of_the_same_session_reads_on_without_a_new_attempt_divider_and_a_new_session_keeps_it()
-    {
-        var project = Project();
-        WriteThreeAttempts(project);
-        var restarted = new AttemptId(Guid.Parse("019aa000-0000-7000-8000-00000000000d"));
-        WriteAttempt(project, Requested(restarted, TestTasks.Design, 300, "Try again", new Continuation(C, "thread-1")), Launched(301),
-            At(302, new AgentEvent.SessionStarted("thread-9")), At(303, new AgentEvent.Message("Try what again?")),
-            At(304, new AgentEvent.Succeeded("Try what again?")), Exited(305));
-        var shell = Shell.Open(project);
-        string[] Markers() => [.. Conversation(shell).Items.OfType<MarkerItemViewModel>().Select(marker => marker.Title)];
-
-        OpenFromInspector(shell, "Design");
-
-        Assert.Equal(["New attempt", "New attempt"], Markers());
-        Assert.Equal(["iDevelop: " + Prompt, "Codex: Which fruit?", "You: banana", "Codex: Wrote banana.", "You: Use the fixture",
-            "Codex: Used the fixture.", "You: Try again", "Codex: Try what again?"], Messages(shell));
-        Assert.Equal(4, Conversation(shell).Attempts.Count);
-        Conversation(shell).SelectedAttempt = Conversation(shell).Attempts.Single(choice => choice.Id == C);
-        shell.WaitUntil(() => Conversation(shell).Idle.IsCompleted && Messages(shell).Length == 6, "the earlier attempt's chain shows");
-        Assert.Equal(["New attempt"], Markers());
-    }
-
-    [AvaloniaTheory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void A_waiting_Pi_conversation_whose_project_folder_moved_disables_Open_in_terminal_with_the_composer_s_note(bool moved)
-    {
-        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
-        var project = Project(TaskAt(TestTasks.Design, "Design", 105, 90, pi, "Draft it.", ConversationMode.Chat));
-        var folder = moved ? Path.Combine(Path.GetDirectoryName(project)!, "before-the-move") : project;
-        WriteAttempt(project, Requested(A, TestTasks.Design, 0, Prompt) with { Settings = pi, Conversation = ConversationMode.Chat, WorkingFolder = folder },
-            Launched(1), At(2, new AgentEvent.SessionStarted("s-1")), At(3, new AgentEvent.Succeeded("Which fruit?")), Exited(4));
-        var shell = Shell.Open(project);
-
-        shell.Click(shell.Header(shell.Node("Design")));
-        shell.Render();
-
-        const string note = "Pi can't continue this conversation after the project folder moved, so it needs a new conversation.";
-        Assert.Equal(!moved, shell.InView<Button>("OpenInTerminal").IsEffectivelyEnabled);
-        if (moved)
-        {
-            Assert.Equal(note, shell.InView<TextBlock>("SendProblem").Text);
-        }
-
-        Invoke(shell.InView<Button>("OpenConversation"));
-        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Idle.IsCompleted && Conversation(shell).Items.Count > 0,
-            "the conversation shows its history");
-        shell.Render();
-        var terminal = shell.Find<Button>("ConversationTerminal");
-
-        Assert.Equal((true, !moved), (terminal.IsEffectivelyVisible, terminal.IsEffectivelyEnabled));
-        Assert.Equal(moved ? note : null, ToolTip.GetTip(terminal));
-        Assert.Equal(moved, shell.Find<TextBlock>("ComposerHint").Text == note);
+        Assert.Equal(expected, Lines(again));
+        Assert.Equal(NodeState.InputRequired, again.NodeModel("Design").State);
     }
 
     [AvaloniaFact]
     public void A_failed_card_opens_its_conversation_from_its_attention_glyph()
     {
-        var project = Project();
-        WriteAttempt(project, Requested(B, TestTasks.Design, 0, Prompt), Launched(1),
-            At(2, new AgentEvent.Failed("The model is not available.")), Exited(3, 1));
-        var shell = Shell.Open(project);
+        using var f = new NodeFixture(NodeFixture.Task(TestTasks.Design, "Design", 105));
+        f.Install(On().Stderr("The model is not available.").Exit(2));
+        var shell = f.Open();
+        shell.NodeModel("Design").RunCommand.Execute(null);
+        shell.WaitForState("Design", NodeState.Failed);
         var attention = shell.InCard<Button>("Design", "CardAttention");
 
         Assert.True(attention.IsEffectivelyVisible);
-        Assert.Equal("Failed: The model is not available.", Avalonia.Automation.AutomationProperties.GetName(attention));
+        Assert.StartsWith("Failed: ", Avalonia.Automation.AutomationProperties.GetName(attention));
         Assert.Equal((240.0, 64.0), (shell.Node("Design").Bounds.Width - 20, shell.Node("Design").Bounds.Height));
         Invoke(attention);
-        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Items.Count > 0, "the conversation opens");
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Items.Count > 1, "the conversation opens");
         shell.Render();
 
         Assert.Equal("Failed", shell.Find<TextBlock>("ConversationStatus").Text);
-        Assert.Contains(Conversation(shell).Items.OfType<MarkerItemViewModel>(), marker => (marker.Title, marker.Detail) == ("Failed", "The model is not available."));
-        Assert.Equal("Failed: The model is not available.", shell.Window.ViewModel.Canvas!.Nodes.Single().AttentionLabel);
+        Assert.Contains(Conversation(shell).Items.OfType<MarkerItemViewModel>(), marker => marker.Title == "Failed" && marker.Detail.Contains("exited with code 2"));
     }
 
     [AvaloniaFact]
@@ -166,7 +103,6 @@ public sealed class ConversationWindowTests : IDisposable
         {
             shell.Click(shell.Header(shell.Node(title)));
             Invoke(shell.InView<Button>("OpenConversation"));
-            shell.WaitUntil(() => Conversation(shell).Idle.IsCompleted, "the conversation finished reading");
             shell.Render();
             var watermark = shell.Find<TextBox>("ConversationComposer").Watermark ?? "";
             Invoke(shell.Find<Button>("CloseConversation"));
@@ -175,30 +111,6 @@ public sealed class ConversationWindowTests : IDisposable
         }
 
         Assert.Equal(("Message Codex", "Message the agent"), (Watermark("Design"), Watermark("Build")));
-    }
-
-    [AvaloniaFact]
-    public void The_attempt_picker_shows_only_once_a_task_has_an_attempt()
-    {
-        var project = Project(
-            TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it."),
-            TaskAt(TestTasks.Build, "Build", 105, 300, CodexHigh, "Build it."));
-        WriteAttempt(project, Requested(B, TestTasks.Design, 0, Prompt), Launched(1),
-            At(2, new AgentEvent.Failed("The model is not available.")), Exited(3, 1));
-        var shell = Shell.Open(project);
-        bool PickerShown(string title)
-        {
-            shell.Click(shell.Header(shell.Node(title)));
-            Invoke(shell.InView<Button>("OpenConversation"));
-            shell.WaitUntil(() => Conversation(shell).Idle.IsCompleted, "the conversation finished reading");
-            shell.Render();
-            var shown = shell.Find<ComboBox>("AttemptPicker").IsEffectivelyVisible;
-            Invoke(shell.Find<Button>("CloseConversation"));
-            shell.Render();
-            return shown;
-        }
-
-        Assert.Equal((true, false), (PickerShown("Design"), PickerShown("Build")));
     }
 
     [AvaloniaFact]

@@ -14,7 +14,7 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// The canvas: its nodes, connections, and selection, kept in step with the workflow document and the project's runs.
+/// The canvas: its nodes, connections, and selection, kept in step with the workflow document and its engine.
 /// The card highlight, the add surfaces, and Generate each extend it in a file of their own.
 /// </summary>
 public sealed partial class WorkflowCanvasViewModel : ObservableObject
@@ -48,18 +48,18 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     private bool _isRenamingWorkflow;
     private (TaskNodeViewModel[] Nodes, ConnectionViewModel[] Connections)? _heldSelection;
 
-    /// <param name="project">The open project whose runner and task owners this canvas shares.</param>
+    /// <param name="project">The open project the workflow belongs to.</param>
     /// <param name="personalBlueprints">The personal library's folder, or null for none.</param>
+    /// <param name="git">The environment the engine's Git runs with, or null for the process's own.</param>
     internal WorkflowCanvasViewModel(
-        ProjectViewModel project, WorkflowDocument document, ClientDirectory clients, Action<string?> setNotice, Func<string, Task> copy, string? personalBlueprints = null)
+        ProjectViewModel project, WorkflowDocument document, ClientDirectory clients, Action<string?> setNotice, Func<string, Task> copy,
+        string? personalBlueprints = null, IReadOnlyDictionary<string, string>? git = null)
     {
         Project = project;
         Document = document;
         Clients = clients;
         _setNotice = setNotice;
         _copy = copy;
-        ActiveRun = new ActiveRunViewModel(Runs, clients);
-        Runs.Changed += (_, _) => Dispatcher.UIThread.Post(ShowAttempts);
         PendingConnection = new PendingConnectionViewModel(this);
         Blueprints = new BlueprintsViewModel(
             this, BlueprintLibrary.Project(document.ProjectFolder), personalBlueprints is null ? null : BlueprintLibrary.Personal(personalBlueprints));
@@ -68,6 +68,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
         CommitMovesCommand = new RelayCommand(CommitMoves);
         NextWaitingCommand = new RelayCommand(SelectNextWaiting);
+        InitializeEngine(git ?? new Dictionary<string, string>());
         Document.Changed += (_, _) => Sync();
         Sync();
         InitializeHighlight();
@@ -126,8 +127,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public PendingConnectionViewModel PendingConnection { get; }
 
-    public ActiveRunViewModel ActiveRun { get; }
-
     /// <summary>The palette and the blueprint editor.</summary>
     public BlueprintsViewModel Blueprints { get; }
 
@@ -172,7 +171,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         internal set => SetProperty(ref _isSelected, value);
     }
 
-    /// <summary>Whether a task this workflow holds or held this session runs in this window.</summary>
+    /// <summary>Whether a node of this workflow runs.</summary>
     public bool IsRunning
     {
         get => _isRunning;
@@ -205,13 +204,9 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     internal ProjectViewModel Project { get; }
 
-    private readonly Dictionary<TaskId, ImmutableArray<ClientId>> _checkingAtStart = [];
-
     internal WorkflowDocument Document { get; }
 
     internal Workflow Workflow => Document.Current;
-
-    internal ProjectRuns Runs => Project.Runs;
 
     internal ClientDirectory Clients { get; }
 
@@ -221,9 +216,10 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         foreach (var node in Nodes)
         {
             node.OnAgentChanged();
-            node.RecheckProblem();
             node.Proposal?.OnClientsChanged();
         }
+
+        ShowEngine();
     }
 
     /// <summary>
@@ -303,26 +299,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     internal NodeKind KindOf(Blueprint blueprint) =>
         NodeKinds.Of(blueprint, key => Workflow.Blueprints.GetValueOrDefault(key) ?? Blueprints.Placeable.FirstOrDefault(placeable => placeable.Key == key));
 
-    /// <summary>
-    /// What the planner may fill and place when it starts now: the palette's blueprints are its types, and the clients
-    /// ready on this machine are the agents it chooses from for each task it adds.
-    /// </summary>
-    internal PlanningContext Planning(TaskId planner)
-    {
-        var clients = Clients.Current;
-        _checkingAtStart[planner] = [.. IDevelop.Execution.Clients.All.Where(id => clients[id] is ClientStatus.Checking)];
-        return PlanningContext.For(Workflow, planner, Blueprints.Placeable, HasStarted) with { Agents = PlanningContext.Offers(clients) };
-    }
-
-    /// <summary>
-    /// The clients that this window was still checking when it last started the planner, which its prompt therefore left
-    /// out, so the proposal can say so. Empty for a planner this window has not started.
-    /// </summary>
-    internal ImmutableArray<ClientId> CheckingAtStart(TaskId planner) => _checkingAtStart.GetValueOrDefault(planner, []);
-
-    /// <summary>Whether the task has an attempt in this project.</summary>
-    internal bool HasStarted(TaskId task) => Runs.Latest.ContainsKey(task);
-
     /// <summary>Hides a proposal until its planner proposes again. Only this window forgets it.</summary>
     internal void CloseProposal(ProposalViewModel proposal)
     {
@@ -354,29 +330,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         (PortViewModel { Side: PortSide.Input } input, PortViewModel { Side: PortSide.Output } output) => new ConnectionKey(output.Node.Id, input.Node.Id),
         _ => null,
     };
-
-    // Each change reads the newest attempts, which is never older than the change itself. A start, even one that another
-    // window's run refuses, also reads the other tasks' attempts again, which another window may have ended or a crash
-    // may have left running.
-    internal void ShowAttempts()
-    {
-        var changed = Nodes.Where(node => node.ShowAttempt(Runs.Latest.GetValueOrDefault(node.Id))).Select(node => node.Id).ToList();
-        // A review that rests between its turns can stop for a reason that changes no attempt, such as a fix round that
-        // closing iDevelop interrupted, which waits for the person's choice.
-        var resting = Nodes.Where(node => node.IsReview && Runs.Latest.GetValueOrDefault(node.Id) is { Status: AttemptStatus.InReview }).Select(node => node.Id);
-        RecheckProblems(changed.Concat(changed.SelectMany(DependencyNeighbors)).Concat(resting));
-
-        foreach (var node in Nodes)
-        {
-            node.Proposal?.Refresh();
-        }
-
-        var own = Runs.Active.Where(run => Project.Owns(this, run.Task)).ToImmutableArray();
-        ActiveRun.Show(own);
-        _standaloneRunning = !own.IsEmpty;
-        ShowActivity();
-        ShowGhosts();
-    }
 
     private void OnWaitingChanged()
     {
@@ -476,6 +429,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         var previous = _projected;
         var current = Document.Current;
         _projected = current;
+        // The engine follows the edit first: it stops a running node whose basis the edit changed, and knows every new node.
+        Engine.Update(current);
         var connectionsChanged = !ReferenceEquals(previous?.Connections, current.Connections);
 
         // A connection holds its two task nodes, so a connection leaves before its nodes can, and comes after they exist.
@@ -487,12 +442,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (!ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
         {
             SyncNodes(current);
-            if (Run is not null)
-            {
-                ShowRun();
-            }
-
-            OnWaitingChanged();
         }
 
         if (connectionsChanged)
@@ -529,44 +478,10 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasUnsavedChanges));
 
-        // The project's runner already follows this change, so the checks see it. A move changes no reason not to start.
+        // An edit of a node or of the connections into it can make a result stale or change why a node cannot run.
         if (!ReferenceEquals(previous?.Tasks, current.Tasks) || connectionsChanged)
         {
-            // An edit of a task or of the connections into it can put an earlier result out of date (#90).
-            ShowHistory();
-            RecheckProblems(Changed(previous, current));
-        }
-    }
-
-    /// <summary>
-    /// The tasks whose reason not to start may differ between the two workflows: a new or edited task, both ends of an
-    /// added, removed, or retyped connection, and every review, whose subject is whatever it depends on now.
-    /// </summary>
-    private static IEnumerable<TaskId> Changed(Workflow? previous, Workflow current)
-    {
-        var tasks = current.Tasks
-            .Where(task => previous?.Tasks.GetValueOrDefault(task.Key) is not { } old || !ReferenceEquals(old, task.Value) || task.Value.Blueprint.Work is WorkSpec.Review)
-            .Select(task => task.Key);
-        var connections = previous is null ? current.Connections.Keys : current.Connections
-            .Where(connection => !previous.Connections.TryGetValue(connection.Key, out var kind) || kind != connection.Value)
-            .Select(connection => connection.Key)
-            .Concat(previous.Connections.Keys.Where(key => !current.Connections.ContainsKey(key)));
-        return tasks.Concat(connections.SelectMany(key => new[] { key.From, key.To }));
-    }
-
-    /// <summary>The tasks connected to this one by a dependency in either direction.</summary>
-    private IEnumerable<TaskId> DependencyNeighbors(TaskId task) =>
-        Workflow.Connections.Where(connection => connection.Value.Blocks() && (connection.Key.From == task || connection.Key.To == task))
-            .Select(connection => connection.Key.From == task ? connection.Key.To : connection.Key.From);
-
-    private void RecheckProblems(IEnumerable<TaskId> tasks)
-    {
-        foreach (var id in tasks.Distinct().ToList())
-        {
-            if (_nodes.TryGetValue(id, out var node))
-            {
-                node.RecheckProblem();
-            }
+            ShowEngine();
         }
     }
 
@@ -606,6 +521,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             Nodes.Remove(node);
             _nodes.Remove(id);
             node.DetachDetail();
+            node.StopFollowingLog();
         }
     }
 

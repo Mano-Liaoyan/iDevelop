@@ -188,101 +188,117 @@ public sealed class CardTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_card_without_an_agent_asks_for_one_with_the_warning_glyph()
+    public void A_card_without_an_agent_says_so_and_its_Run_says_why_it_cannot_start()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
-        Assert.Equal(["Build", "Choose an agent"], Shell.Texts(shell.Node("Build")));
-        var glyph = shell.CardGlyph("Build");
-        Assert.True(glyph.IsEffectivelyVisible);
-        Assert.Same(Application.Current!.FindResource("IconStateNeedsSetup"), glyph.Data);
-        Assert.Equal(Color.Parse("#A16A00"), ((ISolidColorBrush)glyph.Foreground!).Color);
+        Assert.Equal(["Build", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.False(shell.CardGlyph("Build").IsEffectivelyVisible);
+        var node = shell.NodeModel("Build");
+        Assert.Equal(("Instructions is empty.", false), (node.RunRefusal, node.RunCommand.CanExecute(null)));
     }
 
     [AvaloniaFact]
     public void A_running_card_rings_in_its_kinds_stroke_and_says_so()
     {
-        Install(_fakes, ClientId.Codex, On("exec", "--json").Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""").WaitForFile(_gate).Replay(Fixture.Path("codex-success.jsonl")));
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
+        using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105));
+        f.Install(NodeFixture.Reply("s-1", "Drafted.", On().WaitForFile(f.Gate("go"))));
+        var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.RunOnItsOwn();
+        shell.RunNode("Design");
+        shell.WaitForCard("Design", "Running");
 
         var ring = shell.CardLayer("Design", "stateStroke");
         // The status takes the client's line, and the model and level stay on the line under it.
-        Assert.Equal(["Design", "Running", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Running", "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-running", ring.Classes);
         Assert.Equal(shell.Resource("KindImplementStrokeBrush"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         Assert.Same(Application.Current!.FindResource("IconStateRunning"), shell.CardGlyph("Design").Data);
-        File.WriteAllText(_gate, "");
-        shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Succeeded", "the run succeeds");
+        f.Release("go");
+        shell.WaitForCard("Design", "Completed");
     }
 
     [AvaloniaFact]
-    public void A_waiting_card_rings_in_orange_and_says_it_waits()
+    public void A_card_that_needs_the_person_rings_in_orange_and_names_why()
     {
-        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Which file?")));
-        var shell = Shell.Open(
-            _temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.", ConversationMode.Chat)), _fakes.DiscoverAsync().Result);
+        using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105, ConversationMode.Chat));
+        f.Install(NodeFixture.Reply("s-1", "Which file?"));
+        var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Waiting for you", "the task waits");
+        shell.RunNode("Design");
+        shell.WaitForCard("Design", "Input required · reply");
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Waiting for you", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
-        Assert.Contains("state-waiting", ring.Classes);
+        Assert.Equal(["Design", "Input required · reply", "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Design")));
+        Assert.Contains("state-inputrequired", ring.Classes);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
     }
 
     [AvaloniaTheory]
-    [InlineData("codex-success.jsonl", "Succeeded", "#008932")]
-    [InlineData("codex-bad-model.jsonl", "Failed", "#E9152D")]
-    public void A_finished_card_shows_its_ending_in_its_ring(string stream, string label, string ring)
+    [InlineData(false, "Completed", "#008932")]
+    [InlineData(true, "Failed", "#E9152D")]
+    public void A_finished_card_shows_its_ending_in_its_ring(bool fails, string label, string ring)
     {
-        Install(_fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path(stream)));
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
+        using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105));
+        f.Install(fails ? On().Stderr("The model is not available.").Exit(2) : NodeFixture.Reply("s-1", "Drafted."));
+        var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == label, "the run ends");
+        shell.RunNode("Design");
+        shell.WaitForCard("Design", label);
         // The ring is the card's 1.5 px border, so the card's top pixel row is the ring alone. The frame that shows it can
         // come a render tick after the status text, so the test waits for the pixel too.
         shell.WaitUntil(() => shell.ColorAt(shell.Node("Design"), new Point(130, 0)) == Color.Parse(ring), $"the ring turns {ring}");
 
-        Assert.Equal(["Design", label, "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", label, "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Design")));
+    }
+
+    [AvaloniaFact]
+    public void A_stale_card_rings_in_the_warning_colour_after_its_instruction_changes()
+    {
+        using var f = new NodeFixture(NodeFixture.Plan(Design, "Design", 105));
+        f.Install(NodeFixture.Reply("s-1", "Planned."));
+        var shell = f.Open();
+        shell.Click(shell.Find<RadioButton>("ThemeLight"));
+        shell.RunNode("Design");
+        shell.WaitForCard("Design", "Completed");
+
+        shell.Window.ViewModel.Canvas!.Edit(new SetField(Design, "goal", "Plan it again."));
+        shell.Render();
+
+        shell.WaitForCard("Design", "Stale");
+        Assert.Contains("state-stale", shell.CardLayer("Design", "stateStroke").Classes);
+        Assert.Same(Application.Current!.FindResource("IconStateOutOfDate"), shell.CardGlyph("Design").Data);
+        Assert.True(shell.NodeModel("Design").RetryCommand.CanExecute(null));
     }
 
     [AvaloniaFact]
     public void A_planner_with_an_open_proposal_shows_it_in_the_accent_without_a_pulse_and_draws_its_tasks_as_ghosts()
     {
-        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, """
+        using var f = new NodeFixture(new PlaceNode(Design, BuiltInBlueprints.Plan, new CanvasPoint(105, 90))
+        {
+            Title = "Plan export",
+            Fields = ImmutableDictionary<string, string>.Empty.Add("goal", "Export the report as CSV."),
+            Settings = new NodeSettings(NodeFixture.Agy, ConversationMode.Chat),
+        });
+        f.Install(NodeFixture.Reply("s-1", """
             ```idevelop
             {"status": "proposal",
              "add": [{"id": "api", "type": "type-1", "title": "Backend API"}, {"id": "ui", "type": "type-1", "title": "Export button"}],
              "connect": [{"from": "planner", "to": "api"}, {"from": "api", "to": "ui"}]}
             ```
-            """)));
-        var shell = Shell.Open(
-            _temp.Seed(new PlaceNode(Design, BuiltInBlueprints.Plan, new CanvasPoint(105, 90))
-            {
-                Title = "Plan export",
-                Fields = ImmutableDictionary<string, string>.Empty.Add("goal", "Export the report as CSV."),
-                Settings = new NodeSettings(Codex, ConversationMode.Chat),
-            }),
-            _fakes.DiscoverAsync().Result);
+            """));
+        var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Plan export")));
 
-        shell.RunOnItsOwn();
+        shell.RunNode("Plan export");
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
 
         var ring = shell.CardLayer("Plan export", "stateStroke");
-        Assert.Equal(["Plan export", "Proposal · 2 tasks", "GPT-5.5 · high"], Shell.Texts(shell.Node("Plan export")));
+        Assert.Equal(["Plan export", "Proposal · 2 tasks", "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Plan export")));
         Assert.Same(Application.Current!.FindResource("IconSparkle"), shell.CardGlyph("Plan export").Data);
         Assert.Contains("role-proposing", ring.Classes);
         Assert.Equal(Color.Parse("#1E6EF4"), ((ISolidColorBrush)ring.BorderBrush!).Color);

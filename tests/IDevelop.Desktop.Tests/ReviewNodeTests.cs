@@ -1,263 +1,67 @@
-using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
-using IDevelop.Desktop.Execution;
-using IDevelop.Execution;
-using IDevelop.Nodes;
-using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using static IDevelop.Desktop.Tests.AppTempFolder;
-using static IDevelop.TestSupport.FakeAgents;
+using static IDevelop.Desktop.Tests.NodeFixture;
+using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>A review node's loop through the real main window, with a scripted Codex implementer and Claude Code reviewer.</summary>
+/// <summary>
+/// A Review node through the engine (ADR 0035, ADR 0040, ADR 0042): its verdict's findings show in the inspector, a reject
+/// goes back to its subject, which continues its session, and at its round limit it offers Approve and Send back.
+/// </summary>
 [Collection(ProcessCollection.Name)]
-public sealed class ReviewNodeTests : IDisposable
+public sealed class ReviewNodeTests
 {
-    private const string ImplementerSession = "019a9d2e-1111-7000-8000-000000000001";
-    private const string ReviewerSession = "019a9d2e-2222-7000-8000-000000000002";
+    private const string Approves = "Looks right.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"approve\", \"findings\": []}\n```";
 
-    private readonly TempFolder _temp = AppTempFolder.New();
-    private readonly FakeClients _fakes;
-    private readonly string _implementer;
-    private readonly string _reviewer;
-    private readonly string _gate;
-    private readonly string _reading;
+    private const string Rejects =
+        "One problem.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", \"findings\": [{\"id\": \"1\", \"severity\": \"high\", " +
+        "\"location\": \"a.txt:1\", \"text\": \"The line says A.\", \"change\": \"Write A fixed.\"}]}\n```";
 
-    public ReviewNodeTests()
+    private static readonly TaskId A = TestTasks.Design;
+    private static readonly TaskId R = TestTasks.Review;
+
+    [AvaloniaFact]
+    public void An_approving_review_completes_and_its_card_says_so()
     {
-        _fakes = new FakeClients(_temp.Create("bin"));
-        _implementer = _temp.Create("implementer");
-        _reviewer = _temp.Create("reviewer");
-        _gate = Path.Combine(_temp.Create("gate"), "go");
-        _reading = Path.Combine(_temp.Create("reading"), "go");
-    }
+        using var f = new NodeFixture(Task(A, "A", 105), Review(R, "Check", 405), Dependency(A, R));
+        f.Install(On().Choose((Fresh("A"), Reply("s-a", "A ready.", On().Write("a.txt", "A\n"))), (Fresh("Check"), Reply("s-r", Approves))));
+        var shell = f.Open();
 
-    public void Dispose()
-    {
-        File.WriteAllText(_gate, "");
-        File.WriteAllText(_reading, "");
-        _temp.Dispose();
+        shell.Click(shell.Find<Button>("RunWorkflow"));
+
+        shell.WaitForState("Check", NodeState.Completed);
+        Assert.Equal("Approved", shell.NodeModel("Check").ReviewSummary);
+        Assert.Empty(shell.NodeModel("Check").Findings);
     }
 
     [AvaloniaFact]
-    public void A_review_shows_its_round_and_findings_takes_guidance_and_ends_approved()
+    public void At_its_round_limit_a_rejecting_review_shows_its_findings_and_offers_Approve_and_Send_back()
     {
-        Install(_fakes, ClientId.Codex, Resuming(ClientId.Codex, ImplementerSession).Scripted(_implementer), Fresh(ClientId.Codex).Scripted(_implementer));
-        Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, ReviewerSession).Scripted(_reviewer), Fresh(ClientId.ClaudeCode).Scripted(_reviewer));
-        Turn(_implementer, 1, ClientId.Codex, ImplementerSession, "Wrote calc.py.", write: "def add(a, b):\n    return a - b\n");
-        Turn(_reviewer, 1, ClientId.ClaudeCode, ReviewerSession,
-            "Found one.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", \"findings\": [{\"id\": \"1\", \"severity\": \"high\", " +
-            "\"location\": \"calc.py:2\", \"text\": \"add subtracts.\", \"change\": \"Return a + b.\"}]}\n```",
-            gate: _reading);
-        Turn(_implementer, 2, ClientId.Codex, ImplementerSession,
-            "Fixed.\n\n```idevelop\n{\"status\": \"answers\", \"answers\": [{\"id\": \"1\", \"answer\": \"fixed\", \"note\": \"It adds now.\"}]}\n```",
-            write: "def add(a, b):\n    return a + b\n", gate: _gate);
-        Turn(_reviewer, 2, ClientId.ClaudeCode, ReviewerSession, "Good.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"approve\", \"findings\": []}\n```");
-        var project = _temp.Seed(
-            TaskAt(TestTasks.Build, "Add numbers", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" }, "Write calc.py with add(a, b)."),
-            new WorkflowEdit.PlaceNode(TestTasks.Review, BuiltInBlueprints.Review, new CanvasPoint(465, 90))
-            {
-                Title = "Review add",
-                Settings = new NodeSettings(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" }, ConversationMode.Autonomous),
-            },
-            new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Build, TestTasks.Review), ConnectionKind.Dependency));
-        Process.Start(new ProcessStartInfo("git", ["init", "-q", project]) { UseShellExecute = false })!.WaitForExit();
-        var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
+        using var f = new NodeFixture(Task(A, "A", 105), Review(R, "Check", 405), Dependency(A, R), new WorkflowEdit.SetRoundLimit(R, 1));
+        f.Install(
+            Reply("s-a", "A fixed.", FakeAgents.Resuming(ClientId.Antigravity, "s-a").CapturePrompt(Path.Combine(f.Evidence, "fix.txt"))),
+            On().Choose((Fresh("A"), Reply("s-a", "A ready.", On().Write("a.txt", "A\n"))), (Fresh("Check"), Reply("s-r", Rejects))));
+        var shell = f.Open();
 
-        shell.Click(shell.Header(shell.Node("Add numbers")));
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Add numbers", "CardStatus") == "Succeeded", "the subject succeeds");
-        shell.Click(shell.Header(shell.Node("Review add")));
+        shell.Click(shell.Find<Button>("RunWorkflow"));
 
-        Assert.Equal("Reviewer", shell.Find<TextBlock>("AgentHeading").Text);
-        Assert.Equal(
-            ("Reviews in plan mode.", "Claude Code reviews in plan mode, which edits no file."),
-            shell.Note("PermissionNote"));
-        Assert.False(shell.Find<ComboBox>("TaskConversation").IsEffectivelyVisible);
-        Assert.Equal("Guide the Review", shell.Find<TextBlock>("ComposerHeading").Text);
+        shell.WaitUntil(() => shell.NodeModel("Check").EngineState is IDevelop.Engine.NodeState.InputRequired { Why: IDevelop.Engine.NodeState.RoundLimit },
+            "the review reaches its round limit", () => shell.NodeModel("Check").StatusLabel);
+        Assert.Contains("The line says A.", File.ReadAllText(Path.Combine(f.Evidence, "fix.txt")));
+        Assert.Equal("Input required · round limit", shell.CardText("Check", "CardStatus"));
+        shell.Click(shell.Header(shell.Node("Check")));
+        Assert.Equal("1 open finding", shell.InView<TextBlock>("ReviewSummary").Text);
+        var finding = Assert.Single(shell.NodeModel("Check").Findings);
+        Assert.Equal(("Finding 1", "High", "a.txt:1", "The line says A."), (finding.Heading, finding.Severity, finding.Location, finding.Reviewer));
+        Assert.True(shell.InView<Button>("Approve").IsEffectivelyVisible);
+        Assert.True(shell.InView<Button>("SendBack").IsEffectivelyVisible);
 
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "Running", "the reviewer reads");
-        Assert.Equal("The reviewer reads the change.", shell.Find<TextBlock>("ReviewSummary").Text);
-        var underReview = shell.InCard<Border>("Add numbers", "CardUnderReview");
-        Assert.Equal((true, "Under review by Review add"), (underReview.IsEffectivelyVisible, ToolTip.GetTip(underReview)));
-        File.WriteAllText(_reading, "");
-        shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "In review", "the review waits for the fix");
+        shell.Click(shell.InView<Button>("Approve"));
 
-        Assert.Equal("Round 1 · 1 open finding", shell.Find<TextBlock>("ReviewSummary").Text);
-        Assert.Contains("Round 1 · 1 open finding", shell.PeekTexts("Review add")!);
-        Assert.Equal(["Finding 1 · Open", "High", "calc.py:2", "add subtracts.", "Settled by: Return a + b."], Shell.Texts(shell.Find<ItemsControl>("Findings")));
-        // The review rests in review while its fix round snapshots the project and starts, off the window's thread.
-        shell.WaitUntil(() => shell.CardText("Add numbers", "CardStatus") == "Running", "the fix round starts");
-        shell.Click(shell.InView<TextBox>("Composer"));
-        shell.Type("Keep it short.");
-        shell.Click(shell.InView<Button>("SendMessage"));
-        shell.WaitUntil(() => shell.Find<TextBox>("Composer").Text == "", "the guidance is sent");
-
-        File.WriteAllText(_gate, "");
-
-        shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "Succeeded", "the review approves");
-        Assert.Equal("Approved in round 2.", shell.Find<TextBlock>("ReviewSummary").Text);
-        Assert.Equal(["Finding 1 · Resolved", "High", "calc.py:2", "add subtracts.", "Implementer: It adds now."], Shell.Texts(shell.Find<ItemsControl>("Findings")));
-        Assert.Contains("Keep it short.", File.ReadAllText(Path.Combine(_reviewer, "2.stdin")));
-        var conversation = Shell.Texts(shell.Find<ItemsControl>("Conversation"));
-        Assert.Contains("iDevelop", conversation);
-        Assert.DoesNotContain("You", conversation);
-    }
-
-    [AvaloniaFact]
-    public void A_review_that_goes_on_when_its_project_opens_shows_its_run_even_when_the_run_starts_before_the_canvas()
-    {
-        Install(_fakes, ClientId.Codex, Resuming(ClientId.Codex, ImplementerSession).Scripted(_implementer), Fresh(ClientId.Codex).Scripted(_implementer));
-        Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, ReviewerSession).Scripted(_reviewer), Fresh(ClientId.ClaudeCode).Scripted(_reviewer));
-        Turn(_implementer, 1, ClientId.Codex, ImplementerSession, "Wrote calc.py.", write: "def add(a, b):\n    return a - b\n");
-        Turn(_reviewer, 1, ClientId.ClaudeCode, ReviewerSession,
-            "Found one.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", \"findings\": [{\"id\": \"1\", \"text\": \"add subtracts.\", \"change\": \"Return a + b.\"}]}\n```");
-        File.WriteAllText(Path.Combine(_implementer, "2.json"), FakeRule.On().Print(SessionLine(ClientId.Codex, ImplementerSession)).Hang().StepsJson());
-        // The resumed fix round prints nothing until the gate opens, so no later change of its attempt shows it instead.
-        File.WriteAllText(Path.Combine(_implementer, "3.json"), FakeRule.On().WaitForFile(_gate).Print(SessionLine(ClientId.Codex, ImplementerSession))
-            .Write("calc.py", "def add(a, b):\n    return a + b\n")
-            .Print(ReplyLines(ClientId.Codex, "Fixed.\n\n```idevelop\n{\"status\": \"answers\", \"answers\": [{\"id\": \"1\", \"answer\": \"fixed\", \"note\": \"It adds now.\"}]}\n```"))
-            .StepsJson());
-        Turn(_reviewer, 2, ClientId.ClaudeCode, ReviewerSession, "Good.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"approve\", \"findings\": []}\n```");
-        var project = _temp.Seed(
-            TaskAt(TestTasks.Build, "Add numbers", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" }, "Write calc.py with add(a, b)."),
-            new WorkflowEdit.PlaceNode(TestTasks.Review, BuiltInBlueprints.Review, new CanvasPoint(465, 90))
-            {
-                Title = "Review add",
-                Settings = new NodeSettings(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" }, ConversationMode.Autonomous),
-            },
-            new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Build, TestTasks.Review), ConnectionKind.Dependency));
-        Process.Start(new ProcessStartInfo("git", ["init", "-q", project]) { UseShellExecute = false })!.WaitForExit();
-        var clients = _fakes.DiscoverAsync().Result;
-        var workflow = WorkflowDocument.OpenProject(project).Single().Current;
-        var first = ProjectRuns.Open(project, clients);
-        first.Follow(workflow);
-        Assert.IsType<StartResult.Started>(first.Start(workflow.Tasks[TestTasks.Build]));
-        Until(() => first.Latest[TestTasks.Build].Status == AttemptStatus.Succeeded && first.Active.IsEmpty, "the subject succeeds");
-        Assert.IsType<StartResult.Started>(first.Start(workflow.Tasks[TestTasks.Review]));
-        Until(() => File.Exists(Path.Combine(_implementer, "2.stdin")), "fix round 1 runs");
-        var leaving = first.DisposeAsync().AsTask();
-        Until(() => leaving.IsCompleted, "the first window's runs stop");
-
-        var runs = ProjectRuns.Open(project, clients);
-        using var launched = new ManualResetEventSlim();
-        runs.Changed += (_, _) =>
-        {
-            if (!runs.Active.IsEmpty)
-            {
-                launched.Set();
-            }
-        };
-        var reopened = new ProjectViewModel(project, runs, WorkflowDocument.OpenProject(project), (owner, document) =>
-        {
-            // The interrupted fix round waits for the person's choice, which comes before the canvas here.
-            Until(() => runs.Check(workflow.Tasks[TestTasks.Review]) is StartProblem.FixInterrupted { CanContinue: true }, "the review asks how its fix goes on");
-            Assert.False(launched.IsSet);
-            Assert.IsType<StartResult.Started>(runs.ChooseFix(TestTasks.Review, FixChoice.Continue));
-            Assert.True(launched.Wait(TimeSpan.FromSeconds(60)), "the continued fix round launches");
-            return new WorkflowCanvasViewModel(owner, document, clients, _ => { }, _ => Task.CompletedTask);
-        });
-        Dispatcher.UIThread.RunJobs();
-        var canvas = reopened.Workflows.Single();
-
-        Assert.Equal((true, true, "Add numbers"), (canvas.IsRunning, canvas.ActiveRun.IsVisible, canvas.ActiveRun.TaskTitle));
-
-        File.WriteAllText(_gate, "");
-        Until(() => runs.Latest[TestTasks.Review].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the review approves");
-        var closing = reopened.CloseAsync().AsTask();
-        Until(() => closing.IsCompleted, "the project closes");
-    }
-
-    [AvaloniaTheory]
-    [InlineData("ContinueFix", false)]
-    [InlineData("RetryFix", false)]
-    [InlineData("RetryFix", true)]
-    public void An_interrupted_fix_round_goes_on_from_the_review_s_inspector(string choice, bool clientChanged)
-    {
-        Install(_fakes, ClientId.Codex, Resuming(ClientId.Codex, ImplementerSession).Scripted(_implementer), Fresh(ClientId.Codex).Scripted(_implementer));
-        Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, ReviewerSession).Scripted(_reviewer), Fresh(ClientId.ClaudeCode).Scripted(_reviewer));
-        Turn(_implementer, 1, ClientId.Codex, ImplementerSession, "Wrote calc.py.", write: "def add(a, b):\n    return a - b\n");
-        Turn(_reviewer, 1, ClientId.ClaudeCode, ReviewerSession,
-            "Found one.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", \"findings\": [{\"id\": \"1\", \"text\": \"add subtracts.\", \"change\": \"Return a + b.\"}]}\n```");
-        File.WriteAllText(Path.Combine(_implementer, "2.json"), FakeRule.On().Print(SessionLine(ClientId.Codex, ImplementerSession)).Hang().StepsJson());
-        Turn(_implementer, 3, ClientId.Codex, ImplementerSession,
-            "Fixed.\n\n```idevelop\n{\"status\": \"answers\", \"answers\": [{\"id\": \"1\", \"answer\": \"fixed\", \"note\": \"It adds now.\"}]}\n```",
-            write: "def add(a, b):\n    return a + b\n");
-        Turn(_reviewer, 2, ClientId.ClaudeCode, ReviewerSession, "Good.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"approve\", \"findings\": []}\n```");
-        var project = _temp.Seed(
-            TaskAt(TestTasks.Build, "Add numbers", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" }, "Write calc.py with add(a, b)."),
-            new WorkflowEdit.PlaceNode(TestTasks.Review, BuiltInBlueprints.Review, new CanvasPoint(465, 90))
-            {
-                Title = "Review add",
-                Settings = new NodeSettings(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" }, ConversationMode.Autonomous),
-            },
-            new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Build, TestTasks.Review), ConnectionKind.Dependency));
-        Process.Start(new ProcessStartInfo("git", ["init", "-q", project]) { UseShellExecute = false })!.WaitForExit();
-        var clients = _fakes.DiscoverAsync().Result;
-        var workflow = WorkflowDocument.OpenProject(project).Single().Current;
-        var first = ProjectRuns.Open(project, clients);
-        first.Follow(workflow);
-        Assert.IsType<StartResult.Started>(first.Start(workflow.Tasks[TestTasks.Build]));
-        Until(() => first.Latest[TestTasks.Build].Status == AttemptStatus.Succeeded && first.Active.IsEmpty, "the subject succeeds");
-        Assert.IsType<StartResult.Started>(first.Start(workflow.Tasks[TestTasks.Review]));
-        Until(() => File.Exists(Path.Combine(_implementer, "2.stdin")), "fix round 1 runs");
-        var leaving = first.DisposeAsync().AsTask();
-        Until(() => leaving.IsCompleted, "the first window's runs stop");
-        if (clientChanged)
-        {
-            // The subject now names another client, so the interrupted session cannot go on.
-            var document = WorkflowDocument.OpenProject(project).Single();
-            Assert.IsType<EditResult.Applied>(document.Apply(new WorkflowEdit.SetExecution(TestTasks.Build,
-                new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" })));
-            document.Save();
-        }
-
-        var shell = Shell.Open(project, clients);
-        shell.Click(shell.Header(shell.Node("Review add")));
-        shell.WaitUntil(() => shell.Has<Button>("ContinueFix") && shell.Find<Button>("RetryFix").IsEffectivelyVisible, "the review offers the choice");
-        Assert.Equal(WorkflowRunText.Unbroken(clientChanged
-            ? "Closing iDevelop interrupted fix round 1 of \"Add numbers\". Its session cannot go on, so retry the fix in a fresh session."
-            : "Closing iDevelop interrupted fix round 1 of \"Add numbers\". Continue the fix in its session, or retry it in a fresh one."),
-            shell.Find<TextBlock>("StartProblem").Text);
-        Assert.Equal((!clientChanged, true), (shell.Find<Button>("ContinueFix").IsEffectivelyEnabled, shell.Find<Button>("RetryFix").IsEffectivelyEnabled));
-        if (clientChanged)
-        {
-            Assert.Equal("2", File.ReadAllText(Path.Combine(_implementer, "count")));
-            return;
-        }
-        Assert.Equal("2", File.ReadAllText(Path.Combine(_implementer, "count")));
-
-        shell.Click(shell.InView<Button>(choice));
-
-        shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "Succeeded", "the review approves");
-        Assert.Equal("3", File.ReadAllText(Path.Combine(_implementer, "count")));
-        Assert.StartsWith(choice == "ContinueFix" ? "Closing iDevelop interrupted your work on these findings." : "You retry this fix round in a fresh session.",
-            File.ReadAllText(Path.Combine(_implementer, "3.stdin")));
-        Assert.False(shell.Find<Button>("ContinueFix").IsEffectivelyVisible);
-    }
-
-    private static void Until(Func<bool> condition, string what)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.");
-            Thread.Sleep(20);
-            Dispatcher.UIThread.RunJobs();
-        }
-    }
-
-    private static void Turn(string folder, int turn, ClientId client, string session, string reply, string? write = null, string? gate = null)
-    {
-        var steps = FakeRule.On().Print(SessionLine(client, session));
-        steps = gate is null ? steps : steps.WaitForFile(gate);
-        steps = write is null ? steps : steps.Write("calc.py", write);
-        File.WriteAllText(Path.Combine(folder, $"{turn}.json"), steps.Print(ReplyLines(client, reply)).StepsJson());
+        shell.WaitForState("Check", NodeState.Completed);
     }
 }

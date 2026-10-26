@@ -129,7 +129,7 @@ public sealed partial class WorkflowCanvasViewModel
         _generated.Add(node.Id);
         _latestGenerated = node.Id;
         node.PropertyChanged += OnGeneratedChanged;
-        node.RunOnItsOwn();
+        node.RunCommand.Execute(null);
         ShowGenerateProgress();
     }
 
@@ -167,7 +167,7 @@ public sealed partial class WorkflowCanvasViewModel
             ? planner switch
             {
                 { Role: NodeRole.Proposing } => GenerateProgress.Reviewing,
-                { State: NodeState.Running or NodeState.RunningElsewhere or NodeState.Stopping } => GenerateProgress.Planning,
+                { State: NodeState.Running } => GenerateProgress.Planning,
                 _ => GenerateProgress.Idle,
             }
             : GenerateProgress.Idle;

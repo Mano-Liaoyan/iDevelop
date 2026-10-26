@@ -10,7 +10,8 @@ using IDevelop.Desktop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
-using static IDevelop.Desktop.Tests.WorkflowRunFixture;
+using static IDevelop.Desktop.Tests.NodeFixture;
+using static IDevelop.TestSupport.FakeRule;
 using static IDevelop.Workflows.WorkflowEdit;
 
 namespace IDevelop.Desktop.Tests;
@@ -271,12 +272,12 @@ public sealed class CardExpansionTests : IDisposable
     [AvaloniaFact]
     public void Keys_typed_in_the_answer_box_and_on_the_agent_pickers_stay_with_them_and_never_reach_the_canvas()
     {
-        using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat));
-        f.Answer("A", f.Says("Which file?"));
-        var shell = f.Window();
+        using var f = new NodeFixture(NodeFixture.Task(Design, "A", 105, ConversationMode.Chat));
+        f.Install(Reply("s-a", "Which file?"));
+        var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
-        canvas.Nodes.Single().RunOnItsOwn();
-        shell.WaitForCard("A", "Waiting for you");
+        canvas.Nodes.Single().RunCommand.Execute(null);
+        shell.WaitForState("A", NodeState.InputRequired);
         shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
         var zoom = canvas.ViewportZoom;
 
@@ -351,97 +352,60 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void While_a_task_runs_a_change_on_its_cards_pickers_is_for_the_next_run_and_the_card_names_the_agent_that_runs_now()
+    public void A_change_on_a_running_cards_pickers_stops_its_turn_and_leaves_it_stale_for_the_persons_run()
     {
-        using var f = new WorkflowRunFixture(Task(Design, "A", 105));
-        f.Answer("A", f.Says("A ready.", gate: "go"));
-        var shell = f.Window();
-        shell.RunOnItsOwn("A");
-        shell.WaitForCard("A", "Running");
+        using var f = new NodeFixture(NodeFixture.Plan(Design, "A", 105));
+        f.Install(Reply("s-a", "A ready.", On().WaitForFile(f.Gate("go"))));
+        var shell = f.Open();
+        shell.NodeModel("A").RunCommand.Execute(null);
+        shell.WaitForState("A", NodeState.Running);
         shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
-        Assert.Equal("A change applies to the next run.", shell.CardText("A", "CardNextRunNote"));
+        Assert.Equal("A change stops the running turn, and the node waits for your Run.", shell.CardText("A", "CardNextRunNote"));
 
-        shell.Pick(shell.InCard<ComboBox>("A", "CardPickModel"), "GPT-6-Sol");
+        shell.Pick(shell.InCard<ComboBox>("A", "CardPickReasoning"), "high");
 
-        Assert.Equal("GPT-6-Sol · high", shell.CardText("A", "CardModel"));
-        Assert.Equal("This run uses Codex · GPT-5.5 · high. A change applies to the next run.", shell.CardText("A", "CardNextRunNote"));
-        f.Open("go");
-        shell.WaitForCard("A", "Succeeded");
+        shell.WaitForState("A", NodeState.Stale);
+        Assert.Equal("Stale", shell.CardText("A", "CardStatus"));
+        Assert.True(shell.InCard<Button>("A", "CardRetry").IsEffectivelyVisible);
         Assert.False(shell.InCard<TextBlock>("A", "CardNextRunNote").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
-    public void An_approval_card_points_to_the_inspector_where_the_person_answers_its_request()
+    public void An_approval_card_offers_Approve_and_Send_back_and_points_to_the_inspector_for_the_note()
     {
-        using var f = new WorkflowRunFixture(Task(Design, "A", 105), Approval(Build, "Approve", 405), Dependency(Design, Build));
-        f.Answer("A", f.Says("A ready."));
-        var shell = f.Window();
+        using var f = new NodeFixture(NodeFixture.Plan(Design, "A", 105), Approval(Build, "Approve", 405), Dependency(Design, Build));
+        f.Install(Reply("s-a", "A ready."));
+        var shell = f.Open();
         shell.Click(shell.InCard<ToggleButton>("Approve", "CardExpand"));
         Assert.False(shell.InCard<Button>("Approve", "CardShowInspector").IsEffectivelyVisible);
-        shell.StartRun();
-        shell.WaitForCard("Approve", "Waiting for approval");
+        Assert.False(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
+        shell.Click(shell.Find<Button>("RunWorkflow"));
+        shell.WaitForState("Approve", NodeState.InputRequired);
 
+        Assert.Equal("Input required · approval", shell.CardText("Approve", "CardStatus"));
         Assert.Equal("Waits for your approval", shell.CardText("Approve", "CardNowHeading"));
+        Assert.True(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
+        Assert.True(shell.InCard<Button>("Approve", "CardSendBack").IsEffectivelyVisible);
         shell.Click(shell.InCard<Button>("Approve", "CardShowInspector"));
 
         Assert.Equal("Approve", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
-        Assert.True(shell.InView<Button>("ApproveGate").IsEffectivelyVisible);
-    }
+        Assert.True(shell.InView<TextBox>("SendBackNote").IsEffectivelyVisible);
 
-    [AvaloniaFact]
-    public void A_waiting_cards_list_counts_what_a_listed_task_waits_for_so_the_listed_title_keeps_one_line()
-    {
-        const string first = "Design the workflow file format";
-        using var f = new WorkflowRunFixture(Task(Design, first, 105), Task(Build, "Check the storage format", 405),
-            TaskAt(Docs, "C", 405, 250, Codex, "Build C."),
-            Dependency(Design, Build), Dependency(Build, Docs));
-        f.Answer(first, f.Says("Designed.", gate: "go")).Answer("Check the storage format", f.Says("Checked.")).Answer("C", f.Says("C ready."));
-        var shell = f.Window();
-        shell.StartRun();
-        shell.WaitForCard(first, "Running");
-
-        shell.Click(shell.InCard<ToggleButton>("C", "CardExpand"));
-
-        // The card's own status names the task it waits for; the row beside a title only counts it.
-        Assert.Equal($"Waits for \"{first}\"", ((TaskNodeViewModel)shell.Node("Check the storage format").DataContext!).StatusLabel);
-        var waits = shell.InCard<ItemsControl>("C", "CardWaits");
-        Assert.Equal(["Check the storage format", "Waits for 1 task"], Shell.Texts(waits));
-        Assert.Single(waits.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == "Check the storage format").TextLayout.TextLines);
-        f.Open("go");
-        shell.WaitForStatus("Completed");
-    }
-
-    [AvaloniaFact]
-    public void A_waiting_cards_list_follows_a_listed_task_whose_change_leaves_the_cards_own_status_as_it_was()
-    {
-        using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat), TaskAt(Build, "B", 105, 250, Codex, "Build B."),
-            Task(Docs, "C", 405), Dependency(Design, Docs), Dependency(Build, Docs));
-        f.Answer("A", f.Says("Which file?", gate: "a")).Answer("B", f.Says("B ready.", gate: "b")).Answer("C", f.Says("C ready."));
-        var shell = f.Window();
-        shell.Click(shell.InCard<ToggleButton>("C", "CardExpand"));
-        shell.StartRun();
-        shell.WaitUntil(() => Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits")) is ["A", "Running", "B", "Running"], "C lists both running",
-            () => string.Join(", ", Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits"))));
-
-        // A stops to wait for the person while B still runs, so C still waits for 2 tasks, and its list says where A is now.
-        f.Open("a");
-        shell.WaitForCard("A", "Waiting for you");
-
-        Assert.Equal("Waits for 2 tasks", shell.CardText("C", "CardStatus"));
-        shell.WaitUntil(() => Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits")) is ["A", "Waiting for you", "B", "Running"], "C's list follows A",
-            () => string.Join(", ", Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits"))));
-        f.Open("b");
+        shell.Click(shell.InCard<Button>("Approve", "CardApprove"));
+        shell.WaitForState("Approve", NodeState.Completed);
     }
 
     [AvaloniaFact]
     public void Ctrl_Enter_in_the_answer_box_sends_the_answer_as_the_agents_next_turn()
     {
-        using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat));
-        f.Answer("A", f.Says("Which file?"), f.Says("Done.", "session-1")).Route("Use the fixture", "A");
-        var shell = f.Window();
+        using var f = new NodeFixture(NodeFixture.Task(Design, "A", 105, ConversationMode.Chat));
+        f.Install(
+            Reply("s-a", "Done.", FakeAgents.Resuming(ClientId.Antigravity, "s-a").CapturePrompt(Path.Combine(f.Evidence, "answer.txt"))),
+            Reply("s-a", "Which file?"));
+        var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
-        canvas.Nodes.Single().RunOnItsOwn();
-        shell.WaitForCard("A", "Waiting for you");
+        canvas.Nodes.Single().RunCommand.Execute(null);
+        shell.WaitForState("A", NodeState.InputRequired);
         shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
         Assert.Equal(("The agent replied", "Which file?"), (shell.CardText("A", "CardNowHeading"), shell.CardText("A", "CardNowText")));
 
@@ -449,33 +413,11 @@ public sealed class CardExpansionTests : IDisposable
         shell.Type("Use the fixture");
         shell.Press(Key.Enter, RawInputModifiers.Control);
 
-        shell.WaitUntil(() => f.Launches("A") == 2 && shell.CardText("A", "CardNowText") == "Done.", "the answer's turn ends");
-        Assert.Equal("Use the fixture", f.Prompt("A", 2));
+        shell.WaitUntil(() => shell.NodeModel("A").State == NodeState.InputRequired && shell.CardText("A", "CardNowText") == "Done.", "the answer's turn ends");
+        Assert.Equal("Use the fixture", File.ReadAllText(Path.Combine(f.Evidence, "answer.txt")).Trim());
         Assert.Equal("", shell.InCard<TextBox>("A", "CardAnswer").Text);
         Assert.Null(shell.Window.ViewModel.Conversation);
         Assert.Single(canvas.Nodes);
-    }
-
-    [AvaloniaFact]
-    public void The_card_answers_a_task_that_a_run_owns_through_the_run()
-    {
-        using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat), Task(Build, "B", 405), Dependency(Design, Build));
-        f.Answer("A", f.Says("Which file?"), f.Says("Done.", "session-1")).Answer("B", f.Says("B ready.")).Route("Use the fixture", "A");
-        var shell = f.Window();
-        // Expanded before the run starts, the card follows the task into the run.
-        shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
-        shell.StartRun();
-        shell.WaitForCard("A", "Waiting for you");
-        shell.WaitUntil(() => shell.CardText("A", "CardNowText") == "Which file?", "the card shows the run's reply");
-
-        shell.Click(shell.InCard<TextBox>("A", "CardAnswer"));
-        shell.Type("Use the fixture");
-        shell.WaitUntil(() => shell.InCard<Button>("A", "CardSend").IsEffectivelyEnabled, "the run takes a reply");
-        shell.Click(shell.InCard<Button>("A", "CardSend"));
-
-        shell.WaitUntil(() => f.Launches("A") == 2 && shell.CardText("A", "CardNowText") == "Done.", "the reply's turn ends in the run");
-        Assert.Equal("Use the fixture", f.Prompt("A", 2));
-        Assert.Null(shell.Window.ViewModel.Conversation);
     }
 
     [AvaloniaFact]
@@ -513,8 +455,8 @@ public sealed class CardExpansionTests : IDisposable
         Assert.Equal(
             ["Docs", "Implement · Codex · gpt-5.5 · high", "Instructions",
              "Write the workflow file through a temporary file and a rename, so a crash never leaves half a file.",
-             // Run starts nothing before Design has a result, which the peek says last.
-             WorkflowRunText.Unbroken("Runs after \"Design\". Run \"Design\"\u00A0first.")],
+             // Run starts nothing before Design is completed, which the peek says last.
+             "It waits for Design."],
             Shell.Texts(peek));
 
         shell.Window.MouseMove(new Point(5, 5));

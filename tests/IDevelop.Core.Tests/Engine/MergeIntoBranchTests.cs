@@ -39,6 +39,22 @@ public sealed class MergeIntoBranchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_workflow_of_nodes_that_only_read_offers_no_merge()
+    {
+        var (a, b) = (_f.Reader("A"), _f.Reader("B"));
+        _f.Connect(a, b);
+        _f.Install(On().Choose((Fresh("A"), Reply("s-a", "Report A")), (Fresh("B"), Reply("s-b", "Report B"))));
+        var engine = await _f.Open();
+        await engine.Run(a);
+
+        await Until<NodeState.Completed>(engine, b);
+
+        Assert.False(engine.CanMergeIntoBranch);
+        await Assert.ThrowsAsync<InvalidOperationException>(engine.MergeIntoBranch);
+        Assert.Equal(_f.Start, _f.Head);
+    }
+
+    [Fact]
     public async Task It_merges_the_end_nodes_commits_into_the_checked_out_branch()
     {
         var (a, b, c) = (_f.Node("A"), _f.Node("B"), _f.Node("C"));
@@ -52,8 +68,12 @@ public sealed class MergeIntoBranchTests : IAsyncLifetime
         await Until<NodeState.Completed>(engine, b);
         await Until<NodeState.Completed>(engine, c);
 
+        Assert.True(engine.CanMergeIntoBranch);
+
         await engine.MergeIntoBranch();
 
+        // The branch holds every end node's commit now, so there is nothing left to merge.
+        Assert.False(engine.CanMergeIntoBranch);
         Assert.Equal(["README.md", "a.txt", "b.txt", "c.txt"], _f.Files("HEAD").Keys.Order(StringComparer.Ordinal));
         Assert.Equal("refs/heads/main", _f.Repository.Git("symbolic-ref", "HEAD").Trim());
         Assert.Equal("C\n", File.ReadAllText(Path.Combine(_f.Project, "c.txt")));

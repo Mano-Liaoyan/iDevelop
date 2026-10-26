@@ -39,25 +39,11 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     ];
 
     private readonly WorkflowCanvasViewModel _canvas;
-    private readonly RelayCommand _run;
-    private readonly RelayCommand _cancel;
-    private readonly RelayCommand _send;
-    private readonly RelayCommand _stopAndSend;
-    private readonly RelayCommand _openInTerminal;
-    private readonly RelayCommand _newConversation;
-    private readonly RelayCommand _markDone;
-    private readonly RelayCommand _continueFix;
-    private readonly RelayCommand _retryFix;
     private TaskDefinition _task;
     private Point _location;
-    private AttemptRecord? _attempt;
-    private (AttemptId? Continues, ImmutableArray<AttemptRecord> Attempts) _earlier = (null, []);
-    private AttemptRecord? _proposed;
-    private ProposalRead _proposalRead = new ProposalRead.None();
     private ProposalViewModel? _proposal;
     private NodeKind _kind;
     private bool _isLibrary;
-    private StartProblem? _problem;
     private NodeState _state;
     private NodeRole _role;
 
@@ -66,38 +52,18 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         _canvas = canvas;
         _task = task;
         _location = WorkflowCanvasViewModel.ToPoint(position);
-        _attempt = canvas.Runs.Latest.GetValueOrDefault(task.Id);
         Fields = [.. task.Blueprint.Fields.Select(field => new FieldViewModel(this, field))];
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
-        _run = new RelayCommand(Run, () => !RunsHere && (!IsRunOwned || JoinsRun) && RunRefusal is null);
-        _cancel = new RelayCommand(
-            async () => _canvas.Notice(await _canvas.Runs.CancelAsync(Id) is { } problem ? RunText.Describe(problem) : null),
-            () => !IsRunOwned && (StandaloneWaiting || _attempt is { Status: AttemptStatus.InReview } ||
-                _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id)));
-        _send = new RelayCommand(() => Send(stopTurn: false), () => !IsRunOwned && !string.IsNullOrWhiteSpace(Draft) && _canvas.Runs.CheckSend(_task) is null);
-        _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => CanStopAndSend && _send.CanExecute(null));
-        _openInTerminal = new RelayCommand(OpenInTerminal,
-            () => !IsRunOwned && _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null } attempt && !_canvas.Runs.SessionFolderMoved(attempt));
-        _markDone = new RelayCommand(MarkDone, () => StandaloneWaiting);
-        _newConversation = new RelayCommand(() => _canvas.Runs.StartNewConversation(_task, _canvas.Planning(Id)), () => CanStartNewConversation);
-        _continueFix = new RelayCommand(() => ChooseFix(FixChoice.Continue), () => RunFix is { } fix
-            ? CanChooseRunFix && fix.ContinueUnavailable is null : RunTask is null && _problem is StartProblem.FixInterrupted { CanContinue: true });
-        _retryFix = new RelayCommand(() => ChooseFix(FixChoice.Retry), () => RunFix is not null ? CanChooseRunFix : RunTask is null && _problem is StartProblem.FixInterrupted);
         Skills = new SkillPickerViewModel(this);
         DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
         SaveAsBlueprintCommand = new RelayCommand(() => _canvas.Blueprints.SaveAs(_task));
         (_kind, _isLibrary) = (canvas.KindOf(task.Blueprint), !NodeKinds.IsBuiltIn(task.Blueprint));
-        _state = NodeStates.Of(_attempt, RunsElsewhere, null);
+        InitializeRun();
         InitializeCard();
-        InitializeActions();
         InitializeInspector();
         InitializeConversation();
-        InitializeRun();
-        InitializeStanding();
         InitializeExpansion();
-        InitializeRetry();
-        InitializeRunCancel();
     }
 
     public TaskId Id => _task.Id;
@@ -121,12 +87,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         private set => SetProperty(ref _isLibrary, value);
     }
 
-    /// <summary>
-    /// Why the task cannot start now, or null, also while this window runs it. It is kept rather than computed on each
-    /// read, because the card shows it for every node and each check takes the runs' lock.
-    /// </summary>
-    public StartProblem? Problem => _problem;
-
     public NodeState State
     {
         get => _state;
@@ -138,9 +98,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         get => _role;
         private set => SetProperty(ref _role, value);
     }
-
-    /// <summary>How often the node asked the runs why it cannot start.</summary>
-    internal int ProblemChecks { get; private set; }
 
     public PortViewModel Input { get; }
 
@@ -191,30 +148,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     public bool HasConversation => _task.Blueprint.Work is WorkSpec.Agent;
 
     public string ComposerHint => IsReview
-        ? "Both agents read your guidance in their next message. Ctrl+Enter sends."
+        ? "The reviewer reads your guidance in its next turn. Ctrl+Enter sends."
         : "Write to the agent. Ctrl+Enter sends.";
-
-    /// <summary>"Round 2 · 1 open finding" for a review's latest attempt, or null, which its card shows.</summary>
-    public string? ReviewSummary => _attempt is { Subject: not null } review ? RunText.ReviewSummary(review, ReviewLedger.Fold(review)) : null;
-
-    /// <summary>
-    /// The review whose findings the inspector shows: the task's review in the canvas's run while the run shows the task,
-    /// else the task's own latest attempt.
-    /// </summary>
-    private AttemptRecord? InspectedReview => RunTask is not null ? _runReview : _attempt;
-
-    /// <summary>"Round 2 · 1 open finding" for the review the inspector shows, or null, which hides its Findings.</summary>
-    public string? FindingsSummary => InspectedReview is { Subject: not null } review ? RunText.ReviewSummary(review, ReviewLedger.Fold(review)) : null;
-
-    /// <summary>
-    /// The findings of the review the inspector shows, with both sides' latest words. A settled finding fades only beside
-    /// one that still stands, so a review that ended reads in full, as an Approval reads it.
-    /// </summary>
-    public IReadOnlyList<FindingViewModel> Findings => InspectedReview is { Subject: not null } review && ReviewLedger.Fold(review) is var ledger
-        ? [.. ledger.Findings.Select(finding => new FindingViewModel(finding, fades: ledger.OpenCount > 0))]
-        : [];
-
-    public bool HasFindings => Findings.Count > 0;
 
     public IReadOnlyList<Choice> ConversationChoices =>
         [.. Enum.GetValues<ConversationMode>().Select(mode => new Choice(Id, mode.ToString(), RunText.ConversationChoice(mode)))];
@@ -222,27 +157,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     public Choice SelectedConversation => ConversationChoices.First(choice => choice.Id == _task.Conversation.ToString());
 
     public string ConversationNote => RunText.ConversationNote(_task.Conversation);
-
-    /// <summary>The task waits for the person: its latest attempt, or its attempt or approval request in the canvas's run.</summary>
-    public bool IsWaiting => RunTask is { } run ? WaitsInRun(run) : _attempt is { Status: AttemptStatus.WaitingForInput };
-
-    /// <summary>The question or the reason the task's own latest attempt waits for the person, or null.</summary>
-    public string? Waiting => StandaloneWaiting && _attempt is { Pending: { } pending } ? RunText.Waiting(pending) : null;
-
-    /// <summary>The task's latest attempt outside a workflow run waits for the person, which its own commands answer.</summary>
-    private bool StandaloneWaiting => RunTask is null && _attempt is { Status: AttemptStatus.WaitingForInput };
-
-    /// <summary>Closing iDevelop interrupted the review's fix round, which waits for Continue fix or Retry fix.</summary>
-    public bool ShowsFixChoice => RunTask is null ? _problem is StartProblem.FixInterrupted : RunFix is not null;
-
-    /// <summary>Continues the interrupted fix round in its session, when that session can go on.</summary>
-    public ICommand ContinueFixCommand => _continueFix;
-
-    /// <summary>Starts the interrupted fix round again in a fresh session.</summary>
-    public ICommand RetryFixCommand => _retryFix;
-
-    /// <summary>Records the waiting task as done, with the agent's last reply as its result.</summary>
-    public ICommand MarkDoneCommand => _markDone;
 
     public string AgentLabel => RunText.AgentLabel(_task.Execution, Status);
 
@@ -283,43 +197,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         ? IsReview ? RunText.ReviewerNote(settings.Client) : RunText.PermissionNote(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
         : null;
 
-    public string StatusLabel => Standing is { } standing ? standing.Card(TitleOf).Label
-        : RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : RunText.StatusLabel(_attempt, RunsElsewhere);
-
-    /// <summary>
-    /// Why this task cannot start now, shown under the Run button before any click: a fix round of its own that closing
-    /// iDevelop interrupted, which its Continue fix and Retry fix answer, or a repeating review round, which guidance
-    /// answers, else the tasks before it that have no results yet, or what keeps it from starting in a workflow run as
-    /// configured (#90).
-    /// </summary>
-    public string? StartProblem => WorkflowRunText.Unbroken(IsRunOwned && !JoinsRun ? RunOwnedProblem
-        : RunsHere ? null
-        : _problem is IDevelop.Execution.StartProblem.FixInterrupted or IDevelop.Execution.StartProblem.RoundRepeated ? RunText.Describe(_problem)
-        : RunRefusal);
-
-    /// <summary>
-    /// Why Run would start nothing, which keeps it off and is its tooltip: the tasks before this one that have no results
-    /// yet, or what keeps it from starting in a workflow run as configured (#90). Null when Run can start it, or when Run
-    /// does not show because this window runs the task or the canvas's run already holds it.
-    /// </summary>
-    public string? RunRefusal => RunsHere || IsRunOwned && !JoinsRun ? null : WorkflowRunText.Unbroken(_canvas.RunRefusal(this));
-
-    /// <summary>
-    /// Only the inspector shows it, so only the selected task reads the attempts that its last run continues. A task that
-    /// the canvas's run owns shows the run's state instead, so its last attempt outside the run stays out of the way.
-    /// </summary>
-    public AttemptViewModel? LastAttempt => _attempt is null || ShowsRunState ? null
-        : new AttemptViewModel(_attempt, Earlier(_attempt), RunsElsewhere, _canvas.Clients.Current[_attempt.Requested.Client]);
-
-    /// <summary>
-    /// Runs the task in a workflow run, which then starts each task after it once all of that task's predecessors have
-    /// results (#90). Off while this window runs the task on its own, while the canvas's active run already holds it, and
-    /// while <see cref="RunRefusal"/> says why it would start nothing.
-    /// </summary>
-    public ICommand RunCommand => _run;
-
-    public ICommand CancelCommand => _cancel;
-
     /// <summary>The planner's latest proposal while it is open, or null.</summary>
     public ProposalViewModel? Proposal
     {
@@ -343,51 +220,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         set => ConversationState.Draft = value;
     }
 
-    /// <summary>Why a message cannot go to the task's agent now, shown under the composer before any click.</summary>
-    /// <summary>Why a message cannot go to the agent now, or, after the person chose Start a new conversation, that the next one starts it.</summary>
-    public string? SendProblem => _canvas.Runs.CheckSend(_task) is { } problem ? RunText.Describe(problem)
-        : _canvas.Runs.StartsNewConversation(_task.Id) ? RunText.StartsNewConversation : null;
-
-    /// <summary>Start a new conversation, offered while the conversation cannot continue (#92).</summary>
-    public bool CanStartNewConversation => !IsRunOwned && _canvas.Runs.CanStartNewConversation(_task);
-
-    public ICommand NewConversationCommand => _newConversation;
-
-    /// <summary>A review's guidance never stops the reviewer's turn.</summary>
-    public bool CanStopAndSend => TurnRunsHere && !IsReview;
-
-    /// <summary>A turn of the task runs in this window, which Stop and send can stop.</summary>
-    public bool TurnRunsHere =>
-        _attempt is { Status: AttemptStatus.Running, Turns: [.., { Outcome: TurnOutcome.Running }] } attempt && _canvas.Runs.StartedHere(attempt.Id);
-
-    /// <summary>Queues the draft for the next turn, or continues the latest session in a new attempt.</summary>
-    public ICommand SendCommand => _send;
-
-    public ICommand StopAndSendCommand => _stopAndSend;
-
-    /// <summary>Copies the client's own command for the latest session, while no turn of the task runs.</summary>
-    public ICommand OpenInTerminalCommand => _openInTerminal;
-
     private ClientStatus Status => _task.Execution is { } settings ? _canvas.Clients.Current[settings.Client] : new ClientStatus.Checking();
-
-    private bool RunsHere => _attempt is { Status: AttemptStatus.Running } attempt && _canvas.Runs.StartedHere(attempt.Id);
-
-    private bool RunsElsewhere => _attempt is { Status: AttemptStatus.Running } && !RunsHere;
-
-    /// <summary>
-    /// The attempts that <paramref name="attempt"/> continues. Their logs are read again only when it continues another
-    /// attempt than before, because a continued attempt never changes.
-    /// </summary>
-    private ImmutableArray<AttemptRecord> Earlier(AttemptRecord attempt)
-    {
-        var continues = attempt.Continues;
-        if (continues != _earlier.Continues)
-        {
-            _earlier = (continues, continues is null ? [] : _canvas.Runs.EarlierAttempts(attempt));
-        }
-
-        return _earlier.Attempts;
-    }
 
     internal void Update(TaskDefinition task, CanvasPoint position)
     {
@@ -423,142 +256,21 @@ public sealed partial class TaskNodeViewModel : ObservableObject
             {
                 OnAgentChanged();
             }
-
-            OnPropertyChanged(nameof(StartProblem));
-            OnPropertyChanged(nameof(RunRefusal));
-            OnPropertyChanged(nameof(RunOwner));
-            _run.NotifyCanExecuteChanged();
-            OnConversationChanged();
         }
 
         Location = WorkflowCanvasViewModel.ToPoint(position);
-    }
-
-    /// <summary>
-    /// Called on the UI thread with the task's newest attempt after any attempt of the project changes. A run anywhere in
-    /// the project can keep this task from starting. Returns whether the attempt changed.
-    /// </summary>
-    internal bool ShowAttempt(AttemptRecord? attempt)
-    {
-        var changed = !ReferenceEquals(attempt, _attempt);
-        if (changed)
-        {
-            _attempt = attempt;
-            OnPropertyChanged(nameof(StatusLabel));
-            OnPropertyChanged(nameof(LastAttempt));
-            OnPropertyChanged(nameof(IsWaiting));
-            OnPropertyChanged(nameof(Waiting));
-            ShowProposal();
-            OnPropertyChanged(nameof(Preview));
-            OnPropertyChanged(nameof(ReviewSummary));
-            OnPropertyChanged(nameof(FindingsSummary));
-            OnPropertyChanged(nameof(Findings));
-            OnPropertyChanged(nameof(HasFindings));
-        }
-
-        OnPropertyChanged(nameof(StartProblem));
-        OnPropertyChanged(nameof(RunRefusal));
-        _run.NotifyCanExecuteChanged();
-        _cancel.NotifyCanExecuteChanged();
-        _markDone.NotifyCanExecuteChanged();
-        OnConversationChanged();
-        return changed;
-    }
-
-    /// <summary>
-    /// Asks the runs again why the task cannot start, and shows the state that follows. The canvas calls it only after a
-    /// change that can alter the answer: the task, its agent, what the clients offer, or an attempt of the task or of a
-    /// task connected to it by a dependency.
-    /// </summary>
-    internal void RecheckProblem()
-    {
-        ProblemChecks++;
-        var problem = RunsHere ? null : _canvas.Runs.Check(_task);
-        if (problem != _problem)
-        {
-            _problem = problem;
-            OnPropertyChanged(nameof(Problem));
-            OnPropertyChanged(nameof(ShowsFixChoice));
-            _continueFix.NotifyCanExecuteChanged();
-            _retryFix.NotifyCanExecuteChanged();
-        }
-
-        // A changed connection can change the tasks this one runs after.
-        OnPropertyChanged(nameof(StartProblem));
-        OnPropertyChanged(nameof(RunRefusal));
-        OnPropertyChanged(nameof(RunOwner));
-        _run.NotifyCanExecuteChanged();
-
-        ShowState();
-    }
-
-    /// <summary>
-    /// Shows the latest proposal of the task's session, unless it is closed: from its latest attempt, or else from the
-    /// attempts that one continues, newest first. The attempt is read again only when it changed, and an open proposal
-    /// keeps the person's choices and checks them against the workflow again. While the canvas's run shows a planner, its
-    /// proposal there comes first, until an amendment took it (#84).
-    /// </summary>
-    internal void ShowProposal()
-    {
-        if (RunProposalShown is { } run)
-        {
-            var held = _proposal is { } open && open.Identity.Equals(ProposalViewModel.IdentityOf(run.Read, run.Attempt)) ? open : null;
-            var inRun = run.Closed ? null : held ?? new ProposalViewModel(_canvas, run.Read, run.Attempt, run.Source);
-            if (inRun is not null && _canvas.IsClosed(inRun))
-            {
-                inRun = null;
-            }
-
-            inRun?.ShowRun(run.Source);
-            Proposal = inRun;
-            // Stop or the run's end moves Accept off the run, and Accept and Finish with it.
-            OnPropertyChanged(nameof(ShowsAcceptAndFinish));
-            _acceptAndFinish?.NotifyCanExecuteChanged();
-            return;
-        }
-
-        // A planner that the canvas's run started shows only what it proposed there, never a proposal of its own earlier run.
-        if (IsPlanner && RunTask is { Attempt: not null })
-        {
-            Proposal = null;
-            return;
-        }
-
-        if (!ReferenceEquals(_proposed, _attempt))
-        {
-            _proposed = _attempt;
-            _proposalRead = _attempt is null ? new ProposalRead.None()
-                : Earlier(_attempt).Reverse().Prepend(_attempt)
-                    .Select(attempt => Nodes.Proposal.Read(attempt, _canvas.FindBlueprint))
-                    .FirstOrDefault(read => read is not ProposalRead.None) ?? new ProposalRead.None();
-        }
-
-        var shown = _proposalRead is ProposalRead.None ? null
-            : _proposal is { } current && current.Identity.Equals(ProposalViewModel.IdentityOf(_proposalRead, _proposed!.Id)) ? current
-            : new ProposalViewModel(_canvas, _proposalRead, _proposed!.Id);
-        if (shown is not null && _canvas.IsClosed(shown))
-        {
-            shown = null;
-        }
-
-        shown?.Refresh();
-        Proposal = shown;
     }
 
     /// <summary>The task's agent changed, or what the clients offer did.</summary>
     internal void OnAgentChanged()
     {
         OnPropertyChanged(nameof(AgentLabel));
-        OnPropertyChanged(nameof(StartProblem));
-        OnPropertyChanged(nameof(RunRefusal));
-        _run.NotifyCanExecuteChanged();
         foreach (var property in PickerProperties)
         {
             OnPropertyChanged(property);
         }
 
         Skills.Refresh();
-        OnConversationChanged();
     }
 
     internal void ChooseClient(ClientChoice choice)
@@ -608,109 +320,18 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         }
     }
 
-    private void ChooseFix(FixChoice choice)
-    {
-        if (RunFix is not null)
-        {
-            _ = ChooseRunFixAsync(choice);
-            return;
-        }
-
-        _canvas.Notice(_canvas.Runs.ChooseFix(Id, choice) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
-    }
-
-    private void MarkDone() =>
-        _canvas.Notice(_canvas.Runs.MarkDone(Id) is { } problem ? RunText.Describe(problem) : null);
-
-    private void Run() => _canvas.RunNode(this);
-
-    /// <summary>
-    /// Runs the task on its own in the project folder, as Generate Workflow runs its planner. Its connections play no part,
-    /// and a refused start says why in the notice.
-    /// </summary>
-    internal void RunOnItsOwn() =>
-        _canvas.Notice(_canvas.Runs.Start(_task, _canvas.Planning(Id)) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
-
-    private async void Send(bool stopTurn)
-    {
-        var submitted = Draft;
-        if (await _canvas.Runs.SendAsync(_task, submitted, stopTurn) is SendResult.Refused refused)
-        {
-            _canvas.Notice(RunText.Describe(refused.Problem));
-            return;
-        }
-
-        if (Draft == submitted) Draft = "";
-        _canvas.Notice(null);
-    }
-
-    /// <summary>The hand-off is recorded either way, because the notice shows the command and the folder.</summary>
-    private async void OpenInTerminal()
-    {
-        switch (_canvas.Runs.OpenInTerminal(Id))
-        {
-            case TerminalResult.HandedOff handedOff:
-                _canvas.Notice(await Copied(handedOff.Command) ? RunText.HandedOff(handedOff) : RunText.NotCopied(handedOff));
-                break;
-            case TerminalResult.Refused refused:
-                _canvas.Notice(RunText.Describe(refused.Problem));
-                break;
-        }
-    }
-
-    /// <summary>The platform's clipboard can fail, such as while another program holds it on Windows.</summary>
-    private async Task<bool> Copied(string text)
-    {
-        try
-        {
-            await _canvas.Copy(text);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
-    private void OnConversationChanged()
-    {
-        OnPropertyChanged(nameof(SendProblem));
-        OnPropertyChanged(nameof(CanStartNewConversation));
-        OnPropertyChanged(nameof(TurnRunsHere));
-        OnPropertyChanged(nameof(CanStopAndSend));
-        _send.NotifyCanExecuteChanged();
-        _stopAndSend.NotifyCanExecuteChanged();
-        _openInTerminal.NotifyCanExecuteChanged();
-        _newConversation.NotifyCanExecuteChanged();
-    }
-
-    private void ShowState()
-    {
-        State = Standing is { } standing ? standing.Card(TitleOf).State
-            : RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).State : NodeStates.Of(_attempt, RunsElsewhere, _problem);
-        Role = NodeStates.RoleOf(RunTask is null ? _problem : null, _proposal is { HasItems: true });
-    }
+    partial void InitializeRun();
 
     partial void InitializeCard();
-
-    partial void InitializeActions();
 
     partial void InitializeInspector();
 
     partial void InitializeConversation();
 
-    partial void InitializeRun();
-
-    partial void InitializeStanding();
+    partial void InitializeExpansion();
 
     /// <summary>Keeps the agent with another skill choice, as the node's skill picker makes it.</summary>
     internal void SetSkills(ExecutionSettings settings) => SetExecution(settings);
-
-    partial void InitializeExpansion();
-
-    partial void InitializeRetry();
-
-    partial void InitializeRunCancel();
 
     private void SetExecution(ExecutionSettings? settings)
     {

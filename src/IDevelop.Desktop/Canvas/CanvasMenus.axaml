@@ -26,21 +26,14 @@
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" />
       </MenuItem.Icon>
     </MenuItem>
-    <MenuItem Header="Cancel Run"
-              Command="{Binding Node.CancelCommand}" IsVisible="{Binding ShowCancel}"
-              AutomationProperties.AutomationId="NodeMenuCancel">
+    <MenuItem Header="Stop"
+              Command="{Binding Node.StopCommand}" IsVisible="{Binding ShowStop}"
+              AutomationProperties.AutomationId="NodeMenuStop">
       <MenuItem.Icon>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
       </MenuItem.Icon>
     </MenuItem>
-    <MenuItem Header="Cancel"
-              Command="{Binding Node.CancelInRunCommand}" IsVisible="{Binding ShowCancelInRun}"
-              AutomationProperties.AutomationId="NodeMenuCancelInRun">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
-      </MenuItem.Icon>
-    </MenuItem>
-    <MenuItem Header="Retry…"
+    <MenuItem Header="Retry"
               Command="{Binding Node.RetryCommand}" IsVisible="{Binding ShowRetry}"
               AutomationProperties.AutomationId="NodeMenuRetry">
       <MenuItem.Icon>

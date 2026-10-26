@@ -1,39 +1,35 @@
 using System.Collections.ObjectModel;
-using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
-using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
+using IDevelop.Engine;
+using NodeState = IDevelop.Desktop.Canvas.NodeState;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop;
 
 /// <summary>
-/// One open project folder: its one runner, a canvas for each of its workflow documents, and which workflow holds each
-/// task. Its runner lives until the project closes, so switching to another project or workflow stops nothing.
+/// One open project folder: a canvas for each of its workflow documents, each with its own engine. The engines live until
+/// the project closes, so switching to another project or workflow stops nothing.
 /// </summary>
 public sealed class ProjectViewModel : ObservableObject
 {
     private readonly Func<ProjectViewModel, WorkflowDocument, WorkflowCanvasViewModel> _newCanvas;
 
-    // Every task any of this project's documents held this session. A task id never moves between workflows, because
-    // a new task gets a fresh id and opening refuses ids that two files share, so the first holder is the only one. A
-    // running task deleted from its workflow keeps its owner, so its run stays in that workflow's run bar.
-    private readonly Dictionary<TaskId, WorkflowCanvasViewModel> _owners = [];
+    // One window per project: this window holds the project's lock until it closes the project (ADR 0042).
+    private readonly ProjectLock _lock;
 
-    // Unsent drafts, chosen attempts, and reading positions live as long as the project stays open.
+    // Unsent drafts and reading positions live as long as the project stays open.
     private readonly Dictionary<ConversationKey, ConversationState> _conversations = [];
 
     internal ProjectViewModel(
-        string folder, ProjectRuns runs, IEnumerable<WorkflowDocument> documents, Func<ProjectViewModel, WorkflowDocument, WorkflowCanvasViewModel> newCanvas)
+        string folder, ProjectLock windowLock, IEnumerable<WorkflowDocument> documents, Func<ProjectViewModel, WorkflowDocument, WorkflowCanvasViewModel> newCanvas)
     {
+        _lock = windowLock;
         Folder = folder;
         Name = ProjectFolders.Name(folder);
-        Runs = runs;
         _newCanvas = newCanvas;
-        runs.Changed += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(IsRunning)));
         foreach (var document in documents)
         {
             Add(document);
@@ -48,16 +44,14 @@ public sealed class ProjectViewModel : ObservableObject
     /// <summary>One canvas per workflow, kept until the project closes, in the order the project lists them.</summary>
     public ObservableCollection<WorkflowCanvasViewModel> Workflows { get; } = [];
 
-    /// <summary>A task of the project runs in this window, on its own or in a workflow run.</summary>
-    public bool IsRunning => !Runs.Active.IsEmpty || Workflows.Any(canvas => canvas.Run is { HasActivity: true });
+    /// <summary>A node of the project runs.</summary>
+    public bool IsRunning => Workflows.Any(canvas => canvas.IsRunning);
 
     /// <summary>A task of the project waits for the person: a reply, a question, or an approval.</summary>
     public bool IsWaiting => Workflows.Any(canvas => canvas.HasWaiting);
 
-    /// <summary>The workflow runs this window controls and that are still active, which closing the project stops first.</summary>
-    internal IEnumerable<WorkflowCanvasViewModel> ActiveWorkflowRuns => Workflows.Where(canvas => canvas.Run is { IsActive: true, IsControlled: true });
-
-    internal ProjectRuns Runs { get; }
+    /// <summary>The nodes that run now in every workflow of the project.</summary>
+    internal IEnumerable<TaskNodeViewModel> RunningNodes => Workflows.SelectMany(canvas => canvas.Nodes).Where(node => node.State == NodeState.Running);
 
     internal IEnumerable<WorkflowDocument> UnsavedDocuments =>
         Workflows.Select(canvas => canvas.Document).Where(document => document.HasUnsavedChanges);
@@ -79,24 +73,9 @@ public sealed class ProjectViewModel : ObservableObject
         return state;
     }
 
-    /// <summary>Whether the canvas's workflow holds or held the task this session.</summary>
-    internal bool Owns(WorkflowCanvasViewModel canvas, TaskId task) => _owners.GetValueOrDefault(task) == canvas;
-
     internal WorkflowCanvasViewModel Add(WorkflowDocument document)
     {
-        WorkflowCanvasViewModel? canvas = null;
-        // Subscribed before the canvas subscribes, so the runner follows each change before the canvas rechecks its
-        // tasks, whose reasons not to start depend on the workflows the runner follows.
-        document.Changed += (_, _) =>
-        {
-            Runs.Follow(document.Current);
-            Attribute(canvas!);
-        };
-        Runs.Follow(document.Current);
-        canvas = _newCanvas(this, document);
-        Attribute(canvas);
-        // A review that rested when the project opened may have started its next run before the canvas listened.
-        canvas.ShowAttempts();
+        var canvas = _newCanvas(this, document);
         canvas.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(WorkflowCanvasViewModel.IsRunning))
@@ -109,73 +88,22 @@ public sealed class ProjectViewModel : ObservableObject
             }
         };
         Workflows.Add(canvas);
-        ShowActiveRun(canvas);
-        canvas.ReadHistory();
         return canvas;
     }
 
     /// <summary>
-    /// Shows the workflow's run that is still approved or stopping, as a window that opens the project finds it. Opening it
-    /// launches nothing: a run this window takes control of waits for Resume, and one that another window controls is only
-    /// read until that window lets go.
+    /// Closes each workflow's Generate sheet, which listens to the window's client directory until it closes, and stops
+    /// each workflow's running nodes, which reopen as interrupted.
     /// </summary>
-    /// <remarks>
-    /// The journal is read and written off the UI thread, and a busy journal or lock is tried again. A run that still cannot
-    /// be opened says why in the window's status line.
-    /// </remarks>
-    private async void ShowActiveRun(WorkflowCanvasViewModel canvas)
-    {
-        var workflow = canvas.Workflow.Id;
-        RunId? run;
-        try
-        {
-            run = await Task.Run(() => Runs.ActiveRunOf(workflow));
-        }
-        catch (ObjectDisposedException)
-        {
-            return;
-        }
-
-        if (run is not { } active || await WorkflowRunViewModel.OpenAsync(Runs, workflow, active) is not { } open || Runs.Closing)
-        {
-            return;
-        }
-
-        if (open is RunOpen.Opened opened)
-        {
-            canvas.Adopt(opened.Coordinator);
-        }
-        else if (open is RunOpen.Rejected rejected)
-        {
-            canvas.Notice($"Couldn't show the active run of \"{canvas.Name}\". {WorkflowRunText.Problem(rejected.Reason)}");
-        }
-    }
-
-    /// <summary>Records Stop Workflow for each active run this window controls, as Stop and close asks.</summary>
-    internal Task StopWorkflowRunsAsync() => Task.WhenAll(ActiveWorkflowRuns.Select(canvas => canvas.Run!.StopAsync()));
-
-    /// <summary>
-    /// Closes each workflow's Generate sheet, which listens to the window's client directory until it closes, lets go of
-    /// each workflow run, and stops the project's running tasks.
-    /// </summary>
-    internal ValueTask CloseAsync()
+    internal async ValueTask CloseAsync()
     {
         foreach (var canvas in Workflows)
         {
             canvas.CloseSheet();
-            canvas.DisposeRun();
+            await canvas.DisposeEngineAsync();
         }
 
-        return Runs.DisposeAsync();
-    }
-
-    /// <summary>A review whose next step waited for a client goes on once the clients change.</summary>
-    internal void FollowAll()
-    {
-        foreach (var canvas in Workflows)
-        {
-            Runs.Follow(canvas.Document.Current);
-        }
+        _lock.Dispose();
     }
 
     /// <summary>
@@ -186,13 +114,5 @@ public sealed class ProjectViewModel : ObservableObject
     {
         var taken = Workflows.Select(canvas => canvas.Name == Workflow.UnnamedName ? $"{Workflow.UnnamedName} 1" : canvas.Name).ToHashSet(StringComparer.Ordinal);
         return Enumerable.Range(1, taken.Count + 1).Select(number => $"Workflow {number}").First(name => !taken.Contains(name));
-    }
-
-    private void Attribute(WorkflowCanvasViewModel canvas)
-    {
-        foreach (var task in canvas.Document.Current.Tasks.Keys)
-        {
-            _owners.TryAdd(task, canvas);
-        }
     }
 }

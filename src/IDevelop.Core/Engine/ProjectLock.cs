@@ -14,11 +14,24 @@ public sealed class ProjectLock : IDisposable
     private ProjectLock(HeldFile file) => _file = file;
 
     /// <summary>The lock, or null when another window holds it.</summary>
+    /// <exception cref="IOException">The lock file cannot be written, such as in a read-only folder.</exception>
+    /// <exception cref="UnauthorizedAccessException">The lock file cannot be written.</exception>
     public static ProjectLock? TryTake(string projectFolder)
     {
         var file = HeldFile.TryOpen(Path.Combine(projectFolder, DataFolder.Name, "window.lock"));
-        DataFolder.EnsureGitIgnore(projectFolder);
-        return file is null ? null : new(file);
+        if (file is null) return null;
+        try
+        {
+            DataFolder.EnsureGitIgnore(projectFolder);
+        }
+        catch
+        {
+            // A lock that cannot be kept as Git ignores it is let go, so no window holds the project.
+            file.Dispose();
+            throw;
+        }
+
+        return new(file);
     }
 
     public void Dispose() => _file.Dispose();

@@ -83,6 +83,51 @@ public sealed class WorkflowEngine : IAsyncDisposable
         lock (_gate) return Log(node).Entries;
     }
 
+    /// <summary>
+    /// What a planner may fill and place, which its prompt names when a fresh turn starts, or null for none. The engine
+    /// calls it under its lock, so it must not wait for another thread.
+    /// </summary>
+    public Func<TaskId, PlanningContext?>? Planning { get; set; }
+
+    /// <summary>The node's conversation, which follows its log until it is disposed.</summary>
+    public IConversation Conversation(TaskId node)
+    {
+        lock (_gate) return new NodeConversation(node, Log(node), () => TerminalCommand(node));
+    }
+
+    /// <summary>
+    /// The folder the node's agent works in: its worktree for a node that edits the project, else the project folder. Null
+    /// when the worktree cannot be found, such as outside a Git work tree.
+    /// </summary>
+    public string? Folder(TaskId node)
+    {
+        lock (_gate)
+        {
+            if (_workflow.Tasks.GetValueOrDefault(node) is not { } task || !Edits(task)) return _project;
+            try
+            {
+                return _worktrees.Folder(node);
+            }
+            catch (GitFailure)
+            {
+                return null;
+            }
+        }
+    }
+
+    private string? TerminalCommand(TaskId id)
+    {
+        lock (_gate)
+        {
+            if (_live.ContainsKey(id) || Log(id).Record is not { Session: { } session, SessionBasis.Model.Client: var client } || Folder(id) is not { } folder)
+            {
+                return null;
+            }
+
+            return IDevelop.Execution.TerminalCommand.For(folder, Clients.Get(client).Terminal(session), IDevelop.Execution.TerminalCommand.Current);
+        }
+    }
+
     /// <summary>Null when the node can start a fresh turn now, or the reason it cannot.</summary>
     public string? CanRun(TaskId node)
     {
@@ -210,25 +255,43 @@ public sealed class WorkflowEngine : IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    /// <summary>Whether Merge into my branch is offered: every node is completed and nothing is stale.</summary>
+    /// <summary>
+    /// Whether Merge into my branch is offered: every node is completed and nothing is stale, and an end node's commit holds
+    /// work that the checked-out branch does not have yet.
+    /// </summary>
     public bool CanMergeIntoBranch
     {
         get
         {
-            lock (_gate) return _workflow.Tasks.Count > 0 && _workflow.Tasks.Keys.All(id => StateOf(id) is NodeState.Completed);
+            lock (_gate)
+            {
+                if (_workflow.Tasks.Count == 0 || !_workflow.Tasks.Keys.All(id => StateOf(id) is NodeState.Completed)) return false;
+                try
+                {
+                    return _worktrees.HasWorkBeyondHead(EndCommits());
+                }
+                catch (GitFailure)
+                {
+                    return false;
+                }
+            }
         }
     }
 
+    /// <summary>The commits of the end nodes, the nodes with no successors.</summary>
+    private ImmutableArray<CommitId> EndCommits() => [.. _workflow.Tasks.Keys.Where(id => !Successors(id).Any()).SelectMany(Handed).Distinct()];
+
     /// <summary>Merges every end node's commit, the commits of the nodes with no successors, into the checked-out branch.</summary>
     /// <exception cref="InvalidOperationException">
-    /// A node is not completed or is stale, the end nodes conflict with each other, or the branch moved and the merge conflicts.
+    /// A node is not completed or is stale, the branch already holds the end nodes' work, the end nodes conflict with each
+    /// other, or the branch moved and the merge conflicts.
     /// </exception>
     public Task MergeIntoBranch()
     {
         lock (_gate)
         {
-            if (!CanMergeIntoBranch) throw new InvalidOperationException("Every node must be completed and current first.");
-            _worktrees.MergeIntoBranch([.. _workflow.Tasks.Keys.Where(id => !Successors(id).Any()).SelectMany(Handed).Distinct()]);
+            if (!CanMergeIntoBranch) throw new InvalidOperationException("Every node must be completed and current, with work the branch does not have yet.");
+            _worktrees.MergeIntoBranch(EndCommits());
         }
 
         return Task.CompletedTask;
@@ -655,7 +718,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             return inputs;
         }
 
-        var prompt = AgentWork.Prompt(new NodeContext(node, inputs));
+        var prompt = AgentWork.Prompt(new NodeContext(node, inputs) { Planning = Planning?.Invoke(id) });
         return template.Variables.Contains("inputs") || inputs.Length == 0 ? prompt : $"{prompt.TrimEnd()}\n\n## What earlier tasks handed on\n\n{inputs}\n";
     }
 

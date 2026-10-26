@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using IDevelop.Execution;
 
 namespace IDevelop.Desktop.Conversation;
 
@@ -22,7 +21,7 @@ public partial class ConversationView : UserControl
     private bool _restoring;
     private bool _userInput;
     private double? _scrolledTo;
-    private (EntryId Entry, double Offset)? _anchor;
+    private (int Entry, double Offset)? _anchor;
 
     public ConversationView()
     {
@@ -77,7 +76,7 @@ public partial class ConversationView : UserControl
     }
 
     /// <summary>The entry at the top of the view and how far it scrolled into it, or null at the end.</summary>
-    internal (EntryId Entry, double Offset)? Anchor => _follow ? null : _anchor;
+    internal (int Entry, double Offset)? Anchor => _follow ? null : _anchor;
 
     internal bool IsFollowing => _follow;
 
@@ -87,7 +86,6 @@ public partial class ConversationView : UserControl
         if (_model is not null)
         {
             _model.Items.CollectionChanged -= OnItemsChanged;
-            _model.RevealRequested -= Reveal;
             _model.FollowRequested -= Follow;
         }
 
@@ -95,7 +93,6 @@ public partial class ConversationView : UserControl
         if (_model is not null)
         {
             _model.Items.CollectionChanged += OnItemsChanged;
-            _model.RevealRequested += Reveal;
             _model.FollowRequested += Follow;
             _anchor = _model.State.Anchor;
             _follow = _anchor is null;
@@ -139,7 +136,7 @@ public partial class ConversationView : UserControl
                 {
                     Transcript.ScrollIntoView(index.Value);
                 }
-                else if (_model is { Items.Count: > 0, Idle.IsCompleted: true })
+                else if (_model is { Items.Count: > 0 })
                 {
                     _follow = true;
                     _anchor = null;
@@ -186,7 +183,7 @@ public partial class ConversationView : UserControl
     }
 
     /// <summary>The first entry whose bottom lies below the top of the view, and how far the view's top is into it.</summary>
-    private (EntryId Entry, double Offset)? TopEntry()
+    private (int Entry, double Offset)? TopEntry()
     {
         var viewTop = Scroller.Offset.Y;
         foreach (var container in Transcript.GetRealizedContainers().OrderBy(container => Top(container) ?? double.MaxValue))
@@ -200,26 +197,13 @@ public partial class ConversationView : UserControl
         return null;
     }
 
-    private double? Top(EntryId entry) =>
+    private double? Top(int entry) =>
         Transcript.GetRealizedContainers().FirstOrDefault(container => container.DataContext is ConversationItemViewModel item && item.Id == entry) is { } found
             ? Top(found)
             : null;
 
     // Positions are in the scroll viewer's content, whose top is offset zero.
     private double? Top(Control container) => container.TranslatePoint(default, (Visual)Scroller.Content!)?.Y;
-
-    private void Reveal(EntryId entry)
-    {
-        if (_model?.Items.Select(item => item.Id).ToList().IndexOf(entry) is not (var index and >= 0))
-        {
-            return;
-        }
-
-        _follow = false;
-        _anchor = (entry, -16);
-        Transcript.ScrollIntoView(index);
-        Dispatcher.UIThread.Post(Settle, DispatcherPriority.Loaded);
-    }
 
     private void Follow()
     {

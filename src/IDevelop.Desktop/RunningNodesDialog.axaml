@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="IDevelop.Desktop.RunningTaskDialog"
+        x:Class="IDevelop.Desktop.RunningNodesDialog"
         SizeToContent="WidthAndHeight"
         CanResize="False"
         ShowInTaskbar="False"

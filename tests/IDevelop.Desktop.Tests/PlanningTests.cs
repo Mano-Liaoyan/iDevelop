@@ -145,13 +145,13 @@ public sealed class PlanningTests : IDisposable
             """,
             ConversationMode.Autonomous,
             Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "The wire task calls the endpoint.")));
-        shell.WaitUntil(() => shell.InView<TextBlock>("LastRunStatus").Text == "Succeeded", "the first run succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed", "the first run succeeds");
 
         shell.Click(shell.InView<TextBox>("Composer"));
         shell.Type("Why the wire task?");
         shell.Click(shell.InView<Button>("SendMessage"));
 
-        shell.WaitUntil(() => shell.InView<TextBlock>("LastRunStatus").Text == "Succeeded" && shell.Find<TextBox>("LastRunResult").Text == "The wire task calls the endpoint.", "the continuation succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed" && shell.Find<TextBox>("LastReply").Text == "The wire task calls the endpoint.", "the continuation succeeds");
         Assert.Equal(["New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
     }
@@ -168,17 +168,19 @@ public sealed class PlanningTests : IDisposable
             ```
             """);
         var canvas = shell.Window.ViewModel.Canvas!;
-        canvas.Edit(new WorkflowEdit.Batch([new WorkflowEdit.SetExecution(Backend, Codex), new WorkflowEdit.SetField(Backend, "instructions", "Say hi.")]));
+        // Backend runs on its own, so it waits for no planner.
+        canvas.Edit(new WorkflowEdit.Batch([new WorkflowEdit.SetExecution(Backend, Codex), new WorkflowEdit.SetField(Backend, "instructions", "Say hi."),
+            new WorkflowEdit.Delete([], [new ConnectionKey(Architect, Backend)])]));
         shell.Click(shell.Header(shell.Node("Backend")));
-        shell.RunOnItsOwn();
-        shell.WaitUntil(() => shell.CardText("Backend", "CardStatus") == "Succeeded", "the drawn task runs");
+        shell.RunNode();
+        shell.WaitUntil(() => shell.CardText("Backend", "CardStatus") == "Completed", "the drawn task runs");
         shell.Click(shell.Header(shell.Node("Design export")));
 
         var backend = Items(shell).First();
         Assert.Equal(("Fill \"Backend\" as \"Backend API\". It has started, so it stays as it is", false, false), (AutomationProperties.GetName(backend), backend.IsChecked, backend.IsEffectivelyEnabled));
         Assert.Equal(["New Implement Wire export"], Ghosts(shell));
         canvas.Edit(new WorkflowEdit.SetField(Backend, "instructions", ""));
-        Assert.Equal([Frontend], canvas.Planning(Architect).Slots.Select(slot => slot.Id));
+        Assert.Equal([Frontend], canvas.PlanningFor(Architect).Slots.Select(slot => slot.Id));
         canvas.Edit(new WorkflowEdit.SetField(Backend, "instructions", "Say hi."));
         shell.Click(shell.InView<Button>("AcceptProposal"));
 
@@ -365,7 +367,7 @@ public sealed class PlanningTests : IDisposable
 
         Assert.Equal(
             [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key), bugFix.Key],
-            canvas.Planning(Architect).Types.Select(type => type.Key));
+            canvas.PlanningFor(Architect).Types.Select(type => type.Key));
         Assert.Equal(bugFix, canvas.FindBlueprint(bugFix.Key));
     }
 
@@ -393,7 +395,7 @@ public sealed class PlanningTests : IDisposable
         ]);
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design export")));
-        shell.RunOnItsOwn();
+        shell.RunNode();
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
         return shell;
     }

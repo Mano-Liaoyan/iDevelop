@@ -43,13 +43,13 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     /// <summary>
-    /// A project with a Build workflow, whose Design task runs on Codex, and a Release workflow. Every project made here
-    /// has the same workflow names and task titles.
+    /// A project with a Build workflow, whose Design node plans on Antigravity CLI and so runs without Git, and a Release
+    /// workflow. Every project made here has the same workflow names and node titles.
     /// </summary>
     private string Project(string name)
     {
         var folder = _temp.Create(name);
-        Save(folder, "Build", TaskAt(TaskId.New(), "Design", 105, 90, Codex, "Say hi."), TaskAt(TaskId.New(), "Implement", 405, 90));
+        Save(folder, "Build", NodeFixture.Plan(TaskId.New(), "Design", 105), TaskAt(TaskId.New(), "Implement", 405, 90));
         Save(folder, "Release", TaskAt(TaskId.New(), "Ship", 105, 90));
         return folder;
     }
@@ -204,35 +204,52 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     /// <summary>The client waits at the gate until it is stopped or the test opens the gate.</summary>
-    private FakeRule Waits() => On("exec", "--json")
-        .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
-        .WaitForFile(_gate);
+    private FakeRule Waits() => On().Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-1")).WaitForFile(_gate);
+
+    private static FakeRule Hangs() => On().Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-1")).Hang();
+
+    [AvaloniaFact]
+    public void A_project_whose_lock_cannot_be_written_stays_closed_and_the_status_says_why()
+    {
+        var folder = Project("alpha");
+        // A folder where the data folder's .gitignore goes keeps the window's lock from being kept out of Git.
+        File.Delete(Path.Combine(folder, ".idp", ".gitignore"));
+        Directory.CreateDirectory(Path.Combine(folder, ".idp", ".gitignore"));
+
+        var shell = Shell.Open(folder);
+
+        Assert.Empty(shell.Window.ViewModel.Projects);
+        Assert.StartsWith($"Couldn't open {folder}", shell.Status);
+        Directory.Delete(Path.Combine(folder, ".idp", ".gitignore"));
+        shell.Window.ViewModel.Open(folder);
+        Assert.Single(shell.Window.ViewModel.Projects);
+    }
 
     [AvaloniaFact]
     public void A_running_task_runs_on_across_switches_and_another_projects_close_and_stays_in_its_own_workflow()
     {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
+        FakeAgents.Install(_fakes, ClientId.Antigravity, Waits());
         var clients = _fakes.DiscoverAsync().Result;
         var (shell, alpha, _) = OpenBoth(clients);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.RunOnItsOwn();
-        Assert.Equal(("Running", "Design"), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunBarTask").Text));
+        shell.RunNode();
+        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
         Assert.Equal([true, false], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowShows("alpha", workflow, "WorkflowRunning")));
         Assert.Equal([true, false], new[] { "alpha", "beta" }.Select(project => Shell.ById<Control>(shell.ProjectItem(project), "ProjectRunning").Single().IsEffectivelyVisible));
         shell.Click(shell.WorkflowRow("beta", "Build"));
-        Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
 
         shell.Click(ProjectButton(shell, "beta", "CloseProject"));
 
         Assert.Null(shell.Dialog);
         Assert.Equal([("alpha", ["Build", "Release"])], shell.Tree());
         Assert.Equal(("alpha", "Build"), shell.Breadcrumb());
-        Assert.Equal(("Running", "Design"), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunBarTask").Text));
+        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
 
         shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
         Assert.Equal(["\"Design\" is running. Stop it and close alpha?", "Stop and leave", "Keep running"], shell.DialogTexts());
@@ -241,15 +258,15 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal([("alpha", ["Build", "Release"])], shell.Tree());
         Assert.Equal("Running", shell.CardText("Design", "CardStatus"));
 
-        var runs = shell.Window.ViewModel.Projects.Single().Runs;
+        var project = shell.Window.ViewModel.Projects.Single();
         shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
         shell.Choose("StopAndLeave");
-        shell.WaitUntil(() => shell.Tree().Length == 0 && runs.Active.IsEmpty, "alpha closes and its run stops");
+        shell.WaitUntil(() => shell.Tree().Length == 0 && !project.RunningNodes.Any(), "alpha closes and its node stops");
 
         Assert.Equal("iDevelop", shell.Window.Title);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
-        Assert.Equal("Interrupted", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Input required · interrupted", shell.CardText("Design", "CardStatus"));
     }
 
     [AvaloniaFact]
@@ -470,20 +487,18 @@ public sealed class WorkspaceTests : IDisposable
     [AvaloniaFact]
     public void Close_project_shows_the_neighbour_at_once_while_its_running_task_stops()
     {
-        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json")
-            .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
-            .Hang());
+        FakeAgents.Install(_fakes, ClientId.Antigravity, Hangs());
         var (shell, alpha, _) = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.RunOnItsOwn();
+        shell.RunNode();
         var window = shell.Window.ViewModel;
         var closing = window.Projects[0];
-        // What the window lists and shows at the moment the runner reports the task stopped.
+        // What the window lists and shows at the moment the engine reports the node stopped.
         (bool Listed, string? Shown)? whenStopped = null;
-        closing.Runs.Changed += (_, _) =>
+        closing.Workflows[0].Engine.NodeChanged += (_, state) =>
         {
-            if (closing.Runs.Active.IsEmpty)
+            if (state is not IDevelop.Engine.NodeState.Running)
             {
                 whenStopped ??= (window.Projects.Contains(closing), window.Canvas?.Project.Name);
             }
@@ -498,19 +513,17 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal((false, "beta"), whenStopped);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
-        Assert.Equal("Interrupted", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Input required · interrupted", shell.CardText("Design", "CardStatus"));
     }
 
     [AvaloniaFact]
     public void Closing_the_window_takes_no_input_while_its_running_task_stops()
     {
-        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json")
-            .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
-            .Hang());
+        FakeAgents.Install(_fakes, ClientId.Antigravity, Hangs());
         var (shell, _, _) = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.RunOnItsOwn();
+        shell.RunNode();
         Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<Button>("RunTask")];
 
         shell.Window.Close();
@@ -671,11 +684,11 @@ public sealed class WorkspaceTests : IDisposable
     [AvaloniaFact]
     public void Cancel_at_close_projects_unsaved_question_leaves_its_task_running_and_the_project_open()
     {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
+        FakeAgents.Install(_fakes, ClientId.Antigravity, Waits());
         var (shell, _, _) = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.RunOnItsOwn();
+        shell.RunNode();
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         shell.AddNode();
 
@@ -688,9 +701,9 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], shell.Tree());
         Assert.Equal("alpha* - iDevelop: New task, Ship", Shown(shell));
         shell.Click(shell.WorkflowRow("alpha", "Build"));
-        Assert.Equal(("Running", "Design"), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunBarTask").Text));
+        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
         File.WriteAllText(_gate, "");
-        shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the run ends before its folder goes");
+        shell.WaitUntil(() => !shell.Window.ViewModel.RunningNodes.Any(), "the run ends before its folder goes");
     }
 
     [AvaloniaTheory]

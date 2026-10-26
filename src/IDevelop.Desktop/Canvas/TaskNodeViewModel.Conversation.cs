@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Windows.Input;
 using IDevelop.Desktop.Conversation;
-using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 
 namespace IDevelop.Desktop.Canvas;
@@ -12,21 +11,20 @@ public sealed partial class TaskNodeViewModel
     private ConversationState? _conversationState;
     private RelayCommand _openConversation = null!;
 
-    /// <summary>The oldest open question, a wait for the person, or a failure. Opening the conversation leaves it.</summary>
-    public Attention? Attention => Standing is not null ? null : RunTask is { } run ? WorkflowRunText.Needs(run, TitleOf) : HasAgent ? Attention.Of(_attempt) : null;
+    /// <summary>A wait for the person, or a failure. Opening the conversation leaves it.</summary>
+    public Attention? Attention => Attention.Of(_engineState);
 
     public bool HasAttention => Attention is not null;
 
     public string? AttentionLabel => Attention?.Label;
 
-    /// <summary>Opens the task's conversation, at its open question when it has one.</summary>
+    /// <summary>Opens the node's conversation.</summary>
     public ICommand OpenConversationCommand => _openConversation;
 
     /// <summary>What the card's attention glyph does: it opens an agent's conversation, or selects an approval, whose request the inspector shows.</summary>
-    /// <summary>A task whose recovery or interrupted fix waits for the person shows its inspector, which offers the choice.</summary>
-    public ICommand AttendCommand => HasAgent && !NeedsRunPanel ? _openConversation : SelectCommand;
+    public ICommand AttendCommand => HasAgent ? _openConversation : SelectCommand;
 
-    public string AttendHelp => !HasAgent ? "Shows the approval request" : NeedsRunPanel ? "Shows what the run needs from you" : "Opens the conversation";
+    public string AttendHelp => HasAgent ? "Opens the conversation" : "Shows the approval request";
 
     internal ConversationState ConversationState
     {
@@ -44,12 +42,10 @@ public sealed partial class TaskNodeViewModel
 
     partial void InitializeConversation()
     {
-        _openConversation = new RelayCommand(
-            () => _canvas.Project.OpenConversation(new ConversationTarget(_canvas, Id, (Attention as Attention.Question)?.Request)),
-            () => HasAgent);
+        _openConversation = new RelayCommand(() => _canvas.Project.OpenConversation(new ConversationTarget(_canvas, Id)), () => HasAgent);
         PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(LastAttempt) or nameof(RunTask))
+            if (e.PropertyName is nameof(EngineState))
             {
                 OnPropertyChanged(nameof(Attention));
                 OnPropertyChanged(nameof(HasAttention));
