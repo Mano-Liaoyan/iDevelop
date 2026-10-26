@@ -4,7 +4,6 @@ using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.NodeFixture;
-using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
@@ -36,8 +35,9 @@ public sealed class SendBackTests
         shell.Render();
         shell.Click(shell.InView<Button>("SendBack"));
 
-        shell.WaitUntil(() => File.Exists(Path.Combine(f.Evidence, "note.txt")), "A's session gets the note");
-        Assert.Equal("Fix the typo.", File.ReadAllText(Path.Combine(f.Evidence, "note.txt")).Trim());
+        var note = Path.Combine(f.Evidence, "note.txt");
+        shell.WaitUntil(() => File.Exists(note), "A's session gets the note");
+        Assert.Equal("Fix the typo.", File.ReadAllText(note).Trim());
         shell.WaitUntil(() => shell.NodeModel("A").LastReply == "A fixed." && shell.NodeModel("Check").State == NodeState.InputRequired,
             "the approval asks again on the new result");
         Assert.Equal("", shell.InView<TextBox>("SendBackNote").Text);

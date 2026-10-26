@@ -101,6 +101,9 @@ public sealed class ClientDirectory
     /// the client or a listing that is under way, which ends on its own within its probe's timeout, for at most
     /// <paramref name="bound"/>, so a node that starts before the first listing is not held back.
     /// </summary>
+    /// <param name="client">The client that loads the skills.</param>
+    /// <param name="folder">The folder in which the client loads the skills.</param>
+    /// <param name="bound">The maximum time to wait for a listing.</param>
     /// <param name="stop">Ends the wait early, and the listing as it is then is returned.</param>
     public async Task<SkillListing> SkillsAsync(ClientId client, string folder, TimeSpan bound, CancellationToken stop = default)
     {

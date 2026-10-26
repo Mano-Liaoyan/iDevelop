@@ -4,6 +4,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using IDevelop.Workflows;
+using JetBrains.Annotations;
 
 namespace IDevelop.Projects;
 
@@ -13,10 +14,10 @@ internal sealed record ParsedWorkflow(Workflow Workflow, string? Converted);
 internal static class WorkflowFile
 {
     /// <summary>The format this version writes.</summary>
-    public const string FormatV3 = "idevelop.workflow/3";
+    private const string FormatV3 = "idevelop.workflow/3";
 
     /// <summary>Read and converted. It goes once no format 2 file remains.</summary>
-    public const string FormatV2 = "idevelop.workflow/2";
+    private const string FormatV2 = "idevelop.workflow/2";
 
     /// <summary>Strict, readable JSON, which a blueprint file shares.</summary>
     internal static readonly JsonSerializerOptions Options = new()
@@ -124,7 +125,7 @@ internal static class WorkflowFile
             var blueprint = BlueprintKey.Parse(task.Blueprint) is { } key && blueprints.TryGetValue(key, out var found)
                 ? found
                 : throw new ProjectException($"{entry} names blueprint \"{task.Blueprint}\", which the file does not hold.");
-            if (blueprint.Fields.Select(field => field.Key).FirstOrDefault(key => !task.Fields.ContainsKey(key)) is { } missing)
+            if (blueprint.Fields.Select(field => field.Key).FirstOrDefault(fieldKey => !task.Fields.ContainsKey(fieldKey)) is { } missing)
             {
                 throw new ProjectException($"{entry} has no value for {missing}.");
             }
@@ -313,6 +314,7 @@ internal static class WorkflowFile
         public required Dictionary<string, PointDto?> Layout { get; init; }
     }
 
+    [UsedImplicitly]
     private sealed class TaskDtoV2
     {
         public required Guid Id { get; init; }

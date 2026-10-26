@@ -1,6 +1,5 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:conversation="using:IDevelop.Desktop.Conversation">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!-- Markdown blocks. Text stays neutral; only links take the accent's text color. -->
   <!-- No fixed line height, because a line that holds a link control would clip its own text. -->
@@ -139,11 +138,8 @@
   </Style>
   <Style Selector="Border.message">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
-    <Setter Property="Grid.ColumnSpan" Value="2" />
   </Style>
   <Style Selector="Border.message.person">
-    <Setter Property="Grid.Column" Value="1" />
-    <Setter Property="Grid.ColumnSpan" Value="1" />
     <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="MaxWidth" Value="600" />
     <Setter Property="Padding" Value="14,10" />

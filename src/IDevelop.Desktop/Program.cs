@@ -1,4 +1,5 @@
 using Avalonia;
+using JetBrains.Annotations;
 
 namespace IDevelop.Desktop;
 
@@ -7,6 +8,7 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args) => BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
 
+    [UsedImplicitly]
     public static AppBuilder BuildAvaloniaApp() => AppBuilder
         .Configure(() => new App { PreferencesFile = Path.Combine(Environment.GetFolderPath(PreferencesRoot), "iDevelop", "settings.json") })
         .UsePlatformDetect()

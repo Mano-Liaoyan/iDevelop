@@ -21,9 +21,6 @@ public sealed record PaletteGroup(string Heading, IReadOnlyList<BlueprintEntryVi
 public sealed class BlueprintsViewModel : ObservableObject
 {
     private readonly WorkflowCanvasViewModel _canvas;
-    private IReadOnlyList<PaletteGroup> _groups = [];
-    private ImmutableArray<string> _problems = [];
-    private BlueprintEditorViewModel? _editor;
 
     internal BlueprintsViewModel(WorkflowCanvasViewModel canvas, BlueprintLibrary project, BlueprintLibrary? personal)
     {
@@ -36,29 +33,29 @@ public sealed class BlueprintsViewModel : ObservableObject
 
     public IReadOnlyList<PaletteGroup> Groups
     {
-        get => _groups;
-        private set => SetProperty(ref _groups, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     /// <summary>A message for each library file that did not read.</summary>
     public ImmutableArray<string> Problems
     {
-        get => _problems;
+        get;
         private set
         {
-            _problems = value;
+            field = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasProblems));
         }
-    }
+    } = [];
 
     public bool HasProblems => !Problems.IsEmpty;
 
     /// <summary>The blueprint being derived or edited, which the right panel shows in place of the inspector.</summary>
     public BlueprintEditorViewModel? Editor
     {
-        get => _editor;
-        private set => SetProperty(ref _editor, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public ICommand ReloadCommand { get; }
@@ -106,8 +103,8 @@ public sealed class BlueprintsViewModel : ObservableObject
         [
             new PaletteGroup("BUILT-IN", [.. BuiltInBlueprints.All.Select(blueprint => Entry(blueprint, null))]),
             new PaletteGroup("PROJECT", [.. project.Blueprints.Select(blueprint => Entry(blueprint, Project))]),
-            .. Personal is { } library
-                ? [new PaletteGroup("PERSONAL", [.. personal.Blueprints.Select(blueprint => Entry(blueprint, library))])]
+            .. Personal is { } personalLibrary
+                ? [new PaletteGroup("PERSONAL", [.. personal.Blueprints.Select(blueprint => Entry(blueprint, personalLibrary))])]
                 : Array.Empty<PaletteGroup>(),
         ];
         Problems = [.. project.Problems, .. personal.Problems];

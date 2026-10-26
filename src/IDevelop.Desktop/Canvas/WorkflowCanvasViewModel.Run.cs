@@ -22,11 +22,9 @@ public sealed partial class WorkflowCanvasViewModel
     private RelayCommand? _stopAll;
     private RelayCommand? _merge;
     private int _engineChanged;
-    private int _runningCount;
-    private bool _canMerge;
 
     /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
-    internal Func<string, Task<bool>> OpenFolder { get; set; } = _ => Task.FromResult(false);
+    internal Func<string, Task<bool>> OpenFolder { get; init; } = _ => Task.FromResult(false);
 
     /// <summary>The engine that runs this workflow's nodes and routes their results.</summary>
     internal WorkflowEngine Engine { get; private set; } = null!;
@@ -43,15 +41,15 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>How many nodes run now.</summary>
     public int RunningCount
     {
-        get => _runningCount;
-        private set => SetProperty(ref _runningCount, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     /// <summary>Every node is completed and nothing is stale, so the bar offers Merge into my branch.</summary>
     public bool CanMergeIntoBranch
     {
-        get => _canMerge;
-        private set => SetProperty(ref _canMerge, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     /// <summary>The bar shows while a node runs or waits for the person, or while Merge into my branch is offered.</summary>
@@ -102,7 +100,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         foreach (var node in Nodes)
         {
-            node.ShowReviewer(Nodes.FirstOrDefault(other => other.IsReview && other.State == NodeState.Running && Precedes(node.Id, other.Id))?.Title);
+            node.ShowReviewer(Nodes.FirstOrDefault(other => other is { IsReview: true, State: NodeState.Running } && Precedes(node.Id, other.Id))?.Title);
         }
 
         RunningCount = Nodes.Count(node => node.State == NodeState.Running);
@@ -124,18 +122,18 @@ public sealed partial class WorkflowCanvasViewModel
     /// ready on this machine are the agents it chooses from for each task it adds, and those still being checked are left
     /// out. The engine asks for it when the planner starts, on any thread, and its log records the handles.
     /// </summary>
-    internal PlanningContext? Planning(TaskId planner)
+    private PlanningContext Planning(TaskId planner)
     {
         var clients = Clients.Current;
         return PlanningFor(planner) with
         {
-            Agents = IDevelop.Nodes.PlanningContext.Offers(clients),
+            Agents = PlanningContext.Offers(clients),
             Checking = [.. ClientCatalog.All.Where(id => clients[id] is ClientStatus.Checking)],
         };
     }
 
     /// <summary>What a planner may fill and place in the workflow as it is now, which reading its proposal names again.</summary>
-    internal PlanningContext PlanningFor(TaskId planner) => IDevelop.Nodes.PlanningContext.For(Workflow, planner, _placeable, HasStarted);
+    internal PlanningContext PlanningFor(TaskId planner) => PlanningContext.For(Workflow, planner, _placeable, HasStarted);
 
     /// <summary>Whether the node has run: it runs, waits, or has a result.</summary>
     internal bool HasStarted(TaskId task) => Workflow.Tasks.ContainsKey(task) && Engine.State(task) is not IDevelop.Engine.NodeState.Idle;

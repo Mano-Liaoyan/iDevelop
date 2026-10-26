@@ -92,7 +92,7 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
                 var events = ClaudeCode.Events(root);
                 var messageId = message.String("id");
                 var parts = message.Items("content").ToArray();
-                var textIndexes = new Queue<int>(parts.Select((part, index) => (part, index)).Where(pair => pair.part.String("type") == "text" && NonBlank(pair.part.String("text")) is not null)
+                var textIndexes = new Queue<int>(parts.Select((part, position) => (part, index: position)).Where(pair => pair.part.String("type") == "text" && NonBlank(pair.part.String("text")) is not null)
                     .Select(pair => parts.Length == 1 && messageId is not null && _blocks.TryGetValue(messageId, out var block) ? block : pair.index));
                 return new([.. events.Select(e => e is AgentEvent.Message text
                     ? text with { Id = messageId is null ? null : $"{messageId}:{textIndexes.Dequeue()}", Partial = _interrupted } : e)], [], false);
@@ -272,7 +272,7 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
         type = "control_response", response = new { subtype = "success", request_id = id[2..], response },
     })], false);
 
-    public override ProtocolOutput? Interrupt()
+    public override ProtocolOutput Interrupt()
     {
         _interrupted = true;
         return new([], [Control("stop-1", "interrupt")], false);

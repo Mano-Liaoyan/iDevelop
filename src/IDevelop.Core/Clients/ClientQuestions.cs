@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using JetBrains.Annotations;
 
 namespace IDevelop.Clients;
 
@@ -19,4 +20,4 @@ public sealed record QuestionAnswer(
 public sealed record QuestionsReply(ImmutableArray<QuestionAnswer> Answers);
 
 /// <summary>A tool call the client asks permission for.</summary>
-public sealed record PermissionAction(string Tool, string InputJson, string Scope);
+public sealed record PermissionAction(string Tool, [UsedImplicitly] string InputJson, string Scope);

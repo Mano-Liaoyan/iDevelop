@@ -3,13 +3,11 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>What the node's card shows: its kind tile, its title, and its two lines under it. Its peek and its details show the rest.</summary>
 public sealed partial class TaskNodeViewModel
 {
-    private bool _isRenaming;
-
     /// <summary>The card's title is a box that takes a new title.</summary>
     public bool IsRenaming
     {
-        get => _isRenaming;
-        private set => SetProperty(ref _isRenaming, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     internal void BeginRename() => IsRenaming = true;

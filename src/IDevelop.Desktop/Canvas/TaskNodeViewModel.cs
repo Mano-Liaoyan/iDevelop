@@ -1,11 +1,10 @@
-using System.Collections.Immutable;
 using System.Windows.Input;
 using Avalonia;
 using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Nodes;
 using IDevelop.Workflows;
+using JetBrains.Annotations;
 
 namespace IDevelop.Desktop.Canvas;
 
@@ -14,13 +13,13 @@ namespace IDevelop.Desktop.Canvas;
 // names its task.
 
 /// <summary>An entry in the inspector's client picker. A null client is "None".</summary>
-public sealed record ClientChoice(TaskId Task, ClientId? Id, string Label)
+public sealed record ClientChoice([UsedImplicitly] TaskId Task, ClientId? Id, string Label)
 {
     public override string ToString() => Label;
 }
 
 /// <summary>An entry in the model or reasoning picker: the client's own id and what the picker shows.</summary>
-public sealed record Choice(TaskId Task, string Id, string Label)
+public sealed record Choice([UsedImplicitly] TaskId Task, string Id, string Label)
 {
     public override string ToString() => Label;
 }
@@ -44,11 +43,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private ProposalViewModel? _proposal;
     private NodeKind _kind;
     private bool _isLibrary;
-    private NodeState _state;
-    private NodeRole _role;
-    private IReadOnlyList<ClientChoice> _clientChoices = [];
-    private IReadOnlyList<Choice> _modelChoices = [];
-    private IReadOnlyList<Choice> _reasoningChoices = [];
 
     internal TaskNodeViewModel(WorkflowCanvasViewModel canvas, TaskDefinition task, CanvasPoint position)
     {
@@ -92,14 +86,14 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     public NodeState State
     {
-        get => _state;
-        private set => SetProperty(ref _state, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public NodeRole Role
     {
-        get => _role;
-        private set => SetProperty(ref _role, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public PortViewModel Input { get; }
@@ -169,24 +163,33 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     /// <summary>The card's second line in every state: the model and its level, or empty while the task names neither.</summary>
     public string AgentModel => RunText.AgentLines(_task.Execution, Status).Model ?? "";
 
-    public IReadOnlyList<ClientChoice> ClientChoices => Kept(ref _clientChoices,
-        [new(Id, null, "None"), .. ClientCatalog.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))]);
+    public IReadOnlyList<ClientChoice> ClientChoices
+    {
+        get => Kept(ref field,
+            [new(Id, null, "None"), .. ClientCatalog.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))]);
+    } = [];
 
     public ClientChoice SelectedClient => ClientChoices.First(choice => choice.Id == _task.Execution?.Client);
 
     public bool HasClient => _task.Execution is not null;
 
     /// <summary>The models this machine offers, then the task's model when it is not one of them, marked.</summary>
-    public IReadOnlyList<Choice> ModelChoices => Kept(ref _modelChoices, _task.Execution is { } settings
-        ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, Status)))]
-        : []);
+    public IReadOnlyList<Choice> ModelChoices
+    {
+        get => Kept(ref field, _task.Execution is { } settings
+            ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, Status)))]
+            : []);
+    } = [];
 
     public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Model);
 
     /// <summary>The levels the task's model offers, then the task's level when the model does not offer it, marked.</summary>
-    public IReadOnlyList<Choice> ReasoningChoices => Kept(ref _reasoningChoices, _task.Execution is { } settings
-        ? [.. ExecutionChoices.Reasoning(settings, Status).Select(choice => new Choice(Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
-        : []);
+    public IReadOnlyList<Choice> ReasoningChoices
+    {
+        get => Kept(ref field, _task.Execution is { } settings
+            ? [.. ExecutionChoices.Reasoning(settings, Status).Select(choice => new Choice(Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
+            : []);
+    } = [];
 
     public Choice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Reasoning);
 

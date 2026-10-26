@@ -69,7 +69,7 @@ public sealed class StalenessTests : IAsyncLifetime
         await Until<NodeState.Running>(engine, b);
 
         await engine.Run(a);
-        File.WriteAllText(gate, "");
+        await File.WriteAllTextAsync(gate, "");
 
         await Until(engine, b, state => state is NodeState.Completed && engine.History(a).Count == 2);
         Assert.Equal([new BasisInput(a, engine.History(a)[1].Id)], Assert.Single(engine.History(b)).Basis.Inputs.AsEnumerable());

@@ -14,7 +14,6 @@ public sealed class ConnectionViewModel : ObservableObject
     private readonly WorkflowCanvasViewModel _canvas;
     private readonly RelayCommand<ConnectionKind> _setKind;
     private ConnectionKind _kind;
-    private WireEmphasis _emphasis;
     private IReadOnlyList<Point> _route = [];
 
     internal ConnectionViewModel(WorkflowCanvasViewModel canvas, ConnectionKey key, TaskNodeViewModel from, TaskNodeViewModel to, ConnectionKind kind)
@@ -47,8 +46,8 @@ public sealed class ConnectionViewModel : ObservableObject
 
     public WireEmphasis Emphasis
     {
-        get => _emphasis;
-        internal set => SetProperty(ref _emphasis, value);
+        get;
+        internal set => SetProperty(ref field, value);
     }
 
     /// <summary>The corners the wire turns at, from the end of its source stub to the start of its target stub.</summary>

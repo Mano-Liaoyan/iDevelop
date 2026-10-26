@@ -49,7 +49,7 @@ public sealed class ReviewNodeTests
 
         shell.Click(shell.Find<Button>("RunWorkflow"));
 
-        shell.WaitUntil(() => shell.NodeModel("Check").EngineState is IDevelop.Engine.NodeState.InputRequired { Why: IDevelop.Engine.NodeState.RoundLimit },
+        shell.WaitUntil(() => shell.NodeModel("Check").EngineState is Engine.NodeState.InputRequired { Why: Engine.NodeState.RoundLimit },
             "the review reaches its round limit", () => shell.NodeModel("Check").StatusLabel);
         Assert.Contains("The line says A.", File.ReadAllText(Path.Combine(f.Evidence, "fix.txt")));
         Assert.Equal("Input required · round limit", shell.CardText("Check", "CardStatus"));

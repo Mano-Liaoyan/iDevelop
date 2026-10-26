@@ -1,4 +1,6 @@
-namespace IDevelop.TestSupport;
+using IDevelop.TestSupport;
+
+namespace IDevelop.Desktop.Tests;
 
 /// <summary>
 /// Desktop test classes that start processes run one at a time. Executables are written through <see cref="Executable"/>,
@@ -8,11 +10,4 @@ namespace IDevelop.TestSupport;
 public sealed class ProcessCollection
 {
     public const string Name = "Processes";
-}
-
-/// <summary>Classes that change this process's environment run alone, after the parallel classes.</summary>
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class EnvironmentCollection
-{
-    public const string Name = "Environment";
 }

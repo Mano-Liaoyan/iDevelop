@@ -24,6 +24,7 @@ internal sealed class ProcessJob : IDisposable
     private ProcessJob(nint handle) => _handle = handle;
 
     /// <summary>Null when the process could not join a job, such as one that already exited. Stopping its tree still works.</summary>
+    /// <param name="process">The process that joins the new job.</param>
     /// <param name="killOnClose">False leaves the processes running when the job closes, even when iDevelop exits or dies,
     /// so only <see cref="Terminate"/> stops them.</param>
     public static ProcessJob? Assign(Process process, bool killOnClose = true)

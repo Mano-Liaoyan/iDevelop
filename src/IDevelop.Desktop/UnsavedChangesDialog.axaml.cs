@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using JetBrains.Annotations;
 
 namespace IDevelop.Desktop;
 
@@ -7,6 +8,7 @@ public enum UnsavedChangesChoice { Save, Discard, Cancel }
 
 public partial class UnsavedChangesDialog : Window
 {
+    [UsedImplicitly]
     public UnsavedChangesDialog() => InitializeComponent();
 
     public UnsavedChangesDialog(string projectName) : this()

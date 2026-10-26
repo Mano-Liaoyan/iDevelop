@@ -7,7 +7,7 @@ public enum NodeKind { Implement, Plan, Architect, Review, Approval, Merge, Read
 
 /// <param name="Icon">The resource key of the kind's glyph.</param>
 /// <param name="StyleClass">The style class that paints an element in the kind's hue.</param>
-public sealed record NodeKindInfo(NodeKind Kind, string Label, string Icon, string StyleClass);
+public sealed record NodeKindInfo(string Label, string Icon, string StyleClass);
 
 /// <summary>
 /// A node's kind comes from its blueprint and is never stored: a built-in's own kind, else the kind of the built-in it
@@ -28,6 +28,7 @@ public static class NodeKinds
         [BuiltInBlueprints.Merge.Key.Id] = NodeKind.Merge,
     };
 
+    /// <param name="blueprint">The blueprint whose kind to find.</param>
     /// <param name="lookup">Finds a blueprint the chain passes through, or returns null when this machine has none.</param>
     public static NodeKind Of(Blueprint blueprint, Func<BlueprintKey, Blueprint?> lookup)
     {
@@ -62,13 +63,13 @@ public static class NodeKinds
 
     public static NodeKindInfo Info(NodeKind kind) => kind switch
     {
-        NodeKind.Implement => new(kind, "Implement", "IconKindImplement", "kind-implement"),
-        NodeKind.Plan => new(kind, "Plan", "IconKindPlan", "kind-plan"),
-        NodeKind.Architect => new(kind, "Architect", "IconKindArchitect", "kind-architect"),
-        NodeKind.Review => new(kind, "Review", "IconKindReview", "kind-review"),
-        NodeKind.Approval => new(kind, "Approval", "IconKindApproval", "kind-approval"),
-        NodeKind.Merge => new(kind, "Merge", "IconKindMerge", "kind-merge"),
-        NodeKind.ReadOnlyAgent => new(kind, "Read-only agent", "IconKindReadOnlyAgent", "kind-readonlyagent"),
+        NodeKind.Implement => new("Implement", "IconKindImplement", "kind-implement"),
+        NodeKind.Plan => new("Plan", "IconKindPlan", "kind-plan"),
+        NodeKind.Architect => new("Architect", "IconKindArchitect", "kind-architect"),
+        NodeKind.Review => new("Review", "IconKindReview", "kind-review"),
+        NodeKind.Approval => new("Approval", "IconKindApproval", "kind-approval"),
+        NodeKind.Merge => new("Merge", "IconKindMerge", "kind-merge"),
+        NodeKind.ReadOnlyAgent => new("Read-only agent", "IconKindReadOnlyAgent", "kind-readonlyagent"),
     };
 
     public static bool IsBuiltIn(Blueprint blueprint) => blueprint.IsBuiltIn;

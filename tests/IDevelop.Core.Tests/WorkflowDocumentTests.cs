@@ -111,7 +111,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         Assert.Empty(document.Current.Tasks);
         Assert.False(document.HasUnsavedChanges);
         Assert.Equal(Path.Combine(folder, ".idp", "workflows", $"{document.Current.Id}.json"), document.FilePath);
-        Assert.Equal(new[] { "README.md" }, Directory.EnumerateFileSystemEntries(folder).Select(Path.GetFileName));
+        Assert.Equal(["README.md"], Directory.EnumerateFileSystemEntries(folder).Select(Path.GetFileName));
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         Assert.False(document.HasUnsavedChanges);
         Assert.Equal("*.tmp\nnodes/\nwindow.lock\n", File.ReadAllText(Path.Combine(folder, ".idp", ".gitignore")));
         Assert.Equal(
-            new[] { $"{document.Current.Id}.json" },
+            [$"{document.Current.Id}.json"],
             Directory.EnumerateFiles(Path.Combine(folder, ".idp", "workflows")).Select(Path.GetFileName));
         var reopened = WorkflowDocument.OpenProject(folder).Single().Current;
         Assert.Equal(document.Current.Id, reopened.Id);
@@ -167,7 +167,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         Assert.True(error is IOException or UnauthorizedAccessException, $"unexpected {error}");
         Assert.Equal(File.ReadAllBytes(SampleFile), File.ReadAllBytes(document.FilePath));
         Assert.True(document.HasUnsavedChanges);
-        Assert.Equal(new[] { SampleFileName }, Directory.EnumerateFiles(Path.GetDirectoryName(document.FilePath)!).Select(Path.GetFileName));
+        Assert.Equal([SampleFileName], Directory.EnumerateFiles(Path.GetDirectoryName(document.FilePath)!).Select(Path.GetFileName));
 
         document.Save();
 
@@ -353,10 +353,10 @@ public sealed class WorkflowDocumentTests : IDisposable
         WorkflowEdit[] edits =
         [
             TestNodes.Place(TestNodes.Implement(TestTasks.Design, "Build", "Build it."), new CanvasPoint(0, 0)),
-            new WorkflowEdit.PlaceNode(review, BuiltInBlueprints.Review, new CanvasPoint(300, 0)) { Title = "Review" },
-            new WorkflowEdit.PlaceNode(approval, BuiltInBlueprints.Approval, new CanvasPoint(600, 0)) { Title = "Approve" },
-            new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Design, review), ConnectionKind.Dependency),
-            new WorkflowEdit.Connect(new ConnectionKey(review, approval), ConnectionKind.Dependency),
+            new PlaceNode(review, BuiltInBlueprints.Review, new CanvasPoint(300, 0)) { Title = "Review" },
+            new PlaceNode(approval, BuiltInBlueprints.Approval, new CanvasPoint(600, 0)) { Title = "Approve" },
+            new Connect(new ConnectionKey(TestTasks.Design, review), ConnectionKind.Dependency),
+            new Connect(new ConnectionKey(review, approval), ConnectionKind.Dependency),
         ];
         foreach (var edit in edits)
         {
@@ -377,7 +377,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     public void A_round_limit_other_than_the_default_saves_and_reopens_and_the_default_writes_nothing()
     {
         var review = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000066"));
-        var workflow = IDevelop.Workflows.Workflow.Empty(WorkflowId.New())
+        var workflow = Workflows.Workflow.Empty(WorkflowId.New())
             .Must(new PlaceNode(review, BuiltInBlueprints.Review, new CanvasPoint(0, 0)) { Title = "Review" });
 
         var limited = WorkflowFile.Serialize(workflow.Must(new SetRoundLimit(review, 5)));
@@ -582,7 +582,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         return error.Message.Replace(file, "<file>");
     }
 
-    private static readonly string Implement = Encoding.UTF8.GetString(WorkflowFile.Serialize(IDevelop.Workflows.Workflow.Empty(WorkflowId.New())
+    private static readonly string Implement = Encoding.UTF8.GetString(WorkflowFile.Serialize(Workflows.Workflow.Empty(WorkflowId.New())
         .Apply(TestNodes.Place(TestNodes.Implement(Design), new CanvasPoint(0, 0))) is EditResult.Applied applied ? applied.Workflow : null!))
         .Split("\"blueprints\": [")[1].Split("],\n  \"tasks\"")[0].Replace('"', '\'');
 

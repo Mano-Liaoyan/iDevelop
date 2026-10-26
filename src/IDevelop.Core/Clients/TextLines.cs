@@ -7,7 +7,5 @@ internal static class TextLines
     public static IEnumerable<string> Lines(string text) =>
         text.Split('\n').Select(line => line.TrimEnd('\r')).Where(line => line.Trim().Length > 0);
 
-    public static string? FirstLine(string text) => Lines(text).Select(line => line.Trim()).FirstOrDefault();
-
     public static string? LastLine(string text) => Lines(text).Select(line => line.Trim()).LastOrDefault();
 }

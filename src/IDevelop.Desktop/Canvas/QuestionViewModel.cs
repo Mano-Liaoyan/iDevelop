@@ -36,7 +36,6 @@ public sealed class ChoiceViewModel : ObservableObject
 {
     private readonly QuestionViewModel _question;
     private readonly Action _changed;
-    private bool _isChosen;
 
     internal ChoiceViewModel(QuestionOption option, QuestionViewModel question, Action changed)
     {
@@ -55,10 +54,10 @@ public sealed class ChoiceViewModel : ObservableObject
 
     public bool IsChosen
     {
-        get => _isChosen;
+        get;
         set
         {
-            if (!SetProperty(ref _isChosen, value)) return;
+            if (!SetProperty(ref field, value)) return;
             if (value && !_question.MultiSelect)
             {
                 foreach (var other in _question.Choices.Where(choice => choice != this)) other.IsChosen = false;

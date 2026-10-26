@@ -8,7 +8,6 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>What the node needs from the person, and the one way the card and the inspector open its conversation.</summary>
 public sealed partial class TaskNodeViewModel
 {
-    private ConversationState? _conversationState;
     private RelayCommand _openConversation = null!;
 
     /// <summary>A wait for the person, or a failure. Opening the conversation leaves it.</summary>
@@ -26,17 +25,17 @@ public sealed partial class TaskNodeViewModel
 
     public string AttendHelp => HasAgent ? "Opens the conversation" : "Shows the approval request";
 
-    internal ConversationState ConversationState
+    private ConversationState ConversationState
     {
         get
         {
-            if (_conversationState is null)
+            if (field is null)
             {
-                _conversationState = _canvas.Project.ConversationOf(_canvas, Id);
-                _conversationState.PropertyChanged += OnConversationStateChanged;
+                field = _canvas.Project.ConversationOf(_canvas, Id);
+                field.PropertyChanged += OnConversationStateChanged;
             }
 
-            return _conversationState;
+            return field;
         }
     }
 

@@ -21,7 +21,7 @@ public sealed class SkillEntryTests
 
         Assert.Equal(["code-review:code-review"], entries["code-review"].LetsIn.ToArray());
         Assert.Equal(["probeplug:probe-alpha"], entries["probe-alpha"].LetsIn.ToArray());
-        Assert.All(new[] { "code-review:code-review", "probeplug:probe-alpha", "probeplug:probe-delta" }, name => Assert.Empty(entries[name].LetsIn));
+        Assert.All(["code-review:code-review", "probeplug:probe-alpha", "probeplug:probe-delta"], name => Assert.Empty(entries[name].LetsIn));
     }
 
     [Fact]

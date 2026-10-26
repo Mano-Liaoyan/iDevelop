@@ -20,7 +20,7 @@ public sealed class NodeMenuViewModel
     {
         TaskId[] selection = [.. canvas.SelectedNodes.Select(node => node.Id)];
         Node = canvas.SelectedNodes is [var single] ? single : null;
-        ShowRun = Node is { HasAgent: true, HasClient: true } node && node.RunCommand.CanExecute(null);
+        ShowRun = Node is { HasAgent: true, HasClient: true } runnable && runnable.RunCommand.CanExecute(null);
         ShowChooseAgent = Node is { HasAgent: true, HasClient: false } && canvas.Blueprints.Editor is null;
         ShowStop = Node?.StopCommand.CanExecute(null) == true;
         ShowRetry = Node?.ShowsRetry == true;

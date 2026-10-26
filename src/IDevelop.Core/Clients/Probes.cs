@@ -53,6 +53,9 @@ internal static class Probes
         var answered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         // Pi's RPC mode may stop at the end of its input before it answers, so a probe that waits for an answer keeps stdin open.
         var writes = new object();
+        using var finished = new CancellationTokenSource();
+        var stopReplies = finished.Token;
+        Func<string, bool, Task> writeStdin = child.WriteStdinAsync;
         var input = child.WriteStdinAsync(probe.Stdin ?? "", close: probe.DoneWhen is null);
         child.ReadStdout(line =>
         {
@@ -65,7 +68,7 @@ internal static class Probes
             {
                 lock (writes)
                 {
-                    input = WriteAfter(input, child, reply);
+                    input = WriteAfter(input, writeStdin, reply, stopReplies);
                 }
             }
 
@@ -98,7 +101,7 @@ internal static class Probes
 
             await written;
             await child.WriteStdinAsync("", close: true);
-            ended = await Task.WhenAny(exit, Task.Delay(ShutdownGrace)) == exit;
+            ended = await Task.WhenAny(exit, Task.Delay(ShutdownGrace, CancellationToken.None)) == exit;
         }
 
         if (!ended)
@@ -107,19 +110,35 @@ internal static class Probes
         }
 
         await child.WaitForOutputAsync();
+        // A reply can still wait for its delay. Cancel it, and let it end before the process is disposed.
+        await finished.CancelAsync();
+        Task pending;
+        lock (writes)
+        {
+            pending = input;
+        }
+
+        try
+        {
+            await pending;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
         int? exitCode = ended ? await exit : null;
         return new ProbeOutput(exitCode, Snapshot(stdout), Snapshot(stderr), TimedOut: first != exit && first != answered.Task);
     }
 
-    private static async Task WriteAfter(Task before, ChildProcess child, ProbeReply reply)
+    private static async Task WriteAfter(Task before, Func<string, bool, Task> writeStdin, ProbeReply reply, CancellationToken finished)
     {
         await before;
         if (reply.Delay > TimeSpan.Zero)
         {
-            await Task.Delay(reply.Delay);
+            await Task.Delay(reply.Delay, finished);
         }
 
-        await child.WriteStdinAsync(reply.Text, close: false);
+        await writeStdin(reply.Text, false);
     }
 
     /// <summary>Why a probe did not answer as expected, in the words of its last output line.</summary>

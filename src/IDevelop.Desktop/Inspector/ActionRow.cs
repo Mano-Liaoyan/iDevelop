@@ -9,7 +9,7 @@ namespace IDevelop.Desktop.Inspector;
 /// </summary>
 public sealed class ActionRow : Panel
 {
-    public static readonly StyledProperty<double> SpacingProperty = AvaloniaProperty.Register<ActionRow, double>(nameof(Spacing), 8);
+    private static readonly StyledProperty<double> SpacingProperty = AvaloniaProperty.Register<ActionRow, double>(nameof(Spacing), 8);
 
     static ActionRow() => AffectsMeasure<ActionRow>(SpacingProperty);
 

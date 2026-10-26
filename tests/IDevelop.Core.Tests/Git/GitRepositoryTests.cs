@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using IDevelop.Clients;
@@ -67,7 +66,7 @@ public sealed class GitRepositoryTests
         var a = f.Commit("source");
         var repository = f.Open();
         var exclude = Path.Combine(repository.CommonDirectory, "info", "exclude");
-        File.WriteAllBytes(exclude, Encoding.UTF8.GetBytes("keep-me"));
+        File.WriteAllBytes(exclude, "keep-me"u8);
         repository.EnsureExcluded();
         var bytes = File.ReadAllBytes(exclude);
         Assert.Equal("keep-me\n/.worktrees/\n", Encoding.UTF8.GetString(bytes));
@@ -158,7 +157,7 @@ public sealed class GitRepositoryTests
         File.WriteAllText(Path.Combine(repository.CommonDirectory, "info", "grafts"), tip.Hex + " " + a.Hex + "\n");
         Assert.Equal(new GitAncestry.No(), repository.IsAncestor(a, tip));
         Assert.Equal(new GitAncestry.Yes(), repository.IsAncestor(below, tip));
-        Assert.Equal(new[] { "81ddb7c330112c7f16700ed002803a04b0bce693" }, Read(repository.ReadCommit(tip)).Parents.Select(parent => parent.Hex));
+        Assert.Equal(["81ddb7c330112c7f16700ed002803a04b0bce693"], Read(repository.ReadCommit(tip)).Parents.Select(parent => parent.Hex));
         var failed = Assert.IsType<GitAncestry.Failed>(repository.IsAncestor(new(new string('9', 40)), tip));
         Assert.Equal("fatal: Not a valid commit name 9999999999999999999999999999999999999999\n", failed.Detail);
     }
@@ -302,14 +301,14 @@ public sealed class GitRepositoryTests
         }
     }
 
-    private static string RealGit => CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
+    private static string RealGit => CommandResolver.Create((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
 
     private static (string Bin, Dictionary<string, string> Environment) ShimBin(GitFixture f)
     {
         var bin = Directory.CreateDirectory(Path.Combine(f.Open().CommonDirectory, "test-bin")).FullName;
         return (bin, new Dictionary<string, string>(f.Environment)
         {
-            ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
+            ["PATH"] = bin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
         });
     }
 
@@ -336,14 +335,6 @@ public sealed class GitRepositoryTests
             process.Kill();
         }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException) { }
-    }
-
-    private sealed class NonRunningSynchronizationContext : SynchronizationContext
-    {
-        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
-
-        public override void Post(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
-        public override void Send(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 
@@ -13,6 +14,12 @@ namespace IDevelop.Desktop.Conversation;
 /// </summary>
 public partial class ConversationView : UserControl
 {
+    /// <summary>The column of a message: a person's message is in the second column, next to its copy button.</summary>
+    public static readonly IValueConverter MessageColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 0);
+
+    /// <summary>The columns a message spans: a person's message spans one, and other messages span both.</summary>
+    public static readonly IValueConverter MessageColumnSpan = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 2);
+
     // Within this many pixels of the end, the view counts as at the end and follows new output.
     private const double EndSlack = 24;
 

@@ -7,7 +7,6 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Avalonia;
-using IDevelop.Clients;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Engine;
 using IDevelop.TestSupport;
@@ -20,8 +19,7 @@ namespace IDevelop.Desktop.Tests;
 public sealed class ConversationViewTests : IDisposable
 {
     private readonly TempFolder _temp = AppTempFolder.New();
-    private readonly FakeConversation _conversation = new(TestTasks.Design);
-    private readonly List<string> _copied = [];
+    private readonly FakeConversation _conversation = new();
 
     public void Dispose() => _temp.Dispose();
 
@@ -29,11 +27,7 @@ public sealed class ConversationViewTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it.")));
         var canvas = shell.Window.ViewModel.Canvas!;
-        var model = new ConversationViewModel(new ConversationTarget(canvas, TestTasks.Design), state ?? new ConversationState(), _conversation, text =>
-        {
-            _copied.Add(text);
-            return Task.CompletedTask;
-        });
+        var model = new ConversationViewModel(new ConversationTarget(canvas, TestTasks.Design), state ?? new ConversationState(), _conversation, _ => Task.CompletedTask);
         Render();
         return model;
     }

@@ -7,6 +7,7 @@ public static class RejectionText
 {
     public static string Describe(EditRejection reason, Workflow workflow) => Describe(reason, id => workflow.Tasks[id].Title);
 
+    /// <param name="reason">Why the workflow rejected the edit.</param>
     /// <param name="title">The title of a task the reason names, which may be one an edit has yet to add.</param>
     public static string Describe(EditRejection reason, Func<TaskId, string> title) => reason switch
     {

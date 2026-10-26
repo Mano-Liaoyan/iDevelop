@@ -91,7 +91,6 @@ internal sealed class FakeClients : IDisposable
                 ["lacks"] = new JsonArray([.. rule.Lacks.Select(part => JsonValue.Create(part))]),
                 ["thread"] = rule.ThreadMethod,
                 ["threadId"] = rule.ThreadId,
-                ["beforeTurnResponse"] = new JsonArray([.. rule.BeforeTurnResponseSteps.Select(step => step.DeepClone())]),
                 ["steps"] = new JsonArray([.. rule.Steps.Select(step => step.DeepClone())]),
             })]),
         };
@@ -139,15 +138,11 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 {
     public ImmutableArray<string> Has { get; init; } = [];
 
-    public ImmutableArray<string> Lacks { get; init; } = [];
+    public ImmutableArray<string> Lacks { get; private init; } = [];
 
     public string? ThreadMethod { get; init; }
 
     public string? ThreadId { get; init; }
-
-    public ImmutableArray<JsonNode> BeforeTurnResponseSteps { get; init; } = [];
-
-    public FakeRule BeforeTurnResponse(FakeRule steps) => this with { BeforeTurnResponseSteps = steps.Steps };
 
     public FakeRule Thread(string method, string? id = null) => this with { ThreadMethod = method, ThreadId = id };
 
@@ -173,8 +168,6 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     public FakeRule EchoId(string line) => Step("echoId", line);
 
-    public FakeRule CloseStdin() => Step("closeStdin", true);
-
     public FakeRule WaitForStdinEnd() => Step("waitForStdinEnd", true);
 
     public FakeRule Print(string line) => Step("print", line);
@@ -187,22 +180,14 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     public FakeRule Sleep(int milliseconds) => Step("sleep", milliseconds);
 
-    public FakeRule LockFile(string file) => Step("lockFile", file);
-
     public FakeRule WaitForFile(string file) => Step("waitForFile", file);
 
     public FakeRule SpawnSleepingChild(string pidFile) => Step("spawnSleepingChild", pidFile);
 
     public FakeRule SpawnThroughCmd(string pidFile) => Step("spawnThroughCmd", pidFile);
 
-    public FakeRule SpawnResponder(string pidFile, string ping, string pong) => Step("spawnResponder", Strings(pidFile, ping, pong));
-
     public FakeRule SpawnEscapedWriter(string pidFile, string gate, string file, string text) =>
         Step("spawnEscapedWriter", Strings(pidFile, gate, file, text));
-
-    public FakeRule SpawnPartialWriter(string pidFile, string file, string text) => Step("spawnPartialWriter", Strings(pidFile, file, text));
-
-    public FakeRule TrapSignals(string file) => Step("trapSignals", file);
 
     public FakeRule RecordSession(string file) => Step("recordSession", file);
 
@@ -212,12 +197,6 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     /// <summary>Writes <paramref name="text"/> to <paramref name="file"/>, relative to the client's current folder.</summary>
     public FakeRule Write(string file, string text) => Step("write", new JsonArray(JsonValue.Create(file), JsonValue.Create(text)));
-
-    /// <summary>Writes <paramref name="bytes"/> and declares them as the artifact <paramref name="name"/> in the outbox the prompt names.</summary>
-    public FakeRule Outbox(string name, byte[] bytes) => Step("outbox", new JsonArray(JsonValue.Create(name), JsonValue.Create(Convert.ToBase64String(bytes))));
-
-    /// <summary>Copies <paramref name="file"/>, relative to the client's current folder, to <paramref name="destination"/>.</summary>
-    public FakeRule Copy(string file, string destination) => Step("copy", new JsonArray(JsonValue.Create(file), JsonValue.Create(destination)));
 
     /// <summary>Runs the steps of <c>&lt;n&gt;.json</c> in <paramref name="folder"/> on the n-th call, after copying stdin to <c>&lt;n&gt;.stdin</c>.</summary>
     public FakeRule Scripted(string folder) => Step("scripted", folder);
@@ -267,9 +246,6 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
         ["line"] = line,
         ["steps"] = new JsonArray([.. steps.Steps.Select(step => step.DeepClone())]),
     });
-
-    /// <summary>The steps as the JSON array that a scripted turn's file holds.</summary>
-    public string StepsJson() => new JsonArray([.. Steps.Select(step => step.DeepClone())]).ToJsonString();
 
     private static JsonArray Strings(params string[] values) => new([.. values.Select(value => JsonValue.Create(value))]);
 

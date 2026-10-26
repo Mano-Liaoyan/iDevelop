@@ -11,11 +11,10 @@ namespace IDevelop.Desktop.Tests;
 /// <summary>StyleClass's classes and the brushes Kinds.axaml gives them, in both themes.</summary>
 public sealed class KindStyleTests
 {
-    private static Window Show(Control content, ThemeVariant theme)
+    private static void Show(Control content, ThemeVariant theme)
     {
         var window = new Window { Content = content, RequestedThemeVariant = theme };
         window.Show();
-        return window;
     }
 
     private static string Hex(IBrush? brush) => brush is ISolidColorBrush solid ? $"#{solid.Color.ToUInt32():X8}" : $"{brush}";

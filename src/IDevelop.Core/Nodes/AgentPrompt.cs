@@ -15,6 +15,8 @@ public static class AgentPrompt
     /// The rendered template, then iDevelop's contract for the node's conversation mode and for a proposal, which no
     /// blueprint can remove. An Autonomous node that proposes nothing has no contract.
     /// </summary>
+    /// <param name="node">The node whose agent reads the prompt.</param>
+    /// <param name="inputs">The input from earlier nodes, which the template can use.</param>
     /// <param name="planning">What a node whose agent proposes may fill and place, which its prompt lists.</param>
     public static string For(TaskDefinition node, string inputs, PlanningContext? planning = null)
     {

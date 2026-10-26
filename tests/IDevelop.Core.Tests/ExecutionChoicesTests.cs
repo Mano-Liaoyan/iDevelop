@@ -48,10 +48,10 @@ public class ExecutionChoicesTests
         var stored = new ExecutionSettings(ClientId.Codex) { Model = "gpt-7" };
 
         Assert.Equal(
-            new (string, bool)[] { ("gpt-5.5", true), ("gpt-7", false) },
+            [("gpt-5.5", true), ("gpt-7", false)],
             ExecutionChoices.Models(stored, codex).Select(choice => (choice.Model.Id, choice.Offered)));
         Assert.Equal(
-            new (string, bool)[] { ("gpt-7", false) },
+            [("gpt-7", false)],
             ExecutionChoices.Models(stored, new ClientStatus.Missing("No codex command was found on PATH.")).Select(choice => (choice.Model.Id, choice.Offered)));
     }
 }

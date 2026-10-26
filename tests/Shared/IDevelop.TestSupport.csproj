@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The fake clients, fixtures, and folders that both test projects use. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="IDevelop.Core.Tests" />
+    <InternalsVisibleTo Include="IDevelop.Desktop.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\IDevelop.Core\IDevelop.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Fixtures\**" />
+  </ItemGroup>
+</Project>

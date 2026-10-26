@@ -31,7 +31,6 @@ internal static class Pi
         Terminal = session => $"pi --session {session}",
         HasReadOnlyMode = false,
         SessionsPerFolder = true,
-        LostSessionNotice = "No project session found with id",
         // get_commands lists every skill the session loads, with its file, beside prompt templates and extension commands.
         Skills = new SkillSource(folder => new Probe(["--mode", "rpc", "--no-session"])
         {

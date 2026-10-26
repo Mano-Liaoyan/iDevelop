@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Avalonia;
-using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Theme;
 using IDevelop.Projects;
@@ -264,7 +263,7 @@ public sealed class NodeMenuTests : IDisposable
 
         Assert.True(shell.Find<ComboBox>("TaskClient").IsDropDownOpen);
         Assert.True(
-            placedAgainst is { } picker && shell.Bounds(viewport).Contains(picker),
+            placedAgainst is { } place && shell.Bounds(viewport).Contains(place),
             $"The list opened against the picker at {placedAgainst}, outside the inspector's view {shell.Bounds(viewport)}.");
     }
 
@@ -285,10 +284,10 @@ public sealed class NodeMenuTests : IDisposable
         shell.RightClick(shell.Header(shell.Node("Design")));
         shell.Click(shell.MenuItem("NodeMenuReplace"));
         var choices = shell.Window.GetVisualDescendants().OfType<MenuItem>()
-            .Where(item => Avalonia.Automation.AutomationProperties.GetAutomationId(item) == "ReplaceWithItem").ToList();
+            .Where(item => AutomationProperties.GetAutomationId(item) == "ReplaceWithItem").ToList();
         Assert.Equal(
             ["Replace with Implement", "Replace with Plan", "Replace with Architect", "Replace with Review", "Replace with Approval", "Replace with Merge", "Replace with Careful implement"],
-            choices.Select(Avalonia.Automation.AutomationProperties.GetName));
+            choices.Select(AutomationProperties.GetName));
         Assert.All(choices, item =>
         {
             var tile = Assert.IsType<KindTile>(item.Icon);
@@ -322,7 +321,7 @@ public sealed class NodeMenuTests : IDisposable
         shell.RightClick(shell.Header(shell.Node("Outline")));
         shell.Click(shell.MenuItem("NodeMenuReplace"));
         shell.Click(shell.Window.GetVisualDescendants().OfType<MenuItem>()
-            .Single(item => Avalonia.Automation.AutomationProperties.GetName(item) == "Replace with Implement"));
+            .Single(item => AutomationProperties.GetName(item) == "Replace with Implement"));
 
         Assert.Same(before, Workflow(shell));
         Assert.Equal("\"Check\" already reviews \"Design\". A review takes one task that edits the project.", shell.Status);

@@ -53,6 +53,8 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
     /// The slots are the nodes that the planner's dependency connections reach, whose fields are all blank, and that have
     /// not started, in the order of their ids.
     /// </summary>
+    /// <param name="workflow">The workflow that holds the planner.</param>
+    /// <param name="planner">The node whose agent plans.</param>
     /// <param name="placeable">The blueprints a person can place, in the order a palette lists them.</param>
     /// <param name="started">Whether a node has run.</param>
     public static PlanningContext For(Workflow workflow, TaskId planner, IEnumerable<Blueprint> placeable, Func<TaskId, bool> started)
@@ -78,7 +80,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
 
     public static string Slot(int index) => $"slot-{index + 1}";
 
-    public static string Type(int index) => $"type-{index + 1}";
+    private static string Type(int index) => $"type-{index + 1}";
 
     /// <summary>
     /// What a planner reads after its template: how to write a proposal, then each slot and type. With agents to choose

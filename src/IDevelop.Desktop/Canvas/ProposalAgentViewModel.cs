@@ -25,7 +25,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
     ];
 
     private readonly ProposalViewModel _proposal;
-    private readonly string _title;
+    private string Title { get; }
     private readonly Blueprint _blueprint;
     private readonly ProposedAgent? _agent;
     private readonly Func<ExecutionSettings?> _own;
@@ -34,6 +34,11 @@ public sealed class ProposalAgentViewModel : ObservableObject
     private ExecutionSettings? _changed;
     private bool _isEditing;
 
+    /// <param name="proposal">The proposal that adds or fills the task.</param>
+    /// <param name="id">The task that takes the agent.</param>
+    /// <param name="title">The task's title, which names the task in the edit button.</param>
+    /// <param name="blueprint">The task's blueprint, which sets the access the agent gets.</param>
+    /// <param name="agent">The planner's choice of agent for the task, or null for no choice.</param>
     /// <param name="own">The agent the task has of its own, which wins over the planner's choice.</param>
     /// <param name="fills">True for a fill, whose own agent is its task's.</param>
     private ProposalAgentViewModel(ProposalViewModel proposal, TaskId id, string title, Blueprint blueprint, ProposedAgent? agent,
@@ -41,7 +46,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
     {
         _proposal = proposal;
         Id = id;
-        _title = title;
+        Title = title;
         _blueprint = blueprint;
         _agent = agent;
         _own = own;
@@ -112,7 +117,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     public ICommand EditCommand { get; }
 
-    public string EditName => _isEditing ? $"Done changing the agent of \"{_title}\"" : $"Change the agent of \"{_title}\"";
+    public string EditName => _isEditing ? $"Done changing the agent of \"{Title}\"" : $"Change the agent of \"{Title}\"";
 
     /// <summary>Every client, or only those with a read-only mode for a task that only reads.</summary>
     public IReadOnlyList<ClientChoice> ClientChoices =>

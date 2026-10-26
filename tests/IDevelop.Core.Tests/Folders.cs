@@ -1,4 +1,4 @@
-namespace IDevelop.TestSupport;
+namespace IDevelop.Core.Tests;
 
 internal static class Folders
 {

@@ -9,6 +9,7 @@ using Avalonia;
 using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Mvvm;
 using IDevelop.Projects;
 
 namespace IDevelop.Desktop;
@@ -137,11 +138,17 @@ public partial class MainWindow : Window
     internal Func<Task<string?>> PickFolder { get; set; }
 
     /// <summary>Puts text on the clipboard.</summary>
-    internal Func<string, Task> Copy { get; set; }
+    private Func<string, Task> Copy { get; }
 
-    protected override async void OnClosing(WindowClosingEventArgs e)
+    protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
+        // The work up to the first question runs now, so it can still let the window close or keep it open.
+        UiWork.Start(() => Leave(e), ShowFailure);
+    }
+
+    private async Task Leave(WindowClosingEventArgs e)
+    {
         if (_closeConfirmed)
         {
             return;
@@ -264,7 +271,7 @@ public partial class MainWindow : Window
 
     private void OnWorkflowKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.F2 && e.KeyModifiers == KeyModifiers.None && (sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
+        if (e is { Key: Key.F2, KeyModifiers: KeyModifiers.None } && (sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
         {
             RenameWorkflow(canvas);
             e.Handled = true;
@@ -304,7 +311,9 @@ public partial class MainWindow : Window
     }
 
     // Both questions come before either answer acts, and the project's runs stop only once it closes.
-    private async void OnCloseProject(object? sender, RoutedEventArgs e)
+    private void OnCloseProject(object? sender, RoutedEventArgs e) => UiWork.Start(() => CloseProject(sender), ShowFailure);
+
+    private async Task CloseProject(object? sender)
     {
         if (_waitingForUser || (sender as Control)?.DataContext is not ProjectViewModel project)
         {
@@ -346,7 +355,9 @@ public partial class MainWindow : Window
         TreeRows.Margin = new Thickness(0, 0, Tree.ScrollBarMaximum.Y > 0 ? 16 : 8, 0);
 
     // A question, the folder picker, or a project that is still closing holds a second open or close until it ends.
-    private async void OnOpenFolder(object? sender, RoutedEventArgs e)
+    private void OnOpenFolder(object? sender, RoutedEventArgs e) => UiWork.Start(OpenFolder, ShowFailure);
+
+    private async Task OpenFolder()
     {
         if (_waitingForUser)
         {
@@ -360,6 +371,14 @@ public partial class MainWindow : Window
         }
 
         _waitingForUser = false;
+    }
+
+    // A failed question, close, or open leaves the window usable, and the status line says what went wrong.
+    private void ShowFailure(string text)
+    {
+        _waitingForUser = false;
+        ((Control)Content!).IsEnabled = true;
+        ViewModel.Status = text;
     }
 
     // Closing moves no focus, so a name typed into a rename box becomes an edit here, before the unsaved question.
@@ -376,6 +395,7 @@ public partial class MainWindow : Window
     /// question comes before any answer acts, so a Cancel at the last leaves every node running and saves nothing. The
     /// chosen saves then run, and a failed one keeps the projects open.
     /// </summary>
+    /// <param name="projects">The projects to leave, whose running nodes and unsaved workflows the questions name.</param>
     /// <param name="leave">What the questions ask to do, such as "leave" or "close seed".</param>
     private async Task<bool> ConfirmLeaving(IReadOnlyList<ProjectViewModel> projects, string leave)
     {

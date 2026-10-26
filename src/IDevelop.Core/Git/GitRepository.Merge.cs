@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace IDevelop.Git;
 
@@ -19,7 +18,7 @@ internal abstract record TreeMerge
 
 internal sealed partial class GitRepository
 {
-    public static ImmutableArray<ConfigEntry> MergeSettings { get; } =
+    private static ImmutableArray<ConfigEntry> MergeSettings { get; } =
     [
         new("core.attributesFile", OperatingSystem.IsWindows() ? "NUL" : "/dev/null"),
         new("merge.conflictStyle", "merge"),

@@ -93,7 +93,7 @@ public sealed class TurnProtocolTests
     [Fact]
     public void Codex_sends_the_working_folder_only_when_set()
     {
-        foreach (var resume in new string?[] { null, "session-1" })
+        foreach (var resume in new[] { null, "session-1" })
         {
             var request = new LaunchRequest("m", null, "banana") { ResumeSession = resume };
             var withFolder = new CodexProtocol(request with { WorkingFolder = "/w/checkout" });

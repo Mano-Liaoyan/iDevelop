@@ -34,8 +34,6 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     private const int DiffLimit = 200_000;
     private static readonly Lock Gate = new();
 
-    private GitRepository? _repository;
-
     /// <summary>Why no editing node can run, or null.</summary>
     public string? Problem
     {
@@ -53,7 +51,7 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
         }
     }
 
-    private GitRepository Repository => _repository ??= GitRepository.Open(projectFolder, environment) switch
+    private GitRepository Repository => field ??= GitRepository.Open(projectFolder, environment) switch
     {
         RepositoryOpen.Opened opened => opened.Repository,
         RepositoryOpen.Refused { InNoWorkTree: true } => throw new GitFailure("The project folder is in no Git work tree."),

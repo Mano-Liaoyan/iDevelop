@@ -51,7 +51,7 @@ public sealed record Proposal(
     ImmutableArray<ProposedFill> Fills, ImmutableArray<ProposedNode> Nodes, ImmutableArray<ProposedConnection> Connections)
 {
     /// <summary>The handle with which a proposal names its planner.</summary>
-    public const string PlannerHandle = "planner";
+    private const string PlannerHandle = "planner";
 
     // A card's footprint with its gutter, so new cards never touch.
     public const double ColumnStep = 320;
@@ -132,6 +132,8 @@ public sealed record Proposal(
     /// count, and so does a connection the workflow already holds. A slot that has started is never filled, even when
     /// chosen, and counts as left out.
     /// </summary>
+    /// <param name="workflow">The workflow that the edit changes.</param>
+    /// <param name="chosen">The items that the person chose.</param>
     /// <param name="started">Whether a node has run.</param>
     /// <param name="fallback">
     /// The agent that a new Agent or Review node takes when it has no other: no person's choice, no agent of its
@@ -342,7 +344,7 @@ public sealed record Proposal(
     /// A version 8 id from a hash of the plan and the agent's id for the node. Reading the same log again mints the same
     /// ids, and a later turn or continuation that proposes the node again under its id names the same node.
     /// </summary>
-    internal static TaskId Mint(Guid plan, string name)
+    private static TaskId Mint(Guid plan, string name)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{plan}/{name}"));
         hash[6] = (byte)((hash[6] & 0x0F) | 0x80);

@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
-using IDevelop.Clients;
+using JetBrains.Annotations;
 
 namespace IDevelop.Workflows;
 
@@ -132,7 +132,7 @@ public sealed record TaskDefinition
     // The fields compare by content, which a dictionary does not.
     public bool Equals(TaskDefinition? other) =>
         other is not null && Id == other.Id && Blueprint.Equals(other.Blueprint) && Title == other.Title &&
-        Fields.SequenceEqual(other.Fields) && Execution == other.Execution && Conversation == other.Conversation &&
+        Fields.Keys.SequenceEqual(other.Fields.Keys) && Fields.Values.SequenceEqual(other.Fields.Values) && Execution == other.Execution && Conversation == other.Conversation &&
         RoundLimit == other.RoundLimit;
 
     public override int GetHashCode() => HashCode.Combine(Id, Blueprint.Key, Title);
@@ -193,9 +193,9 @@ public abstract record EditRejection
 
     public sealed record UnknownTask(TaskId Task) : EditRejection;
 
-    public sealed record UnknownConnection(ConnectionKey Key) : EditRejection;
+    public sealed record UnknownConnection([UsedImplicitly] ConnectionKey Key) : EditRejection;
 
-    public sealed record TaskAlreadyExists(TaskId Task) : EditRejection;
+    public sealed record TaskAlreadyExists([UsedImplicitly] TaskId Task) : EditRejection;
 
     /// <summary>The task's blueprint has no field with this key.</summary>
     public sealed record UnknownField(TaskId Task, string Key) : EditRejection;
@@ -203,9 +203,9 @@ public abstract record EditRejection
     /// <summary>The workflow already embeds a different blueprint under this key.</summary>
     public sealed record BlueprintConflict(BlueprintKey Key) : EditRejection;
 
-    public sealed record SelfConnection(TaskId Task) : EditRejection;
+    public sealed record SelfConnection([UsedImplicitly] TaskId Task) : EditRejection;
 
-    public sealed record DuplicateConnection(ConnectionKey Key, ConnectionKind ExistingKind) : EditRejection;
+    public sealed record DuplicateConnection([UsedImplicitly] ConnectionKey Key, ConnectionKind ExistingKind) : EditRejection;
 
     /// <summary>The cycle the edit would close, from the new connection's source back to it.</summary>
     public sealed record OrderingCycle(ImmutableArray<TaskId> Path) : EditRejection;
@@ -333,7 +333,9 @@ public sealed class Workflow
         return Applied(new Workflow(Id, Tasks.Add(e.Id, task), Connections, Positions.Add(e.Id, e.Position), Name));
     }
 
+    /// <param name="id">The task to edit.</param>
     /// <param name="edit">Returns the edited task, or null when the edit does not fit it.</param>
+    /// <param name="misfit">The rejection when the edit does not fit the task. An edit that can return null must give it.</param>
     private EditResult Edit(TaskId id, Func<TaskDefinition, TaskDefinition?> edit, EditRejection? misfit = null)
     {
         if (!Tasks.TryGetValue(id, out var task))
@@ -474,7 +476,7 @@ public sealed class Workflow
             : null;
 
     /// <summary>A node that hands on a change of the project, which a review can take as its subject: an editing agent or a Merge node.</summary>
-    public static bool ProducesChange(TaskDefinition task) => task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } or WorkSpec.Merge;
+    private static bool ProducesChange(TaskDefinition task) => task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } or WorkSpec.Merge;
 
     /// <summary>Why a dependency would give a review a second subject, or null.</summary>
     private EditRejection? SecondSubject(ConnectionKey key) =>

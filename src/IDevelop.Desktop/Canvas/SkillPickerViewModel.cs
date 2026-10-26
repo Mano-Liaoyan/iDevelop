@@ -22,9 +22,7 @@ public sealed class SkillPickerViewModel : ObservableObject
     ];
 
     private readonly TaskNodeViewModel _node;
-    private bool _isOpen;
     private ImmutableArray<SkillEntry>? _entries;
-    private IReadOnlyList<SkillChoiceViewModel> _choices = [];
 
     internal SkillPickerViewModel(TaskNodeViewModel node)
     {
@@ -38,10 +36,10 @@ public sealed class SkillPickerViewModel : ObservableObject
     /// <summary>The picker's list is open. Opening it lists the client's skills the first time.</summary>
     public bool IsOpen
     {
-        get => _isOpen;
+        get;
         set
         {
-            if (SetProperty(ref _isOpen, value))
+            if (SetProperty(ref field, value))
             {
                 Refresh();
             }
@@ -73,12 +71,12 @@ public sealed class SkillPickerViewModel : ObservableObject
             var entries = ShowsList && Listing is SkillListing.Listed listed ? SkillChoices.Entries(Settings!.Client, Settings.Skills, listed.Skills) : [];
             if (_entries is not { } shown || !entries.SequenceEqual(shown))
             {
-                (_entries, _choices) = (entries, [.. entries.Select(entry => new SkillChoiceViewModel(this, entry))]);
+                (_entries, field) = (entries, [.. entries.Select(entry => new SkillChoiceViewModel(this, entry))]);
             }
 
-            return _choices;
+            return field;
         }
-    }
+    } = [];
 
     /// <summary>What the open list shows in place of skills: that it is listing them, why it cannot, or that there are none.</summary>
     public string? ListNote => !ShowsList ? null : Listing switch
@@ -168,8 +166,6 @@ public sealed class SkillPickerViewModel : ObservableObject
 /// <summary>One skill in a node's picker. A chosen skill the client no longer lists stays, so the person can see it and untick it.</summary>
 public sealed class SkillChoiceViewModel(SkillPickerViewModel picker, SkillEntry entry)
 {
-    public string Name => entry.Name;
-
     public string Label => entry.Installed ? entry.Name : $"{entry.Name} (not installed)";
 
     /// <summary>The client's own description of the skill, which the tooltip shows, or null.</summary>

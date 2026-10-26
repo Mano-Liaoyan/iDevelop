@@ -5,7 +5,6 @@
      properties keep one rhythm. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:execution="using:IDevelop.Desktop.Execution"
         xmlns:inspector="using:IDevelop.Desktop.Inspector"
         xmlns:theme="using:IDevelop.Desktop.Theme">
 
@@ -212,12 +211,12 @@
                               AutomationProperties.AccessibilityView="Raw"
                               IsVisible="{TemplateBinding Lead, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </Panel>
-          <Panel Name="PART_LabelLine" Grid.Column="2" VerticalAlignment="Top" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}">
+          <Panel Name="PART_LabelLine" Grid.Row="0" Grid.Column="2" VerticalAlignment="Top" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}">
             <TextBlock Name="PART_Label" Classes="rowLabel" Text="{TemplateBinding Label}" ToolTip.Tip="{TemplateBinding LabelTip}" />
           </Panel>
-          <ContentPresenter Name="PART_ContentPresenter" Grid.Column="3" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+          <ContentPresenter Name="PART_ContentPresenter" Grid.Row="0" Grid.Column="3" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
                             VerticalAlignment="Top" VerticalContentAlignment="Center" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
-          <StackPanel Name="PART_Trail" Grid.Column="4" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Top"
+          <StackPanel Name="PART_Trail" Grid.Row="0" Grid.Column="4" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Top"
                       Height="{x:Static inspector:InspectorGrid.LineHeight}">
             <Button Classes="glyph revert"
                     Command="{TemplateBinding RevertCommand}" IsVisible="{TemplateBinding CanRevert}"

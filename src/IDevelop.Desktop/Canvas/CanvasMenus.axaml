@@ -13,7 +13,7 @@
       </Style>
     </ContextMenu.Styles>
     <MenuItem Header="Run" InputGesture="{x:Static canvas:CanvasKeys.Run}"
-              Command="{Binding Node.RunCommand}" IsVisible="{Binding ShowRun}"
+              Command="{Binding Node.RunCommand, FallbackValue={x:Null}}" IsVisible="{Binding ShowRun}"
               AutomationProperties.AutomationId="NodeMenuRun">
       <MenuItem.Icon>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
@@ -27,14 +27,14 @@
       </MenuItem.Icon>
     </MenuItem>
     <MenuItem Header="Stop"
-              Command="{Binding Node.StopCommand}" IsVisible="{Binding ShowStop}"
+              Command="{Binding Node.StopCommand, FallbackValue={x:Null}}" IsVisible="{Binding ShowStop}"
               AutomationProperties.AutomationId="NodeMenuStop">
       <MenuItem.Icon>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
       </MenuItem.Icon>
     </MenuItem>
     <MenuItem Header="Retry"
-              Command="{Binding Node.RetryCommand}" IsVisible="{Binding ShowRetry}"
+              Command="{Binding Node.RetryCommand, FallbackValue={x:Null}}" IsVisible="{Binding ShowRetry}"
               AutomationProperties.AutomationId="NodeMenuRetry">
       <MenuItem.Icon>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" />
@@ -88,14 +88,14 @@
     </MenuItem>
     <Separator IsVisible="{Binding IsSingle}" />
     <MenuItem Header="Derive Blueprint…"
-              Command="{Binding Node.DeriveCommand}" IsVisible="{Binding IsSingle}"
+              Command="{Binding Node.DeriveCommand, FallbackValue={x:Null}}" IsVisible="{Binding IsSingle}"
               AutomationProperties.AutomationId="NodeMenuDerive">
       <MenuItem.Icon>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
       </MenuItem.Icon>
     </MenuItem>
     <MenuItem Header="Save as Blueprint…"
-              Command="{Binding Node.SaveAsBlueprintCommand}" IsVisible="{Binding IsSingle}"
+              Command="{Binding Node.SaveAsBlueprintCommand, FallbackValue={x:Null}}" IsVisible="{Binding IsSingle}"
               AutomationProperties.AutomationId="NodeMenuSaveAs">
       <MenuItem.Icon>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />

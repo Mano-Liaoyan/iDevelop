@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace IDevelop.TestSupport;
+namespace IDevelop.Core.Tests;
 
 /// <summary>
 /// The processes a test started, which it stops at its end. A process that outlives a failed test holds the test host's
@@ -34,7 +34,7 @@ internal sealed class SpawnedProcesses : IDisposable
         {
             try
             {
-                if (File.Exists(file) && int.TryParse(File.ReadAllText(file), out var pid))
+                if (File.Exists(file) && int.TryParse(await File.ReadAllTextAsync(file, timeout.Token), out var pid))
                 {
                     Add(pid);
                     return pid;

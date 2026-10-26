@@ -23,14 +23,14 @@ public sealed class RowLayoutTests
         var row = new SpillRow { MinLeadWidth = 200, Children = { text, new Button { Content = "Mark done" }, new Button { Content = "Cancel" }, new Button { Content = "Send" } } };
         var window = Show(row, width);
 
-        Assert.True(row.IsMeasureValid && row.IsArrangeValid, "The row is still invalid after its layout pass.");
+        Assert.True(row is { IsMeasureValid: true, IsArrangeValid: true }, "The row is still invalid after its layout pass.");
         Assert.Equal(width < 400, row.IsSpilled);
         Assert.InRange(text.Measures, 1, 4);
 
         text.Measures = 0;
         window.Width = width < 400 ? 700 : 300;
         Settle();
-        Assert.True(row.IsMeasureValid && row.IsArrangeValid, "The row is still invalid after the window changed width.");
+        Assert.True(row is { IsMeasureValid: true, IsArrangeValid: true }, "The row is still invalid after the window changed width.");
         Assert.InRange(text.Measures, 1, 4);
     }
 
@@ -46,13 +46,13 @@ public sealed class RowLayoutTests
         var bar = new CanvasTopBar { Children = { breadcrumb, pill, buttons } };
         var window = Show(bar, 1000);
 
-        Assert.True(bar.IsMeasureValid && bar.IsArrangeValid && bar.IsInRow);
+        Assert.True(bar is { IsMeasureValid: true, IsArrangeValid: true, IsInRow: true });
         Assert.InRange(breadcrumb.Measures, 1, 2);
 
         breadcrumb.Measures = 0;
         window.Width = 500;
         Settle();
-        Assert.True(bar.IsMeasureValid && bar.IsArrangeValid && !bar.IsInRow);
+        Assert.True(bar is { IsMeasureValid: true, IsArrangeValid: true, IsInRow: false });
         Assert.InRange(breadcrumb.Measures, 1, 2);
     }
 

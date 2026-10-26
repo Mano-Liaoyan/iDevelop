@@ -124,7 +124,7 @@ public sealed partial record Blueprint
     public const string BuiltInPrefix = "idevelop.";
 
     /// <summary>Variables every template may read: the node's title and what earlier nodes handed on.</summary>
-    public static readonly ImmutableArray<string> CommonVariables = ["title", "inputs"];
+    private static readonly ImmutableArray<string> CommonVariables = ["title", "inputs"];
 
     /// <exception cref="BlueprintException">The blueprint breaks a rule. The message is for the user.</exception>
     public Blueprint(BlueprintKey key, string name, WorkSpec work, ImmutableArray<FieldSpec> fields, NodeSettings defaults)

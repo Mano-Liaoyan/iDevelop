@@ -2,7 +2,7 @@ using IDevelop.Clients;
 using IDevelop.Processes;
 using IDevelop.TestSupport;
 using static IDevelop.TestSupport.FakeRule;
-using static IDevelop.TestSupport.SpawnedProcesses;
+using static IDevelop.Core.Tests.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests;
 
@@ -33,7 +33,7 @@ public sealed class ChildProcessTests : IDisposable
     {
         var sleeper = Path.Combine(_evidence, "sleep.pid");
         var shim = Path.Combine(_fakes.Folder, "bash-client.cmd");
-        File.WriteAllText(shim, $"@\"{GitBashFactAttribute.Bash}\" -c \"bash -c 'sleep 300 & cat /proc/$!/winpid > {sleeper.Replace('\\', '/')}; wait'\"\r\n");
+        await File.WriteAllTextAsync(shim, $"@\"{GitBashFactAttribute.Bash}\" -c \"bash -c 'sleep 300 & cat /proc/$!/winpid > {sleeper.Replace('\\', '/')}; wait'\"\r\n");
         var client = ChildProcess.Start(new ResolvedCommand(shim, IsBatchShim: true), [], _folder, ProcessLifetime.Probe);
         _spawned.Add(client.Identity.Id);
         var sleepId = await _spawned.PidAsync(sleeper);

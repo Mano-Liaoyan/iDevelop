@@ -29,10 +29,10 @@ public enum ChromeSlot
 public sealed class CanvasTopBar : Panel
 {
     /// <summary>The first row's line: the breadcrumb's height, on which the 32 px buttons and the 24 px pill centre.</summary>
-    public const double RowHeight = 36;
+    private const double RowHeight = 36;
 
     /// <summary>The room between the first row and what sits under it.</summary>
-    public const double LineSpacing = 8;
+    private const double LineSpacing = 8;
 
     public static readonly AttachedProperty<ChromeSlot> SlotProperty = AvaloniaProperty.RegisterAttached<CanvasTopBar, Control, ChromeSlot>("Slot");
 

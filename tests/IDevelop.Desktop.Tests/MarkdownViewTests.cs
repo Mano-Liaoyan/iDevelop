@@ -159,7 +159,7 @@ public sealed class MarkdownViewTests
     public void A_message_past_the_cell_link_or_length_limit_shows_as_its_source()
     {
         static string Table(int rows) => "| a | b | c | d | e | f | g | h | i | j |\n|-|-|-|-|-|-|-|-|-|-|\n"
-            + string.Concat(Enumerable.Range(0, rows).Select(row => "| x | x | x | x | x | x | x | x | x | x |\n"));
+            + string.Concat(Enumerable.Range(0, rows).Select(_ => "| x | x | x | x | x | x | x | x | x | x |\n"));
         static string Links(int count) => string.Join(" ", Enumerable.Range(0, count).Select(i => $"[l{i}](https://example.com/{i})"));
         var (window, view) = Show("");
         (int Cells, int Links, int Blocks) Shown(string markdown)

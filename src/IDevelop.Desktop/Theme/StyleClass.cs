@@ -8,23 +8,19 @@ namespace IDevelop.Desktop.Theme;
 /// state-failed, or role-proposing, and take away the class of the value before. Kinds.axaml paints by these classes,
 /// so XAML never names a hue.
 /// </summary>
-public sealed class StyleClass
+public static class StyleClass
 {
-    public static readonly AttachedProperty<NodeKind?> KindProperty = AvaloniaProperty.RegisterAttached<StyleClass, StyledElement, NodeKind?>("Kind");
+    public static readonly AttachedProperty<NodeKind?> KindProperty = AvaloniaProperty.RegisterAttached<StyledElement, NodeKind?>("Kind", typeof(StyleClass));
 
-    public static readonly AttachedProperty<NodeState?> StateProperty = AvaloniaProperty.RegisterAttached<StyleClass, StyledElement, NodeState?>("State");
+    public static readonly AttachedProperty<NodeState?> StateProperty = AvaloniaProperty.RegisterAttached<StyledElement, NodeState?>("State", typeof(StyleClass));
 
-    public static readonly AttachedProperty<NodeRole?> RoleProperty = AvaloniaProperty.RegisterAttached<StyleClass, StyledElement, NodeRole?>("Role");
+    public static readonly AttachedProperty<NodeRole?> RoleProperty = AvaloniaProperty.RegisterAttached<StyledElement, NodeRole?>("Role", typeof(StyleClass));
 
     static StyleClass()
     {
         Swap(KindProperty, kind => NodeKinds.Info(kind).StyleClass);
         Swap(StateProperty, state => $"state-{state.ToString().ToLowerInvariant()}");
         Swap(RoleProperty, role => $"role-{role.ToString().ToLowerInvariant()}");
-    }
-
-    private StyleClass()
-    {
     }
 
     public static NodeKind? GetKind(StyledElement element) => element.GetValue(KindProperty);

@@ -20,8 +20,6 @@ public sealed class AddNodeHeader(string title) : AddNodeItem
 
 public abstract class AddNodeRow : AddNodeItem
 {
-    private bool _isHighlighted;
-
     private protected AddNodeRow(string label, string description, Action run)
     {
         Label = label;
@@ -41,8 +39,8 @@ public abstract class AddNodeRow : AddNodeItem
 
     public bool IsHighlighted
     {
-        get => _isHighlighted;
-        internal set => SetProperty(ref _isHighlighted, value);
+        get;
+        internal set => SetProperty(ref field, value);
     }
 }
 
@@ -59,7 +57,7 @@ public sealed class BlueprintRow : AddNodeRow
         EditCommand = new RelayCommand(() => run(entry.EditCommand));
     }
 
-    public Blueprint Blueprint { get; }
+    private Blueprint Blueprint { get; }
 
     public NodeKind Kind { get; }
 
@@ -96,10 +94,7 @@ public sealed class AddNodeViewModel : ObservableObject
     private readonly ImmutableArray<(string Heading, ImmutableArray<BlueprintRow> Rows)> _libraries;
     private readonly ImmutableArray<ActionRow> _actions;
     private string _query = "";
-    private IReadOnlyList<AddNodeItem> _items = [];
-    private IReadOnlyList<AddNodeItem> _actionItems = [];
     private List<AddNodeRow> _rows = [];
-    private AddNodeRow? _highlighted;
 
     /// <summary>Reads the libraries again, so a blueprint saved elsewhere is offered without a reload.</summary>
     internal AddNodeViewModel(WorkflowCanvasViewModel canvas, AddTarget target)
@@ -119,7 +114,7 @@ public sealed class AddNodeViewModel : ObservableObject
             AddTarget.FromOutput from => ("Connect from", canvas.Nodes.FirstOrDefault(node => node.Id == from.Source)),
             AddTarget.ToInput to => ("Connect to", canvas.Nodes.FirstOrDefault(node => node.Id == to.Target)),
             AddTarget.Between between => ("Insert after", canvas.Nodes.FirstOrDefault(node => node.Id == between.Connection.From)),
-            _ => ((string?)null, (TaskNodeViewModel?)null),
+            _ => (null, null),
         };
         Show();
     }
@@ -142,25 +137,25 @@ public sealed class AddNodeViewModel : ObservableObject
     /// <summary>The headers and rows of the popover's list, which scrolls when it is taller than the popover.</summary>
     public IReadOnlyList<AddNodeItem> Items
     {
-        get => _items;
-        private set => SetProperty(ref _items, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     /// <summary>The Actions header and rows below the list, or nothing while a query lists every match in one list.</summary>
     public IReadOnlyList<AddNodeItem> Actions
     {
-        get => _actionItems;
-        private set => SetProperty(ref _actionItems, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     /// <summary>The row Enter chooses, or null when nothing matches.</summary>
     public AddNodeRow? Highlighted
     {
-        get => _highlighted;
+        get;
         set
         {
-            var old = _highlighted;
-            if (SetProperty(ref _highlighted, value))
+            var old = field;
+            if (SetProperty(ref field, value))
             {
                 old?.IsHighlighted = false;
                 value?.IsHighlighted = true;
@@ -178,7 +173,7 @@ public sealed class AddNodeViewModel : ObservableObject
 
     public bool HasConnect => ConnectNode is not null;
 
-    public ImmutableArray<string> Problems { get; }
+    private ImmutableArray<string> Problems { get; }
 
     public bool HasProblems => !Problems.IsEmpty;
 
@@ -207,7 +202,7 @@ public sealed class AddNodeViewModel : ObservableObject
     /// How well <paramref name="query"/> matches: 0 for a name prefix, 1 for a word prefix, 2 for a substring of the name,
     /// 3 for letters of the name in order, 4 for a substring of the description, or null for no match.
     /// </summary>
-    internal static int? Rank(string query, string name, string description)
+    private static int? Rank(string query, string name, string description)
     {
         const StringComparison ignoreCase = StringComparison.OrdinalIgnoreCase;
         if (name.StartsWith(query, ignoreCase))

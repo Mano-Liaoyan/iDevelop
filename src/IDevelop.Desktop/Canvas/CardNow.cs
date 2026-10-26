@@ -12,8 +12,6 @@ internal sealed record CardFacts(EngineState State, string Status)
 {
     public NodeRole Role { get; init; }
 
-    public bool HasAgent { get; init; } = true;
-
     /// <summary>What the agent did last: its latest message, or the tool it started after it, or null.</summary>
     public string? LastReply { get; init; }
 
@@ -43,7 +41,7 @@ public sealed record CardNow(CardNowKind Kind, string Heading, string? Text, str
 {
     internal static CardNow Of(CardFacts facts)
     {
-        if (facts.Role == NodeRole.Proposing && facts.Proposal is { } proposal)
+        if (facts is { Role: NodeRole.Proposing, Proposal: { } proposal })
         {
             return new(CardNowKind.Proposal, "Proposal", $"{proposal}. Review the tasks in the inspector, then accept or dismiss them.");
         }

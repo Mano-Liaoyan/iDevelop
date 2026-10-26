@@ -239,7 +239,7 @@ public sealed class FeedbackTests : IAsyncLifetime
         await Until<NodeState.Running>(engine, r);
         await engine.Send(r, "Also check names.", interrupt: false);
 
-        File.WriteAllText(gate, "");
+        await File.WriteAllTextAsync(gate, "");
 
         await Until(engine, a, state => state is NodeState.Completed && engine.History(a).Count == 2);
         Assert.Contains("The line says A.", _f.Prompt("fix.txt"), StringComparison.Ordinal);
@@ -262,7 +262,7 @@ public sealed class FeedbackTests : IAsyncLifetime
         await Until<NodeState.Running>(engine, r);
         engine.Update(_f.Workflow = _f.Workflow.Must(new WorkflowEdit.SetField(a, "instructions", "Do A better.")));
 
-        File.WriteAllText(gate, "");
+        await File.WriteAllTextAsync(gate, "");
 
         await Eventually(() => engine.Entries(r).OfType<NodeEntry.Feedback>().Any());
         Assert.Equal(new NodeState.Stale(), engine.State(a));

@@ -10,7 +10,7 @@ namespace IDevelop.Nodes;
 public sealed record Standing(string Id, string Text, string Change, string? Severity = null, string? Location = null);
 
 /// <summary>The reviewer's verdict block. Approval lists no finding, and a request for changes lists at least one.</summary>
-public sealed record Verdict(bool Approves, ImmutableArray<Standing> Findings, ImmutableArray<(string Id, string Reason)> Withdrawn)
+public sealed record Verdict(bool Approves, ImmutableArray<Standing> Findings)
 {
     /// <summary>The verdict at the end of a reviewer's final message, or why it cannot be read.</summary>
     public static (Verdict? Verdict, string? Problem) Read(string? finalText)
@@ -61,16 +61,11 @@ public sealed record Verdict(bool Approves, ImmutableArray<Standing> Findings, I
             standing.Add(new Standing(id, text, change, Text(item, "severity")?.ToLowerInvariant(), Text(item, "location")));
         }
 
-        var withdrawn = Items(block.Value, "withdrawn")
-            .Select(item => (Id: Id(item), Reason: Text(item, "reason") ?? ""))
-            .Where(item => item.Id is not null && standing.All(other => other.Id != item.Id))
-            .Select(item => (item.Id!, item.Reason))
-            .ToImmutableArray();
         return (approves.Value, standing.Count) switch
         {
             (true, > 0) => (null, "The verdict approves but lists findings that still stand."),
             (false, 0) => (null, "The verdict asks for changes but lists no finding."),
-            _ => (new Verdict(approves.Value, standing.ToImmutable(), withdrawn), null),
+            _ => (new Verdict(approves.Value, standing.ToImmutable()), null),
         };
     }
 

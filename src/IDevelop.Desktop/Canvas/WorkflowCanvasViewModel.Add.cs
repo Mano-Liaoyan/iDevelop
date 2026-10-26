@@ -44,15 +44,13 @@ internal interface ICanvasView
 
 public sealed partial class WorkflowCanvasViewModel
 {
-    private AddNodeViewModel? _addNode;
-
     /// <summary>The open Add popover, or null.</summary>
     public AddNodeViewModel? AddNode
     {
-        get => _addNode;
+        get;
         private set
         {
-            if (SetProperty(ref _addNode, value))
+            if (SetProperty(ref field, value))
             {
                 ShowGhosts();
             }
@@ -66,7 +64,7 @@ public sealed partial class WorkflowCanvasViewModel
     internal void CloseAdd() => AddNode = null;
 
     /// <summary>Places a node of the blueprint for the target in one edit, connects it as the target says, and selects it.</summary>
-    internal TaskNodeViewModel? Add(AddTarget target, Blueprint blueprint)
+    internal void Add(AddTarget target, Blueprint blueprint)
     {
         var place = NewTask(blueprint, Position(target));
         var id = place.Id;
@@ -77,19 +75,15 @@ public sealed partial class WorkflowCanvasViewModel
             AddTarget.Between between when Workflow.Connections.TryGetValue(between.Connection, out var kind) =>
             [
                 new WorkflowEdit.Delete([], [between.Connection]),
-                new WorkflowEdit.Connect(new(between.Connection.From, id), kind),
-                new WorkflowEdit.Connect(new(id, between.Connection.To), kind),
+                new WorkflowEdit.Connect(between.Connection with { To = id }, kind),
+                new WorkflowEdit.Connect(between.Connection with { From = id }, kind),
             ],
             _ => [],
         };
-        if (!Apply([place, .. wiring], [place]))
+        if (Apply([place, .. wiring], [place]))
         {
-            return null;
+            Select(_nodes[id]);
         }
-
-        var node = _nodes[id];
-        Select(node);
-        return node;
     }
 
     /// <summary>Selects every node.</summary>

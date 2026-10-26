@@ -11,7 +11,6 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using Avalonia;
-using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Inspector;
 using IDevelop.Desktop.Theme;
@@ -214,9 +213,9 @@ public sealed class InspectorTests : IDisposable
         Assert.False(shell.Find<ItemsControl>("Results").IsEffectivelyVisible);
 
         shell.RunNode();
-        shell.WaitForState("Say hi", IDevelop.Desktop.Canvas.NodeState.Completed);
+        shell.WaitForState("Say hi", NodeState.Completed);
         shell.Click(shell.InView<Button>("RetryTask"));
-        shell.WaitUntil(() => shell.NodeModel("Say hi").Results.Count == 2 && shell.NodeModel("Say hi").State == IDevelop.Desktop.Canvas.NodeState.Completed,
+        shell.WaitUntil(() => shell.NodeModel("Say hi").Results.Count == 2 && shell.NodeModel("Say hi").State == NodeState.Completed,
             "the retry completes");
         shell.Render();
 
@@ -240,7 +239,7 @@ public sealed class InspectorTests : IDisposable
         try
         {
             var now = new DateTimeOffset(2026, 10, 5, 14, 0, 0, TimeSpan.Zero);
-            Assert.Equal(text, IDevelop.Desktop.Execution.RunText.Ago(now.AddSeconds(-secondsAgo), now, TimeZoneInfo.Utc));
+            Assert.Equal(text, Execution.RunText.Ago(now.AddSeconds(-secondsAgo), now, TimeZoneInfo.Utc));
         }
         finally
         {
@@ -290,7 +289,7 @@ public sealed class InspectorTests : IDisposable
         var finish = shell.InView<Button>("ProposalAcceptFinish");
         shell.Window.MouseMove(default);
         shell.Render();
-        Assert.True(finish.IsEffectivelyVisible && finish.IsEffectivelyEnabled);
+        Assert.True(finish is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true });
         Assert.Equal(Color.Parse("#1E6EF4"), shell.ColorAt(finish, new Point(4, finish.Bounds.Height / 2)));
         Assert.Equal((true, false), (shell.Find<Button>("AcceptProposal").Classes.Contains("action"), shell.Find<Button>("AcceptProposal").Classes.Contains("primary")));
         Assert.Contains(shell.Find<CheckBox>("ProposalItem").GetVisualDescendants().OfType<KindTile>(), tile => tile.Kind == NodeKind.Implement);

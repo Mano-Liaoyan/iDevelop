@@ -41,8 +41,8 @@ public abstract record NodeState
     public sealed record Running : NodeState;
 
     /// <summary>
-    /// The node waits for the person. <paramref name="Why"/> is <see cref="Interrupted"/>, <see cref="Approval"/>,
-    /// <see cref="Reply"/>, <see cref="Conflict"/>, <see cref="RoundLimit"/>, the agent's question, or why iDevelop could not read the
+    /// The node waits for the person. <paramref name="Why"/> is <see cref="NodeState.Interrupted"/>, <see cref="NodeState.Approval"/>,
+    /// <see cref="NodeState.Reply"/>, <see cref="NodeState.Conflict"/>, <see cref="NodeState.RoundLimit"/>, the agent's question, or why iDevelop could not read the
     /// agent's result block or verdict.
     /// </summary>
     public sealed record InputRequired(string Why) : NodeState

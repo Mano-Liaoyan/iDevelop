@@ -93,7 +93,7 @@ public sealed class SidebarLayoutTests : IDisposable
         };
 
         Assert.All(names, name => AssertWhole(shell, name));
-        Assert.All(new[] { shell.WorkflowName(Reports, Quarterly), shell.ProjectName(Onboarding) },
+        Assert.All([shell.WorkflowName(Reports, Quarterly), shell.ProjectName(Onboarding)],
             name => Assert.True(name.TextLayout.TextLines.Count > 1, $"\"{name.Text}\" fits on one line at {width} px, so nothing here wraps."));
     }
 
@@ -178,7 +178,7 @@ public sealed class SidebarLayoutTests : IDisposable
         agents.Width = 90;
         shell.Render();
 
-        Assert.All(AgentRows(agents), row => Assert.All(row.GetVisualDescendants().OfType<TextBlock>(), text => AssertWhole(text)));
+        Assert.All(AgentRows(agents), row => Assert.All(row.GetVisualDescendants().OfType<TextBlock>(), AssertWhole));
         Assert.All(AgentRows(agents), row => Assert.Equal("first line 10, dot 0", AgentCentres(row)));
         Assert.True(AgentTexts(agents, "Antigravity CLI").Name.TextLayout.TextLines.Count > 1, "\"Antigravity CLI\" does not wrap.");
         Assert.True(AgentTexts(agents, "Codex").Summary.TextLayout.TextLines.Count > 1, "Codex's \"Ready · 3 models\" does not wrap.");
@@ -301,7 +301,7 @@ public sealed class SidebarLayoutTests : IDisposable
     {
         var item = shell.ProjectItem(project);
         var line = FirstLine(shell.ProjectName(project));
-        var items = new (string, Control)[]
+        var items = new[]
         {
             ("folder", Glyph(item, "IconFolder")), ("waiting", Of<Control>(item, "ProjectWaiting")), ("running", Of<Control>(item, "ProjectRunning")),
             ("+", Of<Button>(item, "NewWorkflow")), ("×", Of<Button>(item, "CloseProject")),
@@ -338,7 +338,7 @@ public sealed class SidebarLayoutTests : IDisposable
         var row = shell.WorkflowRow(project, workflow);
         var chevron = Shell.ById<Control>(row.FindAncestorOfType<Grid>()!, "WorkflowExpand").Single();
         var line = FirstLine(shell.WorkflowName(project, workflow));
-        var items = new (string, Control)[]
+        var items = new[]
         {
             ("chevron", chevron), ("flowchart", Glyph(row, "IconFlowchart")), ("unsaved", Dot(shell, project, workflow, "WorkflowUnsaved")),
             ("waiting", Dot(shell, project, workflow, "WorkflowWaiting")), ("running", Dot(shell, project, workflow, "WorkflowRunning")),

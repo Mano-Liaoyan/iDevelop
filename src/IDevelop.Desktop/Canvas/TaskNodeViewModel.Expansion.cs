@@ -1,7 +1,5 @@
 using System.ComponentModel;
-using System.Windows.Input;
 using Avalonia;
-using IDevelop.Desktop.Mvvm;
 
 namespace IDevelop.Desktop.Canvas;
 
@@ -18,20 +16,18 @@ public sealed partial class TaskNodeViewModel
         nameof(RunRefusal), nameof(LastReply), nameof(Results), nameof(AgentLabel),
     ];
 
-    private bool _isExpanded;
     private Vector _viewOffset;
     private Size _cardSize = new(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight);
     private CardDetailViewModel? _detail;
     private int _detailHolds;
-    private RelayCommand? _toggleExpand;
 
     /// <summary>The card shows its details. A new card starts collapsed.</summary>
     public bool IsExpanded
     {
-        get => _isExpanded;
+        get;
         set
         {
-            if (!SetProperty(ref _isExpanded, value))
+            if (!SetProperty(ref field, value))
             {
                 return;
             }
@@ -50,8 +46,6 @@ public sealed partial class TaskNodeViewModel
             _canvas.OnCardExpansionChanged();
         }
     }
-
-    public ICommand ToggleExpandCommand => _toggleExpand ??= new RelayCommand(() => IsExpanded = !IsExpanded);
 
     /// <summary>The disclosure's name and tooltip, such as Expand "Design".</summary>
     public string ExpandName => $"{(IsExpanded ? "Collapse" : "Expand")} \"{Title}\"";
@@ -115,7 +109,6 @@ public sealed partial class TaskNodeViewModel
     internal CardFacts CardFacts() => new(_engineState, StatusLabel)
     {
         Role = Role,
-        HasAgent = HasAgent,
         LastReply = Latest,
         Report = _history.Count > 0 ? _history[^1].Report : null,
         Detail = StateDetail,

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using IDevelop.Clients;
-using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Execution;
@@ -112,7 +111,7 @@ public static class RunText
         ClientId.Antigravity => "This task only reads the project. Antigravity CLI runs in plan mode.",
     };
 
-    public static string PermissionNote(ClientId client) => client switch
+    private static string PermissionNote(ClientId client) => client switch
     {
         ClientId.ClaudeCode => "Claude Code may edit files in the project folder. It denies any command its settings do not already allow.",
         ClientId.Codex => "Codex may edit files in the project folder. Its commands run in its workspace sandbox.",

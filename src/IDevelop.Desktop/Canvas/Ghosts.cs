@@ -14,7 +14,7 @@ public abstract record Ghost(Point Location);
 /// title, <see cref="Label"/>, and <see cref="Detail"/>, the model and level. <see cref="Note"/> says why the planner's
 /// choice of agent falls back, in a tab under the card.
 /// </summary>
-public sealed record GhostCardViewModel(Point Location, string Label, string Title, string Preview, NodeKind Kind) : Ghost(Location)
+public sealed record GhostCardViewModel(Point Location, string Label, string Title, NodeKind Kind) : Ghost(Location)
 {
     public string? Detail { get; init; }
 

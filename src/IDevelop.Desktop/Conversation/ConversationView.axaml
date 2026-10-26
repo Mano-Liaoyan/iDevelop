@@ -251,14 +251,16 @@
                       </Button>
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                      <Button Classes="icon copy" HorizontalAlignment="Right" VerticalAlignment="Bottom" Command="{Binding CopyCommand}"
+                      <Button Grid.Column="0" Classes="icon copy" HorizontalAlignment="Right" VerticalAlignment="Bottom" Command="{Binding CopyCommand}"
                               IsVisible="{Binding IsPerson}"
                               ToolTip.Tip="Copy message"
                               AutomationProperties.AutomationId="CopyMessage"
                               AutomationProperties.Name="Copy message">
                         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCopy}" />
                       </Button>
-                      <Border Classes="message" Classes.person="{Binding IsPerson}"
+                      <Border Grid.Column="{Binding IsPerson, Converter={x:Static conversation:ConversationView.MessageColumn}}"
+                              Grid.ColumnSpan="{Binding IsPerson, Converter={x:Static conversation:ConversationView.MessageColumnSpan}}"
+                              Classes="message" Classes.person="{Binding IsPerson}"
                               AutomationProperties.AutomationId="Message"
                               AutomationProperties.Name="{Binding AuthorLabel}">
                         <conversation:MarkdownView Markdown="{Binding Text}" />

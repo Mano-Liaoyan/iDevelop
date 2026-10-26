@@ -49,7 +49,7 @@ public sealed class ApprovalTests : IAsyncLifetime
         var (a, p) = (_f.Node("A"), _f.Approval("Check"));
         _f.Connect(a, p);
         var gate = _f.File("gate");
-        File.WriteAllText(gate, "");
+        await File.WriteAllTextAsync(gate, "");
         _f.Install(Reply("s-a", "Report A", On().WaitForFile(gate)));
         var engine = await _f.Open();
         await engine.RunWorkflow();

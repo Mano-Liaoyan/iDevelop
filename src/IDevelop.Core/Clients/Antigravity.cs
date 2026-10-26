@@ -94,8 +94,8 @@ internal static class Antigravity
         return root.String("event") switch
         {
             "init" => Init(root),
-            "step_update" when step?.String("step_type") == "tool" && step?.String("state") == "ACTIVE" && step?.String("tool_name") is { } tool =>
-                [new AgentEvent.ToolStarted(tool, step?.Property("tool_info")?.Property("parameters")?.String("TargetFile"))],
+            "step_update" when step is { } update && update.String("step_type") == "tool" && update.String("state") == "ACTIVE" && update.String("tool_name") is { } tool =>
+                [new AgentEvent.ToolStarted(tool, update.Property("tool_info")?.Property("parameters")?.String("TargetFile"))],
             "result" when root.Property("result") is { } result => [Verdict(result)],
             _ => [],
         };

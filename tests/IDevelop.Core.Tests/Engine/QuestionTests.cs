@@ -45,7 +45,7 @@ public sealed class QuestionTests : IAsyncLifetime
         await engine.Answer(a, waiting.Question.Key, Choose("o:1"));
 
         await Until<NodeState.Completed>(engine, a);
-        Assert.Contains("\"Which color?\":\"Blue\"", File.ReadAllText(_f.File("answer.json")));
+        Assert.Contains("\"Which color?\":\"Blue\"", await File.ReadAllTextAsync(_f.File("answer.json")));
         Assert.Equal("Painted it blue.", Assert.Single(engine.History(a)).Report);
         Assert.Equal(1, engine.Entries(a).Count(entry => entry is NodeEntry.TurnStarted));
         var lines = engine.Conversation(a).Lines;
@@ -68,7 +68,7 @@ public sealed class QuestionTests : IAsyncLifetime
         Assert.Equal(waiting, engine.State(a));
         await engine.Answer(a, waiting.Question!.Key, new QuestionsReply([new QuestionAnswer("q:0", [], "Green")]));
         await Until<NodeState.Completed>(engine, a);
-        Assert.Contains("\"Which color?\":\"Green\"", File.ReadAllText(_f.File("answer.json")));
+        Assert.Contains("\"Which color?\":\"Green\"", await File.ReadAllTextAsync(_f.File("answer.json")));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class QuestionTests : IAsyncLifetime
 
         await Until<NodeState.Completed>(engine, a);
 
-        Assert.Contains("\"behavior\":\"deny\"", File.ReadAllText(_f.File("answer.json")));
+        Assert.Contains("\"behavior\":\"deny\"", await File.ReadAllTextAsync(_f.File("answer.json")));
         Assert.Empty(engine.Entries(a).OfType<NodeEntry.Asked>());
     }
 }

@@ -98,6 +98,12 @@
         "dependencies": {
           "IDevelop.Core": "[1.0.0, )"
         }
+      },
+      "idevelop.testsupport": {
+        "type": "Project",
+        "dependencies": {
+          "IDevelop.Core": "[1.0.0, )"
+        }
       }
     }
   }

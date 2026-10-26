@@ -71,7 +71,7 @@ internal static class Codex
             return null;
         }
 
-        var levels = ReasoningLevels.Sort(model.Items("supported_reasoning_levels").Select(level => level.String("effort")).OfType<string>());
+        var levels = ReasoningLevels.Sort(model.Items("supported_reasoning_levels").Select(entry => entry.String("effort")).OfType<string>());
         return new ModelOption(slug, model.String("display_name") ?? slug, levels)
         {
             DefaultReasoning = model.String("default_reasoning_level") is { } level && levels.Contains(level) ? level : ReasoningLevels.Default(levels),

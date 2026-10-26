@@ -3,7 +3,7 @@ using System.Text.Json;
 using IDevelop.Git;
 using IDevelop.TestSupport;
 using static IDevelop.TestSupport.FakeRule;
-using static IDevelop.TestSupport.SpawnedProcesses;
+using static IDevelop.Core.Tests.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests.Git;
 
@@ -62,23 +62,23 @@ public sealed class GitLifetimeTests
         await exiting.WaitForExitAsync().WaitAsync(Patience);
         Assert.Equal(73, exiting.ExitCode);
         var marker = Assert.Single(Directory.GetFiles(launches, "*.json"));
-        Assert.Contains("status", JsonSerializer.Deserialize<string[]>(File.ReadAllBytes(marker))!);
+        Assert.Contains("status", JsonSerializer.Deserialize<string[]>(await File.ReadAllBytesAsync(marker))!);
         var git = int.Parse(Path.GetFileName(marker).Split('-')[0]);
         spawned.Add(git);
         var child = await spawned.PidAsync(hook).WaitAsync(Patience);
         await Task.Delay(500);
 
-        using (var survivor = System.Diagnostics.Process.GetProcessById(git))
+        using (var survivor = Process.GetProcessById(git))
         {
             Assert.False(survivor.HasExited, "Git died with the app that started it.");
         }
 
-        using (var survivor = System.Diagnostics.Process.GetProcessById(child))
+        using (var survivor = Process.GetProcessById(child))
         {
             Assert.False(survivor.HasExited, "The hook's child died with the app that started Git.");
         }
 
-        File.WriteAllText(gate, "go");
+        await File.WriteAllTextAsync(gate, "go");
         AssertGone(git);
     }
 
@@ -87,8 +87,10 @@ public sealed class GitLifetimeTests
     {
         var dotnet = Path.GetFullPath(Path.Combine(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", "..",
             OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"));
-        var start = new ProcessStartInfo(dotnet) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.Environment["PATH"] = path;
+        var start = new ProcessStartInfo(dotnet)
+        {
+            UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, Environment = { ["PATH"] = path },
+        };
         foreach (var arg in new[] { Path.Combine(AppContext.BaseDirectory, "IDevelop.GitExit.dll"), repository, hook })
         {
             start.ArgumentList.Add(arg);

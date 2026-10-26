@@ -59,10 +59,10 @@ public static class CardLayout
     /// </summary>
     private static bool Beneath(CardBox card, double shift, CardBox other, double otherShift)
     {
-        const double Gutter = 10;
-        var left = card.Location.X + shift + Gutter;
-        var otherLeft = other.Location.X + otherShift + Gutter;
-        return left < otherLeft + other.Size.Width - 2 * Gutter && otherLeft < left + card.Size.Width - 2 * Gutter;
+        const double gutter = 10;
+        var left = card.Location.X + shift + gutter;
+        var otherLeft = other.Location.X + otherShift + gutter;
+        return left < otherLeft + other.Size.Width - 2 * gutter && otherLeft < left + card.Size.Width - 2 * gutter;
     }
 
     /// <summary>The cards' indexes grouped into columns, left to right.</summary>

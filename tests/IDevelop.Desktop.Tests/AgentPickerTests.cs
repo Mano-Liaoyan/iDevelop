@@ -162,7 +162,7 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal(["Codex", "GPT-6-Sol", "low"], Pickers(shell));
         Assert.Equal(
             ["Codex · GPT-5.5 · xhigh", "Codex · GPT-6-Sol · low", "Antigravity CLI · Gemini 3.8 Flash · high"],
-            new[] { "Design", "Build", "Review" }.Select(title => shell.CardAgent(title)));
+            new[] { "Design", "Build", "Review" }.Select(shell.CardAgent));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
 
@@ -183,7 +183,7 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal(["Antigravity CLI", "Gemini 3.8 Flash", "low"], Pickers(shell));
         Assert.Equal(
             ["Codex · GPT-5.5 · low", "Codex · GPT-6-Sol · xhigh", "Antigravity CLI · Gemini 3.8 Flash · low"],
-            new[] { "Design", "Build", "Review" }.Select(title => shell.CardAgent(title)));
+            new[] { "Design", "Build", "Review" }.Select(shell.CardAgent));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
 
@@ -216,7 +216,7 @@ public sealed class AgentPickerTests : IDisposable
             Assert.Equal(pickers[title], Pickers(shell));
             Assert.Equal(
                 ["Pi · deepseek · DeepSeek V4 Pro · high", "Codex · GPT-5.5 · low", "Antigravity CLI · Gemini 3.8 Flash · medium"],
-                new[] { "Design", "Build", "Review" }.Select(task => shell.CardAgent(task)));
+                new[] { "Design", "Build", "Review" }.Select(shell.CardAgent));
             Assert.True("seed - iDevelop" == shell.Window.Title, $"Choosing {title} in the {where} made the title '{shell.Window.Title}'.");
         }
     }
@@ -242,7 +242,7 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal(["Codex", "GPT-5.5", "low"], Pickers(shell));
         Assert.Equal(
             ["Pi · deepseek · DeepSeek V4 Pro · high", "Codex · GPT-5.5 · low"],
-            new[] { "Design", "Build" }.Select(task => shell.CardAgent(task)));
+            new[] { "Design", "Build" }.Select(shell.CardAgent));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
 

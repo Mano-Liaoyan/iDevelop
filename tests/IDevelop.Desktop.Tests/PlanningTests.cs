@@ -7,7 +7,6 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Avalonia;
-using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Theme;
 using IDevelop.Projects;
@@ -41,7 +40,7 @@ public sealed class PlanningTests : IDisposable
     [InlineData(1, 2, "Added 1 task and filled 2 tasks.")]
     public void The_accept_notice_names_only_what_accepting_did(int added, int filled, string notice)
     {
-        Assert.Equal(notice, IDevelop.Desktop.Canvas.ProposalViewModel.AcceptedNotice(added, filled));
+        Assert.Equal(notice, ProposalViewModel.AcceptedNotice(added, filled));
     }
 
     [AvaloniaFact]
@@ -211,7 +210,7 @@ public sealed class PlanningTests : IDisposable
             ],
             GenerateTests.Review(shell));
         Assert.Equal(["Fills · GPT-6.1-Sol · low Backend API", "Fills Frontend"], GenerateTests.Ghosts(shell));
-        Assert.Equal(new string?[] { null, "Pi isn't installed" }, GenerateTests.GhostNotes(shell));
+        Assert.Equal(new[] { null, "Pi isn't installed" }, GenerateTests.GhostNotes(shell));
         // Frontend has no usable choice, so the box offers it the planner's agent, which a planner the person placed leaves off.
         Assert.True(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
         Assert.False(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsChecked);

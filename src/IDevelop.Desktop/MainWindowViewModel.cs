@@ -28,16 +28,13 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly RelayCommand _undo;
     private readonly RelayCommand _redo;
     private readonly RelayCommand _refreshAgents;
-    private WorkflowCanvasViewModel? _canvas;
-    private ConversationViewModel? _conversation;
-    private bool _conversationDocked;
-    private string? _status;
     private bool _refreshingAgents;
     private bool _restoring;
 
     /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
     internal Func<string, Task<bool>> OpenFolder { get; set; } = _ => Task.FromResult(false);
 
+    /// <param name="clients">The coding-agent clients on this machine and what each offers.</param>
     /// <param name="copy">Puts text on the clipboard.</param>
     /// <param name="personalBlueprints">The personal blueprint library's folder, or null for none.</param>
     /// <param name="sessionFile">The file that remembers the open projects between runs, or null to remember nothing.</param>
@@ -47,10 +44,10 @@ public sealed class MainWindowViewModel : ObservableObject
         _copy = copy;
         _personalBlueprints = personalBlueprints;
         _sessionFile = sessionFile;
-        _save = new RelayCommand(() => TrySave(), () => EditableCanvas is not null);
+        _save = new RelayCommand(TrySave, () => EditableCanvas is not null);
         _undo = new RelayCommand(() => EditableCanvas?.Document.Undo(), () => EditableCanvas?.Document.CanUndo ?? false);
         _redo = new RelayCommand(() => EditableCanvas?.Document.Redo(), () => EditableCanvas?.Document.CanRedo ?? false);
-        _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
+        _refreshAgents = new RelayCommand(() => UiWork.Start(RefreshAgents, text => Status = text), () => !_refreshingAgents);
         CloseConversationCommand = new RelayCommand(CloseConversation);
         ToggleConversationLayoutCommand = new RelayCommand(() => IsConversationDocked = !IsConversationDocked);
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
@@ -70,17 +67,17 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>The workflow the window shows, or null when no project is open.</summary>
     public WorkflowCanvasViewModel? Canvas
     {
-        get => _canvas;
-        private set => SetProperty(ref _canvas, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     /// <summary>The open conversation, which the main area or the dock shows, or null.</summary>
     public ConversationViewModel? Conversation
     {
-        get => _conversation;
+        get;
         private set
         {
-            if (SetProperty(ref _conversation, value))
+            if (SetProperty(ref field, value))
             {
                 OnConversationLayoutChanged();
             }
@@ -90,10 +87,10 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>The conversation sits in a dock under the canvas instead of taking the main area. The window keeps the choice.</summary>
     public bool IsConversationDocked
     {
-        get => _conversationDocked;
+        get;
         set
         {
-            if (SetProperty(ref _conversationDocked, value))
+            if (SetProperty(ref field, value))
             {
                 OnConversationLayoutChanged();
             }
@@ -128,8 +125,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public string? Status
     {
-        get => _status;
-        private set => SetProperty(ref _status, value);
+        get;
+        internal set => SetProperty(ref field, value);
     }
 
     public ICommand SaveCommand => _save;
@@ -202,7 +199,7 @@ public sealed class MainWindowViewModel : ObservableObject
     /// Shows the node's conversation in the current layout, and its workflow and card with it. The conversation keeps its
     /// draft and place when it closes.
     /// </summary>
-    internal void OpenConversation(ConversationTarget target)
+    private void OpenConversation(ConversationTarget target)
     {
         if (target.Canvas != Canvas)
         {
@@ -214,13 +211,13 @@ public sealed class MainWindowViewModel : ObservableObject
             ShowConversation(target);
         }
 
-        if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } node && target.Canvas.SelectedNode != node)
+        if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } found && target.Canvas.SelectedNode != found)
         {
-            target.Canvas.Inspect(node);
+            target.Canvas.Inspect(found);
         }
     }
 
-    public void CloseConversation()
+    private void CloseConversation()
     {
         Conversation?.Dispose();
         Conversation = null;
@@ -335,7 +332,13 @@ public sealed class MainWindowViewModel : ObservableObject
         Status = string.Join(" ", [.. notes, .. Status is { } status ? [status] : Array.Empty<string>()]) is { Length: > 0 } all ? all : null;
     }
 
-    public bool TrySave() => Canvas is not { } canvas || TrySave([canvas.Document]);
+    private void TrySave()
+    {
+        if (Canvas is { } canvas)
+        {
+            TrySave([canvas.Document]);
+        }
+    }
 
     /// <summary>Saves each document in turn and stops at the first that fails, whose reason the status shows.</summary>
     internal bool TrySave(IEnumerable<WorkflowDocument> documents)
@@ -412,8 +415,10 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private WorkflowCanvasViewModel NewCanvas(ProjectViewModel project, WorkflowDocument document)
     {
-        var canvas = new WorkflowCanvasViewModel(project, document, _clients, notice => Status = notice, _copy, _personalBlueprints, GitEnvironment);
-        canvas.OpenFolder = folder => OpenFolder(folder);
+        var canvas = new WorkflowCanvasViewModel(project, document, _clients, notice => Status = notice, _copy, _personalBlueprints, GitEnvironment)
+        {
+            OpenFolder = folder => OpenFolder(folder),
+        };
         document.Changed += (_, _) =>
         {
             if (canvas == Canvas)
@@ -488,7 +493,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         var session = new WorkspaceSession(
             [.. Projects.Select(project => project.Folder), .. Unopened.Select(unopened => unopened.Folder)],
-            Canvas is { } canvas ? new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id) : null,
+            Canvas is { } current ? new WorkflowRef(current.Project.Folder, current.Workflow.Id) : null,
             [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.IsExpanded).Select(canvas => new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id))])
         {
             Cards = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.AnyCardExpanded)
@@ -519,7 +524,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async void RefreshAgents()
+    private async Task RefreshAgents()
     {
         _refreshingAgents = true;
         _refreshAgents.NotifyCanExecuteChanged();

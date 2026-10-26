@@ -7,10 +7,10 @@ namespace IDevelop.Desktop.Tests;
 public sealed class CardNowTests
 {
     private static CardNow Of(EngineState state, string status = "", string? reply = null, string? report = null, string? detail = null,
-        NodeRole role = NodeRole.None, bool hasAgent = true, string? proposal = null, string? review = null, string? field = "Draft the format.") =>
+        NodeRole role = NodeRole.None, string? proposal = null, string? review = null, string? field = "Draft the format.") =>
         CardNow.Of(new CardFacts(state, status)
         {
-            LastReply = reply, Report = report, Detail = detail, Role = role, HasAgent = hasAgent, Proposal = proposal, Review = review,
+            LastReply = reply, Report = report, Detail = detail, Role = role, Proposal = proposal, Review = review,
             FieldLabel = "Instructions", FieldText = field,
         });
 
@@ -48,7 +48,7 @@ public sealed class CardNowTests
     {
         var proposal = Of(new EngineState.InputRequired(EngineState.Reply), role: NodeRole.Proposing, proposal: "Proposal · 3 tasks");
 
-        Assert.Equal(CardNowKind.Approval, Of(new EngineState.InputRequired(EngineState.Approval), hasAgent: false).Kind);
+        Assert.Equal(CardNowKind.Approval, Of(new EngineState.InputRequired(EngineState.Approval)).Kind);
         Assert.Equal(CardNowKind.Approval, Of(new EngineState.InputRequired(EngineState.RoundLimit)).Kind);
         Assert.Equal((CardNowKind.Proposal, "Proposal · 3 tasks. Review the tasks in the inspector, then accept or dismiss them."),
             (proposal.Kind, proposal.Text));

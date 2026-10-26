@@ -13,10 +13,10 @@ namespace IDevelop.Desktop.Tests;
 /// </summary>
 internal static class FanOut
 {
-    public static readonly TaskId Design = TestTasks.Design;
-    public static readonly TaskId Build = TestTasks.Build;
-    public static readonly TaskId Docs = TestTasks.Review;
-    public const string Goal = "Add CSV export to the reports page.";
+    private static readonly TaskId Design = TestTasks.Design;
+    private static readonly TaskId Build = TestTasks.Build;
+    private static readonly TaskId Docs = TestTasks.Review;
+    private const string Goal = "Add CSV export to the reports page.";
 
     private const string Proposal = """
         I split the export into an endpoint, a button, and its tests.

@@ -10,6 +10,7 @@ internal sealed class GitFixture : IDisposable
         new(CreateDiamondTemplate, LazyThreadSafetyMode.ExecutionAndPublication);
     private readonly TempFolder _temp = new();
 
+    /// <param name="initialize">If true, the fixture makes a new Git repository in the folder.</param>
     /// <param name="folder">The repository's folder, which the caller cleans up. A new temporary folder by default.</param>
     public GitFixture(bool initialize = true, string? folder = null)
     {
@@ -105,44 +106,13 @@ internal sealed class GitFixture : IDisposable
 
     public GitResult Run(string checkout, params string[] arguments) => Run(checkout, Environment, arguments);
 
-    public async Task<GitResult> RunWithInput(string checkout, string input, params string[] arguments)
+    private GitResult Run(string checkout, IReadOnlyDictionary<string, string> environment, params string[] arguments)
     {
-        using var process = new Process
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo("git", arguments)
         {
-            StartInfo = new ProcessStartInfo("git", arguments)
-            {
-                WorkingDirectory = checkout, UseShellExecute = false, CreateNoWindow = true,
-                RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
-            },
-        };
-        foreach (var (key, value) in Environment) process.StartInfo.Environment[key] = value;
-        process.Start();
-        using var bytes = new MemoryStream();
-        var stdout = process.StandardOutput.BaseStream.CopyToAsync(bytes);
-        var stderr = process.StandardError.ReadToEndAsync();
-        await process.StandardInput.WriteAsync(input);
-        process.StandardInput.Close();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        try { await process.WaitForExitAsync(timeout.Token); }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync();
-            throw new TimeoutException("Fixture Git did not exit.");
-        }
-        await stdout;
-        return new(process.ExitCode, bytes.ToArray(), await stderr);
-    }
-
-    public GitResult Run(string checkout, IReadOnlyDictionary<string, string> environment, params string[] arguments)
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo("git", arguments)
-            {
-                WorkingDirectory = checkout, UseShellExecute = false, CreateNoWindow = true,
-                RedirectStandardOutput = true, RedirectStandardError = true,
-            },
+            WorkingDirectory = checkout, UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true,
         };
         foreach (var (key, value) in environment) process.StartInfo.Environment[key] = value;
         process.Start();

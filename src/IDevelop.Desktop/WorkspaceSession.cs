@@ -74,7 +74,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
         AtomicFile.Replace(file, JsonSerializer.SerializeToUtf8Bytes(session));
     }
 
-    private static IEnumerable<JsonNode?> Items(JsonNode? node) => node is JsonArray array ? array : [];
+    private static IEnumerable<JsonNode?> Items(JsonNode? node) => node as JsonArray ?? [];
 
     private static string? Text(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text) && text.Length > 0 ? text : null;

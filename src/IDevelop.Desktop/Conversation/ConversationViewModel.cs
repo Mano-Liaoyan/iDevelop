@@ -82,7 +82,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         : "The agent's questions arrive in its reply. Answer them with your message.";
 
     /// <summary>What the agent asks while its turn runs, each question with its choices, which Send answers.</summary>
-    public IReadOnlyList<Canvas.QuestionViewModel> Questions => _node?.Questions ?? [];
+    public IReadOnlyList<QuestionViewModel> Questions => _node?.Questions ?? [];
 
     public bool IsAsking => _node?.IsAsking ?? false;
 
@@ -152,7 +152,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// Shows the log's lines from the first one shown to the end. The log only grows, so the rows already shown stay, and new
     /// lines join at the end.
     /// </summary>
-    internal void Refresh()
+    private void Refresh()
     {
         if (_disposed)
         {

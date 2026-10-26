@@ -17,6 +17,4 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
 
     /// <summary>"Commit 1a2b3c4" for a node that edits the project, or null.</summary>
     public string? Commit => result.Commit is { Length: >= 7 } commit ? $"Commit {commit[..7]}" : null;
-
-    public bool IsCurrent => current;
 }

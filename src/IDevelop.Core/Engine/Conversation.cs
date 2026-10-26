@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using IDevelop.Clients;
-using IDevelop.Workflows;
+using JetBrains.Annotations;
 
 namespace IDevelop.Engine;
 
@@ -21,7 +21,7 @@ public abstract record ConversationLine
     }
 
     /// <summary>A tool the agent started, or a notice from its client.</summary>
-    public sealed record Activity(string Text, bool IsTool) : ConversationLine;
+    public sealed record Activity(string Text, [UsedImplicitly] bool IsTool) : ConversationLine;
 
     /// <summary>
     /// A fresh session began, or a turn ended. <paramref name="Detail"/> is why it waits, why it failed, the message a stop
@@ -40,8 +40,6 @@ public abstract record ConversationLine
 /// </summary>
 public interface IConversation : IDisposable
 {
-    TaskId Node { get; }
-
     /// <summary>Every line so far, oldest first.</summary>
     ImmutableList<ConversationLine> Lines { get; }
 
@@ -61,15 +59,12 @@ internal sealed class NodeConversation : IConversation
     private readonly Func<string?> _terminal;
     private int _disposed;
 
-    public NodeConversation(TaskId node, NodeLog log, Func<string?> terminal)
+    public NodeConversation(NodeLog log, Func<string?> terminal)
     {
-        Node = node;
         _log = log;
         _terminal = terminal;
         log.Appended += OnAppended;
     }
-
-    public TaskId Node { get; }
 
     public ImmutableList<ConversationLine> Lines
     {
@@ -110,7 +105,7 @@ internal sealed class NodeConversation : IConversation
 
     private void OnAppended() => Changed?.Invoke();
 
-    internal static IEnumerable<ConversationLine> Read(NodeEntry entry) => entry switch
+    private static IEnumerable<ConversationLine> Read(NodeEntry entry) => entry switch
     {
         NodeEntry.TurnStarted { Session: null } => [new ConversationLine.Marker(MarkerKind.Fresh, null)],
         NodeEntry.PersonMessage message => [new ConversationLine.Person(message.Text)],

@@ -58,7 +58,7 @@ internal sealed partial class Shell
     public static Shell Open(string folder, ClientDirectory? clients = null)
     {
         foreach (var earlier in Opened.Where(shell => shell.Window.ViewModel.Projects.Any(project =>
-            IDevelop.Projects.ProjectFolders.Comparer.Equals(project.Folder, IDevelop.Projects.ProjectFolders.Identity(folder)))).ToList())
+            Projects.ProjectFolders.Comparer.Equals(project.Folder, Projects.ProjectFolders.Identity(folder)))).ToList())
         {
             var leaving = earlier.Window.ViewModel.Leave();
             earlier.WaitUntil(() => leaving.IsCompleted, "the earlier window lets the project go");

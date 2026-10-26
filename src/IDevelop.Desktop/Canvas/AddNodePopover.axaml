@@ -126,9 +126,9 @@
       <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="14,4,12,4"
             IsVisible="{Binding HasConnect}">
         <TextBlock Classes="caption" Text="{Binding ConnectLabel}" VerticalAlignment="Center" />
-        <theme:KindTile Grid.Column="1" Kind="{Binding ConnectNode.Kind}" IsLibrary="{Binding ConnectNode.IsLibrary}" TileSize="18"
+        <theme:KindTile Grid.Column="1" Kind="{Binding ConnectNode.Kind, FallbackValue=Implement}" IsLibrary="{Binding ConnectNode.IsLibrary, FallbackValue=False}" TileSize="18"
                         VerticalAlignment="Center" />
-        <TextBlock Grid.Column="2" Text="{Binding ConnectNode.Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+        <TextBlock Grid.Column="2" Text="{Binding ConnectNode.Title, FallbackValue={x:Null}}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                    FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                    AutomationProperties.AutomationId="AddNodeConnect" />
       </Grid>

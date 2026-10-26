@@ -43,12 +43,6 @@ internal sealed record ClientDefinition
     /// </summary>
     public bool SessionsPerFolder { get; init; }
 
-    /// <summary>
-    /// What the client prints on stderr when it found no session under the id it was given and started an empty one under
-    /// that id, which it then reports as if it had resumed it. Null when the client never does so.
-    /// </summary>
-    public string? LostSessionNotice { get; init; }
-
     /// <summary>How the client lists its skills, or null when it cannot limit a task's skills, as Antigravity CLI cannot.</summary>
     public SkillSource? Skills { get; init; }
 }

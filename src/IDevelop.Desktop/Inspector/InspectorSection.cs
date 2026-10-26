@@ -29,7 +29,6 @@ public sealed class InspectorSection : InspectorPart
 
     private readonly HashSet<InspectorRow> _rows = [];
     private Button? _header;
-    private string _badge = "";
 
     public string Key
     {
@@ -58,9 +57,9 @@ public sealed class InspectorSection : InspectorPart
     /// <summary>"(2)" while the section is folded with two changed values, otherwise empty.</summary>
     public string Badge
     {
-        get => _badge;
-        private set => SetAndRaise(BadgeProperty, ref _badge, value);
-    }
+        get;
+        private set => SetAndRaise(BadgeProperty, ref field, value);
+    } = "";
 
     public bool IsFolded => !IsFiltering && State?.IsFolded(Key) == true;
 
@@ -85,7 +84,7 @@ public sealed class InspectorSection : InspectorPart
         PseudoClasses.Set(":folded", folded);
         Badge = folded && Changes > 0 ? $"({Changes})" : "";
         IsVisible = IsShown;
-        PseudoClasses.Set(":unmatched", !TitleMatches && !_rows.Any(row => row.IsShown && row.LabelMatches));
+        PseudoClasses.Set(":unmatched", !TitleMatches && !_rows.Any(row => row is { IsShown: true, LabelMatches: true }));
         foreach (var row in _rows)
         {
             row.Refresh();
@@ -123,7 +122,7 @@ public sealed class InspectorSection : InspectorPart
 
     private void OnHeaderClick(object? sender, RoutedEventArgs e)
     {
-        if (State is { } state && !state.IsFiltering)
+        if (State is { IsFiltering: false } state)
         {
             state.Fold([Key], !state.IsFolded(Key));
         }
