@@ -1,4 +1,4 @@
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.TestSupport;
 
 namespace IDevelop.Core.Tests;

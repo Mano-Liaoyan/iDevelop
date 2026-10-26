@@ -1,12 +1,13 @@
-using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Headless;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Avalonia;
+using IDevelop.Clients;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Engine;
 using IDevelop.TestSupport;

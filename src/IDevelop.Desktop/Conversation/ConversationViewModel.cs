@@ -7,7 +7,7 @@ using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Engine;
 using NodeState = IDevelop.Desktop.Canvas.NodeState;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Conversation;
@@ -67,7 +67,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The project and workflow the node belongs to, as the breadcrumb names them.</summary>
     public string Breadcrumb => $"{Target.Canvas.Project.Name} › {Target.Canvas.Name}";
 
-    public string AgentName => _node?.SelectedClient.Id is { } client ? Clients.Name(client) : "The agent";
+    public string AgentName => _node?.SelectedClient.Id is { } client ? ClientCatalog.Name(client) : "The agent";
 
     public string StatusLabel => _node?.StatusLabel ?? "";
 
@@ -91,7 +91,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _ => "Sending continues the node's session.",
     };
 
-    public string Watermark => _node?.SelectedClient.Id is { } client ? $"Message {Clients.Name(client)}" : "Message the agent";
+    public string Watermark => _node?.SelectedClient.Id is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
 
     public bool HasEarlier => _start > 0;
 

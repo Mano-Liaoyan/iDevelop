@@ -1,11 +1,11 @@
 using System.Diagnostics;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Execution;
 
-/// <summary>What the interface says about clients and attempts. Core's reasons are already sentences for the user.</summary>
+/// <summary>What the interface says about clients. Core's reasons are already sentences for the user.</summary>
 public static class RunText
 {
     /// <summary>A failed skill listing lasts until the next check of the agents, whose button in the Agents section says this.</summary>
@@ -54,7 +54,7 @@ public static class RunText
         }
 
         var model = settings.Model is { } id ? ExecutionChoices.OfferedModel(status, id)?.Name ?? id : null;
-        return Dotted(Clients.Name(settings.Client), model, settings.Reasoning);
+        return Dotted(ClientCatalog.Name(settings.Client), model, settings.Reasoning);
     }
 
     /// <summary>
@@ -69,7 +69,7 @@ public static class RunText
             return ("No agent", null);
         }
 
-        var client = Clients.Name(settings.Client);
+        var client = ClientCatalog.Name(settings.Client);
         var offered = settings.Model is { } id ? ExecutionChoices.OfferedModel(status, id) : null;
         var model = offered?.Name ?? settings.Model;
         if (offered is { Provider: { } provider } && model is not null && model.EndsWith($" ({provider})", StringComparison.Ordinal))
@@ -84,10 +84,10 @@ public static class RunText
     /// <summary>A client in the inspector's picker, with what keeps it from running.</summary>
     public static string ClientChoice(ClientId client, ClientStatus status) => status switch
     {
-        ClientStatus.Ready => Clients.Name(client),
-        ClientStatus.Checking => $"{Clients.Name(client)} · checking",
-        ClientStatus.Missing => $"{Clients.Name(client)} · not installed",
-        ClientStatus.Unready => $"{Clients.Name(client)} · not ready",
+        ClientStatus.Ready => ClientCatalog.Name(client),
+        ClientStatus.Checking => $"{ClientCatalog.Name(client)} · checking",
+        ClientStatus.Missing => $"{ClientCatalog.Name(client)} · not installed",
+        ClientStatus.Unready => $"{ClientCatalog.Name(client)} · not ready",
         _ => throw new UnreachableException(),
     };
 

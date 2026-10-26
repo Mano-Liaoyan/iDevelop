@@ -1,11 +1,11 @@
-using Avalonia;
 using Avalonia.Automation.Peers;
-using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using IDevelop.Execution;
+using Avalonia;
+using IDevelop.Clients;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;

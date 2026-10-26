@@ -3,7 +3,7 @@ using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;

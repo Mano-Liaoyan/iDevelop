@@ -55,7 +55,7 @@ public partial class ConversationView : UserControl
         RoutedEvent.Register<ConversationView, RoutedEventArgs>("RequiredHeightChanged", RoutingStrategies.Bubble);
 
     /// <summary>
-    /// The height the view needs: its header, the run's strip, the limitations, and the composer as tall as they lay out
+    /// The height the view needs: its header, the bar's strip, the limitations, and the composer as tall as they lay out
     /// at its width, and <see cref="MinTranscriptHeight"/> of transcript.
     /// </summary>
     internal double RequiredHeight { get; private set; }

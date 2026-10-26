@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using IDevelop.Execution;
+using IDevelop.Git;
 using IDevelop.Workflows;
 
 namespace IDevelop.Engine;
@@ -25,12 +25,14 @@ internal sealed class GitFailure(string message) : InvalidOperationException(mes
 /// The editing nodes' worktrees of one workflow. Each node has its worktree at <c>.worktrees/&lt;workflow&gt;/&lt;node&gt;</c>
 /// in the project folder, on its branch <c>idp/&lt;workflow&gt;/&lt;node&gt;</c> (ADR 0032). Commits merge with
 /// <c>git merge-tree</c>; a conflict leaves Git's merge with its markers as a commit on both parents, and the worktree's
-/// next commit replaces it on the same parents (ADR 0033). Every step holds the repository's mutation lock.
+/// next commit replaces it on the same parents (ADR 0033). The steps of every workflow's worktrees run one at a time, and
+/// the project lock keeps every other window out of the project.
 /// </summary>
 internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IReadOnlyDictionary<string, string> environment)
 {
     private const string Identity = "iDevelop <idevelop@localhost>";
     private const int DiffLimit = 200_000;
+    private static readonly Lock Gate = new();
 
     private GitRepository? _repository;
 
@@ -54,7 +56,7 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     private GitRepository Repository => _repository ??= GitRepository.Open(projectFolder, environment) switch
     {
         RepositoryOpen.Opened opened => opened.Repository,
-        RepositoryOpen.Refused { Fault: GitFault.NotInWorkTree } => throw new GitFailure("The project folder is in no Git work tree."),
+        RepositoryOpen.Refused { InNoWorkTree: true } => throw new GitFailure("The project folder is in no Git work tree."),
         RepositoryOpen.Refused refused => throw new GitFailure(refused.Detail.Trim()),
         _ => throw new InvalidOperationException(),
     };
@@ -70,7 +72,7 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     {
         var start = Fold(repository, inputs.Count > 0 ? null : Value(repository.ResolveCommit("HEAD")), inputs);
         var checkout = Checkout(node);
-        if (!Value(repository.Worktrees()).Any(worktree => Same(worktree.Path, checkout)))
+        if (!Value(repository.Worktrees()).Any(worktree => Same(worktree, checkout)))
         {
             repository.EnsureExcluded();
             var branch = $"idp/{workflow}/{node}";
@@ -94,7 +96,7 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     {
         var checkout = Checkout(node);
         var head = Value(repository.ResolveCheckoutHead(checkout)) ?? throw new GitFailure("The worktree has no commit.");
-        var tree = Value(repository.Capture(checkout)).Tree;
+        var tree = Value(repository.Capture(checkout));
         var read = Value(repository.ReadCommit(head));
         // A resolution replaces the commit of Git's merge with its markers, on the same parents.
         ImmutableArray<CommitId> parents = resolving && read.Parents.Length == 2 ? read.Parents : [head];
@@ -217,8 +219,7 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     private T Locked<T>(Func<GitRepository, T> step)
     {
         var repository = Repository;
-        using var held = repository.TakeMutationLock(TimeSpan.FromSeconds(30)) ?? throw new GitFailure("Another program kept the repository busy.");
-        return step(repository);
+        lock (Gate) return step(repository);
     }
 
     private string Git(GitRepository repository, params string[] arguments) =>

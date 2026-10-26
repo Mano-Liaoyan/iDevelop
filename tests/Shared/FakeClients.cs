@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
-using IDevelop.Execution;
+using IDevelop.Clients;
 
 namespace IDevelop.TestSupport;
 

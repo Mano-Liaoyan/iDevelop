@@ -1,11 +1,12 @@
 using Avalonia.Automation;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Headless.XUnit;
 using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using IDevelop.Clients;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;

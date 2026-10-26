@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Windows.Input;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;

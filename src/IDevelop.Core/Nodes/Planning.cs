@@ -1,21 +1,25 @@
 using System.Collections.Immutable;
 using System.Text;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Workflows;
 
 namespace IDevelop.Nodes;
 
 /// <summary>
 /// What a planner's proposal may name: the empty nodes after it as <c>slot-1</c> and on, and the blueprints it may place
-/// as <c>type-1</c> and on. Its attempt records them when it starts, so a proposal reads each handle as the agent read
-/// it, whatever the person changes meanwhile. <paramref name="Plan"/> is new at each start and goes with every
-/// continuation of the session, so a node the agent proposes again under its own id keeps one id.
+/// as <c>type-1</c> and on. The planner's node log records them when its session starts, so a proposal reads each handle
+/// as the agent read it, whatever the person changes meanwhile, also after the project reopens. <paramref name="Plan"/>
+/// mints the ids of the nodes it proposes, so a node the agent proposes again under its own id keeps one id.
 /// </summary>
 public sealed record PlanningHandles(Guid Plan, ImmutableArray<TaskId> Slots, ImmutableArray<BlueprintKey> Types)
 {
+    /// <summary>The clients iDevelop was still checking when the planner started, which its prompt left out.</summary>
+    public ImmutableArray<ClientId> Checking { get; init; } = [];
+
     // ImmutableArray compares by reference.
     public bool Equals(PlanningHandles? other) =>
-        other is not null && Plan == other.Plan && Slots.SequenceEqual(other.Slots) && Types.SequenceEqual(other.Types);
+        other is not null && Plan == other.Plan && Slots.SequenceEqual(other.Slots) && Types.SequenceEqual(other.Types)
+        && Checking.SequenceEqual(other.Checking);
 
     public override int GetHashCode() => HashCode.Combine(Slots.Length, Types.Length);
 }
@@ -27,17 +31,20 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
 
     /// <summary>
     /// The ready clients and models from which the planner chooses the agent of each task it adds or fills, which its
-    /// prompt lists. A run's planner lists those its start recorded, so its prompt renders the same from its attempt
-    /// alone. Empty, the planner chooses none and its prompt is the one it always was.
+    /// prompt lists. Empty, the planner chooses none.
     /// </summary>
     public ImmutableArray<AgentOffer> Agents { get; init; } = [];
 
-    public PlanningHandles Handles(Guid plan) => new(plan, [.. Slots.Select(slot => slot.Id)], [.. Types.Select(type => type.Key)]);
+    /// <summary>The clients iDevelop is still checking, which <see cref="Agents"/> leaves out.</summary>
+    public ImmutableArray<ClientId> Checking { get; init; } = [];
+
+    public PlanningHandles Handles(Guid plan) =>
+        new(plan, [.. Slots.Select(slot => slot.Id)], [.. Types.Select(type => type.Key)]) { Checking = Checking };
 
     /// <summary>Each ready client, in the clients' order, with the models it can run now. A client with none is left out.</summary>
     public static ImmutableArray<AgentOffer> Offers(IReadOnlyDictionary<ClientId, ClientStatus> clients) =>
     [
-        .. Clients.All
+        .. ClientCatalog.All
             .Select(id => new AgentOffer(id, [.. ExecutionChoices.Offered(clients.GetValueOrDefault(id) ?? new ClientStatus.Checking()).Where(model => model.Problem is null)]))
             .Where(offer => !offer.Models.IsEmpty),
     ];
@@ -47,7 +54,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
     /// not started, in the order of their ids.
     /// </summary>
     /// <param name="placeable">The blueprints a person can place, in the order a palette lists them.</param>
-    /// <param name="started">Whether a task has an attempt.</param>
+    /// <param name="started">Whether a node has run.</param>
     public static PlanningContext For(Workflow workflow, TaskId planner, IEnumerable<Blueprint> placeable, Func<TaskId, bool> started)
     {
         var successors = workflow.Connections.Where(connection => connection.Value.Blocks()).ToLookup(connection => connection.Key.From, connection => connection.Key.To);
@@ -129,8 +136,8 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
             text.Append("\nAgents you may choose:\n");
             foreach (var offer in Agents)
             {
-                var readOnly = Clients.HasReadOnlyMode(offer.Client) ? "" : ", which has no read-only mode";
-                text.Append($"- {Clients.WireName(offer.Client)} ({Clients.Name(offer.Client)}){readOnly}:\n");
+                var readOnly = ClientCatalog.HasReadOnlyMode(offer.Client) ? "" : ", which has no read-only mode";
+                text.Append($"- {ClientCatalog.WireName(offer.Client)} ({ClientCatalog.Name(offer.Client)}){readOnly}:\n");
                 foreach (var model in offer.Models)
                 {
                     var name = model.Name == model.Id ? "" : $", {model.Name}";
@@ -169,7 +176,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
             ? " Reads only, so it needs a client with a read-only mode."
             : "";
         var kept = own is { } execution
-            ? $" It has its own agent, {string.Join(", ", new[] { Clients.WireName(execution.Client), execution.Model, execution.Reasoning }.OfType<string>())}, so leave out \"agent\"."
+            ? $" It has its own agent, {string.Join(", ", new[] { ClientCatalog.WireName(execution.Client), execution.Model, execution.Reasoning }.OfType<string>())}, so leave out \"agent\"."
             : "";
         return readOnly + kept;
     }

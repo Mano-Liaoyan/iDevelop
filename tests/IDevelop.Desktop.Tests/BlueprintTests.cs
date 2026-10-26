@@ -1,10 +1,11 @@
-using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using Avalonia;
+using IDevelop.Clients;
 using IDevelop.Desktop.Blueprints;
 using IDevelop.Desktop.Inspector;
 using IDevelop.Projects;

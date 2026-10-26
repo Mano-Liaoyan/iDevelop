@@ -93,7 +93,7 @@
       "idevelop.fakeagent": {
         "type": "Project"
       },
-      "idevelop.runracer": {
+      "idevelop.gitexit": {
         "type": "Project",
         "dependencies": {
           "IDevelop.Core": "[1.0.0, )"

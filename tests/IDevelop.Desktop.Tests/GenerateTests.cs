@@ -1,12 +1,12 @@
 using System.Collections.Immutable;
-using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using Avalonia;
+using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
-using IDevelop.Execution;
 using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.TestSupport;

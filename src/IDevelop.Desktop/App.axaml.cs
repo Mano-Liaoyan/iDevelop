@@ -1,12 +1,12 @@
-using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Logging;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using Avalonia;
+using IDevelop.Clients;
 using IDevelop.Desktop.Theme;
-using IDevelop.Execution;
 
 namespace IDevelop.Desktop;
 

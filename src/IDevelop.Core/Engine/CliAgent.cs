@@ -1,14 +1,15 @@
 using System.Text.Json;
 using System.Threading.Channels;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Nodes;
+using IDevelop.Processes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Engine;
 
 /// <summary>
 /// A node whose agent is Claude Code, Codex, Pi, or Antigravity CLI. Each turn is one client process through the client
-/// layer: the start check builds the launch, <see cref="ChildProcess"/> runs it, and the client's <see cref="TurnProtocol"/>
+/// layer: <see cref="LaunchPlan"/> builds the launch, <see cref="ChildProcess"/> runs it, and the client's <see cref="TurnProtocol"/>
 /// reads its output and writes its input. A turn runs in the folder the engine gives it: an editing node's worktree, or
 /// the project folder for a node that only reads. Questions and permission requests are declined, so a question reaches
 /// the person as text in the agent's reply.
@@ -23,11 +24,11 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
     public string? Problem(TaskDefinition node) =>
         node.Blueprint.Fields.FirstOrDefault(field => field.Required && string.IsNullOrWhiteSpace(node.Field(field.Key))) is { } missing
             ? $"{missing.Label} is empty."
-            : Plan(node, projectFolder, "", null) is StartVerdict.Blocked blocked ? Describe(blocked.Problem) : null;
+            : Plan(node, projectFolder, "", null).Problem;
 
     public async Task<TurnOutcome> Turn(TaskDefinition node, string folder, string prompt, string? session, Action<AgentEvent> report, CancellationToken stop)
     {
-        if (Plan(node, folder, prompt, session) is not StartVerdict.Allowed { Plan: var plan })
+        if (Plan(node, folder, prompt, session).Plan is not { } plan)
         {
             return new TurnOutcome.Failed(Problem(node) ?? "The agent cannot start.");
         }
@@ -56,10 +57,10 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
         }
     }
 
-    private StartVerdict Plan(TaskDefinition node, string folder, string prompt, string? session)
+    private (LaunchPlan? Plan, string? Problem) Plan(TaskDefinition node, string folder, string prompt, string? session)
     {
         var skills = node.Execution is { Skills: not null } settings ? clients.Skills(settings.Client, folder) : null;
-        return StartCheck.Evaluate(node, folder, clients.Current, new Resumption(session, prompt) { Folder = folder }, skills: skills);
+        return LaunchPlan.For(node, folder, prompt, session, clients.Current, skills);
     }
 
     /// <summary>
@@ -142,7 +143,7 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
                     }
                     catch (JsonException)
                     {
-                        report(new AgentEvent.Notice($"iDevelop could not read a line that {Clients.Name(plan.Settings.Client)} printed."));
+                        report(new AgentEvent.Notice($"iDevelop could not read a line that {ClientCatalog.Name(plan.Settings.Client)} printed."));
                     }
                     catch (ProtocolException e)
                     {
@@ -181,19 +182,18 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
     /// </summary>
     private static TurnOutcome Outcome(TaskDefinition node, ClientId client, AgentEvent? verdict, string? lastMessage, int code, string? lastError)
     {
-        var name = Clients.Name(client);
+        var name = ClientCatalog.Name(client);
         switch (verdict)
         {
             case AgentEvent.Failed failed:
                 return new TurnOutcome.Failed(failed.Reason);
             case AgentEvent.Succeeded succeeded when code == 0:
                 var text = succeeded.Result ?? lastMessage;
-                return AgentWork.AfterTurn(node.Conversation, text) switch
+                return node.Conversation switch
                 {
-                    null => new TurnOutcome.Done(text ?? ""),
-                    Pending.Question question => new TurnOutcome.Waits(question.Text, text),
-                    Pending.UnreadableBlock unreadable => new TurnOutcome.Waits(unreadable.Problem, text),
-                    _ => new TurnOutcome.Waits(NodeState.Reply, text),
+                    ConversationMode.Chat => new TurnOutcome.Waits(NodeState.Reply, text),
+                    ConversationMode.MayAsk when AgentPrompt.Question(text) is { } question => new TurnOutcome.Waits(question, text),
+                    _ => new TurnOutcome.Done(text ?? ""),
                 };
             case AgentEvent.Succeeded:
                 return new TurnOutcome.Failed($"{name} reported success but exited with code {code}.");
@@ -202,22 +202,4 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
                     : lastError is { } line ? $"{name} exited with code {code}: {line}" : $"{name} exited with code {code}.");
         }
     }
-
-    private static string Describe(StartProblem problem) => problem switch
-    {
-        StartProblem.NoAgent => "The node has no agent.",
-        StartProblem.NoModel p => $"Choose a model for {Clients.Name(p.Client)}.",
-        StartProblem.NoReadOnlyMode p => $"{Clients.Name(p.Client)} has no read-only mode.",
-        StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",
-        StartProblem.ClientMissing p => $"{Clients.Name(p.Client)} is not installed. {p.Reason}",
-        StartProblem.ClientUnready p => $"{Clients.Name(p.Client)} is not ready. {p.Reason}",
-        StartProblem.ModelNotOffered p => $"{Clients.Name(p.Client)} does not offer {p.Model}.",
-        StartProblem.ModelUnready p => $"{p.Model} is not ready. {p.Reason}",
-        StartProblem.ReasoningNotOffered p => $"{p.Model} does not offer the reasoning level {p.Reasoning ?? "(none)"}.",
-        StartProblem.SkillsChecking p => $"iDevelop is still listing the skills {Clients.Name(p.Client)} loads.",
-        StartProblem.UnsafeArgument p => $"cmd.exe could misread the argument {p.Argument}.",
-        StartProblem.UncProjectFolder p => $"{Clients.Name(p.Client)} cannot run in a network folder.",
-        StartProblem.SessionFolderMoved p => $"{Clients.Name(p.Client)} cannot continue this session after the project folder moved.",
-        _ => "The agent cannot start.",
-    };
 }

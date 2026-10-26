@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using IDevelop.Execution;
+using IDevelop.Clients;
+using IDevelop.Processes;
 using IDevelop.TestSupport;
-using static IDevelop.TestSupport.Processes;
+using static IDevelop.TestSupport.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests;
 
@@ -14,7 +15,7 @@ public sealed class ProcessGroupTests : IDisposable
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
     private static readonly DateTimeOffset T0 = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
     private readonly TempFolder _temp = new();
-    private readonly Processes _spawned = new();
+    private readonly SpawnedProcesses _spawned = new();
     private readonly ManualTimeProvider _clock = new();
     private readonly string _bin;
     private readonly string _folder;
@@ -37,7 +38,7 @@ public sealed class ProcessGroupTests : IDisposable
     }
 
     [UnixFact]
-    public async Task A_workflow_root_leads_its_own_group_and_gets_the_launch_a_standalone_root_gets()
+    public async Task A_workflow_root_leads_its_own_group_and_gets_the_launch_a_probe_root_gets()
     {
         var client = Script("client", """
             printf 'cwd=%s\n' "$(pwd -P)"
@@ -51,28 +52,28 @@ public sealed class ProcessGroupTests : IDisposable
         var command = new ResolvedCommand(client, IsBatchShim: false) { SearchPath = "/usr/bin:/bin" };
         string[] arguments = ["one", "two words", "é", ""];
 
-        var standalone = await Run(command, arguments, ProcessLifetime.Standalone);
+        var probe = await Run(command, arguments, ProcessLifetime.Probe);
         var workflow = await Run(command, arguments, ProcessLifetime.Workflow);
 
         Assert.Equal(new Containment.Group(workflow.Id), workflow.Containment);
-        Assert.Equal(new Containment.None("No process group contains this turn's descendants."), standalone.Containment);
+        Assert.Equal(new Containment.None("No process group contains this turn's descendants."), probe.Containment);
         Assert.Equal($"group={workflow.Id}", Assert.Single(workflow.Output, line => line.StartsWith("group=", StringComparison.Ordinal)));
-        Assert.NotEqual($"group={standalone.Id}", Assert.Single(standalone.Output, line => line.StartsWith("group=", StringComparison.Ordinal)));
+        Assert.NotEqual($"group={probe.Id}", Assert.Single(probe.Output, line => line.StartsWith("group=", StringComparison.Ordinal)));
         string[] expected =
         [
             $"cwd={RealPath(_folder)}",
             "arg=one", "arg=two words", "arg=é", "arg=", "path=/usr/bin:/bin", "in=héllo", "in=wörld",
         ];
-        Assert.Equal(expected, standalone.Output.Where(line => !line.StartsWith("group=", StringComparison.Ordinal)));
+        Assert.Equal(expected, probe.Output.Where(line => !line.StartsWith("group=", StringComparison.Ordinal)));
         Assert.Equal(expected, workflow.Output.Where(line => !line.StartsWith("group=", StringComparison.Ordinal)));
-        Assert.Equal(["err=é"], standalone.Errors);
+        Assert.Equal(["err=é"], probe.Errors);
         Assert.Equal(["err=é"], workflow.Errors);
-        Assert.Equal((7, 7), (standalone.Exit, workflow.Exit));
+        Assert.Equal((7, 7), (probe.Exit, workflow.Exit));
     }
 
     [UnixTheory]
     [InlineData("workflow")]
-    [InlineData("standalone")]
+    [InlineData("probe")]
     [InlineData("no session")]
     public async Task A_workflow_root_leads_a_new_session_so_no_terminal_can_stop_it(string launch)
     {
@@ -84,7 +85,7 @@ public sealed class ProcessGroupTests : IDisposable
         try
         {
             child = ChildProcess.Start(fakes.Resolver.Resolve("client")!, [], _folder,
-                launch == "standalone" ? ProcessLifetime.Standalone : ProcessLifetime.Workflow);
+                launch == "probe" ? ProcessLifetime.Probe : ProcessLifetime.Workflow);
         }
         finally
         {
@@ -104,7 +105,7 @@ public sealed class ProcessGroupTests : IDisposable
                 Assert.Equal(new Containment.Group(child.Identity.Id), child.Containment);
                 Assert.Null(((Containment.Group)child.Containment).Detail);
             }
-            else if (launch == "standalone")
+            else if (launch == "probe")
             {
                 Assert.Equal(GetSid(0), ids[1]);
                 Assert.NotEqual(child.Identity.Id, ids[2]);
@@ -129,19 +130,19 @@ public sealed class ProcessGroupTests : IDisposable
     }
 
     [UnixFact]
-    public async Task A_root_ended_by_a_signal_reports_128_plus_the_signal_as_a_standalone_root_does()
+    public async Task A_root_ended_by_a_signal_reports_128_plus_the_signal_as_a_probe_root_does()
     {
         var command = new ResolvedCommand(Script("client", "kill -9 $$\n"), IsBatchShim: false);
 
-        var standalone = await Run(command, [], ProcessLifetime.Standalone);
+        var probe = await Run(command, [], ProcessLifetime.Probe);
         var workflow = await Run(command, [], ProcessLifetime.Workflow);
 
-        Assert.Equal((137, 137), (standalone.Exit, workflow.Exit));
+        Assert.Equal((137, 137), (probe.Exit, workflow.Exit));
         Assert.IsType<Containment.Group>(workflow.Containment);
     }
 
     [UnixFact]
-    public void A_failed_workflow_launch_reads_as_a_failed_standalone_launch()
+    public void A_failed_workflow_launch_reads_as_a_failed_probe_launch()
     {
         var missingFolder = Path.Combine(_folder, "missing");
         var notExecutable = Path.Combine(_bin, "plain");
@@ -149,23 +150,23 @@ public sealed class ProcessGroupTests : IDisposable
         var client = new ResolvedCommand(Script("client", "exit 0\n"), IsBatchShim: false);
         foreach (var (command, folder) in new[] { (client, missingFolder), (new ResolvedCommand(notExecutable, false), _folder) })
         {
-            var standalone = Assert.Throws<LaunchException>(() => ChildProcess.Start(command, [], folder, ProcessLifetime.Standalone));
+            var probe = Assert.Throws<LaunchException>(() => ChildProcess.Start(command, [], folder, ProcessLifetime.Probe));
             var workflow = Assert.Throws<LaunchException>(() => ChildProcess.Start(command, [], folder, ProcessLifetime.Workflow));
             Assert.StartsWith($"{command.Path} did not start: ", workflow.Message);
-            Assert.Equal(standalone.Message, workflow.Message);
+            Assert.Equal(probe.Message, workflow.Message);
         }
     }
 
     [LinuxFact]
-    public async Task A_workflow_root_keeps_the_signal_mask_and_ignored_signals_a_standalone_root_gets()
+    public async Task A_workflow_root_keeps_the_signal_mask_and_ignored_signals_a_probe_root_gets()
     {
         var command = new ResolvedCommand(Script("client", "grep -E '^Sig(Blk|Ign):' /proc/self/status\n"), IsBatchShim: false);
 
-        var standalone = await Run(command, [], ProcessLifetime.Standalone);
+        var probe = await Run(command, [], ProcessLifetime.Probe);
         var workflow = await Run(command, [], ProcessLifetime.Workflow);
 
-        Assert.Equal(2, standalone.Output.Length);
-        Assert.Equal(standalone.Output, workflow.Output);
+        Assert.Equal(2, probe.Output.Length);
+        Assert.Equal(probe.Output, workflow.Output);
     }
 
     [UnixFact]

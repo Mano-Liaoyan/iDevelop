@@ -131,7 +131,7 @@ public static class BuiltInBlueprints
         [new FieldSpec("instructions", "Instructions", FieldShape.Text, Required: false, "")],
         new NodeSettings(null, ConversationMode.Autonomous))
     {
-        Description = "Merges the work of the tasks before it, and resolves the run's merge conflicts with the agent you choose.",
+        Description = "Merges the work of the tasks before it, and resolves their merge conflicts with the agent you choose.",
     };
 
     /// <summary>Every built-in, in the order a palette lists them.</summary>

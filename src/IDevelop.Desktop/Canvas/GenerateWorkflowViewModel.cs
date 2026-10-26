@@ -1,8 +1,8 @@
 using System.Windows.Input;
 using Avalonia.Threading;
+using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
@@ -91,14 +91,14 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
         {
             ClientStatus.Ready ready => (planner.Model, ExecutionChoices.OfferedModel(ready, planner.Model)) switch
             {
-                (null, _) => $"Choose a {Clients.Name(planner.Client)} model first.",
-                ({ } id, null) => $"{Clients.Name(planner.Client)} does not offer {id} on this machine. Choose another model.",
+                (null, _) => $"Choose a {ClientCatalog.Name(planner.Client)} model first.",
+                ({ } id, null) => $"{ClientCatalog.Name(planner.Client)} does not offer {id} on this machine. Choose another model.",
                 ({ } id, { Problem: { } problem }) => $"{id} cannot run now. {problem}",
                 _ => null,
             },
-            ClientStatus.Missing missing => $"{Clients.Name(planner.Client)} is not installed. {missing.Reason}",
-            ClientStatus.Unready unready => $"{Clients.Name(planner.Client)} is not ready. {unready.Reason}",
-            _ => $"iDevelop is still checking {Clients.Name(planner.Client)}.",
+            ClientStatus.Missing missing => $"{ClientCatalog.Name(planner.Client)} is not installed. {missing.Reason}",
+            ClientStatus.Unready unready => $"{ClientCatalog.Name(planner.Client)} is not ready. {unready.Reason}",
+            _ => $"iDevelop is still checking {ClientCatalog.Name(planner.Client)}.",
         };
 
     /// <summary>Places the planner and runs it. Off while the description is blank or the agent cannot plan.</summary>
@@ -108,7 +108,7 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
 
     private bool CanSubmit => !string.IsNullOrWhiteSpace(_prompt) && Problem is null;
 
-    private static IEnumerable<ClientId> PlanningClients => Clients.All.Where(Clients.HasReadOnlyMode);
+    private static IEnumerable<ClientId> PlanningClients => ClientCatalog.All.Where(ClientCatalog.HasReadOnlyMode);
 
     internal void ChooseClient(PlannerClientChoice choice)
     {
@@ -190,7 +190,7 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
 
     private static string Names(IEnumerable<ClientId> clients)
     {
-        var names = clients.Select(Clients.Name).ToArray();
+        var names = clients.Select(ClientCatalog.Name).ToArray();
         return names.Length < 3 ? string.Join(" or ", names) : $"{string.Join(", ", names[..^1])}, or {names[^1]}";
     }
 }

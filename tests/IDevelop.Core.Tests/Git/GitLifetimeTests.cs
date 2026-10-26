@@ -1,9 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
-using IDevelop.Core.Tests.Runs;
-using IDevelop.Execution;
+using IDevelop.Git;
 using IDevelop.TestSupport;
 using static IDevelop.TestSupport.FakeRule;
-using static IDevelop.TestSupport.Processes;
+using static IDevelop.TestSupport.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests.Git;
 
@@ -20,7 +20,7 @@ public sealed class GitLifetimeTests
     public async Task A_timed_out_call_stops_a_hook_child_whose_parent_exited()
     {
         using var temp = new TempFolder();
-        using var spawned = new Processes();
+        using var spawned = new SpawnedProcesses();
         using var fakes = new FakeClients(temp.Create("bin"), FakeClientInstallMode.Direct);
         var sleeper = Path.Combine(temp.Create("evidence"), "sleeper.pid");
         // The fake waits for the sleeper's pid, so the limit only has to outlast a cold start.
@@ -48,7 +48,7 @@ public sealed class GitLifetimeTests
     public async Task A_call_cut_off_by_iDevelop_exiting_leaves_Git_and_its_hooks_to_finish()
     {
         using var temp = new TempFolder();
-        using var spawned = new Processes();
+        using var spawned = new SpawnedProcesses();
         var launches = temp.Create("launches");
         using var fakes = new FakeClients(temp.Create("bin"), FakeClientInstallMode.Direct) { LaunchFolder = launches };
         var evidence = temp.Create("evidence");
@@ -56,14 +56,11 @@ public sealed class GitLifetimeTests
         var gate = Path.Combine(evidence, "gate");
         fakes.Install("git", On("status").SpawnSleepingChild(hook).WaitForFile(gate));
         var repository = temp.Create("repository");
-        using var racer = new Racer(new Dictionary<string, string>
-        {
-            ["PATH"] = fakes.Folder + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
-        }, "git-exit", repository, hook);
+        using var exiting = GitExit(fakes.Folder + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"), repository, hook);
 
-        Assert.Equal("exiting", await racer.Line());
-        await racer.Exit();
-        Assert.Equal(73, racer.ExitCode);
+        Assert.Equal("exiting", await exiting.StandardOutput.ReadLineAsync().WaitAsync(Patience));
+        await exiting.WaitForExitAsync().WaitAsync(Patience);
+        Assert.Equal(73, exiting.ExitCode);
         var marker = Assert.Single(Directory.GetFiles(launches, "*.json"));
         Assert.Contains("status", JsonSerializer.Deserialize<string[]>(File.ReadAllBytes(marker))!);
         var git = int.Parse(Path.GetFileName(marker).Split('-')[0]);
@@ -83,5 +80,20 @@ public sealed class GitLifetimeTests
 
         File.WriteAllText(gate, "go");
         AssertGone(git);
+    }
+
+    /// <summary>Starts the GitExit helper, which runs git status in <paramref name="repository"/> and exits once the hook started.</summary>
+    private static Process GitExit(string path, string repository, string hook)
+    {
+        var dotnet = Path.GetFullPath(Path.Combine(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", "..",
+            OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"));
+        var start = new ProcessStartInfo(dotnet) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.Environment["PATH"] = path;
+        foreach (var arg in new[] { Path.Combine(AppContext.BaseDirectory, "IDevelop.GitExit.dll"), repository, hook })
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        return Process.Start(start)!;
     }
 }

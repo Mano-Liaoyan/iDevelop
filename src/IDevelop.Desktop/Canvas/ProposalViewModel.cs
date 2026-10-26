@@ -3,7 +3,7 @@ using System.Windows.Input;
 using Avalonia;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -160,12 +160,12 @@ public sealed class ProposalViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Which clients this window was still checking when it started the planner, so the planner did not consider them,
-    /// such as "Pi was still being checked when the planner started, so the planner didn't consider it." Null for none.
+    /// Which clients iDevelop was still checking when the planner started, so the planner did not consider them, such as
+    /// "Pi was still being checked when the planner started, so the planner didn't consider it." Null for none.
     /// </summary>
-    public string? CheckingNote => Proposal is { } proposal && _canvas.CheckingAtStart(proposal.Planner) is { IsEmpty: false } checking
+    public string? CheckingNote => Proposal is { } proposal && _canvas.Engine.Planned(proposal.Planner)?.Checking is { IsEmpty: false } checking
         ? checking.Length == 1
-            ? $"{IDevelop.Execution.Clients.Name(checking[0])} was still being checked when the planner started, so the planner didn't consider it."
+            ? $"{ClientCatalog.Name(checking[0])} was still being checked when the planner started, so the planner didn't consider it."
             : $"{Names(checking)} were still being checked when the planner started, so the planner didn't consider them."
         : null;
 
@@ -410,7 +410,7 @@ public sealed class ProposalViewModel : ObservableObject
     /// <summary>"Pi and Antigravity CLI", or "Claude Code, Pi, and Antigravity CLI".</summary>
     private static string Names(IReadOnlyList<ClientId> clients)
     {
-        var names = clients.Select(IDevelop.Execution.Clients.Name).ToArray();
+        var names = clients.Select(ClientCatalog.Name).ToArray();
         return names.Length < 3 ? string.Join(" and ", names) : $"{string.Join(", ", names[..^1])}, and {names[^1]}";
     }
 }

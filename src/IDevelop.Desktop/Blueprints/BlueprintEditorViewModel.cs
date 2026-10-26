@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -165,7 +165,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     }
 
     public IReadOnlyList<Option<ClientId?>> ClientChoices { get; } =
-        [new(null, "None"), .. Clients.All.Select(id => new Option<ClientId?>(id, Clients.Name(id)))];
+        [new(null, "None"), .. ClientCatalog.All.Select(id => new Option<ClientId?>(id, ClientCatalog.Name(id)))];
 
     public Option<ClientId?> Client
     {

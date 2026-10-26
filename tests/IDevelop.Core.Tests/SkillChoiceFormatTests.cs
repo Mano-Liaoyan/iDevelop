@@ -1,6 +1,6 @@
-using System.Text;
 using System.Text.Json;
-using IDevelop.Execution;
+using System.Text;
+using IDevelop.Clients;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -10,8 +10,7 @@ namespace IDevelop.Core.Tests;
 
 /// <summary>
 /// A node's skill choice (#93) is part of its agent. No choice means every skill the client loads, and a choice, even an
-/// empty one, means exactly those. The workflow file, the run's revision, and the attempt log keep it only when it is set,
-/// so a file or a revision without one reads and hashes as before.
+/// empty one, means exactly those. The workflow file keeps it only when it is set, so a file without one reads as before.
 /// </summary>
 public sealed class SkillChoiceFormatTests
 {
@@ -93,35 +92,6 @@ public sealed class SkillChoiceFormatTests
 
         Assert.Equal($"file: task {Design} {problem}", error.Message);
     }
-
-    [Fact]
-    public void A_revision_names_skills_only_for_a_task_with_a_choice()
-    {
-        var all = TestNodes.Implement(Design, "Design", execution: Claude);
-        var chosen = all with { Execution = Claude with { Skills = ["tdd", "find-skills"] } };
-
-        Assert.DoesNotContain("skills", Revision.CanonicalTask(all), StringComparison.Ordinal);
-        Assert.Contains("""
-            "reasoning":"high","skills":["find-skills","tdd"]}
-            """, Revision.CanonicalTask(chosen), StringComparison.Ordinal);
-        Assert.Contains("""
-            "reasoning":"high","skills":[]}
-            """, Revision.CanonicalTask(all with { Execution = Claude with { Skills = [] } }), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void An_attempt_records_the_choice_it_ran_with_and_reads_older_logs_as_all_skills()
-    {
-        var options = AttemptLogOptions();
-        var chosen = Claude with { Skills = ["tdd"] };
-
-        var written = JsonSerializer.Serialize(chosen, options);
-        Assert.Equal(chosen, JsonSerializer.Deserialize<ExecutionSettings>(written, options));
-        Assert.Equal(Claude, JsonSerializer.Deserialize<ExecutionSettings>(JsonSerializer.Serialize(Claude, options), options));
-        Assert.DoesNotContain("skills", JsonSerializer.Serialize(Claude, options), StringComparison.Ordinal);
-    }
-
-    private static JsonSerializerOptions AttemptLogOptions() => AttemptLog.Options;
 
     private static Workflow Place(params TaskDefinition[] tasks) => tasks.Index().Aggregate(Workflow.Empty(new WorkflowId(Guid.CreateVersion7())),
         (workflow, entry) => ((EditResult.Applied)workflow.Apply(TestNodes.Place(entry.Item, new CanvasPoint(entry.Index * 300, 0)))).Workflow);

@@ -1,7 +1,7 @@
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using static IDevelop.Execution.AgentEvent;
+using static IDevelop.Clients.AgentEvent;
 
 namespace IDevelop.Core.Tests;
 
@@ -55,7 +55,7 @@ public class ClientDefinitionTests
     [Fact]
     public void Claude_Code_turns_each_permission_denial_into_a_notice()
     {
-        var events = Clients.Get(ClientId.ClaudeCode).Protocol(new LaunchRequest("m", null, "p")).Read(
+        var events = ClientCatalog.Get(ClientId.ClaudeCode).Protocol(new LaunchRequest("m", null, "p")).Read(
             """{"type":"result","subtype":"success","is_error":false,"result":"I could not run it.","permission_denials":[{"tool_name":"Bash"}]}""");
 
         Assert.Equal([new Notice("Claude Code denied Bash."), new Succeeded("I could not run it.")], events.Events.ToArray());
@@ -168,7 +168,7 @@ public class ClientDefinitionTests
     {
         const string session = "01a108d7-464d-77a3-8908-a36f38ce6c14";
         LaunchArguments Resume(ClientId client, string model, string? reasoning) =>
-            Clients.Get(client).Launch(new LaunchRequest(model, reasoning, "banana") { ResumeSession = session });
+            ClientCatalog.Get(client).Launch(new LaunchRequest(model, reasoning, "banana") { ResumeSession = session });
 
         var claude = Resume(ClientId.ClaudeCode, "claude-opus-5-5", "xhigh");
         var codex = Resume(ClientId.Codex, "gpt-6-sol", "high");
@@ -202,7 +202,7 @@ public class ClientDefinitionTests
                 "pi --session 5a1c01fc-d492-491f-a024-4e4c1bf97949",
                 "agy --conversation 5a1c01fc-d492-491f-a024-4e4c1bf97949",
             ],
-            Clients.All.Select(client => Clients.Get(client).Terminal("5a1c01fc-d492-491f-a024-4e4c1bf97949")));
+            ClientCatalog.All.Select(client => ClientCatalog.Get(client).Terminal("5a1c01fc-d492-491f-a024-4e4c1bf97949")));
     }
 
     [Fact]
@@ -304,7 +304,7 @@ public class ClientDefinitionTests
     {
         var catalog = Models(ClientId.Pi, new ProbeOutput(null, Fixture.Text("pi-rpc-models.jsonl"), "", false));
 
-        var probes = Clients.Get(ClientId.Pi).Readiness([.. catalog]);
+        var probes = ClientCatalog.Get(ClientId.Pi).Readiness([.. catalog]);
 
         Assert.Equal(new string?[] { "deepseek", "openai-codex" }, probes.Select(probe => probe.Provider));
         Assert.Equal(["auth", "check", "--provider", "openai-codex", "--json"], probes[1].Probe.Arguments.ToArray());
@@ -319,18 +319,18 @@ public class ClientDefinitionTests
 
     private static AgentEvent[] Events(ClientId client, string fixture)
     {
-        var protocol = Clients.Get(client).Protocol(new LaunchRequest("m", null, "p"));
+        var protocol = ClientCatalog.Get(client).Protocol(new LaunchRequest("m", null, "p"));
         return [.. Fixture.Lines(fixture).SelectMany(line => protocol.Read(client == ClientId.Codex ? FakeAgents.AppLine(line) : line).Events)];
     }
 
     private static LaunchArguments Launch(ClientId client, string model, string? reasoning, string prompt) =>
-        Clients.Get(client).Launch(new LaunchRequest(model, reasoning, prompt));
+        ClientCatalog.Get(client).Launch(new LaunchRequest(model, reasoning, prompt));
 
     private static CatalogParse Catalog(ClientId client, ProbeOutput output) =>
-        Assert.IsType<CatalogSource.Probed>(Clients.Get(client).Catalog).Parse(output);
+        Assert.IsType<CatalogSource.Probed>(ClientCatalog.Get(client).Catalog).Parse(output);
 
     private static ModelOption[] Models(ClientId client, ProbeOutput output) =>
         [.. Assert.IsType<CatalogParse.Models>(Catalog(client, output)).Options];
 
-    private static ReadinessProblem? Problem(ClientId client, ProbeOutput output) => Assert.Single(Clients.Get(client).Readiness([])).Problem(output);
+    private static ReadinessProblem? Problem(ClientId client, ProbeOutput output) => Assert.Single(ClientCatalog.Get(client).Readiness([])).Problem(output);
 }

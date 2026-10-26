@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
 using System.Windows.Input;
 using Avalonia;
+using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -167,7 +167,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     public string AgentModel => RunText.AgentLines(_task.Execution, Status).Model ?? "";
 
     public IReadOnlyList<ClientChoice> ClientChoices =>
-        [new(Id, null, "None"), .. Clients.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))];
+        [new(Id, null, "None"), .. ClientCatalog.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))];
 
     public ClientChoice SelectedClient => ClientChoices.First(choice => choice.Id == _task.Execution?.Client);
 

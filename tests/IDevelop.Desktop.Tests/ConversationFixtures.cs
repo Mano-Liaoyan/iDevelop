@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.VisualTree;
 using IDevelop.Engine;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Tests;

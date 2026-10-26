@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Workflows;
 
 namespace IDevelop.Projects;
@@ -95,13 +95,13 @@ internal static class BlueprintJson
         ? null
         : new ExecutionDto
         {
-            Client = Clients.WireName(settings.Client), Model = settings.Model, Reasoning = settings.Reasoning,
+            Client = ClientCatalog.WireName(settings.Client), Model = settings.Model, Reasoning = settings.Reasoning,
             Skills = settings.Skills is { } skills ? [.. skills] : null,
         };
 
     /// <exception cref="ProjectException">The client is unknown, or a skill name is null, blank, or repeated.</exception>
     public static ExecutionSettings Execution(ExecutionDto execution, string entry) =>
-        new(Clients.ParseWireName(execution.Client) ?? throw new ProjectException($"{entry} names unknown agent \"{execution.Client}\"."))
+        new(ClientCatalog.ParseWireName(execution.Client) ?? throw new ProjectException($"{entry} names unknown agent \"{execution.Client}\"."))
         {
             Model = execution.Model,
             Reasoning = execution.Reasoning,

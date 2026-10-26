@@ -1,5 +1,5 @@
 using IDevelop.Engine;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Nodes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -108,12 +108,34 @@ public sealed class SessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_planner_s_log_keeps_the_handles_its_prompt_named_so_its_proposal_reads_the_same_after_a_reopen()
+    {
+        var a = _f.Reader("A");
+        var b = _f.Node("B");
+        _f.Connect(a, b);
+        _f.Install(Reply("s-a", "Plan"));
+        var engine = await _f.Open();
+        var context = PlanningContext.For(_f.Workflow, a, [BuiltInBlueprints.Implement], _ => false) with { Checking = [ClientId.Pi] };
+        engine.Planning = _ => context;
+
+        await engine.Run(a);
+        await Until<NodeState.Completed>(engine, a);
+
+        var expected = context.Handles(a.Value);
+        Assert.Equal(ClientId.Pi, Assert.Single(expected.Checking));
+        Assert.Equal(expected, engine.Planned(a));
+        Assert.Null(engine.Planned(b));
+        await using var reopened = new WorkflowEngine(_f.Project, _f.Workflow, await _f.Fakes.DiscoverAsync());
+        Assert.Equal(expected, reopened.Planned(a));
+    }
+
+    [Fact]
     public async Task After_a_crash_a_turn_without_an_end_reopens_interrupted_and_a_message_continues_its_session()
     {
         var a = _f.Reader("A");
         _f.Install(Reply("s-a", "Continued", FakeAgents.Resuming(ClientId.Antigravity, "s-a")));
         var node = _f.Workflow.Tasks[a];
-        var basis = new Basis([], AgentWork.Prompt(new NodeContext(node, "")), new AgentModel(ClientId.Antigravity, Agy.Model, Agy.Reasoning));
+        var basis = new Basis([], AgentPrompt.For(node, ""), new AgentModel(ClientId.Antigravity, Agy.Model, Agy.Reasoning));
         var log = new NodeLog(_f.Project, a);
         log.Append(new NodeEntry.TurnStarted(basis, null));
         log.Append(new NodeEntry.Agent(new AgentEvent.SessionStarted("s-a")));

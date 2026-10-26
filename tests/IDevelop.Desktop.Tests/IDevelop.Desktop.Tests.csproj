@@ -11,7 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\IDevelop.Desktop\IDevelop.Desktop.csproj" />
     <ProjectReference Include="..\IDevelop.FakeAgent\IDevelop.FakeAgent.csproj" />
-    <ProjectReference Include="..\IDevelop.RunRacer\IDevelop.RunRacer.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\*.cs" LinkBase="Shared" />

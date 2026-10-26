@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.RegularExpressions;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Workflows;
 
 namespace IDevelop.Core.Tests;
@@ -15,7 +15,7 @@ public sealed class RealWindowHarnessTests
         var fake = harness[harness.IndexOf("function New-FakeCodex", StringComparison.Ordinal)..];
         fake = fake[..fake.IndexOf("ConvertTo-Json", StringComparison.Ordinal)];
         string[][] rules = [.. Regex.Matches(fake, @"when = @\(([^)]*)\)").Select(match => match.Groups[1].Value.Split(',').Select(part => part.Trim().Trim('\'')).ToArray())];
-        var codex = Clients.Get(ClientId.Codex);
+        var codex = ClientCatalog.Get(ClientId.Codex);
         ImmutableArray<string>[] commands =
         [
             Assert.IsType<CatalogSource.Probed>(codex.Catalog).Probe.Arguments,

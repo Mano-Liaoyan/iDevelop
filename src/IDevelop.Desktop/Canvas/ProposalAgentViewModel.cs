@@ -1,7 +1,7 @@
 using System.Windows.Input;
+using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -116,7 +116,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     /// <summary>Every client, or only those with a read-only mode for a task that only reads.</summary>
     public IReadOnlyList<ClientChoice> ClientChoices =>
-        [.. Clients.All.Where(id => !ReadOnly || Clients.HasReadOnlyMode(id)).Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _proposal.Status(id))))];
+        [.. ClientCatalog.All.Where(id => !ReadOnly || ClientCatalog.HasReadOnlyMode(id)).Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _proposal.Status(id))))];
 
     public ClientChoice? SelectedClient => ClientChoices.FirstOrDefault(choice => choice.Id == Settings?.Client);
 

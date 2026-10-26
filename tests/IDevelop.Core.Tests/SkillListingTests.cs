@@ -1,5 +1,5 @@
 using System.Text.Json;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
@@ -190,7 +190,7 @@ public sealed class SkillListingTests : IDisposable
         Skill(Path.Combine(_project, ".claude", "skills"), "release", "Cuts a release.");
         await directory.RefreshAsync();
 
-        // A start while the client lists its skills again, such as a run's next task, still has the last listing.
+        // A start while the client lists its skills again still has the last listing.
         Assert.Equal(["simplify", "verify-idevelop"], Names(directory.Skills(ClientId.ClaudeCode, _project)));
         var relisted = await UntilAsync(directory, ClientId.ClaudeCode, _project, listing => Names(listing).Contains("release"));
         Assert.Equal(["release", "simplify", "verify-idevelop"], Names(relisted));

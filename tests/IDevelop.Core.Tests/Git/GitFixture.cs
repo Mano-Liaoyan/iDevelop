@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using IDevelop.Execution;
+using IDevelop.Git;
 using IDevelop.TestSupport;
 
 namespace IDevelop.Core.Tests.Git;

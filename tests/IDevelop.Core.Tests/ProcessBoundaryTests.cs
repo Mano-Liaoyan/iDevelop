@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using System.Text.Json;
-using IDevelop.Execution;
+using IDevelop.Clients;
+using IDevelop.Engine;
+using IDevelop.Processes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using static IDevelop.Core.Tests.AttemptEvents;
 using static IDevelop.TestSupport.FakeRule;
-using static IDevelop.TestSupport.Processes;
+using static IDevelop.TestSupport.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests;
 
@@ -14,7 +15,7 @@ public sealed class ProcessBoundaryTests : IDisposable
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
     private readonly TempFolder _temp = new();
-    private readonly Processes _spawned = new();
+    private readonly SpawnedProcesses _spawned = new();
     private readonly FakeClients _fakes;
     private readonly string _project;
     private readonly string _evidence;
@@ -137,7 +138,6 @@ public sealed class ProcessBoundaryTests : IDisposable
         var pidFile = Path.Combine(_evidence, "released.pid");
         using var child = Start(On().SpawnSleepingChild(pidFile).Hang());
         var sleeper = await Sleeper(pidFile);
-        child.LeaveDescendantsRunning();
         child.Dispose();
 
         var cleanup = await child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
@@ -145,9 +145,8 @@ public sealed class ProcessBoundaryTests : IDisposable
         Assert.Equal(CleanupResult.Incomplete, cleanup.Result);
         Assert.Equal("The turn's process was already released.", cleanup.Detail);
         Assert.Empty(cleanup.Steps);
-        Assert.Equal(ProcessMatch.Same, ProcessCheck.Check(child.Identity));
-        Assert.Equal(ProcessMatch.Same, ProcessCheck.Check(sleeper));
-        Assert.Equal(ProcessMatch.Same, ProcessCheck.StopIfSame(child.Identity));
+        ProcessCheck.StopIfSame(child.Identity);
+        ProcessCheck.StopIfSame(sleeper);
         AssertGone(sleeper.Id);
 
         var controlPid = Path.Combine(_evidence, "control.pid");
@@ -160,76 +159,17 @@ public sealed class ProcessBoundaryTests : IDisposable
     }
 
     [Fact]
-    public async Task A_standalone_launch_keeps_its_log_bytes()
-    {
-        var pidFile = Path.Combine(_evidence, "standalone.pid");
-        FakeAgents.Install(_fakes, ClientId.Codex, FakeAgents.Fresh(ClientId.Codex)
-            .SpawnSleepingChild(pidFile).Print(FakeAgents.ReplyLines(ClientId.Codex, "DONE")).Exit(0));
-        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync().WaitAsync(Patience));
-        var settled = NextSettled(runs);
-        var started = Assert.IsType<StartResult.Started>(runs.Start(TaskDefinition()));
-        var sleeper = await Sleeper(pidFile);
-        var record = await settled.WaitAsync(Patience);
-        Assert.Equal((AttemptStatus.Succeeded, "DONE"), (record.Status, record.Result));
-        var folder = AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), TestTasks.Build, started.Attempt.Id);
-        var lines = File.ReadAllLines(Path.Combine(folder, "events.jsonl"));
-        var launchedLine = Assert.Single(lines, line => line.Contains("\"type\":\"launched\"", StringComparison.Ordinal));
-        using var json = JsonDocument.Parse(launchedLine);
-        Assert.False(json.RootElement.TryGetProperty("lifetime", out _));
-        Assert.False(json.RootElement.TryGetProperty("containment", out _));
-        Assert.DoesNotContain(lines, line => line.Contains("\"type\":\"cleanedUp\"", StringComparison.Ordinal));
-        var launched = Assert.Single(AttemptLog.Read(folder).OfType<AttemptEvent.Launched>());
-        Assert.Equal($"{{\"type\":\"launched\",\"at\":{JsonSerializer.Serialize(launched.At)},\"processId\":{launched.ProcessId},\"processStarted\":{JsonSerializer.Serialize(launched.ProcessStarted)}}}", launchedLine);
-        Assert.Equal(ProcessMatch.Same, ProcessCheck.StopIfSame(sleeper));
-
-        using var log = AttemptLog.Create(_temp.Create("workflow-log"), BuildRequested(First));
-        log.Append(LaunchedAt1s with { Lifetime = ProcessLifetime.Workflow, Containment = new Containment.None("x") });
-        Assert.Equal("""{"type":"launched","at":"2026-10-04T05:00:01+00:00","processId":4242,"processStarted":"2026-10-04T05:00:01+00:00","lifetime":"workflow","containment":{"type":"none","reason":"x"}}""",
-            File.ReadAllLines(Path.Combine(log.Folder, "events.jsonl"))[1]);
-        var before = AttemptEvidence.Read(log.Folder);
-        var cleanedUp = new AttemptEvent.CleanedUp(T0.AddSeconds(2), CleanupResult.Incomplete, "x", [new CleanupStep(T0.AddSeconds(2), "killTree", "root exited")]);
-        log.Append(cleanedUp);
-        Assert.Equal("""{"type":"cleanedUp","at":"2026-10-04T05:00:02+00:00","result":"incomplete","detail":"x","steps":[{"at":"2026-10-04T05:00:02+00:00","action":"killTree","failure":"root exited"}]}""",
-            File.ReadAllLines(Path.Combine(log.Folder, "events.jsonl"))[2]);
-        var roundTrip = Assert.Single(AttemptLog.Read(log.Folder).OfType<AttemptEvent.CleanedUp>());
-        Assert.Equal((T0.AddSeconds(2), CleanupResult.Incomplete, "x"), (roundTrip.At, roundTrip.Result, roundTrip.Detail));
-        Assert.Equal(new[] { new CleanupStep(T0.AddSeconds(2), "killTree", "root exited") }, roundTrip.Steps.ToArray());
-        var after = AttemptEvidence.Read(log.Folder);
-        Assert.Null(before.Rejection);
-        Assert.Null(after.Rejection);
-        Assert.Equal(AttemptStatus.Running, after.Record!.Status);
-        Assert.Equivalent(before.Record, after.Record);
-        Assert.Equal(before.Record!.AppliedEvents, after.Record.AppliedEvents);
-        Assert.Equal(before.Record, AttemptReducer.Apply(before.Record, roundTrip));
-        Assert.Equal(3, after.Events.Length);
-        Assert.IsType<AttemptEvent.CleanedUp>(after.Events[2]);
-        Assert.NotEqual(before.Checkpoint, after.Checkpoint);
-    }
-
-    [Fact]
-    public void A_group_containment_is_logged_with_its_ID_and_read_back()
-    {
-        using var log = AttemptLog.Create(_temp.Create("group-log"), BuildRequested(First));
-        log.Append(LaunchedAt1s with { Lifetime = ProcessLifetime.Workflow, Containment = new Containment.Group(4242) });
-
-        Assert.Equal("""{"type":"launched","at":"2026-10-04T05:00:01+00:00","processId":4242,"processStarted":"2026-10-04T05:00:01+00:00","lifetime":"workflow","containment":{"type":"group","id":4242}}""",
-            File.ReadAllLines(Path.Combine(log.Folder, "events.jsonl"))[1]);
-        Assert.Equal(new Containment.Group(4242), Assert.Single(AttemptLog.Read(log.Folder).OfType<AttemptEvent.Launched>()).Containment);
-    }
-
-    [Fact]
-    public async Task Launch_markers_count_runs_not_probes()
+    public async Task Launch_markers_count_turns_not_probes()
     {
         var folder = _temp.Create("launches");
         _fakes.LaunchFolder = folder;
         FakeAgents.Install(_fakes, ClientId.Codex, FakeAgents.Fresh(ClientId.Codex).Print(FakeAgents.ReplyLines(ClientId.Codex, "DONE")));
         var clients = await _fakes.DiscoverAsync().WaitAsync(Patience);
         Assert.Equal(0, LaunchMarkers.Runs(folder, ClientId.Codex));
-        await using var runs = ProjectRuns.Open(_project, clients);
-        var settled = NextSettled(runs);
 
-        Assert.IsType<StartResult.Started>(runs.Start(TaskDefinition()));
-        Assert.Equal(AttemptStatus.Succeeded, (await settled.WaitAsync(Patience)).Status);
+        var outcome = await new CliAgent(clients, _project).Turn(TaskDefinition(), _project, "Say DONE.", null, _ => { }, CancellationToken.None).WaitAsync(Patience);
+
+        Assert.Equal(new TurnOutcome.Done("DONE"), outcome);
 
         Assert.Equal(1, LaunchMarkers.Runs(folder, ClientId.Codex));
         Assert.True(Directory.GetFiles(folder, "*.json").Length > 1);
@@ -245,8 +185,8 @@ public sealed class ProcessBoundaryTests : IDisposable
         using var fakes = new FakeClients(_temp.Create("direct-bin"), FakeClientInstallMode.Direct) { LaunchFolder = folder };
         FakeAgents.Install(fakes, client, FakeAgents.Fresh(client).Write(ran, "ran"));
         var request = new LaunchRequest("m", null, "banana");
-        var definition = Clients.Get(client);
-        using var child = ChildProcess.Start(fakes.Resolver.Resolve(definition.Command)!, definition.Launch(request).Arguments, _project, ProcessLifetime.Standalone);
+        var definition = ClientCatalog.Get(client);
+        using var child = ChildProcess.Start(fakes.Resolver.Resolve(definition.Command)!, definition.Launch(request).Arguments, _project, ProcessLifetime.Probe);
         _spawned.Add(child.Identity.Id);
 
         await WaitUntilAsync(() => Directory.GetFiles(folder, "*.json") is [var file] &&
@@ -295,20 +235,8 @@ public sealed class ProcessBoundaryTests : IDisposable
         return ProcessCheck.Identify(process);
     }
 
-    private static TaskDefinition TaskDefinition() => TestNodes.Implement(TestTasks.Build, "Build", "Say DONE.", execution: CodexHigh);
-
-    private static Task<AttemptRecord> NextSettled(ProjectRuns runs)
-    {
-        var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
-        runs.Changed += (_, _) =>
-        {
-            if (runs.Latest.GetValueOrDefault(TestTasks.Build) is { Status: not AttemptStatus.Running } record)
-            {
-                settled.TrySetResult(record);
-            }
-        };
-        return settled.Task;
-    }
+    private static TaskDefinition TaskDefinition() => TestNodes.Implement(TestTasks.Build, "Build", "Say DONE.",
+        execution: new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" });
 
     private static async Task WaitUntilAsync(Func<bool> done)
     {

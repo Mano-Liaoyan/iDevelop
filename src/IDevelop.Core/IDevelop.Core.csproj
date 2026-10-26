@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="IDevelop.Core.Tests" />
-    <InternalsVisibleTo Include="IDevelop.RunRacer" />
+    <InternalsVisibleTo Include="IDevelop.GitExit" />
     <InternalsVisibleTo Include="IDevelop.Desktop" />
     <InternalsVisibleTo Include="IDevelop.Desktop.Tests" />
   </ItemGroup>

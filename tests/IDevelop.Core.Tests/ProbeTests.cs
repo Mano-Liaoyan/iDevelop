@@ -1,8 +1,8 @@
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
-using static IDevelop.TestSupport.Processes;
+using static IDevelop.TestSupport.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests;
 
@@ -15,7 +15,7 @@ public sealed class ProbeTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private static CatalogSource.Probed PiCatalog => (CatalogSource.Probed)Clients.Get(ClientId.Pi).Catalog;
+    private static CatalogSource.Probed PiCatalog => (CatalogSource.Probed)ClientCatalog.Get(ClientId.Pi).Catalog;
 
     [Fact]
     public async Task A_probe_that_answered_gets_the_end_of_its_input_and_exits_on_its_own()

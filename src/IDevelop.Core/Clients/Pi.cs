@@ -1,0 +1,231 @@
+using System.Collections.Immutable;
+using System.Text.Json;
+using static IDevelop.Clients.JsonFields;
+
+namespace IDevelop.Clients;
+
+/// <summary>Pi through <c>pi -p --mode json</c>. On Windows <c>pi</c> is an npm <c>pi.cmd</c> shim.</summary>
+internal static class Pi
+{
+    private static readonly ImmutableArray<string> StandardLevels = ["minimal", "low", "medium", "high"];
+
+    private static readonly ImmutableArray<string> ExtraLevels = ["off", "xhigh", "max"];
+
+    public static readonly ClientDefinition Definition = new()
+    {
+        Name = "Pi",
+        WireName = "pi",
+        Command = "pi",
+        Catalog = new CatalogSource.Probed(
+            new Probe(["--mode", "rpc", "--no-session"])
+            {
+                Stdin = """{"id":"idevelop-models","type":"get_available_models"}""" + "\n",
+                DoneWhen = IsModelsResponse,
+            },
+            ParseCatalog),
+        // One check per provider. Never send RPC set_model: it can change the user's default model.
+        Readiness = models => [.. models.Select(model => model.Provider!).Distinct().Select(provider =>
+            new ReadinessProbe(provider, new Probe(["auth", "check", "--provider", provider, "--json"]), output => SignInProblem(provider, output)))],
+        Launch = Launch,
+        Protocol = request => new OneShotProtocol(Launch(request), Interpret),
+        Terminal = session => $"pi --session {session}",
+        HasReadOnlyMode = false,
+        SessionsPerFolder = true,
+        LostSessionNotice = "No project session found with id",
+        // get_commands lists every skill the session loads, with its file, beside prompt templates and extension commands.
+        Skills = new SkillSource(folder => new Probe(["--mode", "rpc", "--no-session"])
+        {
+            Folder = folder,
+            Stdin = """{"id":"idevelop-skills","type":"get_commands"}""" + "\n",
+            DoneWhen = IsCommandsResponse,
+        }, ParseSkills)
+        {
+            Annotate = (listing, folder, user) => listing is SkillListing.Listed listed && PiTrust.HidesProjectSkills(folder, user)
+                ? listed with { ProjectNotTrusted = true }
+                : listing,
+        },
+    };
+
+    private static LaunchArguments Launch(LaunchRequest request) => new(
+    [
+        "-p", "--mode", "json", "--model", request.Model,
+        .. request.Reasoning is { } thinking ? ["--thinking", thinking] : Array.Empty<string>(),
+        // Pi loads exactly the skills it is given after --no-skills. A file path with forward slashes passes through pi.cmd.
+        // A choice whose skill list could not be read has no files to give, so Pi keeps its own skills.
+        .. request.Skills is { Unchecked: false } skills
+            ? ["--no-skills", .. skills.Chosen.Where(skill => skill.Path is not null).SelectMany(skill => new[] { "--skill", SkillPath(skill.Path!) })]
+            : Array.Empty<string>(),
+        .. request.ResumeSession is { } session ? ["--session-id", session] : Array.Empty<string>(),
+    ],
+    request.Prompt);
+
+    private static string SkillPath(string path) => OperatingSystem.IsWindows() ? path.Replace('\\', '/') : path;
+
+    private static bool IsCommandsResponse(string line) =>
+        line.Contains("\"type\":\"response\"", StringComparison.Ordinal) && line.Contains("\"command\":\"get_commands\"", StringComparison.Ordinal);
+
+    private static SkillListing ParseSkills(ProbeOutput output)
+    {
+        foreach (var line in TextLines.Lines(output.Stdout).Where(IsCommandsResponse))
+        {
+            try
+            {
+                using var json = JsonDocument.Parse(line);
+                var response = json.RootElement;
+                if (response.Bool("success") != true)
+                {
+                    return new SkillListing.Unavailable($"Pi did not list its skills: {response.String("error") ?? "it reported a failure"}.");
+                }
+
+                // A skill's command is its name after "skill:".
+                return new SkillListing.Listed(SkillChoices.Distinct(response.Property("data")?.Items("commands")
+                    .Where(command => command.String("source") == "skill" && command.String("name") is { } name && name.StartsWith("skill:", StringComparison.Ordinal))
+                    .Select(command => new SkillOption(command.String("name")!["skill:".Length..], command.String("description") ?? "")
+                    {
+                        Path = command.Property("sourceInfo")?.String("path"),
+                    }) ?? []));
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return new SkillListing.Unavailable($"Pi did not list its skills. {Probes.Failure("pi --mode rpc", output)}");
+    }
+
+    private static CatalogParse ParseCatalog(ProbeOutput output)
+    {
+        foreach (var line in TextLines.Lines(output.Stdout).Where(IsModelsResponse))
+        {
+            try
+            {
+                using var json = JsonDocument.Parse(line);
+                var response = json.RootElement;
+                if (response.Bool("success") != true)
+                {
+                    return new CatalogParse.Problem($"Pi did not list its models: {response.String("error") ?? "it reported a failure"}.");
+                }
+
+                ImmutableArray<ModelOption> models = [.. response.Property("data")?.Items("models").Select(Model).OfType<ModelOption>() ?? []];
+                return models.IsEmpty ? new CatalogParse.Problem("Pi listed no models.") : new CatalogParse.Models(models);
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return new CatalogParse.Problem($"Pi did not list its models. {Probes.Failure("pi --mode rpc", output)}");
+    }
+
+    private static bool IsModelsResponse(string line) =>
+        line.Contains("\"type\":\"response\"", StringComparison.Ordinal) && line.Contains("\"command\":\"get_available_models\"", StringComparison.Ordinal);
+
+    private static ModelOption? Model(JsonElement model)
+    {
+        if (model.String("provider") is not { } provider || model.String("id") is not { } id)
+        {
+            return null;
+        }
+
+        var levels = Levels(model);
+        return new ModelOption($"{provider}/{id}", $"{model.String("name") ?? id} ({provider})", levels)
+        {
+            Provider = provider,
+            DefaultReasoning = ReasoningLevels.Default(levels),
+        };
+    }
+
+    /// <summary>
+    /// Pi clamps an unsupported level without saying so, so only the levels its map allows are offered.
+    /// A null entry removes a standard level. The extra levels exist only when the map names them with a value.
+    /// </summary>
+    private static ImmutableArray<string> Levels(JsonElement model)
+    {
+        if (model.Bool("reasoning") != true)
+        {
+            return [];
+        }
+
+        var map = model.Property("thinkingLevelMap");
+        JsonValueKind? Entry(string level) =>
+            map is { ValueKind: JsonValueKind.Object } levels && levels.TryGetProperty(level, out var value) ? value.ValueKind : null;
+
+        return ReasoningLevels.Sort(
+        [
+            .. StandardLevels.Where(level => Entry(level) != JsonValueKind.Null),
+            .. ExtraLevels.Where(level => Entry(level) is { } kind && kind != JsonValueKind.Null),
+        ]);
+    }
+
+    private static ReadinessProblem? SignInProblem(string provider, ProbeOutput output)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(output.Stdout);
+            if (json.RootElement.String("status") is { } status)
+            {
+                return status == "ready"
+                    ? null
+                    : new ReadinessProblem($"Pi's sign-in for {provider} is {status}. Sign in to {provider} in Pi again.", SignedOut: true);
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return new ReadinessProblem(Probes.Failure($"pi auth check --provider {provider}", output), SignedOut: false);
+    }
+
+    private static ImmutableArray<AgentEvent> Interpret(string line)
+    {
+        using var json = JsonDocument.Parse(line);
+        var root = json.RootElement;
+        return root.String("type") switch
+        {
+            "session" when root.String("id") is { } id => [new AgentEvent.SessionStarted(id)],
+            "message_end" when root.Property("message") is { } message && message.String("role") == "assistant" => Assistant(message),
+            "tool_execution_start" when root.String("toolName") is { } tool =>
+                [new AgentEvent.ToolStarted(tool, root.Property("args")?.String("path") ?? root.Property("args")?.String("command"))],
+            // Pi exits 0 even when the turn fails, so this verdict is its only success signal.
+            "agent_end" => [Verdict(root.Items("messages").Where(message => message.String("role") == "assistant").Select(message => (JsonElement?)message).LastOrDefault())],
+            _ => [],
+        };
+    }
+
+    private static ImmutableArray<AgentEvent> Assistant(JsonElement message)
+    {
+        var events = ImmutableArray.CreateBuilder<AgentEvent>();
+        var model = message.String("provider") is { } provider && message.String("model") is { } id ? $"{provider}/{id}" : message.String("model");
+        var thinking = message.String("thinkingLevel");
+        if (model is not null || thinking is not null)
+        {
+            events.Add(new AgentEvent.Reported(model, thinking));
+        }
+
+        if (Text(message) is { } text)
+        {
+            events.Add(new AgentEvent.Message(text));
+        }
+
+        return events.ToImmutable();
+    }
+
+    private static AgentEvent Verdict(JsonElement? last)
+    {
+        if (last is not { } message)
+        {
+            return new AgentEvent.Failed("Pi ended without an answer.");
+        }
+
+        return message.String("stopReason") switch
+        {
+            "stop" => new AgentEvent.Succeeded(Text(message)),
+            "error" => new AgentEvent.Failed(NonBlank(message.String("errorMessage")) ?? "Pi reported an error."),
+            "aborted" => new AgentEvent.Failed("Pi stopped the turn."),
+            var reason => new AgentEvent.Failed($"Pi ended with stop reason {reason ?? "none"}."),
+        };
+    }
+
+    private static string? Text(JsonElement message) => NonBlank(string.Join("\n",
+        message.Items("content").Where(part => part.String("type") == "text").Select(part => part.String("text")).OfType<string>()));
+}

@@ -1,4 +1,3 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -6,9 +5,10 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Avalonia;
+using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
-using IDevelop.Execution;
 using IDevelop.Projects;
 
 namespace IDevelop.Desktop;

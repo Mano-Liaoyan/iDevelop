@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
-using IDevelop.Execution;
+using IDevelop.Clients;
+using IDevelop.Git;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -89,6 +90,12 @@ public sealed class WorkflowEngine : IAsyncDisposable
     /// </summary>
     public Func<TaskId, PlanningContext?>? Planning { get; set; }
 
+    /// <summary>The handles a planner's session read when it started, which its proposals name, or null before it started.</summary>
+    public PlanningHandles? Planned(TaskId node)
+    {
+        lock (_gate) return Log(node).Record.Planning;
+    }
+
     /// <summary>The node's conversation, which follows its log until it is disposed.</summary>
     public IConversation Conversation(TaskId node)
     {
@@ -124,7 +131,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 return null;
             }
 
-            return IDevelop.Execution.TerminalCommand.For(folder, Clients.Get(client).Terminal(session), IDevelop.Execution.TerminalCommand.Current);
+            return Clients.TerminalCommand.For(folder, ClientCatalog.Get(client).Terminal(session), Clients.TerminalCommand.Current);
         }
     }
 
@@ -355,8 +362,18 @@ public sealed class WorkflowEngine : IAsyncDisposable
         }
         else
         {
-            Start(id, basis, WithFeedback(Prompt(id, null), feedback), session: null, round: round);
+            StartPrompted(id, basis, feedback, round);
         }
+    }
+
+    /// <summary>
+    /// Starts a fresh turn on the node's prompt. A planner's prompt lists what it may fill and place, and its log records
+    /// those handles, which its proposals name.
+    /// </summary>
+    private void StartPrompted(TaskId id, Basis basis, string? feedback, bool round)
+    {
+        var planning = _workflow.Tasks[id].Blueprint.Work is WorkSpec.Agent { Proposes: true } ? Planning?.Invoke(id) ?? PlanningContext.None : null;
+        Start(id, basis, WithFeedback(Prompt(id, null, planning), feedback), session: null, round: round, planning: planning?.Handles(id.Value));
     }
 
     private static string WithFeedback(string prompt, string? feedback) =>
@@ -389,7 +406,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 Settle(id, basis, new NodeEntry.Conflicted(conflict.Description), new NodeEntry.Waiting(NodeState.Conflict, conflict.Description));
                 break;
             default:
-                Start(id, basis, WithFeedback(Prompt(id, null), feedback), session: null, round: round);
+                StartPrompted(id, basis, feedback, round);
                 break;
         }
     }
@@ -453,13 +470,14 @@ public sealed class WorkflowEngine : IAsyncDisposable
         Start(id, basis, text, session);
     }
 
-    private void Start(TaskId id, Basis basis, string prompt, string? session, WorktreeStart.Conflict? conflict = null, bool round = false)
+    private void Start(TaskId id, Basis basis, string prompt, string? session, WorktreeStart.Conflict? conflict = null, bool round = false,
+        PlanningHandles? planning = null)
     {
         var node = _workflow.Tasks[id];
         var agent = AgentOf(node) ?? throw new InvalidOperationException("This node kind does not run yet.");
         StopDescendants(id);
         var log = Log(id);
-        log.Append(new NodeEntry.TurnStarted(basis, session) { Round = round });
+        log.Append(new NodeEntry.TurnStarted(basis, session) { Round = round, Planning = planning });
         if (conflict is not null) log.Append(new NodeEntry.Conflicted(conflict.Description));
         var folder = Edits(node) ? _worktrees.Folder(id) : _project;
         var live = new Live();
@@ -599,7 +617,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     /// How a reviewer's turn ends: an approval completes it with its report, a reject sends its findings back in its fix
     /// template, and a verdict that cannot be read waits for the person.
     /// </summary>
-    private NodeEntry Judge(TaskId id, WorkSpec.Review review, string text, Basis basis) => ReviewLedger.ReadVerdict(text) switch
+    private NodeEntry Judge(TaskId id, WorkSpec.Review review, string text, Basis basis) => Verdict.Read(text) switch
     {
         ({ Approves: true }, _) => new NodeEntry.Completed(new NodeResult(NewId(), text, null, basis)),
         ({ } verdict, _) => new NodeEntry.Feedback(Render(id, review.Fix, Findings(verdict))),
@@ -682,7 +700,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     {
         var node = workflow.Tasks[id];
         var instruction = node.Blueprint.Work is WorkSpec.Agent
-            ? AgentWork.Prompt(new NodeContext(node, ""))
+            ? AgentPrompt.For(node, "")
             : string.Join("\n", node.Fields.Select(field => $"{field.Key}: {field.Value}"));
         return new Basis([.. Predecessors(workflow, id).Select(p => new BasisInput(p, Log(p).Record.History.LastOrDefault()?.Id))], instruction,
             node.Execution is { } settings ? new AgentModel(settings.Client, settings.Model, settings.Reasoning) : null);
@@ -693,7 +711,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     /// the template under their own heading when it has no place for them. A Merge node's prompt names the
     /// <paramref name="conflict"/> it resolves. An Approval node's prompt is its inputs alone.
     /// </summary>
-    private string Prompt(TaskId id, WorktreeStart.Conflict? conflict)
+    private string Prompt(TaskId id, WorktreeStart.Conflict? conflict, PlanningContext? planning = null)
     {
         var node = _workflow.Tasks[id];
         var inputs = Inputs(id);
@@ -718,7 +736,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             return inputs;
         }
 
-        var prompt = AgentWork.Prompt(new NodeContext(node, inputs) { Planning = Planning?.Invoke(id) });
+        var prompt = AgentPrompt.For(node, inputs, planning);
         return template.Variables.Contains("inputs") || inputs.Length == 0 ? prompt : $"{prompt.TrimEnd()}\n\n## What earlier tasks handed on\n\n{inputs}\n";
     }
 
