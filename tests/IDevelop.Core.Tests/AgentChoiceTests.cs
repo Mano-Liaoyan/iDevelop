@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Nodes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -147,7 +147,7 @@ public sealed class AgentChoiceTests
     }
 
     [Fact]
-    public void Without_agents_the_contract_is_the_one_run_planners_have_always_read()
+    public void Without_agents_the_contract_leaves_the_agents_to_the_person()
     {
         Assert.Equal("""
             When your plan is ready, end your final message with one proposal block. Nothing comes after the block. The person accepts the tasks they want from it:
@@ -201,7 +201,6 @@ public sealed class AgentChoiceTests
 
         Assert.Equal(new ProposedAgent("codex", "gpt-5.5", "low", "A small endpoint."), proposal.Fills[0].Agent);
         Assert.Equal("The agent of slot-2 is not an object.", proposal.Fills[1].Agent!.Unreadable);
-        Assert.DoesNotContain("\"agent\":", RunJournal.Canonical(Ready("""{"status": "proposal", "fill": [{"slot": "slot-1", "title": "A"}]}""")));
     }
 
     [Theory]
@@ -218,15 +217,14 @@ public sealed class AgentChoiceTests
     }
 
     [Fact]
-    public void A_proposal_without_agents_reads_and_records_as_before()
+    public void A_proposal_without_agents_reads_with_no_agent()
     {
         var proposal = Ready("""{"status": "proposal", "add": [{"id": "a", "type": "type-1", "title": "A"}]}""");
 
         var chose = Ready("""{"status": "proposal", "add": [{"id": "a", "type": "type-1", "title": "A", "agent": {"client": "codex"}}]}""");
 
         Assert.Null(Assert.Single(proposal.Nodes).Agent);
-        Assert.DoesNotContain("\"agent\":", RunJournal.Canonical(proposal));
-        Assert.Contains("\"agent\":{\"client\":\"codex\",", RunJournal.Canonical(chose));
+        Assert.Equal(new ProposedAgent("codex", null, null, null), Assert.Single(chose.Nodes).Agent);
     }
 
     [Theory]
@@ -238,7 +236,7 @@ public sealed class AgentChoiceTests
     public void A_choice_this_machine_offers_is_usable_under_the_catalogs_own_names(
         string client, string model, string? reasoning, string wire, string id, string? level)
     {
-        var settings = new ExecutionSettings(Clients.ParseWireName(wire)!.Value) { Model = id, Reasoning = level };
+        var settings = new ExecutionSettings(ClientCatalog.ParseWireName(wire)!.Value) { Model = id, Reasoning = level };
 
         Assert.Equal(new AgentCheck.Usable(settings), AgentCheck.Of(new ProposedAgent(client, model, reasoning, "Why."), BuiltInBlueprints.Implement, Machine));
     }
@@ -421,19 +419,9 @@ public sealed class AgentChoiceTests
             .Must(new Connect(new ConnectionKey(Architect, Backend), ConnectionKind.Dependency))
             .Must(new Connect(new ConnectionKey(Architect, Frontend), ConnectionKind.Dependency));
 
-    /// <summary>The proposal of an Architect attempt whose one turn ended with <paramref name="json"/> in its block.</summary>
-    private static Proposal Ready(string json, ImmutableArray<TaskId>? slots = null)
-    {
-        var record = AttemptReducer.Replay(
-        [
-            new AttemptEvent.Requested(AttemptEvents.T0, new AttemptId(Guid.Parse("019a9d2e-6000-7000-8000-000000000091")), Architect, "Design export", Sol, "p", "codex", [])
-            {
-                Planning = new PlanningHandles(Plan, slots ?? [Backend, Frontend], [.. Types.Select(blueprint => blueprint.Key)]),
-            },
-            new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.SessionStarted("01a108d7-464d-77a3-8908-a36f38ce6c91")),
-            new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.Succeeded($"Here is the plan.\n\n```idevelop\n{json}\n```")),
-            new AttemptEvent.Exited(AttemptEvents.T0, 0, ""),
-        ])!;
-        return Assert.IsType<ProposalRead.Ready>(Proposal.Read(record, key => Types.FirstOrDefault(blueprint => blueprint.Key == key))).Proposal;
-    }
+    /// <summary>The proposal of an Architect reply that ends with <paramref name="json"/> in its block.</summary>
+    private static Proposal Ready(string json, ImmutableArray<TaskId>? slots = null) =>
+        Assert.IsType<ProposalRead.Ready>(Proposal.Read(Architect, 1, $"Here is the plan.\n\n```idevelop\n{json}\n```",
+            new PlanningHandles(Plan, slots ?? [Backend, Frontend], [.. Types.Select(blueprint => blueprint.Key)]),
+            key => Types.FirstOrDefault(blueprint => blueprint.Key == key))).Proposal;
 }

@@ -83,5 +83,5 @@ public sealed record NodeResult(string Id, string Report, string? Commit, Basis 
 {
     /// <summary>The verdict a review's report ends with, or null for a report without one.</summary>
     [JsonIgnore]
-    public Verdict? Verdict => ReviewLedger.ReadVerdict(Report).Verdict;
+    public Verdict? Verdict => Verdict.Read(Report).Verdict;
 }

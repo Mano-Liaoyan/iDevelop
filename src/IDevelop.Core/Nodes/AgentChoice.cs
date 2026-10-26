@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Workflows;
 
 namespace IDevelop.Nodes;
@@ -65,8 +65,8 @@ public abstract record AgentCheck
             return new Unusable($"The planner chose {named}, which is not a client iDevelop runs.", "Unknown client");
         }
 
-        var name = Clients.Name(client);
-        if (blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review && !Clients.HasReadOnlyMode(client))
+        var name = ClientCatalog.Name(client);
+        if (blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review && !ClientCatalog.HasReadOnlyMode(client))
         {
             return new Unusable($"The planner chose {name}, which has no read-only mode for a {blueprint.Name}.", $"{name} can't run read-only");
         }
@@ -120,7 +120,7 @@ public abstract record AgentCheck
 
     /// <summary>The client whose wire name or display name this is, ignoring case.</summary>
     private static ClientId? ClientNamed(string name) =>
-        Clients.All.Where(id => Same(Clients.WireName(id), name) || Same(Clients.Name(id), name)).Select(id => (ClientId?)id).FirstOrDefault();
+        ClientCatalog.All.Where(id => Same(ClientCatalog.WireName(id), name) || Same(ClientCatalog.Name(id), name)).Select(id => (ClientId?)id).FirstOrDefault();
 
     private static ModelOption? ModelNamed(ImmutableArray<ModelOption> models, string name) =>
         models.FirstOrDefault(model => model.Id == name) ?? models.FirstOrDefault(model => Same(model.Id, name) || Same(model.Name, name));

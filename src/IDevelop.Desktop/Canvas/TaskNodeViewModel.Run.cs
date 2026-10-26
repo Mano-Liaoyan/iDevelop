@@ -28,6 +28,7 @@ public sealed partial class TaskNodeViewModel
     private (int Index, string Text)? _lastReply;
     private (int Index, string Text)? _proposed;
     private string? _latest;
+    private System.Collections.Immutable.ImmutableArray<IDevelop.Clients.BackgroundTask> _background = [];
     private IConversation? _log;
     private int _logChanged;
     private string _sendBackNote = "";
@@ -47,7 +48,7 @@ public sealed partial class TaskNodeViewModel
     public EngineState EngineState => _engineState;
 
     /// <summary>"Running", "Completed", or what the node needs, such as "Input required · approval".</summary>
-    public string StatusLabel => NodeStates.Label(_engineState);
+    public string StatusLabel => NodeStates.Label(_engineState, _background);
 
     /// <summary>What the node needs from the person, or why it failed or went stale, or null when its status says enough.</summary>
     public string? StateDetail => NodeStates.Detail(_engineState);
@@ -109,7 +110,7 @@ public sealed partial class TaskNodeViewModel
     public string? LastReply => _lastReply is { Text: var text } ? ResultBlock.Prose(text) : null;
 
     /// <summary>The verdict of a review's latest reply, or null.</summary>
-    private Verdict? Verdict => IsReview && _lastReply is { Text: var reply } ? ReviewLedger.ReadVerdict(reply).Verdict : null;
+    private Verdict? Verdict => IsReview && _lastReply is { Text: var reply } ? Verdict.Read(reply).Verdict : null;
 
     /// <summary>"Approved" or "2 open findings" for a review's latest verdict, or null, which its card shows.</summary>
     public string? ReviewSummary => Verdict is { } verdict
@@ -183,6 +184,7 @@ public sealed partial class TaskNodeViewModel
         _runRefusal = engine.CanRun(Id);
         _history = engine.History(Id);
         (_lastReply, _proposed, _latest) = HasAgent ? ReadReplies(engine) : (null, null, null);
+        _background = HasAgent ? Log(engine).Background : [];
         ShowProposal();
         ShowState();
         OnPropertyChanged(nameof(ShowsApprove));
@@ -216,7 +218,7 @@ public sealed partial class TaskNodeViewModel
     /// </summary>
     internal void ShowProposal()
     {
-        if (_task.Blueprint.Work is not WorkSpec.Agent { Proposes: true } || _proposed is not { } reply)
+        if (_task.Blueprint.Work is not WorkSpec.Agent { Proposes: true } || _proposed is not { } reply || _canvas.Engine.Planned(Id) is not { } handles)
         {
             Proposal = null;
             return;
@@ -224,7 +226,7 @@ public sealed partial class TaskNodeViewModel
 
         var identity = (Id, reply.Index);
         var shown = _proposal is { } open && open.Identity.Equals(identity) ? open
-            : IDevelop.Nodes.Proposal.Read(Id, reply.Index, reply.Text, _canvas.HandlesOf(Id), _canvas.FindBlueprint) switch
+            : IDevelop.Nodes.Proposal.Read(Id, reply.Index, reply.Text, handles, _canvas.FindBlueprint) switch
             {
                 ProposalRead.None => null,
                 var read => new ProposalViewModel(_canvas, read, identity),

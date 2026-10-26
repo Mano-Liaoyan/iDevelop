@@ -1,9 +1,7 @@
 using System.Collections.Immutable;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using IDevelop.Execution;
+using System.Text;
 using IDevelop.Workflows;
 
 namespace IDevelop.Nodes;
@@ -13,9 +11,8 @@ public sealed record ProposedFill(TaskId Slot, string? Title, ImmutableSortedDic
 {
     /// <summary>
     /// The agent the planner chose for the node, which it takes only when it has no agent of its own, or null when it
-    /// chose none. A run's journal leaves out a null agent, so a fill without one records as it always did.
+    /// chose none.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ProposedAgent? Agent { get; init; }
 }
 
@@ -23,21 +20,19 @@ public sealed record ProposedFill(TaskId Slot, string? Title, ImmutableSortedDic
 public sealed record ProposedNode(TaskId Id, string Name, Blueprint Blueprint, string Title, ImmutableSortedDictionary<string, string> Fields)
 {
     /// <summary>
-    /// The agent the planner chose for the node, or null when it chose none, as every planner before it was asked to.
-    /// A run's journal leaves out a null agent, so a proposal without agents records as it always did.
+    /// The agent the planner chose for the node, or null when it chose none.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ProposedAgent? Agent { get; init; }
 }
 
 public sealed record ProposedConnection(TaskId From, TaskId To, ConnectionKind Kind);
 
-/// <summary>What reading a planner's attempt found.</summary>
+/// <summary>What reading a planner's reply found.</summary>
 public abstract record ProposalRead
 {
     private ProposalRead() { }
 
-    /// <summary>The attempt is no planner's, or no turn of it ended with a proposal.</summary>
+    /// <summary>The reply does not end with a proposal.</summary>
     public sealed record None : ProposalRead;
 
     /// <summary>The latest proposal could not be read. The text is for the user.</summary>
@@ -52,7 +47,7 @@ public abstract record ProposalRead
 /// part, as one <see cref="WorkflowEdit.Batch"/>.
 /// </summary>
 public sealed record Proposal(
-    TaskId Planner, AttemptId Attempt, int Turn,
+    TaskId Planner, int Turn,
     ImmutableArray<ProposedFill> Fills, ImmutableArray<ProposedNode> Nodes, ImmutableArray<ProposedConnection> Connections)
 {
     /// <summary>The handle with which a proposal names its planner.</summary>
@@ -61,40 +56,6 @@ public sealed record Proposal(
     // A card's footprint with its gutter, so new cards never touch.
     public const double ColumnStep = 320;
     public const double RowStep = 112;
-
-    /// <summary>
-    /// Reads the latest proposal of a planner's attempt. The same attempt always gives the same proposal and the same new
-    /// ids, so accepting it again places no node twice.
-    /// </summary>
-    /// <param name="blueprint">The blueprint behind a type handle's key, or null when this machine has none.</param>
-    public static ProposalRead Read(AttemptRecord attempt, Func<BlueprintKey, Blueprint?> blueprint)
-    {
-        if (attempt.Planning is not { } handles)
-        {
-            return new ProposalRead.None();
-        }
-
-        foreach (var turn in attempt.Turns.Reverse())
-        {
-            switch (ResultBlock.Read(turn.FinalText))
-            {
-                case ResultBlock.Readable { Status: "proposal" } block:
-                    try
-                    {
-                        return new ProposalRead.Ready(Parse(block.Value, attempt.Task, attempt.Id, turn.Number, handles, blueprint));
-                    }
-                    catch (ProposalException e)
-                    {
-                        return new ProposalRead.Problem(e.Message);
-                    }
-
-                case ResultBlock.Unreadable unreadable:
-                    return new ProposalRead.Problem($"The agent's last block could not be read. {unreadable.Problem}");
-            }
-        }
-
-        return new ProposalRead.None();
-    }
 
     /// <summary>
     /// Reads the proposal a planner's reply ends with. <paramref name="turn"/> numbers the reply, so a later reply reads as
@@ -107,7 +68,7 @@ public sealed record Proposal(
             case ResultBlock.Readable { Status: "proposal" } block:
                 try
                 {
-                    return new ProposalRead.Ready(Parse(block.Value, planner, new AttemptId(handles.Plan), turn, handles, blueprint));
+                    return new ProposalRead.Ready(Parse(block.Value, planner, turn, handles, blueprint));
                 }
                 catch (ProposalException e)
                 {
@@ -171,7 +132,7 @@ public sealed record Proposal(
     /// count, and so does a connection the workflow already holds. A slot that has started is never filled, even when
     /// chosen, and counts as left out.
     /// </summary>
-    /// <param name="started">Whether a task has an attempt.</param>
+    /// <param name="started">Whether a node has run.</param>
     /// <param name="fallback">
     /// The agent that a new Agent or Review node takes when it has no other: no person's choice, no agent of its
     /// blueprint's own, and no planner's choice. It takes it with the blueprint's default conversation mode. A fill whose
@@ -280,7 +241,7 @@ public sealed record Proposal(
         ];
     }
 
-    private static Proposal Parse(JsonElement block, TaskId planner, AttemptId attempt, int turn, PlanningHandles handles, Func<BlueprintKey, Blueprint?> blueprint)
+    private static Proposal Parse(JsonElement block, TaskId planner, int turn, PlanningHandles handles, Func<BlueprintKey, Blueprint?> blueprint)
     {
         var ends = new Dictionary<string, TaskId>(StringComparer.Ordinal) { [PlannerHandle] = planner };
         var fills = ImmutableArray.CreateBuilder<ProposedFill>();
@@ -374,7 +335,7 @@ public sealed record Proposal(
             throw new ProposalException("The proposal fills and adds no task.");
         }
 
-        return new Proposal(planner, attempt, turn, fills.ToImmutable(), nodes.ToImmutable(), connections.ToImmutable());
+        return new Proposal(planner, turn, fills.ToImmutable(), nodes.ToImmutable(), connections.ToImmutable());
     }
 
     /// <summary>

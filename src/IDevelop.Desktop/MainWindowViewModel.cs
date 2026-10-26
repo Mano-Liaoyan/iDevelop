@@ -4,12 +4,12 @@ using System.ComponentModel;
 using System.Windows.Input;
 using Avalonia.Logging;
 using Avalonia.Threading;
+using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Execution;
-using IDevelop.Engine;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
+using IDevelop.Engine;
 using IDevelop.Projects;
 
 namespace IDevelop.Desktop;
@@ -139,7 +139,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public ICommand RedoCommand => _redo;
 
-    public IReadOnlyList<AgentRow> Agents => [.. Clients.All.Select(id => new AgentRow(id, _clients.Current[id]))];
+    public IReadOnlyList<AgentRow> Agents => [.. ClientCatalog.All.Select(id => new AgentRow(id, _clients.Current[id]))];
 
     /// <summary>Probes every client again. Each row keeps its last status until its new answer arrives.</summary>
     public ICommand RefreshAgentsCommand => _refreshAgents;

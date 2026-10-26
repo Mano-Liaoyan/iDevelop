@@ -1,6 +1,6 @@
 # Agent client behavior
 
-Every turn relies on the client behavior below. The four client sections record the first launches, run on their own, and the [C1 protocols](#conversation-protocols-from-c1) section describes how each turn talks to its client now, and which parts no real client run has confirmed yet. The client rows in `src/IDevelop.Core/Execution/Clients/` encode it, and the tests replay the recorded fixtures in `tests/Shared/Fixtures`.
+Every turn relies on the client behavior below. The four client sections record the first launches, run on their own, and the [C1 protocols](#conversation-protocols-from-c1) section describes how each turn talks to its client now, and which parts no real client run has confirmed yet. The client rows in `src/IDevelop.Core/Clients/` encode it, and the tests replay the recorded fixtures in `tests/Shared/Fixtures`.
 
 These observations come from running each client on Windows on 2026-10-04, first from a shell and then through iDevelop. Each run used the sign-in that client already had. Each client wrote a requested file in a fresh Git repository and returned its final text. The recorded event streams, trimmed and without local paths, are the fixtures. Some Antigravity CLI observations come from running it on 2026-10-03 while setting up this project.
 
@@ -106,6 +106,6 @@ When the listing fails, a turn of a node with a choice still starts, as the owne
 - The [Skills](#skills) listings and launches on Windows and macOS, in a Pi project the person trusted, and with Claude Code plugins that a project's settings enable. The 2026-10-11 probe ran on Linux only.
 - Whether `agy models` fails for a signed-out account, which iDevelop treats as the readiness signal.
 - Whether each client's terminal command opens its interactive interface on the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there. No probe opened an interactive interface.
-- Real client runs on macOS, and the login shell's PATH on macOS and Linux. On Linux on 2026-10-05, `scripts/probe-clients.mjs` and a scratch harness that drives `ProjectRuns` ran all four real clients, but the harness inherited a full PATH. The release workflow runs the fake client on macOS.
+- Real client runs on macOS, and the login shell's PATH on macOS and Linux. On Linux on 2026-10-05, `scripts/probe-clients.mjs` and a scratch harness ran all four real clients, but the harness inherited a full PATH. The release workflow runs the fake client on macOS.
 - On macOS and Linux, `Process.Kill(entireProcessTree: true)` misses a descendant whose parent already exited, because .NET cannot list the children of an exited process there. A turn's process group covers it ([ADR 0001](adr/0001-unix-workflow-turns-lead-their-own-session.md)).
 - Whether each provider's plan permits unattended turns started by iDevelop is each provider's policy, as the [provider access reference](provider-access.md) records.

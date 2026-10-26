@@ -1,8 +1,8 @@
 using System.Text.Json;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using static IDevelop.Execution.AgentEvent;
+using static IDevelop.Clients.AgentEvent;
 
 namespace IDevelop.Core.Tests;
 
@@ -121,7 +121,7 @@ public sealed class TurnProtocolTests
     [Fact]
     public void Codex_initializes_resumes_and_starts_a_turn_with_the_schema_fields()
     {
-        var protocol = Clients.Get(ClientId.Codex).Protocol(new LaunchRequest("gpt-6-sol", "high", "banana") { ResumeSession = "thread-a", ReadOnly = true });
+        var protocol = ClientCatalog.Get(ClientId.Codex).Protocol(new LaunchRequest("gpt-6-sol", "high", "banana") { ResumeSession = "thread-a", ReadOnly = true });
         Assert.Equal(["""{"id":"init-1","method":"initialize","params":{"clientInfo":{"name":"idevelop","version":"1.0.0"},"capabilities":{"experimentalApi":false}}}"""], protocol.Start().Writes.ToArray());
         Assert.Equal(["""{"method":"initialized"}""", """{"id":"thread-1","method":"thread/resume","params":{"model":"gpt-6-sol","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"read-only","threadId":"thread-a","excludeTurns":true}}"""], protocol.Read("""{"id":"init-1","result":{}}""").Writes.ToArray());
         Assert.Equal(["""{"method":"initialized"}""", """{"id":"thread-1","method":"thread/start","params":{"model":"m","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"workspace-write"}}"""],
@@ -196,6 +196,6 @@ public sealed class TurnProtocolTests
         Assert.Equal([new Message("Hello") { Id = "step:2" }], protocol.Read("""{"event":"step_update","step_update":{"step_index":2,"state":"DONE","step_type":"agent_response"}}""").Events.ToArray());
     }
 
-    private static TurnProtocol Protocol(ClientId client) => Clients.Get(client).Protocol(new LaunchRequest("m", "low", "banana"));
+    private static TurnProtocol Protocol(ClientId client) => ClientCatalog.Get(client).Protocol(new LaunchRequest("m", "low", "banana"));
     private static AgentEvent[] Read(TurnProtocol protocol, string name) => [.. Fixture.Lines($"c1/{name}.jsonl").SelectMany(line => protocol.Read(line).Events.ToArray())];
 }

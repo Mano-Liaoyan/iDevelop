@@ -1,3 +1,4 @@
+using IDevelop.Clients;
 namespace IDevelop.TestSupport;
 
 internal sealed class WindowsFactAttribute : FactAttribute

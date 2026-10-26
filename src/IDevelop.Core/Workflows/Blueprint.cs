@@ -31,8 +31,8 @@ public readonly partial record struct BlueprintKey(string Id, int Version) : ICo
 }
 
 /// <summary>
-/// What a node does. A closed set: a new work needs code, which is one <see cref="WorkSpec"/> case, one value here, and
-/// one implementation of <c>INodeWork</c>. The build fails on an enum switch that misses a value.
+/// What a node does. A closed set: a new work needs code, which is one <see cref="WorkSpec"/> case and one value here. The
+/// build fails on an enum switch that misses a value.
 /// </summary>
 public enum WorkKind { Agent, Review, Person, Merge }
 
@@ -83,10 +83,8 @@ public abstract record WorkSpec
     }
 
     /// <summary>
-    /// A run's merge agent. Its step in a run merges its predecessors' code and hands on their reports and artifacts, and
-    /// its agent runs only to resolve a merge conflict: between its own predecessors, between the predecessors of a node
-    /// it takes conflicts for, or between the run's work and the branch the run started from. <paramref name="Template"/>
-    /// starts that agent's session.
+    /// A merge agent. Its worktree starts from the merge of its predecessors' commits, and its agent checks that merge and
+    /// resolves each conflict in it in turn, in its own session. <paramref name="Template"/> starts that session.
     /// </summary>
     public sealed record Merge(PromptTemplate Template) : WorkSpec
     {

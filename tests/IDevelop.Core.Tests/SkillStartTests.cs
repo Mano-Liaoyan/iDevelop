@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text.Json;
-using IDevelop.Execution;
+using IDevelop.Clients;
+using IDevelop.Engine;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
@@ -9,7 +10,7 @@ namespace IDevelop.Core.Tests;
 
 /// <summary>
 /// A start keeps a node's skill choice (#93) with the skills its client lists in the project: a chosen skill that is no
-/// longer installed is left out, and the attempt's activity names it. Antigravity CLI has no choice to keep.
+/// longer installed is left out. Antigravity CLI has no choice to keep.
 /// </summary>
 public sealed class SkillStartTests : IDisposable
 {
@@ -27,13 +28,11 @@ public sealed class SkillStartTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Choosing))]
-    public void A_choice_runs_with_its_skills_that_are_still_installed_and_names_the_ones_that_are_not(ClientId client)
+    public void A_choice_runs_with_its_skills_that_are_still_installed(ClientId client)
     {
         var plan = Allowed(Task(client, ["tdd", "gone", "also-gone"]), Listed);
 
         Assert.Equal(new SkillLaunch([Tdd], [ImageGen]), plan.Request.Skills, SkillLaunches.Instance);
-        Assert.Equal(["also-gone", "gone"], plan.MissingSkills.ToArray());
-        Assert.Equal(["also-gone", "gone"], plan.LoggedMissingSkills.ToArray());
     }
 
     [Theory]
@@ -42,8 +41,9 @@ public sealed class SkillStartTests : IDisposable
     {
         var task = Task(client, ["tdd"]);
 
-        Assert.Equal(new StartProblem.SkillsChecking(client), Blocked(task, null));
-        Assert.Equal(new StartProblem.SkillsChecking(client), Blocked(task, new SkillListing.Checking()));
+        var waits = $"iDevelop is still listing the skills {ClientCatalog.Name(client)} loads.";
+        Assert.Equal(waits, Blocked(task, null));
+        Assert.Equal(waits, Blocked(task, new SkillListing.Checking()));
     }
 
     [Theory]
@@ -53,8 +53,6 @@ public sealed class SkillStartTests : IDisposable
         var plan = Allowed(Task(client, ["gone", "tdd"]), new SkillListing.Unavailable("It broke."));
 
         Assert.Equal(new SkillLaunch([new SkillOption("gone", ""), new SkillOption("tdd", "")], []) { Unchecked = true }, plan.Request.Skills, SkillLaunches.Instance);
-        Assert.Equal("It broke.", plan.SkillsUnchecked);
-        Assert.Empty(plan.MissingSkills);
     }
 
     [Theory]
@@ -64,9 +62,6 @@ public sealed class SkillStartTests : IDisposable
         var plan = Allowed(Task(client, null), null);
 
         Assert.Null(plan.Request.Skills);
-        Assert.Empty(plan.MissingSkills);
-        Assert.True(plan.LoggedMissingSkills.IsDefault);
-        Assert.Null(plan.SkillsUnchecked);
     }
 
     [Fact]
@@ -75,7 +70,6 @@ public sealed class SkillStartTests : IDisposable
         var plan = Allowed(Task(ClientId.Antigravity, ["tdd"]), null);
 
         Assert.Null(plan.Request.Skills);
-        Assert.Empty(plan.MissingSkills);
     }
 
     [Fact]
@@ -83,9 +77,10 @@ public sealed class SkillStartTests : IDisposable
     {
         var clients = Ready(ClientId.Codex, isBatchShim: true);
 
-        var verdict = StartCheck.Evaluate(Task(ClientId.Codex, ["tdd"]), "C:/project", clients, skills: Listed);
+        var (plan, problem) = LaunchPlan.For(Task(ClientId.Codex, ["tdd"]), "C:/project", "p", null, clients, Listed);
 
-        Assert.IsType<StartVerdict.Allowed>(verdict);
+        Assert.Null(problem);
+        Assert.NotNull(plan);
     }
 
     [Fact]
@@ -98,61 +93,14 @@ public sealed class SkillStartTests : IDisposable
         IReadOnlyDictionary<ClientId, ClientStatus> With(ResolvedCommand command) =>
             new Dictionary<ClientId, ClientStatus> { [ClientId.Pi] = new ClientStatus.Ready(command, [new ModelOption("m", "M", ["high"])]) };
 
-        var plan = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(Task(ClientId.Pi, ["deploy"]), "C:/project", With(followed), skills: listed)).Plan;
+        var plan = LaunchPlan.For(Task(ClientId.Pi, ["deploy"]), "C:/project", "p", null, With(followed), listed).Plan!;
         var launch = followed.Launch(plan.Launch.Arguments)!;
 
         Assert.Equal(("C:/npm/node.exe", "C:/npm/node_modules/pi/cli.js"), (launch.File, launch.Arguments[0]));
         Assert.Contains(file, launch.Arguments);
         // A shim iDevelop cannot follow still says that cmd.exe could misread the path.
-        Assert.Equal(new StartProblem.UnsafeArgument(ClientId.Pi, file),
-            Assert.IsType<StartVerdict.Blocked>(StartCheck.Evaluate(Task(ClientId.Pi, ["deploy"]), "C:/project", With(shim), skills: listed)).Problem);
-    }
-
-    [Fact]
-    public void An_attempt_names_the_skills_its_turn_runs_without_once_until_they_change()
-    {
-        var requested = new AttemptEvent.Requested(DateTimeOffset.UnixEpoch, AttemptId.New(), TestTasks.Design, "Design",
-            new ExecutionSettings(ClientId.ClaudeCode) { Skills = ["gone", "tdd"] }, "p", "claude", []) { MissingSkills = ["gone"] };
-        var record = AttemptReducer.Start(requested);
-        Assert.Equal(["Claude Code runs without gone, which is not installed."], record.Activity.Select(line => line.Text));
-
-        record = AttemptReducer.Apply(record, new AttemptEvent.TurnRequested(DateTimeOffset.UnixEpoch, "next", "claude", []) { MissingSkills = ["gone"] });
-        Assert.Single(record.Activity);
-        record = AttemptReducer.Apply(record, new AttemptEvent.TurnRequested(DateTimeOffset.UnixEpoch, "next", "claude", []) { MissingSkills = ["gone", "tdd"] });
-        Assert.Equal("Claude Code runs without gone and tdd, which are not installed.", record.Activity[^1].Text);
-        record = AttemptReducer.Apply(record, new AttemptEvent.TurnRequested(DateTimeOffset.UnixEpoch, "next", "claude", []));
-        Assert.Empty(record.MissingSkills);
-        Assert.Equal(2, record.Activity.Count);
-        Assert.Equal("Pi runs without a, b and c, which are not installed.", AttemptReducer.MissingSkillsNote(ClientId.Pi, ["a", "b", "c"]));
-
-        var roundTrip = JsonSerializer.Deserialize<AttemptEvent>(JsonSerializer.Serialize<AttemptEvent>(requested, AttemptLog.Options), AttemptLog.Options);
-        Assert.Equal(["gone"], Assert.IsType<AttemptEvent.Requested>(roundTrip).MissingSkills.ToArray());
-        Assert.DoesNotContain("missingSkills", JsonSerializer.Serialize<AttemptEvent>(requested with { MissingSkills = default }, AttemptLog.Options),
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void An_attempt_says_once_that_its_skill_list_could_not_be_checked_and_what_its_client_got()
-    {
-        var requested = new AttemptEvent.Requested(DateTimeOffset.UnixEpoch, AttemptId.New(), TestTasks.Design, "Design",
-            new ExecutionSettings(ClientId.ClaudeCode) { Skills = ["tdd"] }, "p", "claude", []) { SkillsUnchecked = "It broke." };
-        var record = AttemptReducer.Start(requested);
-        Assert.Equal(["Claude Code's skill list couldn't be read, so it gets the chosen skills as they are, unchecked. It broke."], record.Activity.Select(line => line.Text));
-
-        record = AttemptReducer.Apply(record, new AttemptEvent.TurnRequested(DateTimeOffset.UnixEpoch, "next", "claude", []) { SkillsUnchecked = "It broke." });
-        Assert.Single(record.Activity);
-        record = AttemptReducer.Apply(record, new AttemptEvent.TurnRequested(DateTimeOffset.UnixEpoch, "next", "claude", []));
-        Assert.Null(record.SkillsUnchecked);
-        Assert.Single(record.Activity);
-
-        Assert.Equal("Codex's skill list couldn't be read, so the skill choice couldn't be applied, and Codex runs with all of its skills.",
-            SkillChoices.UncheckedNote(ClientId.Codex));
-        Assert.Equal("Pi's skill list couldn't be read, so the skill choice couldn't be applied, and Pi runs with all of its skills.",
-            SkillChoices.UncheckedNote(ClientId.Pi));
-        var roundTrip = JsonSerializer.Deserialize<AttemptEvent>(JsonSerializer.Serialize<AttemptEvent>(requested, AttemptLog.Options), AttemptLog.Options);
-        Assert.Equal("It broke.", Assert.IsType<AttemptEvent.Requested>(roundTrip).SkillsUnchecked);
-        Assert.DoesNotContain("skillsUnchecked", JsonSerializer.Serialize<AttemptEvent>(requested with { SkillsUnchecked = null }, AttemptLog.Options),
-            StringComparison.Ordinal);
+        Assert.Equal($"cmd.exe could misread the argument {file}.",
+            LaunchPlan.For(Task(ClientId.Pi, ["deploy"]), "C:/project", "p", null, With(shim), listed).Problem);
     }
 
     [Fact]
@@ -168,30 +116,20 @@ public sealed class SkillStartTests : IDisposable
             FakeAgents.PiProvider("deepseek", "ready"), FakeAgents.PiProvider("openai-codex", "invalid"),
             On("-p").RecordArguments(Path.Combine(evidence, "arguments.json")).Replay(Fixture.Path("pi-success.jsonl")));
         var clients = await fakes.DiscoverAsync();
-        await using var runs = ProjectRuns.Open(project, clients);
         var task = TestNodes.Implement(TestTasks.Design, "Deploy", "Deploy it. Then reply with DONE.",
             execution: new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high", Skills = ["deploy"] });
 
         Assert.IsType<SkillListing.Unavailable>(await SkillListingTests.ListedAsync(clients, ClientId.Pi, project));
-        var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
-        runs.Changed += (_, _) =>
-        {
-            if (runs.Latest.GetValueOrDefault(TestTasks.Design) is { Status: not AttemptStatus.Running } record)
-            {
-                settled.TrySetResult(record);
-            }
-        };
-        Assert.IsType<StartResult.Started>(runs.Start(task));
-        var record = await settled.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        var (outcome, events) = await Turn(clients, project, project, task);
 
-        Assert.Equal(AttemptStatus.Succeeded, record.Status);
+        Assert.IsType<TurnOutcome.Done>(outcome);
         Assert.DoesNotContain("--no-skills", JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(evidence, "arguments.json")))!);
-        Assert.Equal("Pi's skill list couldn't be read, so the skill choice couldn't be applied, and Pi runs with all of its skills. Pi did not list its skills: an extension failed.",
-            record.Activity[0].Text);
+        Assert.Contains(new AgentEvent.Notice("Pi's skill list couldn't be read, so the skill choice couldn't be applied, and Pi runs with all of its skills. " +
+            "Pi did not list its skills: an extension failed."), events);
     }
 
     [Fact]
-    public async Task Pi_runs_a_task_with_exactly_its_chosen_skill_files_and_its_activity_names_the_missing_one()
+    public async Task A_turn_in_a_worktree_waits_for_the_project_s_listing_and_runs_with_exactly_the_chosen_skill_files_it_holds()
     {
         var project = _temp.Create("project");
         var evidence = _temp.Create("evidence");
@@ -200,29 +138,26 @@ public sealed class SkillStartTests : IDisposable
         var fakes = new FakeClients(_temp.Create("bin"));
         FakeAgents.Install(fakes, ClientId.Pi, On("-p").RecordArguments(Path.Combine(evidence, "arguments.json")).Replay(Fixture.Path("pi-success.jsonl")));
         var clients = await fakes.DiscoverAsync();
-        await using var runs = ProjectRuns.Open(project, clients);
         var task = TestNodes.Implement(TestTasks.Design, "Deploy", "Deploy it. Then reply with DONE.",
             execution: new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high", Skills = ["deploy", "gone"] });
 
-        Assert.Equal(new StartResult.Refused(new StartProblem.SkillsChecking(ClientId.Pi)), runs.Start(task));
-        await SkillListingTests.ListedAsync(clients, ClientId.Pi, project);
-        var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
-        runs.Changed += (_, _) =>
-        {
-            if (runs.Latest.GetValueOrDefault(TestTasks.Design) is { Status: not AttemptStatus.Running } record)
-            {
-                settled.TrySetResult(record);
-            }
-        };
-        Assert.IsType<StartResult.Started>(runs.Start(task));
-        var record = await settled.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        // The listing has not started, so the node may run, and its turn waits for the listing.
+        Assert.Null(new CliAgent(clients, project).Problem(task));
+        var (outcome, events) = await Turn(clients, project, _temp.Create("worktree"), task);
 
-        Assert.Equal(AttemptStatus.Succeeded, record.Status);
+        Assert.IsType<TurnOutcome.Done>(outcome);
+        Assert.Contains(new AgentEvent.Notice("Pi runs without gone, which is not installed."), events);
         var arguments = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(evidence, "arguments.json")))!;
         Assert.Equal(["--no-skills", "--skill", Path.Combine(Path.GetFullPath(project), ".pi", "skills", "deploy", "SKILL.md")],
             arguments.SkipWhile(argument => argument != "--no-skills").TakeWhile(argument => argument != "--session-id"));
-        Assert.Equal("Pi runs without gone, which is not installed.", record.Activity[0].Text);
-        Assert.Equal(["deploy", "gone"], record.Requested.Skills!);
+    }
+
+    private static async Task<(TurnOutcome Outcome, AgentEvent[] Events)> Turn(ClientDirectory clients, string project, string folder, TaskDefinition task)
+    {
+        var events = new System.Collections.Concurrent.ConcurrentQueue<AgentEvent>();
+        var outcome = await new CliAgent(clients, project).Turn(task, folder, "Deploy it. Then reply with DONE.", null, events.Enqueue, CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(60));
+        return (outcome, [.. events]);
     }
 
     private static TaskDefinition Task(ClientId client, ImmutableSortedSet<string>? skills) => TestNodes.Implement(TestTasks.Design, "Design", "Write it.",
@@ -234,10 +169,10 @@ public sealed class SkillStartTests : IDisposable
     };
 
     private static LaunchPlan Allowed(TaskDefinition task, SkillListing? skills) =>
-        Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(task, Folder, Ready(task.Execution!.Client), skills: skills)).Plan;
+        Assert.IsType<LaunchPlan>(LaunchPlan.For(task, Folder, "p", null, Ready(task.Execution!.Client), skills).Plan);
 
-    private static StartProblem Blocked(TaskDefinition task, SkillListing? skills) =>
-        Assert.IsType<StartVerdict.Blocked>(StartCheck.Evaluate(task, Folder, Ready(task.Execution!.Client), skills: skills)).Problem;
+    private static string? Blocked(TaskDefinition task, SkillListing? skills) =>
+        LaunchPlan.For(task, Folder, "p", null, Ready(task.Execution!.Client), skills).Problem;
 
     private sealed class SkillLaunches : IEqualityComparer<SkillLaunch?>
     {

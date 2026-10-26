@@ -2,25 +2,21 @@ using System.Text;
 
 namespace IDevelop.Projects;
 
-/// <summary>The layout of a project's <c>.idp</c> folder, which the workflow document and the attempts share.</summary>
+/// <summary>The layout of a project's <c>.idp</c> folder, which the workflow documents and the node logs share.</summary>
 internal static class DataFolder
 {
     public const string Name = ".idp";
 
-    private static readonly string[] IgnoredLines = ["*.tmp", "attempts/", "runs/", "nodes/", "window.lock"];
+    private static readonly string[] IgnoredLines = ["*.tmp", "nodes/", "window.lock"];
 
     public static string Workflows(string projectFolder) => Path.Combine(projectFolder, Name, "workflows");
-
-    public static string Attempts(string projectFolder) => Path.Combine(projectFolder, Name, "attempts");
-
-    public static string Runs(string projectFolder) => Path.Combine(projectFolder, Name, "runs");
 
     /// <summary>The project's blueprint library, which Git tracks.</summary>
     public static string Blueprints(string projectFolder) => Path.Combine(projectFolder, Name, "blueprints");
 
     /// <summary>
-    /// Makes <c>.idp/.gitignore</c> ignore temporary files, attempts, runs, node logs, and the window lock. It keeps the user's lines and appends the
-    /// missing ones when an older project gains execution records.
+    /// Makes <c>.idp/.gitignore</c> ignore temporary files, node logs, and the window lock. It keeps the user's lines and
+    /// appends the missing ones.
     /// </summary>
     public static void EnsureGitIgnore(string projectFolder)
     {

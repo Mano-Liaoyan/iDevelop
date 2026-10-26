@@ -1,4 +1,4 @@
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
@@ -20,7 +20,7 @@ public sealed class ClientDirectoryTests : IDisposable
     public async Task Discovery_reads_each_installed_clients_models_and_sign_in()
     {
         var shim = FakeAgents.Install(_fakes, ClientId.ClaudeCode);
-        foreach (var client in Clients.All.Remove(ClientId.ClaudeCode))
+        foreach (var client in ClientCatalog.All.Remove(ClientId.ClaudeCode))
         {
             FakeAgents.Install(_fakes, client);
         }

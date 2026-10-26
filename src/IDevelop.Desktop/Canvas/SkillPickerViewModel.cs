@@ -1,8 +1,8 @@
 using System.Collections.Immutable;
 using System.Windows.Input;
+using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
-using IDevelop.Execution;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
@@ -104,7 +104,7 @@ public sealed class SkillPickerViewModel : ObservableObject
 
     private ExecutionSettings? Settings => _node.Definition.Execution;
 
-    private string ClientName => Settings is { } settings ? Clients.Name(settings.Client) : "";
+    private string ClientName => Settings is { } settings ? ClientCatalog.Name(settings.Client) : "";
 
     /// <summary>The client's listing for the project, asked for only while the list is open or the node has a choice to check.</summary>
     private SkillListing? Listing => Settings is { } settings && SkillChoices.CanChoose(settings.Client) && (IsOpen || settings.Skills is not null)

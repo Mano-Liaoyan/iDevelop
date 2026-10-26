@@ -1,11 +1,10 @@
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Windows.Input;
 using Avalonia.Threading;
+using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Engine;
-using IDevelop.Execution;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -18,8 +17,6 @@ namespace IDevelop.Desktop.Canvas;
 /// </summary>
 public sealed partial class WorkflowCanvasViewModel
 {
-    private readonly ConcurrentDictionary<TaskId, ImmutableArray<ClientId>> _checkingAtStart = [];
-    private readonly ConcurrentDictionary<TaskId, PlanningHandles> _handles = [];
     private ImmutableArray<Blueprint> _placeable = [];
     private RelayCommand? _runWorkflow;
     private RelayCommand? _stopAll;
@@ -124,32 +121,21 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>
     /// What a planner may fill and place, which its prompt names: the palette's blueprints are its types, and the clients
-    /// ready on this machine are the agents it chooses from for each task it adds. The engine asks for it when the planner
-    /// starts, on any thread.
+    /// ready on this machine are the agents it chooses from for each task it adds, and those still being checked are left
+    /// out. The engine asks for it when the planner starts, on any thread, and its log records the handles.
     /// </summary>
     internal PlanningContext? Planning(TaskId planner)
     {
         var clients = Clients.Current;
-        _checkingAtStart[planner] = [.. IDevelop.Execution.Clients.All.Where(id => clients[id] is ClientStatus.Checking)];
-        var context = PlanningFor(planner) with { Agents = IDevelop.Nodes.PlanningContext.Offers(clients) };
-        _handles[planner] = context.Handles(planner.Value);
-        return context;
+        return PlanningFor(planner) with
+        {
+            Agents = IDevelop.Nodes.PlanningContext.Offers(clients),
+            Checking = [.. ClientCatalog.All.Where(id => clients[id] is ClientStatus.Checking)],
+        };
     }
-
-    /// <summary>
-    /// The handles the planner's prompt named, which its proposal's slots and types refer to: those of its last start in
-    /// this window, else those of the workflow as it is now.
-    /// </summary>
-    internal PlanningHandles HandlesOf(TaskId planner) => _handles.GetValueOrDefault(planner) ?? PlanningFor(planner).Handles(planner.Value);
 
     /// <summary>What a planner may fill and place in the workflow as it is now, which reading its proposal names again.</summary>
     internal PlanningContext PlanningFor(TaskId planner) => IDevelop.Nodes.PlanningContext.For(Workflow, planner, _placeable, HasStarted);
-
-    /// <summary>
-    /// The clients that this window was still checking when it last started the planner, which its prompt therefore left
-    /// out, so the proposal can say so. Empty for a planner this window has not started.
-    /// </summary>
-    internal ImmutableArray<ClientId> CheckingAtStart(TaskId planner) => _checkingAtStart.GetValueOrDefault(planner, []);
 
     /// <summary>Whether the node has run: it runs, waits, or has a result.</summary>
     internal bool HasStarted(TaskId task) => Workflow.Tasks.ContainsKey(task) && Engine.State(task) is not IDevelop.Engine.NodeState.Idle;

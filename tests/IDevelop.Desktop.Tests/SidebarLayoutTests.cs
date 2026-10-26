@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;

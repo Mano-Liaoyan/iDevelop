@@ -107,7 +107,7 @@ Stop-IDevelop
 
 ## Real-client run (spends quota)
 
-Use a real client only when the change touches a client integration, such as `src/IDevelop.Core/Execution/Clients/`, or when the user asks. A real run spends the client's subscription quota, and the agent edits the project folder. Keep it in the session's scratch copy of the sample. Stop any fake session first.
+Use a real client only when the change touches a client integration, such as `src/IDevelop.Core/Clients/`, or when the user asks. A real run spends the client's subscription quota, and the agent edits the project folder. Keep it in the session's scratch copy of the sample. Stop any fake session first.
 
 ```powershell
 Import-Module ./scripts/real-window.psm1

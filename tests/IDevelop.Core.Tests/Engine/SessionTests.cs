@@ -1,5 +1,5 @@
 using IDevelop.Engine;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Nodes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -108,12 +108,77 @@ public sealed class SessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_planner_s_log_keeps_the_handles_its_prompt_named_so_its_proposal_reads_the_same_after_a_reopen()
+    {
+        var a = _f.Reader("A");
+        var b = _f.Node("B");
+        _f.Connect(a, b);
+        _f.Install(Reply("s-a", "Plan"));
+        var engine = await _f.Open();
+        var context = PlanningContext.For(_f.Workflow, a, [BuiltInBlueprints.Implement], _ => false) with { Checking = [ClientId.Pi] };
+        engine.Planning = _ => context;
+
+        await engine.Run(a);
+        await Until<NodeState.Completed>(engine, a);
+
+        var expected = context.Handles(a.Value);
+        Assert.Equal(ClientId.Pi, Assert.Single(expected.Checking));
+        Assert.Equal(expected, engine.Planned(a));
+        Assert.Null(engine.Planned(b));
+        await using var reopened = new WorkflowEngine(_f.Project, _f.Workflow, await _f.Fakes.DiscoverAsync());
+        Assert.Equal(expected, reopened.Planned(a));
+    }
+
+    [Fact]
+    public async Task The_conversation_lists_the_background_work_of_the_turn_that_has_no_end_yet()
+    {
+        var a = _f.Node("A");
+        var log = new NodeLog(_f.Project, a);
+        var task = new BackgroundTask("Survey the files", IsSubagent: true);
+        log.Append(new NodeEntry.TurnStarted(new Basis([], "p", null), null));
+        log.Append(new NodeEntry.Agent(new AgentEvent.BackgroundTasks([task])));
+        using (var open = (await _f.Open()).Conversation(a))
+        {
+            Assert.Equal(task, Assert.Single(open.Background));
+        }
+
+        log.Append(new NodeEntry.Failed("It broke."));
+        await using var reopened = new WorkflowEngine(_f.Project, _f.Workflow, await _f.Fakes.DiscoverAsync());
+        using var ended = reopened.Conversation(a);
+        Assert.Empty(ended.Background);
+    }
+
+    [Fact]
+    public async Task A_Pi_message_from_another_folder_than_its_session_s_is_refused_and_nothing_launches()
+    {
+        var settings = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        var node = TestNodes.Implement(new TaskId(Guid.Parse("019a0000-0000-7000-8000-0000000000aa")), "Pi", "Do it.", execution: settings,
+            conversation: ConversationMode.Chat);
+        _f.Workflow = _f.Workflow.Must(TestNodes.Place(node, new CanvasPoint(0, 0)));
+        var log = new NodeLog(_f.Project, node.Id);
+        log.Append(new NodeEntry.TurnStarted(new Basis([], AgentPrompt.For(node, ""), new AgentModel(ClientId.Pi, settings.Model, settings.Reasoning)), null)
+        {
+            Folder = Path.Combine(_f.Project, "moved-from"),
+        });
+        log.Append(new NodeEntry.Agent(new AgentEvent.SessionStarted("s-pi")));
+        log.Append(new NodeEntry.Waiting(NodeState.Reply, "Hi."));
+        var engine = await _f.Open();
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => engine.Send(node.Id, "Go on.", interrupt: false));
+
+        Assert.Equal("Pi can't continue this conversation after the project folder moved, so it needs a new conversation.", refused.Message);
+        Assert.Single(engine.Entries(node.Id).OfType<NodeEntry.TurnStarted>());
+        using var conversation = engine.Conversation(node.Id);
+        Assert.Null(conversation.TerminalCommand);
+    }
+
+    [Fact]
     public async Task After_a_crash_a_turn_without_an_end_reopens_interrupted_and_a_message_continues_its_session()
     {
         var a = _f.Reader("A");
         _f.Install(Reply("s-a", "Continued", FakeAgents.Resuming(ClientId.Antigravity, "s-a")));
         var node = _f.Workflow.Tasks[a];
-        var basis = new Basis([], AgentWork.Prompt(new NodeContext(node, "")), new AgentModel(ClientId.Antigravity, Agy.Model, Agy.Reasoning));
+        var basis = new Basis([], AgentPrompt.For(node, ""), new AgentModel(ClientId.Antigravity, Agy.Model, Agy.Reasoning));
         var log = new NodeLog(_f.Project, a);
         log.Append(new NodeEntry.TurnStarted(basis, null));
         log.Append(new NodeEntry.Agent(new AgentEvent.SessionStarted("s-a")));

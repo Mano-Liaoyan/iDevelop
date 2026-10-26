@@ -1,4 +1,3 @@
-using IDevelop.Execution;
 using IDevelop.Projects;
 
 namespace IDevelop.Engine;
@@ -9,17 +8,27 @@ namespace IDevelop.Engine;
 /// </summary>
 public sealed class ProjectLock : IDisposable
 {
-    private readonly HeldFile _file;
+    private readonly FileStream _file;
 
-    private ProjectLock(HeldFile file) => _file = file;
+    private ProjectLock(FileStream file) => _file = file;
 
     /// <summary>The lock, or null when another window holds it.</summary>
     /// <exception cref="IOException">The lock file cannot be written, such as in a read-only folder.</exception>
     /// <exception cref="UnauthorizedAccessException">The lock file cannot be written.</exception>
     public static ProjectLock? TryTake(string projectFolder)
     {
-        var file = HeldFile.TryOpen(Path.Combine(projectFolder, DataFolder.Name, "window.lock"));
-        if (file is null) return null;
+        var path = Path.Combine(projectFolder, DataFolder.Name, "window.lock");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        FileStream file;
+        try
+        {
+            file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+
         try
         {
             DataFolder.EnsureGitIgnore(projectFolder);

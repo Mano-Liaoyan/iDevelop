@@ -1,9 +1,10 @@
 using System.Collections.Immutable;
-using System.Text;
 using System.Text.Encodings.Web;
-using System.Text.Json;
 using System.Text.Json.Serialization;
-using IDevelop.Execution;
+using System.Text.Json;
+using System.Text;
+using IDevelop.Clients;
+using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -30,6 +31,14 @@ internal abstract record NodeEntry
     {
         /// <summary>Routing started this fresh turn for the next round of the node's feedback loop.</summary>
         public bool Round { get; init; }
+
+        /// <summary>What a planner's fresh session may fill and place, which its proposals name, or null for any other node.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public PlanningHandles? Planning { get; init; }
+
+        /// <summary>The folder a fresh session runs in, where a client that keeps sessions per folder finds it again.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Folder { get; init; }
     }
 
     public sealed record Agent(AgentEvent Event) : NodeEntry;
@@ -79,13 +88,24 @@ internal sealed record NodeRecord(ImmutableList<NodeResult> History, string? Ses
     /// <summary>The node's last turn continued its session rather than starting a fresh one.</summary>
     public bool Continued { get; init; }
 
+    /// <summary>The handles the session's planner read when it started.</summary>
+    public PlanningHandles? Planning { get; init; }
+
+    /// <summary>The folder the session started in.</summary>
+    public string? SessionFolder { get; init; }
+
+    /// <summary>The background work the open turn's client last listed.</summary>
+    public ImmutableArray<BackgroundTask> Background { get; init; } = [];
+
     public NodeRecord Apply(NodeEntry entry) => entry switch
     {
         NodeEntry.TurnStarted { Session: null } start => this with
         {
             Session = null, SessionBasis = start.Basis, TurnBasis = start.Basis, Open = true, Resolving = false, Rounds = start.Round ? Rounds : 0, Continued = false,
+            Planning = start.Planning, SessionFolder = start.Folder, Background = [],
         },
-        NodeEntry.TurnStarted start => this with { TurnBasis = start.Basis, Open = true, Rounds = 0, Continued = true },
+        NodeEntry.TurnStarted start => this with { TurnBasis = start.Basis, Open = true, Rounds = 0, Continued = true, Background = [] },
+        NodeEntry.Agent { Event: AgentEvent.BackgroundTasks tasks } => this with { Background = tasks.Tasks },
         NodeEntry.Agent { Event: AgentEvent.SessionStarted started } => this with { Session = started.SessionId },
         NodeEntry.Completed completed => this with { History = History.Add(completed.Result), End = entry, Open = false, Resolving = false, Rounds = 0 },
         NodeEntry.Waiting => this with { End = entry, Open = false, Rounds = 0 },

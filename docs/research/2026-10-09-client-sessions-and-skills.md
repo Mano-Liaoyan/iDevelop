@@ -44,14 +44,14 @@ Every client's resume already continues its own session. None of them copies the
 
 ## What iDevelop does today
 
-- Each turn is one client process. `LaunchPlan.Resuming` sends the person's message alone, with the session id ([`StartCheck.cs`](../../src/IDevelop.Core/Execution/StartCheck.cs)). No iDevelop prompt copies earlier messages into a resumed turn.
+- Each turn is one client process. A resumed turn sends the person's message alone, with the session id ([`LaunchPlan.cs`](../../src/IDevelop.Core/Clients/LaunchPlan.cs)). No iDevelop prompt copies earlier messages into a resumed turn.
 - The launches:
-  - Claude Code: `--resume <id>` ([`ClaudeCode.cs`](../../src/IDevelop.Core/Execution/Clients/ClaudeCode.cs)).
-  - Codex: `thread/resume` with `threadId` and `excludeTurns: true`, then one `turn/start` ([`CodexProtocol.cs`](../../src/IDevelop.Core/Execution/Clients/CodexProtocol.cs)).
-  - Pi: `-p --mode json --session-id <id>` ([`Pi.cs`](../../src/IDevelop.Core/Execution/Clients/Pi.cs)).
-  - Antigravity CLI: `--conversation <id>` with one stdin line ([`Antigravity.cs`](../../src/IDevelop.Core/Execution/Clients/Antigravity.cs)).
+  - Claude Code: `--resume <id>` ([`ClaudeCode.cs`](../../src/IDevelop.Core/Clients/ClaudeCode.cs)).
+  - Codex: `thread/resume` with `threadId` and `excludeTurns: true`, then one `turn/start` ([`CodexProtocol.cs`](../../src/IDevelop.Core/Clients/CodexProtocol.cs)).
+  - Pi: `-p --mode json --session-id <id>` ([`Pi.cs`](../../src/IDevelop.Core/Clients/Pi.cs)).
+  - Antigravity CLI: `--conversation <id>` with one stdin line ([`Antigravity.cs`](../../src/IDevelop.Core/Clients/Antigravity.cs)).
 - Claude Code and Codex close stdin at the turn's terminal event (`result`, `turn/completed`), so the process exits ([agent-clients.md](../agent-clients.md#conversation-protocols-from-c1)).
-- A message to a task that is not running starts a new attempt whose first turn continues the latest attempt's session ([context.md](../context.md#working-decisions)). `ProjectRuns.EarlierAttempts` chains those attempts ([`ProjectRuns.cs`](../../src/IDevelop.Core/Execution/ProjectRuns.cs)). The conversation view shows each one under a "New attempt" marker and lists them in an attempt picker ([`ConversationItems.cs`](../../src/IDevelop.Desktop/Conversation/ConversationItems.cs), [`ConversationView.axaml`](../../src/IDevelop.Desktop/Conversation/ConversationView.axaml)). Only a reply to a waiting attempt, in May ask or Chat mode, is the next turn of the same attempt ([glossary](../../GLOSSARY.md): Attempt, Continuation).
+- A message to a task that is not running starts a new attempt whose first turn continues the latest attempt's session ([context.md](../context.md#working-decisions)). `ProjectRuns.EarlierAttempts` chains those attempts (`ProjectRuns.cs`). The conversation view shows each one under a "New attempt" marker and lists them in an attempt picker ([`ConversationItems.cs`](../../src/IDevelop.Desktop/Conversation/ConversationItems.cs), [`ConversationView.axaml`](../../src/IDevelop.Desktop/Conversation/ConversationView.axaml)). Only a reply to a waiting attempt, in May ask or Chat mode, is the next turn of the same attempt ([glossary](../../GLOSSARY.md): Attempt, Continuation).
 
 ### What the probes recorded
 

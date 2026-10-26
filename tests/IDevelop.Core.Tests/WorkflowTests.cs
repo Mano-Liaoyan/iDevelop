@@ -317,37 +317,5 @@ public class WorkflowTests
         Assert.Equal(
             new EditRejection.SecondSubject(reviewer, merge),
             workflow.Rejection(new Connect(new ConnectionKey(Build, reviewer), ConnectionKind.Dependency)));
-        // Its findings go to the editing agents behind the merge (ADR 0041).
-        Assert.Equal(new[] { Design, Build }.Order(), workflow.ImplementersOf(reviewer).AsEnumerable());
-    }
-
-    [Fact]
-    public void A_review_s_implementers_are_its_editing_subject_or_the_editing_agents_behind_its_merge_nodes()
-    {
-        var inner = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000077"));
-        var outer = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000078"));
-        var reviewer = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000066"));
-        var workflow = ThreeTasks()
-            .Must(new PlaceNode(inner, BuiltInBlueprints.Merge, new CanvasPoint(700, 400)) { Title = "Merge" })
-            .Must(new PlaceNode(outer, BuiltInBlueprints.Merge, new CanvasPoint(900, 400)) { Title = "Merge again" })
-            .Must(new PlaceNode(reviewer, BuiltInBlueprints.Review, new CanvasPoint(1100, 400)) { Title = "Check" })
-            .Must(new Connect(new ConnectionKey(Design, inner), ConnectionKind.Dependency))
-            .Must(new Connect(new ConnectionKey(inner, outer), ConnectionKind.Dependency))
-            .Must(new Connect(new ConnectionKey(Build, outer), ConnectionKind.Dependency));
-        Assert.Empty(workflow.ImplementersOf(reviewer));
-
-        Assert.Equal([Build], workflow.Must(new Connect(new ConnectionKey(Build, reviewer), ConnectionKind.Dependency)).ImplementersOf(reviewer).AsEnumerable());
-        Assert.Equal(new[] { Design, Build }.Order(),
-            workflow.Must(new Connect(new ConnectionKey(outer, reviewer), ConnectionKind.Dependency)).ImplementersOf(reviewer).AsEnumerable());
-    }
-
-    [Fact]
-    public void An_approval_waits_for_the_person_and_passes_its_inputs_on_once_approved()
-    {
-        var node = new IDevelop.Nodes.NodeContext(new TaskDefinition(Design, BuiltInBlueprints.Approval), "The plan is ready.");
-
-        Assert.Equal(new IDevelop.Nodes.NodeStep.WaitForPerson(new IDevelop.Nodes.Pending.Approval()), IDevelop.Nodes.NodeWorks.For(BuiltInBlueprints.Approval.Work).Next(node, null));
-        Assert.IsNotAssignableFrom<IDevelop.Nodes.IConverses>(IDevelop.Nodes.NodeWorks.For(BuiltInBlueprints.Approval.Work));
-        Assert.IsAssignableFrom<IDevelop.Nodes.IConverses>(IDevelop.Nodes.NodeWorks.For(BuiltInBlueprints.Review.Work));
     }
 }

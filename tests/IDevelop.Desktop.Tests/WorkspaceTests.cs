@@ -10,7 +10,7 @@ using Avalonia.Input;
 using Avalonia.Controls.Presenters;
 using Avalonia.VisualTree;
 using Avalonia.Media;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;

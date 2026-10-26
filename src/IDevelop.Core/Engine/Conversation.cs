@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Workflows;
 
 namespace IDevelop.Engine;
@@ -48,6 +48,9 @@ public interface IConversation : IDisposable
     /// <summary>The command that continues the node's session in a terminal, or null while a turn runs or it has no session.</summary>
     string? TerminalCommand { get; }
 
+    /// <summary>The background work that the running turn's client waits for, such as a subagent (ADR 0030).</summary>
+    ImmutableArray<BackgroundTask> Background { get; }
+
     /// <summary>Raised after the log grows, on the thread that wrote it.</summary>
     event Action? Changed;
 }
@@ -95,6 +98,8 @@ internal sealed class NodeConversation : IConversation
     }
 
     public string? TerminalCommand => _terminal();
+
+    public ImmutableArray<BackgroundTask> Background => _log.Record is { Open: true, Background: var tasks } ? tasks : [];
 
     public event Action? Changed;
 

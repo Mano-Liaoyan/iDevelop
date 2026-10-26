@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.VisualTree;
 using IDevelop.Engine;
-using IDevelop.Execution;
+using IDevelop.Clients;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Tests;
@@ -37,6 +37,8 @@ internal sealed class FakeConversation(TaskId node) : IConversation
     public ImmutableList<ConversationLine> Lines { get; private set; } = [];
 
     public string? TerminalCommand { get; set; }
+
+    public ImmutableArray<BackgroundTask> Background { get; set; } = [];
 
     public bool Disposed { get; private set; }
 

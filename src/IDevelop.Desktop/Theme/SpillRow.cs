@@ -6,7 +6,7 @@ namespace IDevelop.Desktop.Theme;
 /// <summary>Where a <see cref="SpillRow"/>'s controls sit once they leave its first line.</summary>
 public enum SpillAlignment
 {
-    /// <summary>Under the text's start, as a header's attempt picker sits under its title.</summary>
+    /// <summary>Under the text's start, as a conversation header's controls sit under its title.</summary>
     Start,
 
     /// <summary>At the row's right edge, as a composer's buttons end where the composer's box ends.</summary>
