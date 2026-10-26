@@ -44,7 +44,7 @@ public sealed class ProtocolLaunchTests
                 var request = new LaunchRequest("m", "high", "banana")
                 {
                     ReadOnly = row.ReadOnly, ResumeSession = "session-1",
-                    Policy = ClientPolicy.For(client, row.ReadOnly, row.Mode, row.Reviewer, row.Host ? new HostQuestions.DeferImmediately() : new HostQuestions.Disabled()),
+                    Policy = ClientPolicy.For(client, row.ReadOnly, row.Mode, row.Reviewer, row.Host),
                 };
                 var actual = ClientCatalog.Get(client).Launch(request);
                 Assert.Equal(client switch

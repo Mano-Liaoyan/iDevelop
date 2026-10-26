@@ -96,7 +96,7 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
         var request = new LaunchRequest(id, settings.Reasoning, prompt)
         {
             ResumeSession = session, ReadOnly = readOnly, Skills = skillLaunch,
-            Policy = ClientPolicy.For(client, readOnly, node.Conversation, node.Blueprint.Work is WorkSpec.Review, new HostQuestions.Disabled()),
+            Policy = ClientPolicy.For(client, readOnly, node.Conversation, node.Blueprint.Work is WorkSpec.Review),
         };
         var plan = new LaunchPlan(ClientCatalog.Get(client), ready.Command, settings, request);
         return ready.Command.UnsafeArgument(plan.Launch.Arguments) is { } argument

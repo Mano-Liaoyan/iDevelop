@@ -138,6 +138,21 @@ public static class SkillChoices
         _ => $"{ClientCatalog.Name(client)}'s skill list couldn't be read, so it gets the chosen skills as they are, unchecked.",
     };
 
+    /// <summary>
+    /// What a turn's activity says about its choice, or null: the chosen skills it runs without, such as "Claude Code runs
+    /// without gone, which is not installed.", or <see cref="UncheckedNote"/> and why the list could not be read.
+    /// </summary>
+    public static string? TurnNote(ClientId client, ImmutableSortedSet<string>? chosen, SkillListing? listing)
+    {
+        var name = ClientCatalog.Name(client);
+        if (chosen is null || !CanChoose(client)) return null;
+        if (listing is SkillListing.Unavailable unavailable) return $"{UncheckedNote(client)} {unavailable.Reason}";
+        if (listing is not SkillListing.Listed listed || Missing(chosen, listed.Skills) is not { IsEmpty: false } missing) return null;
+        return missing.Length == 1
+            ? $"{name} runs without {missing[0]}, which is not installed."
+            : $"{name} runs without {string.Join(", ", missing.Take(missing.Length - 1))} and {missing[^1]}, which are not installed.";
+    }
+
     /// <summary>A launch takes only the chosen skills the client lists, so a skill that is not installed is left out.</summary>
     internal static SkillLaunch Launch(ImmutableSortedSet<string> chosen, ImmutableArray<SkillOption> listed) =>
         new([.. listed.Where(skill => chosen.Contains(skill.Name))], [.. listed.Where(skill => !chosen.Contains(skill.Name))]);

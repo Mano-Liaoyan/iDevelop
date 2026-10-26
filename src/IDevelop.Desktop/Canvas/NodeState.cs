@@ -32,6 +32,15 @@ public static class NodeStates
         _ => "Idle",
     };
 
+    /// <summary>
+    /// The status of a running node whose client waits for <paramref name="background"/> work, such as "Waiting for a
+    /// background subagent" (ADR 0030), and otherwise the state's own.
+    /// </summary>
+    public static string Label(EngineState state, System.Collections.Immutable.ImmutableArray<IDevelop.Clients.BackgroundTask> background) =>
+        state is not EngineState.Running || background.IsDefaultOrEmpty ? Label(state)
+        : background.Any(task => task.IsSubagent) ? "Waiting for a background subagent"
+        : "Waiting for background work";
+
     /// <summary>What the node needs from the person, or why it stopped, in a sentence, or null when its status says enough.</summary>
     public static string? Detail(EngineState state) => state switch
     {

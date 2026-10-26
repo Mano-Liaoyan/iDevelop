@@ -44,7 +44,7 @@ Every client's resume already continues its own session. None of them copies the
 
 ## What iDevelop does today
 
-- Each turn is one client process. `LaunchPlan.Resuming` sends the person's message alone, with the session id (`StartCheck.cs`). No iDevelop prompt copies earlier messages into a resumed turn.
+- Each turn is one client process. A resumed turn sends the person's message alone, with the session id ([`LaunchPlan.cs`](../../src/IDevelop.Core/Clients/LaunchPlan.cs)). No iDevelop prompt copies earlier messages into a resumed turn.
 - The launches:
   - Claude Code: `--resume <id>` ([`ClaudeCode.cs`](../../src/IDevelop.Core/Clients/ClaudeCode.cs)).
   - Codex: `thread/resume` with `threadId` and `excludeTurns: true`, then one `turn/start` ([`CodexProtocol.cs`](../../src/IDevelop.Core/Clients/CodexProtocol.cs)).

@@ -8,27 +8,27 @@ public class ClientPolicyTests
     [Fact]
     public void The_effective_policy_bypasses_permissions_for_an_editing_Claude_Code_node_and_keeps_native_access_otherwise()
     {
-        (ClientId Client, bool ReadOnly, ConversationMode Mode, bool Reviewer, HostQuestions Host,
+        (ClientId Client, bool ReadOnly, ConversationMode Mode, bool Reviewer, bool Host,
             NativePolicy Native, QuestionHandling Questions, PermissionPrompts Prompts)[] rows =
         [
-            (ClientId.ClaudeCode, false, ConversationMode.Autonomous, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, true, ConversationMode.Autonomous, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, false, ConversationMode.Autonomous, true, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, true, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, false, ConversationMode.Chat, true, HostQuestions.Bounded.Recommended, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Surface, PermissionPrompts.Host),
-            (ClientId.ClaudeCode, false, ConversationMode.Chat, false, HostQuestions.Bounded.Recommended, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Surface, PermissionPrompts.Host),
-            (ClientId.ClaudeCode, true, ConversationMode.MayAsk, false, HostQuestions.Bounded.Recommended, new NativePolicy.Claude("plan"), QuestionHandling.Surface, PermissionPrompts.Host),
-            (ClientId.ClaudeCode, true, ConversationMode.Chat, false, new HostQuestions.DeferImmediately(), new NativePolicy.Claude("plan"), QuestionHandling.Surface, PermissionPrompts.Host),
-            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, new HostQuestions.Disabled(), new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, true, ConversationMode.Chat, false, new HostQuestions.Disabled(), new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Codex, false, ConversationMode.Chat, false, HostQuestions.Bounded.Recommended, new NativePolicy.Codex("workspace-write"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Codex, true, ConversationMode.MayAsk, false, new HostQuestions.DeferImmediately(), new NativePolicy.Codex("read-only"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Codex, false, ConversationMode.Chat, true, HostQuestions.Bounded.Recommended, new NativePolicy.Codex("read-only"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Pi, false, ConversationMode.Chat, false, HostQuestions.Bounded.Recommended, new NativePolicy.Pi(), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Pi, true, ConversationMode.MayAsk, false, new HostQuestions.DeferImmediately(), new NativePolicy.Pi(), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Antigravity, false, ConversationMode.Chat, false, HostQuestions.Bounded.Recommended, new NativePolicy.Antigravity("accept-edits"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Antigravity, true, ConversationMode.MayAsk, false, new HostQuestions.DeferImmediately(), new NativePolicy.Antigravity("plan"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.ClaudeCode, false, ConversationMode.Autonomous, false, true, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.ClaudeCode, true, ConversationMode.Autonomous, false, true, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.ClaudeCode, false, ConversationMode.Autonomous, true, true, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, true, true, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.ClaudeCode, false, ConversationMode.Chat, true, true, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, true, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Surface, PermissionPrompts.Host),
+            (ClientId.ClaudeCode, false, ConversationMode.Chat, false, true, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Surface, PermissionPrompts.Host),
+            (ClientId.ClaudeCode, true, ConversationMode.MayAsk, false, true, new NativePolicy.Claude("plan"), QuestionHandling.Surface, PermissionPrompts.Host),
+            (ClientId.ClaudeCode, true, ConversationMode.Chat, false, true, new NativePolicy.Claude("plan"), QuestionHandling.Surface, PermissionPrompts.Host),
+            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, false, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.ClaudeCode, true, ConversationMode.Chat, false, false, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.Codex, false, ConversationMode.Chat, false, true, new NativePolicy.Codex("workspace-write"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.Codex, true, ConversationMode.MayAsk, false, true, new NativePolicy.Codex("read-only"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.Codex, false, ConversationMode.Chat, true, true, new NativePolicy.Codex("read-only"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.Pi, false, ConversationMode.Chat, false, true, new NativePolicy.Pi(), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.Pi, true, ConversationMode.MayAsk, false, true, new NativePolicy.Pi(), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.Antigravity, false, ConversationMode.Chat, false, true, new NativePolicy.Antigravity("accept-edits"), QuestionHandling.Decline, PermissionPrompts.None),
+            (ClientId.Antigravity, true, ConversationMode.MayAsk, false, true, new NativePolicy.Antigravity("plan"), QuestionHandling.Decline, PermissionPrompts.None),
         ];
 
         foreach (var row in rows)

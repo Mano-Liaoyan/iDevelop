@@ -1,3 +1,4 @@
+using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Execution;
 using EngineState = IDevelop.Engine.NodeState;
@@ -30,6 +31,18 @@ public sealed class NodeStateTests
         Assert.Equal(state, NodeStates.Of(engine));
         Assert.Equal(label, NodeStates.Label(engine));
         Assert.Equal(tone, NodeStates.Tone(state));
+    }
+
+    [Fact]
+    public void A_running_turn_says_what_background_work_it_waits_for()
+    {
+        var running = new EngineState.Running();
+
+        Assert.Equal("Running", NodeStates.Label(running, []));
+        Assert.Equal("Waiting for a background subagent", NodeStates.Label(running,
+            [new BackgroundTask("Run the tests", IsSubagent: false), new BackgroundTask("Survey the files", IsSubagent: true)]));
+        Assert.Equal("Waiting for background work", NodeStates.Label(running, [new BackgroundTask("Run the tests", IsSubagent: false)]));
+        Assert.Equal("Completed", NodeStates.Label(new EngineState.Completed(), [new BackgroundTask("Survey the files", IsSubagent: true)]));
     }
 
     [Fact]

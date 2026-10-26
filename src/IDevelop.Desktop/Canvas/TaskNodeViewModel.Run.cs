@@ -28,6 +28,7 @@ public sealed partial class TaskNodeViewModel
     private (int Index, string Text)? _lastReply;
     private (int Index, string Text)? _proposed;
     private string? _latest;
+    private System.Collections.Immutable.ImmutableArray<IDevelop.Clients.BackgroundTask> _background = [];
     private IConversation? _log;
     private int _logChanged;
     private string _sendBackNote = "";
@@ -47,7 +48,7 @@ public sealed partial class TaskNodeViewModel
     public EngineState EngineState => _engineState;
 
     /// <summary>"Running", "Completed", or what the node needs, such as "Input required · approval".</summary>
-    public string StatusLabel => NodeStates.Label(_engineState);
+    public string StatusLabel => NodeStates.Label(_engineState, _background);
 
     /// <summary>What the node needs from the person, or why it failed or went stale, or null when its status says enough.</summary>
     public string? StateDetail => NodeStates.Detail(_engineState);
@@ -183,6 +184,7 @@ public sealed partial class TaskNodeViewModel
         _runRefusal = engine.CanRun(Id);
         _history = engine.History(Id);
         (_lastReply, _proposed, _latest) = HasAgent ? ReadReplies(engine) : (null, null, null);
+        _background = HasAgent ? Log(engine).Background : [];
         ShowProposal();
         ShowState();
         OnPropertyChanged(nameof(ShowsApprove));

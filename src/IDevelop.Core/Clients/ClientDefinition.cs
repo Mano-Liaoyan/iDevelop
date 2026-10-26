@@ -96,7 +96,7 @@ internal sealed record LaunchRequest(string Model, string? Reasoning, string Pro
     public SkillLaunch? Skills { get; init; }
 
     public EffectivePolicy PolicyFor(ClientId client) => Policy ?? ClientPolicy.For(
-        client, ReadOnly, ConversationMode.Autonomous, reviewer: false, new HostQuestions.Disabled());
+        client, ReadOnly, ConversationMode.Autonomous, reviewer: false);
 }
 
 internal sealed record LaunchArguments(ImmutableArray<string> Arguments, string Stdin);

@@ -104,7 +104,7 @@ public sealed class SkillStartTests : IDisposable
     }
 
     [Fact]
-    public async Task Pi_runs_a_task_whose_skill_list_could_not_be_read_with_all_of_its_skills()
+    public async Task Pi_runs_a_task_whose_skill_list_could_not_be_read_with_all_of_its_skills_and_says_so()
     {
         var project = _temp.Create("project");
         var evidence = _temp.Create("evidence");
@@ -120,16 +120,16 @@ public sealed class SkillStartTests : IDisposable
             execution: new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high", Skills = ["deploy"] });
 
         Assert.IsType<SkillListing.Unavailable>(await SkillListingTests.ListedAsync(clients, ClientId.Pi, project));
-        var outcome = await Turn(clients, project, task);
+        var (outcome, events) = await Turn(clients, project, project, task);
 
         Assert.IsType<TurnOutcome.Done>(outcome);
         Assert.DoesNotContain("--no-skills", JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(evidence, "arguments.json")))!);
-        Assert.Equal("Pi's skill list couldn't be read, so the skill choice couldn't be applied, and Pi runs with all of its skills.",
-            SkillChoices.UncheckedNote(ClientId.Pi));
+        Assert.Contains(new AgentEvent.Notice("Pi's skill list couldn't be read, so the skill choice couldn't be applied, and Pi runs with all of its skills. " +
+            "Pi did not list its skills: an extension failed."), events);
     }
 
     [Fact]
-    public async Task Pi_runs_a_task_with_exactly_its_chosen_skill_files_once_its_skills_are_listed()
+    public async Task A_turn_in_a_worktree_waits_for_the_project_s_listing_and_runs_with_exactly_the_chosen_skill_files_it_holds()
     {
         var project = _temp.Create("project");
         var evidence = _temp.Create("evidence");
@@ -141,18 +141,24 @@ public sealed class SkillStartTests : IDisposable
         var task = TestNodes.Implement(TestTasks.Design, "Deploy", "Deploy it. Then reply with DONE.",
             execution: new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high", Skills = ["deploy", "gone"] });
 
-        Assert.Equal("iDevelop is still listing the skills Pi loads.", new CliAgent(clients, project).Problem(task));
-        await SkillListingTests.ListedAsync(clients, ClientId.Pi, project);
-        var outcome = await Turn(clients, project, task);
+        // The listing has not started, so the node may run, and its turn waits for the listing.
+        Assert.Null(new CliAgent(clients, project).Problem(task));
+        var (outcome, events) = await Turn(clients, project, _temp.Create("worktree"), task);
 
         Assert.IsType<TurnOutcome.Done>(outcome);
+        Assert.Contains(new AgentEvent.Notice("Pi runs without gone, which is not installed."), events);
         var arguments = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(evidence, "arguments.json")))!;
         Assert.Equal(["--no-skills", "--skill", Path.Combine(Path.GetFullPath(project), ".pi", "skills", "deploy", "SKILL.md")],
             arguments.SkipWhile(argument => argument != "--no-skills").TakeWhile(argument => argument != "--session-id"));
     }
 
-    private static Task<TurnOutcome> Turn(ClientDirectory clients, string project, TaskDefinition task) =>
-        new CliAgent(clients, project).Turn(task, project, "Deploy it. Then reply with DONE.", null, _ => { }, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(60));
+    private static async Task<(TurnOutcome Outcome, AgentEvent[] Events)> Turn(ClientDirectory clients, string project, string folder, TaskDefinition task)
+    {
+        var events = new System.Collections.Concurrent.ConcurrentQueue<AgentEvent>();
+        var outcome = await new CliAgent(clients, project).Turn(task, folder, "Deploy it. Then reply with DONE.", null, events.Enqueue, CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(60));
+        return (outcome, [.. events]);
+    }
 
     private static TaskDefinition Task(ClientId client, ImmutableSortedSet<string>? skills) => TestNodes.Implement(TestTasks.Design, "Design", "Write it.",
         execution: new ExecutionSettings(client) { Model = "m", Reasoning = "high", Skills = skills });

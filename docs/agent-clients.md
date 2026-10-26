@@ -1,6 +1,6 @@
 # Agent client behavior
 
-Every turn relies on the client behavior below. The four client sections record the first launches, run on their own, and the [C1 protocols](#conversation-protocols-from-c1) section describes how each turn talks to its client now, and which parts no real client run has confirmed yet. The client rows in `src/IDevelop.Core/Execution/Clients/` encode it, and the tests replay the recorded fixtures in `tests/Shared/Fixtures`.
+Every turn relies on the client behavior below. The four client sections record the first launches, run on their own, and the [C1 protocols](#conversation-protocols-from-c1) section describes how each turn talks to its client now, and which parts no real client run has confirmed yet. The client rows in `src/IDevelop.Core/Clients/` encode it, and the tests replay the recorded fixtures in `tests/Shared/Fixtures`.
 
 These observations come from running each client on Windows on 2026-10-04, first from a shell and then through iDevelop. Each run used the sign-in that client already had. Each client wrote a requested file in a fresh Git repository and returned its final text. The recorded event streams, trimmed and without local paths, are the fixtures. Some Antigravity CLI observations come from running it on 2026-10-03 while setting up this project.
 

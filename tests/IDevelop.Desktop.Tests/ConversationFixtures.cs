@@ -38,6 +38,8 @@ internal sealed class FakeConversation(TaskId node) : IConversation
 
     public string? TerminalCommand { get; set; }
 
+    public ImmutableArray<BackgroundTask> Background { get; set; } = [];
+
     public bool Disposed { get; private set; }
 
     public event Action? Changed;

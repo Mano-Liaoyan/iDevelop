@@ -126,7 +126,8 @@ public sealed class WorkflowEngine : IAsyncDisposable
     {
         lock (_gate)
         {
-            if (_live.ContainsKey(id) || Log(id).Record is not { Session: { } session, SessionBasis.Model.Client: var client } || Folder(id) is not { } folder)
+            if (_live.ContainsKey(id) || Log(id).Record is not { Session: { } session, SessionBasis.Model.Client: var client } || Folder(id) is not { } folder
+                || Moved(id) is not null)
             {
                 return null;
             }
@@ -203,10 +204,22 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 return;
             }
 
+            if (Moved(node) is { } moved) throw new InvalidOperationException(moved);
             Continue(node, text);
         });
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Why the node's session cannot go on, or null: a client that finds a session only in the folder where it ran, Pi, and a
+    /// session that ran in another folder, because the project folder moved since (ADR 0026).
+    /// </summary>
+    private string? Moved(TaskId id) =>
+        Log(id).Record is { SessionFolder: { } ran, SessionBasis.Model.Client: var client } && ClientCatalog.Get(client).SessionsPerFolder
+        && Folder(id) is { } now && !string.Equals(Path.GetFullPath(ran), Path.GetFullPath(now),
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+            ? $"{ClientCatalog.Name(client)} can't continue this conversation after the project folder moved, so it needs a new conversation."
+            : null;
 
     /// <summary>
     /// Accepts what a waiting node offers as its result: an Approval node's inputs, a reviewer's inputs at its round limit,
@@ -477,9 +490,9 @@ public sealed class WorkflowEngine : IAsyncDisposable
         var agent = AgentOf(node) ?? throw new InvalidOperationException("This node kind does not run yet.");
         StopDescendants(id);
         var log = Log(id);
-        log.Append(new NodeEntry.TurnStarted(basis, session) { Round = round, Planning = planning });
-        if (conflict is not null) log.Append(new NodeEntry.Conflicted(conflict.Description));
         var folder = Edits(node) ? _worktrees.Folder(id) : _project;
+        log.Append(new NodeEntry.TurnStarted(basis, session) { Round = round, Planning = planning, Folder = session is null ? folder : null });
+        if (conflict is not null) log.Append(new NodeEntry.Conflicted(conflict.Description));
         var live = new Live();
         _live[id] = live;
         live.Done = Task.Run(() => Drive(id, node, agent, log, live, basis, folder, prompt, session));
@@ -583,7 +596,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         foreach (var predecessor in Targets(id).Where(p => !_live.ContainsKey(p)))
         {
             var record = Log(predecessor).Record;
-            if (record.Session is null)
+            if (record.Session is null || Moved(predecessor) is not null)
             {
                 if (Refusal(predecessor) is null) StartFresh(predecessor, feedback: text);
             }

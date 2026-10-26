@@ -96,6 +96,36 @@ public sealed class ClientDirectory
         }
     }
 
+    /// <summary>
+    /// The skills <paramref name="client"/> loads in <paramref name="folder"/>, once a listing is in: it waits for a check of
+    /// the client or a listing that is under way, which ends on its own within its probe's timeout, for at most
+    /// <paramref name="bound"/>, so a node that starts before the first listing is not held back.
+    /// </summary>
+    /// <param name="stop">Ends the wait early, and the listing as it is then is returned.</param>
+    public async Task<SkillListing> SkillsAsync(ClientId client, string folder, TimeSpan bound, CancellationToken stop = default)
+    {
+        var listed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged(object? sender, EventArgs e)
+        {
+            if (Skills(client, folder) is not SkillListing.Checking) listed.TrySetResult();
+        }
+
+        Changed += OnChanged;
+        try
+        {
+            if (Skills(client, folder) is SkillListing.Checking)
+            {
+                await Task.WhenAny(listed.Task, Task.Delay(bound, stop)).ConfigureAwait(false);
+            }
+
+            return Skills(client, folder);
+        }
+        finally
+        {
+            Changed -= OnChanged;
+        }
+    }
+
     /// <summary>Probes the four clients at once, off the calling thread. A call during a refresh joins it.</summary>
     public Task RefreshAsync()
     {
