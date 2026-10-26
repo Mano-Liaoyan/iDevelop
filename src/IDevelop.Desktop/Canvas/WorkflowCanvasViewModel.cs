@@ -2,12 +2,9 @@ using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia;
-using Avalonia.Threading;
 using IDevelop.Desktop.Blueprints;
-using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Clients;
-using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -38,17 +35,13 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     private readonly Dictionary<ConnectionKey, ConnectionViewModel> _connections = [];
     private readonly HashSet<object> _closedProposals = [];
     private Workflow? _projected;
-    private TaskNodeViewModel? _selectedNode;
-    private ConnectionViewModel? _selectedConnection;
-    private Point _viewportLocation;
-    private double _viewportZoom = 1;
-    private bool _isExpanded;
-    private bool _isSelected;
-    private bool _isRunning;
-    private bool _isRenamingWorkflow;
     private (TaskNodeViewModel[] Nodes, ConnectionViewModel[] Connections)? _heldSelection;
 
     /// <param name="project">The open project the workflow belongs to.</param>
+    /// <param name="document">The workflow document that the canvas shows and edits.</param>
+    /// <param name="clients">The coding-agent clients on this machine and what each offers.</param>
+    /// <param name="setNotice">Shows a notice in the window, or clears it with null.</param>
+    /// <param name="copy">Copies text to the clipboard.</param>
     /// <param name="personalBlueprints">The personal library's folder, or null for none.</param>
     /// <param name="git">The environment the engine's Git runs with, or null for the process's own.</param>
     internal WorkflowCanvasViewModel(
@@ -72,7 +65,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         Document.Changed += (_, _) => Sync();
         Sync();
         InitializeHighlight();
-        InitializeAdd();
         InitializeGenerate();
     }
 
@@ -91,10 +83,10 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     // clears the other one here and the inspector follows the most recent click.
     public TaskNodeViewModel? SelectedNode
     {
-        get => _selectedNode;
+        get;
         set
         {
-            if (SetProperty(ref _selectedNode, value))
+            if (SetProperty(ref field, value))
             {
                 if (value is not null)
                 {
@@ -108,10 +100,10 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public ConnectionViewModel? SelectedConnection
     {
-        get => _selectedConnection;
+        get;
         set
         {
-            if (SetProperty(ref _selectedConnection, value))
+            if (SetProperty(ref field, value))
             {
                 if (value is not null)
                 {
@@ -132,15 +124,15 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public Point ViewportLocation
     {
-        get => _viewportLocation;
-        set => SetProperty(ref _viewportLocation, value);
+        get;
+        set => SetProperty(ref field, value);
     }
 
     public double ViewportZoom
     {
-        get => _viewportZoom;
-        set => SetProperty(ref _viewportZoom, value);
-    }
+        get;
+        set => SetProperty(ref field, value);
+    } = 1;
 
     /// <summary>Whether a view has shown this canvas yet. The first view places the cards below the floating chrome.</summary>
     internal bool IsPositioned { get; set; }
@@ -152,10 +144,10 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public bool IsExpanded
     {
-        get => _isExpanded;
+        get;
         set
         {
-            if (SetProperty(ref _isExpanded, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(ExpandLabel));
             }
@@ -167,21 +159,21 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public bool IsSelected
     {
-        get => _isSelected;
-        internal set => SetProperty(ref _isSelected, value);
+        get;
+        internal set => SetProperty(ref field, value);
     }
 
     /// <summary>Whether a node of this workflow runs.</summary>
     public bool IsRunning
     {
-        get => _isRunning;
-        private set => SetProperty(ref _isRunning, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public bool IsRenamingWorkflow
     {
-        get => _isRenamingWorkflow;
-        private set => SetProperty(ref _isRenamingWorkflow, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public ICommand DeleteSelectionCommand { get; }
@@ -281,6 +273,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     internal Task Copy(string text) => _copy(text);
 
+    /// <param name="edit">The edit to apply to the workflow document.</param>
     /// <param name="title">Names a task in a rejection, for an edit that adds tasks. Null names them from the workflow.</param>
     internal EditResult Edit(WorkflowEdit edit, Func<TaskId, string>? title = null)
     {
@@ -343,7 +336,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         Place(NewTask(blueprint, FreeSpot(new CanvasPoint(ViewportLocation.X + 60, ViewportLocation.Y + 60))));
 
     /// <summary>Applies the placement, selects the new node, and returns it, or returns null when the edit was rejected.</summary>
-    internal TaskNodeViewModel? Place(WorkflowEdit.PlaceNode edit)
+    private TaskNodeViewModel? Place(WorkflowEdit.PlaceNode edit)
     {
         if (Edit(edit) is not EditResult.Applied)
         {
@@ -356,7 +349,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     }
 
     /// <summary>The first spot at or below <paramref name="start"/>, in steps of a card's footprint, that no card is near.</summary>
-    internal CanvasPoint FreeSpot(CanvasPoint start) => Offset(start, FreeShift([start]));
+    private CanvasPoint FreeSpot(CanvasPoint start) => Offset(start, FreeShift([start]));
 
     /// <summary>
     /// The shortest shift down, in steps of a card's footprint, after which no card is near any of the spots. The spots move
@@ -432,6 +425,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         // The engine follows the edit first: it stops a running node whose basis the edit changed, and knows every new node.
         Engine.Update(current);
         var connectionsChanged = !ReferenceEquals(previous?.Connections, current.Connections);
+        var tasksChanged = !ReferenceEquals(previous?.Tasks, current.Tasks);
+        var positionsChanged = !ReferenceEquals(previous?.Positions, current.Positions);
 
         // A connection holds its two task nodes, so a connection leaves before its nodes can, and comes after they exist.
         if (connectionsChanged)
@@ -439,7 +434,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             DropConnections(current);
         }
 
-        if (!ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
+        if (tasksChanged || positionsChanged)
         {
             SyncNodes(current);
         }
@@ -449,13 +444,13 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             SyncConnections(current);
         }
 
-        if (!ReferenceEquals(previous?.Positions, current.Positions))
+        if (positionsChanged)
         {
             Reroute();
             ScheduleCardLayout();
         }
 
-        if (connectionsChanged || !ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
+        if (connectionsChanged || tasksChanged || positionsChanged)
         {
             ArrangeOutline();
         }
@@ -479,7 +474,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         OnPropertyChanged(nameof(HasUnsavedChanges));
 
         // An edit of a node or of the connections into it can make a result stale or change why a node cannot run.
-        if (!ReferenceEquals(previous?.Tasks, current.Tasks) || connectionsChanged)
+        if (tasksChanged || connectionsChanged)
         {
             ShowEngine();
         }
@@ -553,8 +548,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     internal static Point ToPoint(CanvasPoint point) => new(point.X, point.Y);
 
     partial void InitializeHighlight();
-
-    partial void InitializeAdd();
 
     partial void InitializeGenerate();
 }

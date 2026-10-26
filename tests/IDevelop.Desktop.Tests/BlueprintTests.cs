@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Avalonia;
-using IDevelop.Clients;
 using IDevelop.Desktop.Blueprints;
 using IDevelop.Desktop.Inspector;
 using IDevelop.Projects;
@@ -28,7 +27,7 @@ public sealed class BlueprintTests : IDisposable
         var shell = Shell.Open(_temp.Create("plan"));
 
         Assert.Equal(["Implement", "Plan", "Architect", "Review", "Approval", "Merge"], EntryNames(shell, "BUILT-IN"));
-        Assert.All(new[] { "Implement", "Plan", "Architect", "Review", "Approval", "Merge" }, name =>
+        Assert.All(["Implement", "Plan", "Architect", "Review", "Approval", "Merge"], name =>
         {
             Assert.True(Button(shell, name, "PlaceBlueprint").IsEffectivelyVisible);
             Assert.Equal(["Derive Blueprint…"], MenuEntries(shell, name));

@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
 using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
@@ -37,7 +37,6 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     private string _model;
     private string _reasoning;
     private bool _inPersonal;
-    private string? _problem;
 
     private BlueprintEditorViewModel(
         BlueprintsViewModel owner, Blueprint source, BlueprintLibrary? editing, string name, IReadOnlyDictionary<string, string>? values, NodeSettings defaults)
@@ -167,6 +166,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     public IReadOnlyList<Option<ClientId?>> ClientChoices { get; } =
         [new(null, "None"), .. ClientCatalog.All.Select(id => new Option<ClientId?>(id, ClientCatalog.Name(id)))];
 
+    [AllowNull]
     public Option<ClientId?> Client
     {
         get => _client;
@@ -198,8 +198,8 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     /// <summary>Why the blueprint cannot be saved as it stands, or null.</summary>
     public string? Problem
     {
-        get => _problem;
-        private set => SetProperty(ref _problem, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public ICommand SaveCommand => _save;
@@ -233,15 +233,12 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         LibraryKind.Personal => "personal",
     };
 
-    private bool Set<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
+    private void Set<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
     {
-        if (!SetProperty(ref field, value, name))
+        if (SetProperty(ref field, value, name))
         {
-            return false;
+            Validate();
         }
-
-        Validate();
-        return true;
     }
 
     private Blueprint? Build(out string? problem)

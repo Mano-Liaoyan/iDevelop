@@ -1,11 +1,8 @@
 using System.Collections.Immutable;
-using System.Text.Json;
-using IDevelop.Clients;
 using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
-using static IDevelop.TestSupport.FakeAgents;
 using static IDevelop.Workflows.WorkflowEdit;
 
 namespace IDevelop.Core.Tests;
@@ -13,12 +10,10 @@ namespace IDevelop.Core.Tests;
 /// <summary>Planners propose graph edits through scripted replies of the fake agent, and the person accepts them.</summary>
 public sealed class PlanningTests : IDisposable
 {
-    private const string Session = "01a108d7-464d-77a3-8908-a36f38ce6c14";
     private static readonly TaskId Architect = TestTasks.Design;
     private static readonly TaskId Backend = TestTasks.Build;
     private static readonly TaskId Frontend = TestTasks.Review;
     private static readonly ExecutionSettings Sol = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" };
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
     private static readonly Guid Plan = Guid.Parse("019a9d2e-6100-7000-8000-000000000088");
     private static readonly ExecutionSettings Haiku = new(ClientId.ClaudeCode) { Model = "claude-haiku-4-5" };
 
@@ -45,15 +40,11 @@ public sealed class PlanningTests : IDisposable
         """;
 
     private readonly TempFolder _temp = new();
-    private readonly FakeClients _fakes;
     private readonly string _project;
-    private readonly string _evidence;
 
     public PlanningTests()
     {
-        _fakes = new FakeClients(_temp.Create("bin"));
         _project = _temp.Create("project");
-        _evidence = _temp.Create("evidence");
     }
 
     public void Dispose() => _temp.Dispose();
@@ -386,11 +377,6 @@ public sealed class PlanningTests : IDisposable
             .Select(task => (task.Name, accepted.Tasks[task.Id].Execution, accepted.Tasks[task.Id].Conversation))];
     }
 
-    private static (string Title, string Instructions, string Criteria) Summary(TaskDefinition task) =>
-        task.Blueprint == BuiltInBlueprints.Architect
-            ? (task.Title, task.Field("brief"), "")
-            : (task.Title, task.Field("instructions"), task.Field("acceptanceCriteria"));
-
     private static Blueprint? Find(BlueprintKey key) => Types.FirstOrDefault(blueprint => blueprint.Key == key);
 
     private static readonly PlanningHandles Handles = new(Plan, [Backend, Frontend], [.. Types.Select(blueprint => blueprint.Key)]);
@@ -421,6 +407,4 @@ public sealed class PlanningTests : IDisposable
         document.Save();
         return document;
     }
-
-    private string Evidence(string name) => Path.Combine(_evidence, name);
 }

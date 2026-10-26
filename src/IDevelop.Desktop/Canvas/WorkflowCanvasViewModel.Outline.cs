@@ -12,7 +12,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// </summary>
     public ObservableCollection<TaskNodeViewModel> Outline { get; } = [];
 
-    internal static IReadOnlyList<TaskId> ReadingOrder(Workflow workflow)
+    private static IReadOnlyList<TaskId> ReadingOrder(Workflow workflow)
     {
         var dependencies = workflow.Connections.Where(connection => connection.Value.Blocks()).Select(connection => connection.Key).ToList();
         var before = dependencies.ToLookup(key => key.To);

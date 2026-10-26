@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using EngineState = IDevelop.Engine.NodeState;
 
@@ -36,7 +38,7 @@ public static class NodeStates
     /// The status of a running node whose client waits for <paramref name="background"/> work, such as "Waiting for a
     /// background subagent" (ADR 0030), and otherwise the state's own.
     /// </summary>
-    public static string Label(EngineState state, System.Collections.Immutable.ImmutableArray<IDevelop.Clients.BackgroundTask> background) =>
+    public static string Label(EngineState state, ImmutableArray<BackgroundTask> background) =>
         state is not EngineState.Running || background.IsDefaultOrEmpty ? Label(state)
         : background.Any(task => task.IsSubagent) ? "Waiting for a background subagent"
         : "Waiting for background work";

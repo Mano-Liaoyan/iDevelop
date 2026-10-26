@@ -246,14 +246,14 @@
                         Background="Transparent"
                         ToolTip.Tip="{Binding Reason}">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Foreground="{DynamicResource TextFaintBrush}" />
-                    <TextBlock Grid.Column="1" Classes="sidebarName" Text="{Binding Name}"
+                    <TextBlock Grid.Row="0" Grid.Column="1" Classes="sidebarName" Text="{Binding Name}"
                                FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextMutedBrush}"
                                AutomationProperties.AutomationId="UnopenedName" />
                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
                                FontSize="12" Foreground="{DynamicResource StateWarningStrongBrush}"
                                AutomationProperties.AutomationId="UnopenedReason"
                                AutomationProperties.HelpText="{Binding Reason}" />
-                    <Button Grid.Column="2" Classes="icon" VerticalAlignment="Top"
+                    <Button Grid.Row="0" Grid.Column="2" Classes="icon" VerticalAlignment="Top"
                             Click="OnForgetProject"
                             ToolTip.Tip="Forget this folder"
                             AutomationProperties.AutomationId="ForgetProject"
@@ -301,7 +301,7 @@
                            Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                            Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
                            Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}" />
-                  <TextBlock Grid.Column="1" Classes="sidebarName" Text="{Binding Name}"
+                  <TextBlock Grid.Row="0" Grid.Column="1" Classes="sidebarName" Text="{Binding Name}"
                              FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" />
                   <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextWrapping="Wrap"
                              AutomationProperties.AutomationId="{Binding AutomationId}"
@@ -446,40 +446,46 @@
 
             <!-- Run Workflow runs every node that has no current result, so it needs no selected node (ADR 0017). -->
             <Panel canvas:CanvasTopBar.Slot="Trailing" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
-              <StackPanel x:DataType="canvas:WorkflowCanvasViewModel" DataContext="{Binding Canvas}" Orientation="Horizontal" Spacing="8">
-                <Button Classes="action glyph" Command="{Binding RunWorkflowCommand}"
-                        ToolTip.Tip="Run Workflow&#10;Run every node that has no current result, along its dependencies"
-                        AutomationProperties.AutomationId="RunWorkflow"
-                        AutomationProperties.Name="Run Workflow">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-                    <TextBlock Classes="label" Text="Run Workflow" VerticalAlignment="Center" />
-                  </StackPanel>
-                </Button>
-                <Button Classes="glyph" Classes.primary="{Binding IsGenerateIdle}" Classes.action="{Binding !IsGenerateIdle}"
-                        Click="OnGenerate"
-                        ToolTip.Tip="{Binding GenerateLabel, StringFormat='{}{0}&#10;Describe what to build, and a planner proposes the tasks'}"
-                        AutomationProperties.AutomationId="GenerateWorkflow"
-                        AutomationProperties.Name="{Binding GenerateLabel}">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
-                    <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
-                              Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding IsPlanning}" />
-                    <!-- An open proposal shows a dot before its label, or on the glyph when the label hides. -->
-                    <Panel Classes="wideOnly" VerticalAlignment="Center">
-                      <Ellipse Width="8" Height="8" Margin="4,0" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}" />
-                    </Panel>
-                    <Panel Classes="compactOnly" VerticalAlignment="Center">
-                      <Panel IsVisible="{Binding IsReviewing}">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" />
-                        <Ellipse Width="6" Height="6" Margin="0,-2,-3,0" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                 Fill="{DynamicResource AccentBrush}" />
-                      </Panel>
-                    </Panel>
-                    <TextBlock Classes="label" Text="{Binding GenerateLabel}" VerticalAlignment="Center" />
-                  </StackPanel>
-                </Button>
-              </StackPanel>
+              <ContentControl Content="{Binding Canvas}">
+                <ContentControl.ContentTemplate>
+                  <DataTemplate x:DataType="canvas:WorkflowCanvasViewModel">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Classes="action glyph" Command="{Binding RunWorkflowCommand}"
+                              ToolTip.Tip="Run Workflow&#10;Run every node that has no current result, along its dependencies"
+                              AutomationProperties.AutomationId="RunWorkflow"
+                              AutomationProperties.Name="Run Workflow">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
+                          <TextBlock Classes="label" Text="Run Workflow" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                      <Button Classes="glyph" Classes.primary="{Binding IsGenerateIdle}" Classes.action="{Binding !IsGenerateIdle}"
+                              Click="OnGenerate"
+                              ToolTip.Tip="{Binding GenerateLabel, StringFormat='{}{0}&#10;Describe what to build, and a planner proposes the tasks'}"
+                              AutomationProperties.AutomationId="GenerateWorkflow"
+                              AutomationProperties.Name="{Binding GenerateLabel}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
+                          <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
+                                    Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding IsPlanning}" />
+                          <!-- An open proposal shows a dot before its label, or on the glyph when the label hides. -->
+                          <Panel Classes="wideOnly" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Margin="4,0" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}" />
+                          </Panel>
+                          <Panel Classes="compactOnly" VerticalAlignment="Center">
+                            <Panel IsVisible="{Binding IsReviewing}">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" />
+                              <Ellipse Width="6" Height="6" Margin="0,-2,-3,0" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                       Fill="{DynamicResource AccentBrush}" />
+                            </Panel>
+                          </Panel>
+                          <TextBlock Classes="label" Text="{Binding GenerateLabel}" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                    </StackPanel>
+                  </DataTemplate>
+                </ContentControl.ContentTemplate>
+              </ContentControl>
             </Panel>
 
             <!-- The status sits under the breadcrumb so a long message never covers it. The line limit keeps it above
@@ -539,7 +545,7 @@
 
     <!-- A modal sheet covers every column, so the breadcrumb, Save, and the sidebar take no click while it is open.
          It sits above the splitters, whose ZIndex 1 would otherwise draw them over the scrim and let them take a drag. -->
-    <ContentControl Grid.ColumnSpan="5" ZIndex="2" Content="{Binding Canvas.Sheet}">
+    <ContentControl Grid.Column="0" Grid.ColumnSpan="5" ZIndex="2" Content="{Binding Canvas.Sheet, FallbackValue={x:Null}}">
       <ContentControl.DataTemplates>
         <DataTemplate DataType="canvas:GenerateWorkflowViewModel">
           <canvas:GenerateSheet />

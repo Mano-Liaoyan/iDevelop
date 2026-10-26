@@ -19,14 +19,14 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
 {
     private static readonly TimeSpan WriteTime = TimeSpan.FromSeconds(5);
 
+    /// <summary>How long a turn with a skill choice waits for the project's skill listing that is under way (ADR 0025).</summary>
+    private static readonly TimeSpan SkillWait = TimeSpan.FromSeconds(40);
+
     /// <summary>How long a stopped client has to end its turn after the interrupt before its process tree is stopped.</summary>
     public TimeSpan ShutdownTime { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>How long a client has to exit after it reported success, a clock that stands still while it lists background work (ADR 0030).</summary>
     public TimeSpan SuccessExitTime { get; init; } = TimeSpan.FromSeconds(60);
-
-    /// <summary>How long a turn with a skill choice waits for the project's skill listing that is under way (ADR 0025).</summary>
-    public TimeSpan SkillWait { get; init; } = TimeSpan.FromSeconds(40);
 
     /// <summary>Why the node cannot start. A skill listing under way holds nothing back, because the turn waits for it.</summary>
     public string? Problem(TaskDefinition node) =>
@@ -97,13 +97,13 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
             var code = await process.WaitForExitAsync();
             await process.WaitForOutputAsync();
             inbox.Writer.TryWrite(code);
-        });
+        }, CancellationToken.None);
         // The person's answers join the channel until the engine completes them at the turn's end.
         _ = Task.Run(async () =>
         {
-            await foreach (var reply in replies.ReadAllAsync()) inbox.Writer.TryWrite(reply);
-        });
-        using var registration = stop.Register(() => inbox.Writer.TryWrite(stop));
+            await foreach (var reply in replies.ReadAllAsync(CancellationToken.None)) inbox.Writer.TryWrite(reply);
+        }, CancellationToken.None);
+        await using var registration = stop.Register(() => inbox.Writer.TryWrite(stop));
         var asks = plan.Request.Policy?.Questions == QuestionHandling.Surface;
 
         AgentEvent? verdict = null;
@@ -180,7 +180,7 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
         }
 
         await Output(protocol.Start());
-        await foreach (var item in inbox.Reader.ReadAllAsync())
+        await foreach (var item in inbox.Reader.ReadAllAsync(CancellationToken.None))
         {
             switch (item)
             {

@@ -49,7 +49,7 @@ internal sealed class NodeFixture : IDisposable
 
     public FakeClients Fakes { get; }
 
-    public IReadOnlyDictionary<string, string> Git { get; }
+    private IReadOnlyDictionary<string, string> Git { get; }
 
     /// <summary>An Implement node of Antigravity whose prompt starts with its title.</summary>
     public static WorkflowEdit.PlaceNode Task(TaskId id, string title, double x, ConversationMode conversation = ConversationMode.Autonomous) =>
@@ -79,9 +79,6 @@ internal sealed class NodeFixture : IDisposable
     /// <summary>The start of the stdin line of a fresh turn of the node titled <paramref name="title"/>.</summary>
     public static string Fresh(string title) => """{"event":"user","message":{"role":"user","content":"# """ + title + "\\n";
 
-    /// <summary>A reviewer's answer with its verdict block.</summary>
-    public static string Verdict(string json) => $"I read the change.\n\n```idevelop\n{json}\n```";
-
     /// <summary>A file a turn waits for, which <see cref="Release"/> writes.</summary>
     public string Gate(string name) => Path.Combine(Evidence, $"gate-{name}");
 
@@ -91,7 +88,7 @@ internal sealed class NodeFixture : IDisposable
     /// <summary>Installs the fake agy with these turn rules, most specific first.</summary>
     public void Install(params FakeRule[] turns) => FakeAgents.Install(Fakes, ClientId.Antigravity, turns);
 
-    public ClientDirectory Clients() => _clients ??= Fakes.DiscoverAsync().Result;
+    private ClientDirectory Clients() => _clients ??= Fakes.DiscoverAsync().Result;
 
     /// <summary>Opens the project in a new window whose engines run Git with the fixture's configuration.</summary>
     public Shell Open()
@@ -113,17 +110,16 @@ internal sealed class NodeFixture : IDisposable
     /// <summary>Opens the project in a new window, as <see cref="Open"/> does.</summary>
     public Shell Window() => Open();
 
-    public string Run(params string[] arguments)
+    private void Run(params string[] arguments)
     {
         var start = new ProcessStartInfo("git") { WorkingDirectory = Project, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         foreach (var (key, value) in Git) start.Environment[key] = value;
         using var process = Process.Start(start)!;
-        var output = process.StandardOutput.ReadToEnd();
+        process.StandardOutput.ReadToEnd();
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
         Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}");
-        return output;
     }
 
     public void Dispose()
@@ -175,9 +171,6 @@ internal sealed partial class Shell
     }
 
     /// <summary>Waits until the node's card shows the state.</summary>
-    public TaskNodeViewModel WaitForState(string title, NodeState state)
-    {
+    public void WaitForState(string title, NodeState state) =>
         WaitUntil(() => NodeModel(title).State == state, $"\"{title}\" is {state} (it is {NodeModel(title).State}: {NodeModel(title).StatusLabel})");
-        return NodeModel(title);
-    }
 }

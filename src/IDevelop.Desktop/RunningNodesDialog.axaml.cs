@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using JetBrains.Annotations;
 
 namespace IDevelop.Desktop;
 
@@ -11,6 +12,7 @@ public enum RunningNodesChoice { StopAndLeave, KeepRunning }
 /// </summary>
 public partial class RunningNodesDialog : Window
 {
+    [UsedImplicitly]
     public RunningNodesDialog() => InitializeComponent();
 
     public RunningNodesDialog(string question) : this()

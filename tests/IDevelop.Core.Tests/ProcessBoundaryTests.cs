@@ -7,7 +7,7 @@ using IDevelop.Processes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
-using static IDevelop.TestSupport.SpawnedProcesses;
+using static IDevelop.Core.Tests.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests;
 
@@ -137,7 +137,7 @@ public sealed class ProcessBoundaryTests : IDisposable
     public async Task Cleanup_after_dispose_signals_nothing()
     {
         var pidFile = Path.Combine(_evidence, "released.pid");
-        using var child = Start(On().SpawnSleepingChild(pidFile).Hang());
+        var child = Start(On().SpawnSleepingChild(pidFile).Hang());
         var sleeper = await Sleeper(pidFile);
         child.Dispose();
 
@@ -195,28 +195,28 @@ public sealed class ProcessBoundaryTests : IDisposable
         Assert.Equal(1, LaunchMarkers.Runs(folder, client));
         var marker = Assert.Single(Directory.GetFiles(folder, "*.json"));
         Assert.StartsWith(child.Identity.Id + "-", Path.GetFileName(marker));
-        Assert.Equal(definition.Launch(request).Arguments.ToArray(), JsonSerializer.Deserialize<string[]>(File.ReadAllBytes(marker)));
+        Assert.Equal(definition.Launch(request).Arguments.ToArray(), JsonSerializer.Deserialize<string[]>(await File.ReadAllBytesAsync(marker)));
         Assert.Equal(ProcessMatch.Same, ProcessCheck.Check(child.Identity));
         Assert.False(File.Exists(ran));
 
         var protocol = definition.Protocol(request);
-        await Write(protocol.Start());
-        await Write(protocol.Read(client == ClientId.Codex ? """{"id":"init-1","result":{}}"""
+        await Write(child, protocol.Start());
+        await Write(child, protocol.Read(client == ClientId.Codex ? """{"id":"init-1","result":{}}"""
             : """{"type":"control_response","response":{"subtype":"success","request_id":"init-1","response":{}}}"""));
         if (client == ClientId.Codex)
         {
-            await Write(protocol.Read("""{"id":"thread-1","result":{"thread":{"id":"session-1"}}}"""));
+            await Write(child, protocol.Read("""{"id":"thread-1","result":{"thread":{"id":"session-1"}}}"""));
         }
 
         Assert.Equal(0, await child.WaitForExitAsync().WaitAsync(Patience));
-        Assert.Equal("ran", File.ReadAllText(ran));
+        Assert.Equal("ran", await File.ReadAllTextAsync(ran));
         Assert.Equal(1, LaunchMarkers.Runs(folder, client));
 
-        async Task Write(ProtocolOutput output)
+        static async Task Write(ChildProcess target, ProtocolOutput output)
         {
             foreach (var frame in output.Writes)
             {
-                await child.WriteStdinAsync(frame + "\n", close: false).WaitAsync(Patience);
+                await target.WriteStdinAsync(frame + "\n", close: false).WaitAsync(Patience);
             }
         }
     }

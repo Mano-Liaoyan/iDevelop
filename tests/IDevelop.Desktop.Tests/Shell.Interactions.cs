@@ -40,7 +40,7 @@ internal sealed partial class Shell
     /// <summary>The name of the highlighted row.</summary>
     public string? Highlighted() =>
         Window.GetVisualDescendants().OfType<Button>()
-            .SingleOrDefault(row => row.Classes.Contains("highlighted") && row.IsEffectivelyVisible) is { } row ? AutomationProperties.GetName(row) : null;
+            .SingleOrDefault(button => button.Classes.Contains("highlighted") && button.IsEffectivelyVisible) is { } row ? AutomationProperties.GetName(row) : null;
 
     /// <summary>The canvas point under a point of the window, at the editor's zoom.</summary>
     public Point CanvasPointAt(Point inWindow)

@@ -12,6 +12,11 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
     /// resuming <paramref name="session"/> when set, or why it cannot start. Pure, so the inspector's message before any
     /// click and the start itself agree.
     /// </summary>
+    /// <param name="node">The node that runs the turn.</param>
+    /// <param name="folder">The folder in which the turn runs.</param>
+    /// <param name="prompt">The prompt that the turn sends.</param>
+    /// <param name="session">The session to resume, or null to start a new session.</param>
+    /// <param name="clients">The status of each client on this machine.</param>
     /// <param name="skills">The skills the node's client lists in the folder, which a node with a skill choice needs.</param>
     public static (LaunchPlan? Plan, string? Problem) For(
         TaskDefinition node, string folder, string prompt, string? session, IReadOnlyDictionary<ClientId, ClientStatus> clients, SkillListing? skills)
@@ -59,7 +64,7 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
             return (null, $"Choose a model for {name}.");
         }
 
-        if (ready.Models.FirstOrDefault(model => model.Id == id) is not { } model)
+        if (ready.Models.FirstOrDefault(option => option.Id == id) is not { } model)
         {
             return (null, $"{name} does not offer {id}.");
         }

@@ -6,9 +6,6 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>The edits that the canvas's node actions build from one node.</summary>
 public sealed partial class TaskNodeViewModel
 {
-    /// <summary>The blueprint the node was placed from, as the workflow embeds it.</summary>
-    internal Blueprint Blueprint => _task.Blueprint;
-
     /// <summary>A copy of the node titled "{Title} copy", with its field values and settings.</summary>
     internal WorkflowEdit.PlaceNode CopyAs(TaskId id, CanvasPoint position) => new(id, _task.Blueprint, position)
     {

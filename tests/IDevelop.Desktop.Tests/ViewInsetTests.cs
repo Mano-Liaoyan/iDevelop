@@ -22,7 +22,7 @@ public sealed class ViewInsetTests : IDisposable
     private static double ChromeBottom(Shell shell) =>
         Math.Max(shell.Bounds(shell.Find<Border>("Breadcrumb")).Bottom, shell.Bounds(shell.Find<Button>("GenerateWorkflow")).Bottom);
 
-    private static Rect CardInWindow(Shell shell, string title) => shell.CardRect(title).Translate((Vector)shell.Bounds(shell.Editor).TopLeft);
+    private static Rect CardInWindow(Shell shell, string title) => shell.CardRect(title).Translate(shell.Bounds(shell.Editor).TopLeft);
 
     [AvaloniaFact]
     public void Fit_to_view_keeps_every_card_of_a_tall_workflow_below_the_breadcrumb_and_inside_the_canvas()

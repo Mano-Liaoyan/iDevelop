@@ -1,8 +1,6 @@
-using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using System.Text;
 using IDevelop.Git;
-using IDevelop.TestSupport;
 
 namespace IDevelop.Core.Tests.Git;
 
@@ -64,9 +62,9 @@ public sealed class MergeTreeTests
         var conflict = Assert.IsType<TreeMerge.Conflicted>(f.Open().MergeTrees(b, c, a));
         Assert.Equal(new[] { new StageEntry("100644", "573541ac9702dd3969c9bc859d2b91ec1f7e6e56", 1, "settings.txt"), new StageEntry("100644", "2e9833d602b8042bdd0e77f3a31aca12944ec21d", 2, "settings.txt"),
             new StageEntry("100644", "986c6e7523fb2a807d8e3526a127e1ced5bc44e4", 3, "settings.txt") }, conflict.Stages);
-        Assert.Equal(new[] { "Auto-merging", "CONFLICT (contents)" }, conflict.Messages.Select(message => message.Type));
-        Assert.Equal(new[] { "Auto-merging settings.txt\n", "CONFLICT (content): Merge conflict in settings.txt\n" }, conflict.Messages.Select(message => message.Text));
-        Assert.Equal(new[] { "settings.txt", "settings.txt" }, conflict.Messages.SelectMany(message => message.Paths));
+        Assert.Equal(["Auto-merging", "CONFLICT (contents)"], conflict.Messages.Select(message => message.Type));
+        Assert.Equal(["Auto-merging settings.txt\n", "CONFLICT (content): Merge conflict in settings.txt\n"], conflict.Messages.Select(message => message.Text));
+        Assert.Equal(["settings.txt", "settings.txt"], conflict.Messages.SelectMany(message => message.Paths));
         Assert.Contains("CONFLICT (content): Merge conflict in settings.txt\n", Encoding.UTF8.GetString(conflict.Stdout));
         Assert.Equal("", conflict.Stderr);
     }
@@ -127,12 +125,12 @@ public sealed class MergeTreeTests
         f.Git("checkout", "-q", "-b", "c", a.Hex);
         WriteRaw("0\n1\n2\n3\n4\n5\n6\n7\nc=1\n");
         var c = f.Commit("c");
-        Assert.Equal(0, Unlink([.. Encoding.UTF8.GetBytes(f.Folder + "/k"), 255, .. Encoding.UTF8.GetBytes(".txt"), 0]));
+        Assert.Equal(0, Unlink([.. Encoding.UTF8.GetBytes(f.Folder + "/k"), 255, .. ".txt"u8, 0]));
         Assert.Equal("7e41f9122663f203d727f7b2eeeba497522df4ba", Assert.IsType<TreeMerge.Clean>(f.Open().MergeTrees(b, c, a)).Tree.Hex);
 
         void WriteRaw(string text)
         {
-            byte[] path = [.. Encoding.UTF8.GetBytes(f.Folder + "/k"), 255, .. Encoding.UTF8.GetBytes(".txt"), 0];
+            byte[] path = [.. Encoding.UTF8.GetBytes(f.Folder + "/k"), 255, .. ".txt"u8, 0];
             var file = Fopen(path, "wb");
             Assert.NotEqual(IntPtr.Zero, file);
             try

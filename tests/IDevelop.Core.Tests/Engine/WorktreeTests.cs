@@ -33,7 +33,7 @@ public sealed class WorktreeTests : IAsyncLifetime
         Assert.Equal([_f.Start], _f.Parents(commit));
         Assert.Equal("A\n", _f.Files(commit)["a.txt"]);
         Assert.Equal(commit, _f.Repository.Git("rev-parse", $"idp/{_f.Workflow.Id}/{a}").Trim());
-        Assert.Equal(Path.GetFullPath(_f.Worktree(a)), Path.GetFullPath(File.ReadAllText(_f.File("a.cwd")).Trim()));
+        Assert.Equal(Path.GetFullPath(_f.Worktree(a)), Path.GetFullPath((await File.ReadAllTextAsync(_f.File("a.cwd"))).Trim()));
         Assert.Equal(_f.Start, _f.Head);
         Assert.False(File.Exists(Path.Combine(_f.Project, "a.txt")));
     }
@@ -74,7 +74,7 @@ public sealed class WorktreeTests : IAsyncLifetime
 
         await Until<NodeState.Completed>(engine, c);
         Assert.Null(engine.History(p)[0].Commit);
-        Assert.Equal(Path.GetFullPath(_f.Project), Path.GetFullPath(File.ReadAllText(_f.File("p.cwd")).Trim()));
+        Assert.Equal(Path.GetFullPath(_f.Project), Path.GetFullPath((await File.ReadAllTextAsync(_f.File("p.cwd"))).Trim()));
         Assert.False(Directory.Exists(_f.Worktree(p)));
         var merge = Assert.Single(_f.Parents(engine.History(c)[0].Commit!));
         Assert.Equal([engine.History(a)[0].Commit!, engine.History(b)[0].Commit!], _f.Parents(merge));
@@ -98,11 +98,11 @@ public sealed class WorktreeTests : IAsyncLifetime
         Assert.Equal(new NodeState.InputRequired(NodeState.Conflict), await Until<NodeState.InputRequired>(engine, c));
         Assert.Contains("x.txt", Assert.IsType<NodeEntry.Waiting>(engine.Entries(c)[^1]).Text, StringComparison.Ordinal);
         var file = Path.Combine(_f.Worktree(c), "x.txt");
-        Assert.Contains("<<<<<<<", File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.Contains("<<<<<<<", await File.ReadAllTextAsync(file), StringComparison.Ordinal);
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => engine.MarkResolved(c));
         Assert.Contains("x.txt", refused.Message, StringComparison.Ordinal);
 
-        File.WriteAllText(file, "A and B\n");
+        await File.WriteAllTextAsync(file, "A and B\n");
         await engine.MarkResolved(c);
 
         await Until<NodeState.Completed>(engine, c);
@@ -140,14 +140,14 @@ public sealed class WorktreeTests : IAsyncLifetime
         _f.Connect(a, c);
         _f.Connect(b, c);
         var gate = _f.File("gate");
-        File.WriteAllText(gate, "");
+        await File.WriteAllTextAsync(gate, "");
         _f.Install(On().Choose(
             (Fresh("A"), Reply("s-a", "Report A", On().WaitForFile(gate).Write("x.txt", "A\n"))),
             (Fresh("B"), Reply("s-b", "Report B", On().Write("x.txt", "B\n")))));
         var engine = await _f.Open();
         await engine.RunWorkflow();
         await Until<NodeState.InputRequired>(engine, c);
-        File.WriteAllText(Path.Combine(_f.Worktree(c), "x.txt"), "A and B\n");
+        await File.WriteAllTextAsync(Path.Combine(_f.Worktree(c), "x.txt"), "A and B\n");
         File.Delete(gate);
         await engine.Retry(a);
 
@@ -282,10 +282,10 @@ public sealed class WorktreeTests : IAsyncLifetime
 
         await Until<NodeState.Completed>(engine, a);
         var checkout = Path.Combine(project, ".worktrees", _f.Workflow.Id.ToString(), a.ToString());
-        Assert.Equal(Path.Combine(checkout, "services", "api"), File.ReadAllText(_f.File("a.cwd")).Trim());
+        Assert.Equal(Path.Combine(checkout, "services", "api"), (await File.ReadAllTextAsync(_f.File("a.cwd"))).Trim());
         Assert.Equal("A\n", _f.Files(engine.History(a)[0].Commit!)["services/api/a.txt"]);
         await engine.MergeIntoBranch();
-        Assert.Equal("A\n", File.ReadAllText(Path.Combine(project, "a.txt")));
+        Assert.Equal("A\n", await File.ReadAllTextAsync(Path.Combine(project, "a.txt")));
     }
 
     [Fact]
@@ -296,7 +296,7 @@ public sealed class WorktreeTests : IAsyncLifetime
         var engine = await _f.Open();
         await engine.Run(a);
         await Until<NodeState.Completed>(engine, a);
-        File.WriteAllText(Path.Combine(_f.Worktree(a), "stray.txt"), "left over\n");
+        await File.WriteAllTextAsync(Path.Combine(_f.Worktree(a), "stray.txt"), "left over\n");
 
         await engine.Retry(a);
 

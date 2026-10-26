@@ -37,14 +37,13 @@ public sealed class ClientDirectoryTests : IDisposable
         Assert.Equal(["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"], Ids(claude));
         Assert.Equal(["gpt-6.1-sol", "gpt-6-sol", "gpt-5.5"], Ids(directory.Current[ClientId.Codex]));
         Assert.Equal(
-            new (string, string?)[]
-            {
+            [
                 ("deepseek/deepseek-flash", null),
                 ("deepseek/deepseek-v4-pro", null),
                 ("openai-codex/gpt-5.5", PiCodexSignedOut),
                 ("openai-codex/gpt-6-astra", PiCodexSignedOut),
                 ("openai-codex/gpt-6-luna", PiCodexSignedOut),
-            },
+            ],
             Assert.IsType<ClientStatus.Ready>(directory.Current[ClientId.Pi]).Models.Select(model => (model.Id, model.Problem)));
         Assert.Equal(
             ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-pro", "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b"],

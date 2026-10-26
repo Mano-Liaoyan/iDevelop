@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using IDevelop.Clients;
+using JetBrains.Annotations;
 
 namespace IDevelop.Processes;
 
@@ -17,7 +18,7 @@ internal abstract record Containment
     public sealed record Job : Containment;
 
     /// <summary>The process group a Linux or macOS workflow turn leads. Its ID is the root's process ID.</summary>
-    public sealed record Group(int Id) : Containment
+    public sealed record Group([UsedImplicitly] int Id) : Containment
     {
         /// <summary>Why the turn could not have a session of its own, or null when it does.</summary>
         public string? Detail { get; init; }
@@ -26,7 +27,7 @@ internal abstract record Containment
     public sealed record None(string Reason) : Containment;
 }
 
-internal sealed record CleanupStep(DateTimeOffset At, string Action, string? Failure);
+internal sealed record CleanupStep([UsedImplicitly] DateTimeOffset At, string Action, string? Failure);
 
 internal enum CleanupResult { Completed, Incomplete }
 
@@ -57,7 +58,6 @@ internal sealed class ChildProcess : IDisposable
     private readonly Process? _process;
     private readonly ProcessJob? _job;
     private readonly ProcessGroup? _group;
-    private readonly StreamWriter? _groupInput;
     private readonly StreamReader? _groupOutput;
     private readonly StreamReader? _groupError;
     private Task _stdout = Task.CompletedTask;
@@ -78,7 +78,7 @@ internal sealed class ChildProcess : IDisposable
     private ChildProcess(ProcessGroup group, ProcessLifetime lifetime)
     {
         _group = group;
-        _groupInput = new StreamWriter(group.Input, Utf8, PipeBuffer) { AutoFlush = true };
+        Input = new StreamWriter(group.Input, Utf8, PipeBuffer) { AutoFlush = true };
         _groupOutput = new StreamReader(group.Output, Utf8, detectEncodingFromByteOrderMarks: true, PipeBuffer);
         _groupError = new StreamReader(group.Error, Utf8, detectEncodingFromByteOrderMarks: true, PipeBuffer);
         Identity = group.Identity;
@@ -107,7 +107,7 @@ internal sealed class ChildProcess : IDisposable
     /// <exception cref="LaunchException">The command did not start, or a batch shim was given an unsafe argument.</exception>
     public static ChildProcess Start(ResolvedCommand command, IReadOnlyList<string> arguments, string workingDirectory, ProcessLifetime lifetime)
     {
-        if (command.UnsafeArgument(arguments) is { } argument || command.Launch(arguments) is not { } launch)
+        if (command.UnsafeArgument(arguments) is not null || command.Launch(arguments) is not { } launch)
         {
             throw new LaunchException(
                 $"{command.Path} runs through cmd.exe, which could misread the argument {command.UnsafeArgument(arguments)}, so iDevelop did not start it.");
@@ -186,7 +186,7 @@ internal sealed class ChildProcess : IDisposable
         }
     }
 
-    public async Task<bool> WriteInputAsync(string text, bool close, TimeSpan timeout, CancellationToken ct)
+    public async Task WriteInputAsync(string text, bool close, TimeSpan timeout, CancellationToken ct)
     {
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
         bounded.CancelAfter(timeout);
@@ -198,12 +198,9 @@ internal sealed class ChildProcess : IDisposable
             {
                 Input.Close();
             }
-
-            return true;
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException or OperationCanceledException)
         {
-            return false;
         }
     }
 
@@ -214,9 +211,15 @@ internal sealed class ChildProcess : IDisposable
 
     public async Task<int> WaitForExitAsync()
     {
-        if (_group is not null)
+        Task<int>? groupExit;
+        lock (_gate)
         {
-            return await _group.Exited;
+            groupExit = _group?.Exited;
+        }
+
+        if (groupExit is not null)
+        {
+            return await groupExit;
         }
 
         await _process!.WaitForExitAsync();
@@ -301,7 +304,7 @@ internal sealed class ChildProcess : IDisposable
         }
     }
 
-    private StreamWriter Input => _groupInput ?? _process!.StandardInput;
+    private StreamWriter Input { get => field ?? _process!.StandardInput; init; }
 
     private static async Task ReadLinesAsync(StreamReader reader, Action<string> onLine)
     {

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
+using JetBrains.Annotations;
 
 namespace IDevelop.Clients;
 
@@ -24,7 +25,7 @@ internal abstract record AgentEvent
     public sealed record SessionStarted(string SessionId) : AgentEvent;
 
     /// <summary>The model or reasoning level the client says it used. A null field leaves the previous value.</summary>
-    public sealed record Reported(string? Model, string? Reasoning) : AgentEvent;
+    public sealed record Reported([UsedImplicitly] string? Model, [UsedImplicitly] string? Reasoning) : AgentEvent;
 
     /// <summary>A complete assistant message. The last one is the result when the verdict carries no text.</summary>
     public sealed record Message(string Text) : AgentEvent
@@ -46,7 +47,7 @@ internal abstract record AgentEvent
 
     public sealed record PermissionRequested(string RequestId, PermissionAction Action) : AgentEvent;
 
-    public sealed record RequestClosed(string RequestId) : AgentEvent;
+    public sealed record RequestClosed([UsedImplicitly] string RequestId) : AgentEvent;
 
     public sealed record ToolStarted(string Tool, string? Detail) : AgentEvent;
 

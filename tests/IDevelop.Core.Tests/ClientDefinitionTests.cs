@@ -306,7 +306,7 @@ public class ClientDefinitionTests
 
         var probes = ClientCatalog.Get(ClientId.Pi).Readiness([.. catalog]);
 
-        Assert.Equal(new string?[] { "deepseek", "openai-codex" }, probes.Select(probe => probe.Provider));
+        Assert.Equal(["deepseek", "openai-codex"], probes.Select(probe => probe.Provider));
         Assert.Equal(["auth", "check", "--provider", "openai-codex", "--json"], probes[1].Probe.Arguments.ToArray());
         Assert.Null(probes[0].Problem(new ProbeOutput(0, """{"status":"ready"}""", "", false)));
         Assert.Equal(

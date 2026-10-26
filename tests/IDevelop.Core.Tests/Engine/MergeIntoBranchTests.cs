@@ -1,5 +1,4 @@
 using IDevelop.Engine;
-using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Engine.EngineFixture;
 using static IDevelop.TestSupport.FakeRule;
@@ -76,7 +75,7 @@ public sealed class MergeIntoBranchTests : IAsyncLifetime
         Assert.False(engine.CanMergeIntoBranch);
         Assert.Equal(["README.md", "a.txt", "b.txt", "c.txt"], _f.Files("HEAD").Keys.Order(StringComparer.Ordinal));
         Assert.Equal("refs/heads/main", _f.Repository.Git("symbolic-ref", "HEAD").Trim());
-        Assert.Equal("C\n", File.ReadAllText(Path.Combine(_f.Project, "c.txt")));
+        Assert.Equal("C\n", await File.ReadAllTextAsync(Path.Combine(_f.Project, "c.txt")));
     }
 
     [Fact]

@@ -7,7 +7,6 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Avalonia;
-using IDevelop.Clients;
 using IDevelop.Desktop.Inspector;
 using IDevelop.Desktop.Theme;
 using IDevelop.TestSupport;
@@ -49,7 +48,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
         shell.RunNode("Design");
-        shell.WaitForState("Design", IDevelop.Desktop.Canvas.NodeState.InputRequired);
+        shell.WaitForState("Design", Canvas.NodeState.InputRequired);
         var inspector = shell.Find<Control>("Inspector");
         var box = shell.InView<TextBox>("Composer");
         shell.Render();
@@ -183,7 +182,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.SizeInspector(280);
 
         var notes = shell.Find<Control>("Palette").GetVisualDescendants().OfType<TextBlock>()
-            .Where(text => text.IsEffectivelyVisible && text.Text == "None yet. Derive a blueprint to add one.").ToArray();
+            .Where(text => text is { IsEffectivelyVisible: true, Text: "None yet. Derive a blueprint to add one." }).ToArray();
 
         Assert.Equal([0, 0], notes.Select(note => note.TextLayout.TextLines.Count(line => line.HasCollapsed)));
     }
@@ -213,7 +212,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
-            .Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Buttons)).ToArray();
+            .Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons) }).ToArray();
 
         Assert.Equal(
             ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Status", "Type", "Version", "Description"],
@@ -375,7 +374,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var content = shell.Bounds(shell.Find<Control>("Inspector")).Left + Inset;
         var rows = shell.Find<Control>("BlueprintEditor").GetVisualDescendants().OfType<InspectorRow>()
-            .Where(row => row.IsEffectivelyVisible && row.Layout is RowLayout.Columns or RowLayout.Stacked).ToArray();
+            .Where(row => row is { IsEffectivelyVisible: true, Layout: RowLayout.Columns or RowLayout.Stacked }).ToArray();
         Assert.Contains(rows, row => row.Label == "Key");
         Assert.All(rows, row => Assert.Equal((row.Label, content), (row.Label, Math.Round(shell.Bounds(Label(row)).Left, 1))));
         Assert.All(rows.Where(row => Shown(row, ":stacked")), row => Assert.Equal((row.Label, content), (row.Label, Math.Round(shell.Bounds(Presenter(row)).Left, 1))));
@@ -589,7 +588,7 @@ public sealed class InspectorLayoutTests : IDisposable
         // A scroll bar lays out at its expanded width and only draws thinner while collapsed, so its bounds are where it
         // expands to, and it overlays the content, which never moves for it.
         var bar = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<ScrollBar>()
-            .Single(scroll => scroll.IsEffectivelyVisible && scroll.Orientation == Avalonia.Layout.Orientation.Vertical);
+            .Single(scroll => scroll is { IsEffectivelyVisible: true, Orientation: Avalonia.Layout.Orientation.Vertical });
         Assert.Equal(right, shell.Bounds(bar).Right, 0.5);
         Assert.True(shell.Bounds(bar).Left >= right - Inset + 2, $"The bar starts {right - shell.Bounds(bar).Left} px from the edge.");
         Assert.True(shell.Bounds(shell.Find<Button>("RevertInstructions")).Right <= shell.Bounds(bar).Left - 2);
@@ -613,7 +612,7 @@ public sealed class InspectorLayoutTests : IDisposable
             Assert.Equal((size, "actions at 12, values at 64"), (size, Edges(shell)));
             AssertNothingCutShort(shell);
             var shown = inspector.GetVisualDescendants().OfType<Control>()
-                .Where(control => control.IsEffectivelyVisible && control.Bounds.Width > 0 && control.FindAncestorOfType<InspectorRow>() is { } row
+                .Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 } && control.FindAncestorOfType<InspectorRow>() is not null
                     && control.FindAncestorOfType<TextBox>() is null && control.FindAncestorOfType<ComboBox>() is null).ToArray();
             Assert.All(shown, control => Assert.True(shell.Bounds(control).Right <= right - Inset + 0.5,
                 $"At {size} px, a {control.GetType().Name} ends {right - shell.Bounds(control).Right} px from the edge."));
@@ -629,11 +628,11 @@ public sealed class InspectorLayoutTests : IDisposable
         static bool Paragraph(Control control) => control is TextBlock { Name: not "PART_Label" }
             && control.FindAncestorOfType<InspectorRow>() is { Layout: not RowLayout.Buttons }
             && control.FindAncestorOfType<Button>() is null
-            && !control.GetVisualAncestors().OfType<Control>().Any(ancestor => ancestor.Name == "PART_Trail");
+            && control.GetVisualAncestors().OfType<Control>().All(ancestor => ancestor.Name != "PART_Trail");
     }
 
     /// <summary>The window's x of the first pixel right of <paramref name="control"/>'s rightmost drawn pixel.</summary>
-    internal static double InkRight(Shell shell, Control control)
+    private static double InkRight(Shell shell, Control control)
     {
         // A click presses a button, which Fluent scales down and eases back, so a section's header and its count move for a
         // few frames after its fold. The pixels are read once nothing above the control is still scaled.
@@ -647,7 +646,7 @@ public sealed class InspectorLayoutTests : IDisposable
         return Math.Floor(bounds.X) + last + 1;
     }
 
-    private static bool Shown(InspectorRow row, string pseudoClass) => ((Avalonia.Controls.IPseudoClasses)row.Classes).Contains(pseudoClass);
+    private static bool Shown(InspectorRow row, string pseudoClass) => ((IPseudoClasses)row.Classes).Contains(pseudoClass);
 
     private static TextBlock Label(InspectorRow row) => row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Label");
 
@@ -668,7 +667,7 @@ public sealed class InspectorLayoutTests : IDisposable
     private static InspectorRow[] BesideRows(Shell shell) =>
     [
         .. shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
-            .Where(row => row.IsEffectivelyVisible && row.Layout == RowLayout.Columns),
+            .Where(row => row is { IsEffectivelyVisible: true, Layout: RowLayout.Columns }),
     ];
 
     /// <summary>The distinct left insets, in px from the inspector's edge, of the labels and the values that sit beside them.</summary>
@@ -685,7 +684,7 @@ public sealed class InspectorLayoutTests : IDisposable
     {
         var inspector = shell.Bounds(shell.Find<Control>("Inspector"));
         var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
-            .Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Buttons or RowLayout.Title)).ToArray();
+            .Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons or RowLayout.Title) }).ToArray();
         Assert.Equal(labels, rows.Select(row => row.Label));
         foreach (var row in rows)
         {
@@ -704,7 +703,7 @@ public sealed class InspectorLayoutTests : IDisposable
     {
         var inspector = shell.Find<Control>("Inspector");
         var right = shell.Bounds(inspector).Right;
-        var shown = inspector.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible && control.Bounds.Width > 0).ToArray();
+        var shown = inspector.GetVisualDescendants().OfType<Control>().Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 }).ToArray();
         bool InRow(Control control) => control.FindAncestorOfType<InspectorRow>() is not null;
         string? Id(Control control) => AutomationProperties.GetAutomationId(control);
 

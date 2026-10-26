@@ -5,7 +5,7 @@ internal sealed class TempFolder(string? root = null) : IDisposable
     private readonly string _root = root ?? NewRoot();
 
     // The app names a folder as its file system spells it, which TEMP need not (C:\TEMP for C:\Temp).
-    public static readonly string Temporary = IDevelop.Projects.ProjectFolders.OnDisk(System.IO.Path.GetTempPath());
+    public static readonly string Temporary = Projects.ProjectFolders.OnDisk(System.IO.Path.GetTempPath());
 
     /// <summary>A new folder's path under the temporary folder. Nothing creates it yet.</summary>
     public static string NewRoot() => System.IO.Path.Combine(Temporary, "idevelop-tests", Guid.NewGuid().ToString("N"));

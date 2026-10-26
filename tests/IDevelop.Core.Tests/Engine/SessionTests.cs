@@ -182,7 +182,7 @@ public sealed class SessionTests : IAsyncLifetime
         var log = new NodeLog(_f.Project, a);
         log.Append(new NodeEntry.TurnStarted(basis, null));
         log.Append(new NodeEntry.Agent(new AgentEvent.SessionStarted("s-a")));
-        File.AppendAllText(NodeLog.PathOf(_f.Project, a), """{"entry":"agent","event":{"type":"mess""");
+        await File.AppendAllTextAsync(NodeLog.PathOf(_f.Project, a), """{"entry":"agent","event":{"type":"mess""");
 
         var engine = await _f.Open();
 
@@ -192,6 +192,6 @@ public sealed class SessionTests : IAsyncLifetime
         await using var reopened = new WorkflowEngine(_f.Project, _f.Workflow, await _f.Fakes.DiscoverAsync());
         Assert.Equal((new NodeState.Completed(), engine.History(a)[0]), (reopened.State(a), Assert.Single(reopened.History(a))));
         Assert.Contains(new NodeEntry.PersonMessage("Go on."), reopened.Entries(a));
-        Assert.Contains("nodes/\n", File.ReadAllText(Path.Combine(_f.Project, ".idp", ".gitignore")), StringComparison.Ordinal);
+        Assert.Contains("nodes/\n", await File.ReadAllTextAsync(Path.Combine(_f.Project, ".idp", ".gitignore")), StringComparison.Ordinal);
     }
 }

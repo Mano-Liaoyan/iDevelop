@@ -29,7 +29,7 @@ public abstract record LinkTarget(string Destination)
 public sealed class ConversationLinkRouter
 {
     /// <summary>The router for the links inside a control. Every message under the conversation view inherits it.</summary>
-    public static readonly AttachedProperty<ConversationLinkRouter?> RouterProperty =
+    private static readonly AttachedProperty<ConversationLinkRouter?> RouterProperty =
         AvaloniaProperty.RegisterAttached<ConversationLinkRouter, Control, ConversationLinkRouter?>("Router", inherits: true);
 
     private readonly Func<Uri, Task<bool>> _launch;

@@ -8,7 +8,6 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using Avalonia;
-using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -25,7 +24,6 @@ namespace IDevelop.Desktop.Tests;
 [Collection(ProcessCollection.Name)]
 public sealed class CardTests : IDisposable
 {
-    private const string Session = "01a108d7-464d-77a3-8908-a36f38ce6c14";
     private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" };
     private static readonly TaskId Design = TestTasks.Design;
     private static readonly TaskId Build = TestTasks.Build;
@@ -55,7 +53,7 @@ public sealed class CardTests : IDisposable
     }
 
     private static PlaceNode Place(TaskId id, Blueprint blueprint, string title, double x, double y, ExecutionSettings? execution = null) =>
-        new(id, blueprint, new CanvasPoint(x, y)) { Title = title, Settings = new NodeSettings(execution, blueprint.Defaults.Conversation) };
+        new(id, blueprint, new CanvasPoint(x, y)) { Title = title, Settings = blueprint.Defaults with { Execution = execution } };
 
     /// <summary>A project with one node of each kind, the last from the project's library.</summary>
     private string EachKind()

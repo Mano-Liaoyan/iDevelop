@@ -27,7 +27,10 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     private readonly ConversationLine.Agent? _agent;
     private readonly ConversationViewModel _owner;
 
+    /// <param name="id">The line's place in the conversation.</param>
+    /// <param name="text">The whole message source, result block included.</param>
     /// <param name="agent">The agent's line, or null for the person's message.</param>
+    /// <param name="owner">The conversation that shows the message.</param>
     internal MessageItemViewModel(int id, string text, ConversationLine.Agent? agent, ConversationViewModel owner) : base(id)
     {
         _text = text;
@@ -38,10 +41,10 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 
     public bool IsPerson => _agent is null;
 
-    public bool IsAgent => _agent is not null;
+    private bool IsAgent => _agent is not null;
 
     /// <summary>A subagent of the node's agent wrote it, so it shows as the subagent's own.</summary>
-    public bool IsSubagent => _agent?.Subagent is not null;
+    private bool IsSubagent => _agent?.Subagent is not null;
 
     public string AuthorLabel => _agent switch
     {
@@ -72,14 +75,10 @@ public sealed class ActivityItemViewModel(int id, ConversationLine.Activity acti
 
     /// <summary>The first line, which the row shows. The tooltip holds all of it.</summary>
     public string Line => activity.Text.Split('\n', 2)[0];
-
-    public bool IsTool => activity.IsTool;
 }
 
 public sealed class MarkerItemViewModel(int id, ConversationLine.Marker marker) : ConversationItemViewModel(id)
 {
-    public MarkerKind Kind => marker.Kind;
-
     /// <summary>A short heading for the boundary or event, such as "New session" or "Failed".</summary>
     public string Title => marker.Kind switch
     {
@@ -100,5 +99,5 @@ public sealed class MarkerItemViewModel(int id, ConversationLine.Marker marker) 
     public bool IsProblem => marker.Kind is MarkerKind.Failed or MarkerKind.Dropped;
 
     private static string? WaitingDetail(string? why) =>
-        why is null ? null : Canvas.NodeStates.Detail(new IDevelop.Engine.NodeState.InputRequired(why));
+        why is null ? null : Canvas.NodeStates.Detail(new NodeState.InputRequired(why));
 }

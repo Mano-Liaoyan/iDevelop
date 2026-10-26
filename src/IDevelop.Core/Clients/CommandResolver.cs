@@ -82,15 +82,15 @@ internal static partial class NpmShim
         }
 
         ImmutableArray<string> flags = [.. match.Groups["flags"].Value.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)];
-        var folder = System.IO.Path.GetDirectoryName(shim)!;
-        var script = System.IO.Path.Combine(folder,
-            match.Groups["script"].Value.Replace('\\', System.IO.Path.DirectorySeparatorChar).TrimStart(System.IO.Path.DirectorySeparatorChar));
+        var folder = Path.GetDirectoryName(shim)!;
+        var script = Path.Combine(folder,
+            match.Groups["script"].Value.Replace('\\', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar));
         if (flags.Any(flag => !Flag().IsMatch(flag)) || !File.Exists(script))
         {
             return null;
         }
 
-        var beside = System.IO.Path.Combine(folder, "node.exe");
+        var beside = Path.Combine(folder, "node.exe");
         return (File.Exists(beside) ? beside : nodeOnPath()) is { } node ? new NodeScript(node, [.. flags, script]) : null;
     }
 
@@ -135,6 +135,7 @@ public sealed class CommandResolver
     private Lazy<Task<ImmutableArray<string>>> ReadFullyQualifiedFolders() =>
         new(async () => [.. (await _readSearchPath()).Where(Path.IsPathFullyQualified)]);
 
+    /// <param name="searchPath">The folders to search for a command, in order.</param>
     /// <param name="extensions">Windows' PATHEXT entries, tried in order. Empty elsewhere, where a file needs an execute bit.</param>
     public static CommandResolver Create(IReadOnlyList<string> searchPath, IReadOnlyList<string> extensions)
     {

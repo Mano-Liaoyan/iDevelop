@@ -70,7 +70,7 @@ public sealed partial class TaskNodeViewModel
     /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the inspector
     /// offers both in one button.
     /// </summary>
-    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && Proposal is { HasItems: true } && Waits(IDevelop.Engine.NodeState.Reply);
+    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && Proposal is { HasItems: true } && Waits(Engine.NodeState.Reply);
 
     /// <summary>Accepts the proposal, and once it is accepted, approves the planner's reply as its result.</summary>
     public ICommand AcceptAndFinishCommand => _acceptAndFinish!;

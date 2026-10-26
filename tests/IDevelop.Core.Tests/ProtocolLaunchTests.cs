@@ -73,7 +73,7 @@ public sealed class ProtocolLaunchTests
     [Fact]
     public void A_skill_choice_reaches_claude_code_as_its_initialize_allow_list_on_every_turn()
     {
-        foreach (var session in new string?[] { null, "session-1" })
+        foreach (var session in new[] { null, "session-1" })
         {
             var request = new LaunchRequest("m", "high", "banana") { ResumeSession = session, Skills = new SkillLaunch([Tdd], [ImageGen]) };
 
@@ -89,7 +89,8 @@ public sealed class ProtocolLaunchTests
     [Fact]
     public void A_skill_choice_reaches_codex_as_the_skills_it_turns_off_in_the_threads_configuration()
     {
-        foreach (var (session, method) in new[] { ((string?)null, "thread/start"), ("session-1", "thread/resume") })
+        (string? Session, string Method)[] launches = [(null, "thread/start"), ("session-1", "thread/resume")];
+        foreach (var (session, method) in launches)
         {
             var request = new LaunchRequest("m", "high", "banana") { ResumeSession = session, Skills = new SkillLaunch([Tdd], [ImageGen]) };
 

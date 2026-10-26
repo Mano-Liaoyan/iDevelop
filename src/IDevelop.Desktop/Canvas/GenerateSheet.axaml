@@ -55,20 +55,20 @@
           <TextBlock Classes="sheetCaption" Text="Planner" />
           <Grid ColumnDefinitions="88,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
             <TextBlock Classes="sheetLabel" Text="Client" />
-            <ComboBox Grid.Column="1"
+            <ComboBox Grid.Row="0" Grid.Column="1"
                       ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}"
                       PlaceholderText="Choose a client"
                       SelectionChanged="OnClientChosen"
                       AutomationProperties.AutomationId="GenerateClient"
                       AutomationProperties.Name="Client" />
-            <TextBlock Grid.Row="1" Classes="sheetLabel" Text="Model" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="sheetLabel" Text="Model" />
             <ComboBox Grid.Row="1" Grid.Column="1"
                       ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}"
                       PlaceholderText="Choose a model"
                       SelectionChanged="OnModelChosen"
                       AutomationProperties.AutomationId="GenerateModel"
                       AutomationProperties.Name="Model" />
-            <TextBlock Grid.Row="2" Classes="sheetLabel" Text="Reasoning" IsVisible="{Binding HasReasoning}" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="sheetLabel" Text="Reasoning" IsVisible="{Binding HasReasoning}" />
             <ComboBox Grid.Row="2" Grid.Column="1" IsVisible="{Binding HasReasoning}"
                       ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}"
                       SelectionChanged="OnReasoningChosen"

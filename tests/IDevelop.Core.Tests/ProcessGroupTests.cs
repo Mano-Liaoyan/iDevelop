@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using IDevelop.Clients;
 using IDevelop.Processes;
 using IDevelop.TestSupport;
-using static IDevelop.TestSupport.SpawnedProcesses;
+using static IDevelop.Core.Tests.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests;
 
@@ -96,7 +96,7 @@ public sealed class ProcessGroupTests : IDisposable
         {
             _spawned.Add(child.Identity.Id);
             Assert.Equal(0, await child.WaitForExitAsync().WaitAsync(Patience));
-            var ids = File.ReadAllText(session).Split(' ').Select(id => int.Parse(id, CultureInfo.InvariantCulture)).ToArray();
+            var ids = (await File.ReadAllTextAsync(session)).Split(' ').Select(id => int.Parse(id, CultureInfo.InvariantCulture)).ToArray();
             Assert.Equal(child.Identity.Id, ids[0]);
             if (launch == "workflow")
             {
@@ -329,11 +329,11 @@ public sealed class ProcessGroupTests : IDisposable
         Assert.Equal(0, await child.WaitForExitAsync().WaitAsync(Patience));
         await Task.Delay(100);
 
-        using (var zombie = Process.GetProcessById(child.Identity.Id))
+        using (Process.GetProcessById(child.Identity.Id))
         {
             if (OperatingSystem.IsLinux())
             {
-                var stat = File.ReadAllText($"/proc/{child.Identity.Id}/stat");
+                var stat = await File.ReadAllTextAsync($"/proc/{child.Identity.Id}/stat");
                 Assert.Equal('Z', stat[stat.LastIndexOf(')') + 2]);
             }
         }

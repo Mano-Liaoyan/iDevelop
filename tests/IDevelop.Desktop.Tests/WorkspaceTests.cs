@@ -23,8 +23,6 @@ namespace IDevelop.Desktop.Tests;
 [Collection(ProcessCollection.Name)]
 public sealed class WorkspaceTests : IDisposable
 {
-    private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" };
-
     private readonly TempFolder _temp = AppTempFolder.New();
     private readonly FakeClients _fakes;
     private readonly string _gate;
@@ -214,7 +212,7 @@ public sealed class WorkspaceTests : IDisposable
     /// </summary>
     private static void WaitUntilLetGo(Shell shell, string folder) => shell.WaitUntil(() =>
     {
-        using var free = IDevelop.Engine.ProjectLock.TryTake(folder);
+        using var free = Engine.ProjectLock.TryTake(folder);
         return free is not null;
     }, "the window lets the closed project go");
 
@@ -509,7 +507,7 @@ public sealed class WorkspaceTests : IDisposable
         (bool Listed, string? Shown)? whenStopped = null;
         closing.Workflows[0].Engine.NodeChanged += (_, state) =>
         {
-            if (state is not IDevelop.Engine.NodeState.Running)
+            if (state is not Engine.NodeState.Running)
             {
                 whenStopped ??= (window.Projects.Contains(closing), window.Canvas?.Project.Name);
             }

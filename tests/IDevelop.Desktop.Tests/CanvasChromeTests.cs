@@ -118,12 +118,12 @@ public sealed class CanvasChromeTests : IDisposable
         var transcript = shell.Bounds(shell.Find<Control>("TranscriptScroller"));
         Assert.True(transcript.Height >= ConversationView.MinTranscriptHeight - 0.5, $"The transcript is {transcript.Height} px tall.");
         var header = Shell.Around(shell.Find<TextBlock>("ConversationTitle"), "conversationHeader");
-        Assert.All(header.GetVisualDescendants().OfType<SpillRow>(), row => Assert.True(row.IsMeasureValid && row.IsArrangeValid));
+        Assert.All(header.GetVisualDescendants().OfType<SpillRow>(), row => Assert.True(row is { IsMeasureValid: true, IsArrangeValid: true }));
         var lines = Lines(header.GetVisualDescendants().OfType<Control>()
             .Where(control => AutomationProperties.GetAutomationId(control) is "ConversationTitle" or "ConversationStatus"
                 or "ConversationLayout" or "CloseConversation" or "ClientLimitationsInfo")
-            .Where(control => control.IsEffectivelyVisible && control.Bounds.Width > 0)
-            .Select(control => shell.Bounds(control)));
+            .Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 })
+            .Select(shell.Bounds));
         Assert.True(lines <= 2, $"The docked header has {lines} lines.");
         // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit behind a glyph.
         Assert.False(shell.Find<Control>("ConversationBreadcrumb").IsEffectivelyVisible);
@@ -279,7 +279,7 @@ public sealed class CanvasChromeTests : IDisposable
     /// <summary>The lowest edge of the top row's controls and the highest edge of the bottom row's.</summary>
     private static (double Top, double Bottom) Rows(Shell shell) =>
         (new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "RunWorkflow", "Status" }.Where(shell.ShowsAny).Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom),
-         new Control[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating"), shell.Find<Control>("WorkflowRunBar") }
+         new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating"), shell.Find<Control>("WorkflowRunBar") }
             .Where(control => control.IsEffectivelyVisible).Min(control => shell.Bounds(control).Top));
 
     /// <summary>The cards and the proposal's ghost cards as they show, at the editor's zoom.</summary>
@@ -324,17 +324,21 @@ public sealed class CanvasChromeTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
         var canvas = shell.Window.ViewModel.Canvas!;
-        canvas.PlaceInView(IDevelop.Workflows.BuiltInBlueprints.Implement);
-        canvas.PlaceInView(IDevelop.Workflows.BuiltInBlueprints.Implement);
+        canvas.PlaceInView(Workflows.BuiltInBlueprints.Implement);
+        canvas.PlaceInView(Workflows.BuiltInBlueprints.Implement);
         shell.Window.ViewModel.UndoCommand.Execute(null);
         shell.Render();
         var (undo, redo, save) = (shell.Find<Button>("Undo"), shell.Find<Button>("Redo"), shell.Find<Button>("Save"));
         Assert.True(undo.IsEffectivelyEnabled && redo.IsEffectivelyEnabled && save.IsEffectivelyEnabled);
         Assert.True(shell.Bounds(undo).Right <= shell.Bounds(redo).Left && shell.Bounds(redo).Right <= shell.Bounds(save).Left);
 
-        Assert.Same(redo, KeyboardNavigationHandler.GetNext(undo, NavigationDirection.Next));
-        Assert.Same(save, KeyboardNavigationHandler.GetNext(redo, NavigationDirection.Next));
-        Assert.Same(redo, KeyboardNavigationHandler.GetNext(save, NavigationDirection.Previous));
+        undo.Focus();
+        shell.Press(Key.Tab);
+        Assert.Same(redo, shell.Window.FocusManager!.GetFocusedElement());
+        shell.Press(Key.Tab);
+        Assert.Same(save, shell.Window.FocusManager!.GetFocusedElement());
+        shell.Press(Key.Tab, RawInputModifiers.Shift);
+        Assert.Same(redo, shell.Window.FocusManager!.GetFocusedElement());
     }
 
     [AvaloniaFact]
@@ -393,7 +397,7 @@ public sealed class CanvasChromeTests : IDisposable
     {
         var canvas = shell.Bounds(shell.Editor);
         var minimap = Shell.Around(shell.Find<Minimap>("Minimap"), "floating");
-        Assert.Equal(canvas.Width >= CanvasChrome.CompactWidth && canvas.Height >= CanvasChrome.MinimapMinHeight, minimap.IsEffectivelyVisible);
+        Assert.Equal(canvas is { Width: >= CanvasChrome.CompactWidth, Height: >= CanvasChrome.MinimapMinHeight }, minimap.IsEffectivelyVisible);
         // Expand All sits with the zoom controls while the minimap shows, which is taller, so the row keeps its height (ADR 0024).
         Assert.Equal(minimap.IsEffectivelyVisible && shell.Window.ViewModel.Canvas is { IsEmpty: false }, shell.Find<Button>("ExpandAll").IsEffectivelyVisible);
         var boxes = new[] { ("Zoom", Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), ("Minimap", minimap), ("WorkflowRunBar", shell.Find<Control>("WorkflowRunBar")) }
@@ -405,7 +409,7 @@ public sealed class CanvasChromeTests : IDisposable
 
         // The bar holds its status, its progress, its activity, and whichever of its buttons show, its text whole.
         var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunProgress", "RunActivity", "StopWorkflow", "ResumeRun", "DismissRun" }.Where(shell.ShowsAny).Select(id => shell.Find<Control>(id))
+        var inside = new[] { "RunProgress", "RunActivity", "StopWorkflow", "ResumeRun", "DismissRun" }.Where(shell.ShowsAny).Select(shell.Find<Control>)
             .Append(Shell.Around(shell.Find<TextBlock>("RunStatus"), "pill"));
         Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
         if (shell.ShowsAny("StopWorkflow"))

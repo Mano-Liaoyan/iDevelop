@@ -10,7 +10,7 @@ using IDevelop.Desktop.Theme;
 
 namespace IDevelop.Desktop;
 
-public partial class App : Application
+public class App : Application
 {
     /// <summary>The per-user file that remembers the theme between runs. Null remembers nothing.</summary>
     public string? PreferencesFile { get; init; }

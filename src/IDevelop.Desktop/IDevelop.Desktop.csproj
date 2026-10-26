@@ -9,6 +9,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="NodifyAvalonia" />
     <PackageReference Include="Markdig" />
+    <PackageReference Include="JetBrains.Annotations" PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\IDevelop.Core\IDevelop.Core.csproj" />

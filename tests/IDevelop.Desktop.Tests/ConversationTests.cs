@@ -46,7 +46,8 @@ public sealed class ConversationTests
         Assert.Equal("", shell.Find<TextBox>("Composer").Text);
         f.Release("go");
 
-        shell.WaitUntil(() => File.Exists(Path.Combine(f.Evidence, "resumed.txt")) && shell.NodeModel("Say hi").State == NodeState.Completed, "the next turn ends");
+        var resumed = Path.Combine(f.Evidence, "resumed.txt");
+        shell.WaitUntil(() => File.Exists(resumed) && shell.NodeModel("Say hi").State == NodeState.Completed, "the next turn ends");
         Assert.Equal("Also write hi.", ResumedWith(f));
         Assert.Equal("Wrote hi.", shell.NodeModel("Say hi").LastReply);
     }
@@ -63,7 +64,8 @@ public sealed class ConversationTests
         shell.InView<TextBox>("Composer").Text = "Stop and write hi.";
         Invoke(shell.InView<Button>("StopAndSend"));
 
-        shell.WaitUntil(() => File.Exists(Path.Combine(f.Evidence, "resumed.txt")) && shell.NodeModel("Say hi").State == NodeState.Completed, "the next turn ends");
+        var resumed = Path.Combine(f.Evidence, "resumed.txt");
+        shell.WaitUntil(() => File.Exists(resumed) && shell.NodeModel("Say hi").State == NodeState.Completed, "the next turn ends");
         Assert.Equal("Stop and write hi.", ResumedWith(f));
     }
 

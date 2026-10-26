@@ -124,7 +124,7 @@ public sealed class SkillStartTests : IDisposable
         var (outcome, events) = await Turn(clients, project, project, task);
 
         Assert.IsType<TurnOutcome.Done>(outcome);
-        Assert.DoesNotContain("--no-skills", JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(evidence, "arguments.json")))!);
+        Assert.DoesNotContain("--no-skills", JsonSerializer.Deserialize<string[]>(await File.ReadAllTextAsync(Path.Combine(evidence, "arguments.json")))!);
         Assert.Contains(new AgentEvent.Notice("Pi's skill list couldn't be read, so the skill choice couldn't be applied, and Pi runs with all of its skills. " +
             "Pi did not list its skills: an extension failed."), events);
     }
@@ -148,7 +148,7 @@ public sealed class SkillStartTests : IDisposable
 
         Assert.IsType<TurnOutcome.Done>(outcome);
         Assert.Contains(new AgentEvent.Notice("Pi runs without gone, which is not installed."), events);
-        var arguments = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(evidence, "arguments.json")))!;
+        var arguments = JsonSerializer.Deserialize<string[]>(await File.ReadAllTextAsync(Path.Combine(evidence, "arguments.json")))!;
         Assert.Equal(["--no-skills", "--skill", Path.Combine(Path.GetFullPath(project), ".pi", "skills", "deploy", "SKILL.md")],
             arguments.SkipWhile(argument => argument != "--no-skills").TakeWhile(argument => argument != "--session-id"));
     }

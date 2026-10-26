@@ -130,12 +130,11 @@ public class WorkflowTests
         var looped = DesignBuildReview().Must(new Connect(new ConnectionKey(Review, Design), ConnectionKind.Context));
 
         Assert.Equal(
-            new[]
-            {
+            [
                 KeyValuePair.Create(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
                 KeyValuePair.Create(new ConnectionKey(Build, Review), ConnectionKind.Dependency),
                 KeyValuePair.Create(new ConnectionKey(Review, Design), ConnectionKind.Context),
-            },
+            ],
             looped.Connections);
     }
 
@@ -157,9 +156,9 @@ public class WorkflowTests
 
         var after = workflow.Must(new Delete([Build], []));
 
-        Assert.Equal(new[] { Design, Review }, after.Tasks.Keys);
-        Assert.Equal(new[] { new ConnectionKey(Design, Review) }, after.Connections.Keys);
-        Assert.Equal(new[] { Design, Review }, after.Positions.Keys);
+        Assert.Equal([Design, Review], after.Tasks.Keys);
+        Assert.Equal([new ConnectionKey(Design, Review)], after.Connections.Keys);
+        Assert.Equal([Design, Review], after.Positions.Keys);
     }
 
     [Fact]
@@ -167,8 +166,8 @@ public class WorkflowTests
     {
         var after = DesignBuildReview().Must(new Delete([], [new ConnectionKey(Design, Build)]));
 
-        Assert.Equal(new[] { Design, Build, Review }, after.Tasks.Keys);
-        Assert.Equal(new[] { new ConnectionKey(Build, Review) }, after.Connections.Keys);
+        Assert.Equal([Design, Build, Review], after.Tasks.Keys);
+        Assert.Equal([new ConnectionKey(Build, Review)], after.Connections.Keys);
     }
 
     [Fact]
@@ -179,12 +178,11 @@ public class WorkflowTests
         var moved = workflow.Must(new MoveTasks([new TaskPosition(Build, new CanvasPoint(240, 120)), new TaskPosition(Missing, new CanvasPoint(1, 1))]));
 
         Assert.Equal(
-            new[]
-            {
+            [
                 KeyValuePair.Create(Design, new CanvasPoint(120, 90)),
                 KeyValuePair.Create(Build, new CanvasPoint(240, 120)),
                 KeyValuePair.Create(Review, new CanvasPoint(720, 247.5)),
-            },
+            ],
             moved.Positions);
         Assert.Same(workflow.Tasks, moved.Tasks);
         Assert.Same(workflow.Connections, moved.Connections);
@@ -216,7 +214,7 @@ public class WorkflowTests
         var twice = once.Must(new Delete([Build], [new ConnectionKey(Design, Build)]));
 
         Assert.Same(once, twice);
-        Assert.Equal(new[] { Design, Review }, twice.Tasks.Keys);
+        Assert.Equal([Design, Review], twice.Tasks.Keys);
     }
 
     [Fact]

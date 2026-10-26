@@ -5,32 +5,28 @@ namespace IDevelop.Desktop.Canvas;
 
 public sealed class PendingConnectionViewModel(WorkflowCanvasViewModel canvas) : ObservableObject
 {
-    private object? _previewTarget;
-    private string _previewText = "";
-    private bool _isRejected;
-
     public object? Source { get; set; }
 
     public object? PreviewTarget
     {
-        get => _previewTarget;
+        get;
         set
         {
-            _previewTarget = value;
+            field = value;
             Refresh();
         }
     }
 
     public string PreviewText
     {
-        get => _previewText;
-        private set => SetProperty(ref _previewText, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = "";
 
     public bool IsRejected
     {
-        get => _isRejected;
-        private set => SetProperty(ref _isRejected, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     private void Refresh()

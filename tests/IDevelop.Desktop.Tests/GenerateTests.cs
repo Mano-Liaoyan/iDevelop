@@ -249,8 +249,8 @@ public sealed class GenerateTests : IDisposable
         var added = workflow.Tasks.Values.Where(task => task.Id != planner).ToDictionary(task => task.Title);
         Assert.Equal(
             [
-                ("Export API", new CanvasPoint(origin.X + Proposal.ColumnStep, origin.Y)),
-                ("Export button", new CanvasPoint(origin.X + 2 * Proposal.ColumnStep, origin.Y)),
+                ("Export API", origin with { X = origin.X + Proposal.ColumnStep }),
+                ("Export button", origin with { X = origin.X + 2 * Proposal.ColumnStep }),
                 ("Export tests", new CanvasPoint(origin.X + 2 * Proposal.ColumnStep, origin.Y + Proposal.RowStep)),
             ],
             added.Keys.Order().Select(title => (title, workflow.Positions[added[title].Id])));
@@ -464,7 +464,7 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal(
             ["Codex · GPT-6.1-Sol · xhigh Export API", "Claude Code · Claude Haiku 4.5 · low Export button", "Codex · GPT-6.1-Sol · high Export tests"],
             Ghosts(shell));
-        Assert.Equal(new string?[] { null, null, "Pi isn't installed" }, GhostNotes(shell));
+        Assert.Equal(new[] { null, null, "Pi isn't installed" }, GhostNotes(shell));
         // Every card has the client on one line and the model and level on the next, whatever their length.
         Assert.Equal([["Codex", "GPT-6.1-Sol · xhigh"], ["Claude Code", "Claude Haiku 4.5 · low"], ["Codex", "GPT-6.1-Sol · high"]], GhostLines(shell));
     }
@@ -515,7 +515,7 @@ public sealed class GenerateTests : IDisposable
 
         shell.Click(shell.InView<CheckBox>("ProposalUsePlannerAgent"));
 
-        Assert.Equal(new string?[] { null, null, "Pi isn't installed" }, GhostNotes(shell));
+        Assert.Equal(new[] { null, null, "Pi isn't installed" }, GhostNotes(shell));
         Assert.Equal("New Implement Export tests", Ghosts(shell)[2]);
         Assert.Equal(
             "The planner chose Pi, which isn't installed. Choose the task's agent before it runs.",
@@ -808,7 +808,7 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.Find<Button>("GenerateSubmit"));
     }
 
-    internal static IEnumerable<T> ById<T>(Shell shell, string automationId) where T : Control =>
+    private static IEnumerable<T> ById<T>(Shell shell, string automationId) where T : Control =>
         Shell.ById<T>(shell.Window, automationId).Where(control => control.IsEffectivelyVisible);
 
     /// <summary>Each proposed task in the review: its title, the agent it takes, the reason shown, and the note on its choice.</summary>
@@ -820,12 +820,12 @@ public sealed class GenerateTests : IDisposable
             Visible(entry, "ProposalAgentNote")))];
 
     /// <summary>A proposed task's agent on its row: the client's line, then the model and level's, joined as one label.</summary>
-    internal static string? AgentLines(Visual entry) =>
-        Shell.ById<StackPanel>(entry, "ProposalAgent").SingleOrDefault(agent => agent.IsEffectivelyVisible) is { } agent
+    private static string? AgentLines(Visual entry) =>
+        Shell.ById<StackPanel>(entry, "ProposalAgent").SingleOrDefault(panel => panel.IsEffectivelyVisible) is { } agent
             ? string.Join(" · ", Shell.Texts(agent))
             : null;
 
-    internal static string? Visible(Visual root, string automationId) =>
+    private static string? Visible(Visual root, string automationId) =>
         Shell.ById<TextBlock>(root, automationId).SingleOrDefault(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))?.Text;
 
     /// <summary>The button that opens or closes the agent of the proposed task with this title.</summary>
@@ -857,13 +857,13 @@ public sealed class GenerateTests : IDisposable
     /// <summary>Each ghost wire's two ends on the canvas.</summary>
     private static (Point From, Point To)[] GhostWires(Shell shell) =>
         [.. GhostWireLines(shell)
-            .Select(wire => shell.Ends(wire))
+            .Select(shell.Ends)
             .Select(ends => (From: Shell.Rounded(shell.CanvasPointAt(ends.Source)), To: Shell.Rounded(shell.CanvasPointAt(ends.Target))))
             .OrderBy(wire => (wire.From.X, wire.From.Y, wire.To.X, wire.To.Y))];
 
     private static string? ButtonLabel(Shell shell) => AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"));
 
-    internal static IEnumerable<Panel> GhostCards(Shell shell) =>
+    private static IEnumerable<Panel> GhostCards(Shell shell) =>
         shell.Window.GetVisualDescendants().OfType<Panel>().Where(panel => AutomationProperties.GetAutomationId(panel) == "GhostCard")
             .OrderBy(panel => panel.TranslatePoint(default, shell.Editor)!.Value.X).ThenBy(panel => panel.TranslatePoint(default, shell.Editor)!.Value.Y);
 
@@ -872,7 +872,7 @@ public sealed class GenerateTests : IDisposable
         [.. GhostCards(shell).Select(panel => $"{string.Join(" · ", new[] { Visible(panel, "GhostLabel"), Visible(panel, "GhostDetail") }.OfType<string>())} {AutomationProperties.GetName(panel)}")];
 
     /// <summary>Each ghost card's subtitle lines, in the order of <see cref="Ghosts"/>.</summary>
-    internal static string[][] GhostLines(Shell shell) =>
+    private static string[][] GhostLines(Shell shell) =>
         [.. GhostCards(shell).Select(panel => new[] { Visible(panel, "GhostLabel"), Visible(panel, "GhostDetail") }.OfType<string>().ToArray())];
 
     /// <summary>The note under each ghost card, in the order of <see cref="Ghosts"/>, or null for a card without one.</summary>

@@ -2,7 +2,7 @@ using IDevelop.Clients;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
-using static IDevelop.TestSupport.SpawnedProcesses;
+using static IDevelop.Core.Tests.SpawnedProcesses;
 
 namespace IDevelop.Core.Tests;
 
@@ -26,7 +26,7 @@ public sealed class ProbeTests : IDisposable
         var output = await Probes.RunAsync(_fakes.Resolver.Resolve("pi")!, PiCatalog.Probe);
 
         Assert.Equal((0, false), (output.ExitCode, output.TimedOut));
-        Assert.Equal("""{"id":"idevelop-models","type":"get_available_models"}""" + "\n", File.ReadAllText(stdin));
+        Assert.Equal("""{"id":"idevelop-models","type":"get_available_models"}""" + "\n", await File.ReadAllTextAsync(stdin));
         Assert.Equal(5, Assert.IsType<CatalogParse.Models>(PiCatalog.Parse(output)).Options.Length);
     }
 
@@ -38,7 +38,7 @@ public sealed class ProbeTests : IDisposable
 
         await Probes.RunAsync(_fakes.Resolver.Resolve("pi")!, PiCatalog.Probe);
 
-        Assert.Equal(Folders.AsCurrentFolder(Path.GetTempPath()), File.ReadAllText(folder));
+        Assert.Equal(Folders.AsCurrentFolder(Path.GetTempPath()), await File.ReadAllTextAsync(folder));
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class ProbeTests : IDisposable
         var output = await Probes.RunAsync(_fakes.Resolver.Resolve("codex")!, new Probe(["login", "status"]) { Timeout = TimeSpan.FromSeconds(5) });
 
         Assert.Equal((null, true), (output.ExitCode, output.TimedOut));
-        AssertGone(int.Parse(File.ReadAllText(sleeper)));
+        AssertGone(int.Parse(await File.ReadAllTextAsync(sleeper)));
     }
 
     [Fact]

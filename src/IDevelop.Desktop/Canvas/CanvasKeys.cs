@@ -28,8 +28,6 @@ public static class CanvasKeys
 
     public static KeyGesture ZoomToActual { get; } = new(Key.D0);
 
-    public static KeyGesture Add { get; } = new(Key.N);
-
     /// <summary>
     /// The gesture as the platform writes it, such as Ctrl+D or ⌘D. Outside macOS, Avalonia names Enter "Return" and
     /// Delete "Delete", so the hint uses Enter and Del, the names printed on those keys.

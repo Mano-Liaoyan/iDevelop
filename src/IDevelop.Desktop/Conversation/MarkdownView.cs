@@ -27,7 +27,7 @@ public sealed class MarkdownView : StackPanel
 {
     public static readonly StyledProperty<string?> MarkdownProperty = AvaloniaProperty.Register<MarkdownView, string?>(nameof(Markdown));
 
-    public static readonly StyledProperty<bool> FitsCodeProperty = AvaloniaProperty.Register<MarkdownView, bool>(nameof(FitsCode));
+    private static readonly StyledProperty<bool> FitsCodeProperty = AvaloniaProperty.Register<MarkdownView, bool>(nameof(FitsCode));
 
     // Measured headlessly at each limit, 1,000 table cells or 500 links lay out in about 165 ms, and 20,000 characters of
     // nested brackets in about 530 ms. A code block costs about ten paragraphs, and 1,000 paragraphs or 100 code blocks
@@ -62,7 +62,7 @@ public sealed class MarkdownView : StackPanel
     public bool FitsCode
     {
         get => GetValue(FitsCodeProperty);
-        set => SetValue(FitsCodeProperty, value);
+        init => SetValue(FitsCodeProperty, value);
     }
 
     /// <summary>How many blocks were built since the view was created, which shows that unchanged blocks are reused.</summary>
@@ -463,7 +463,7 @@ public sealed class MarkdownView : StackPanel
     private static Task Activate(Control link, string destination) =>
         ConversationLinkRouter.GetRouter(link) is { } router ? router.ActivateAsync(link, destination) : Task.CompletedTask;
 
-    internal static readonly FontFamily MonoFont = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace");
+    private static readonly FontFamily MonoFont = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace");
 
     private static ControlTheme? Glyph() =>
         Application.Current?.TryGetResource("Glyph", null, out var theme) == true ? theme as ControlTheme : null;

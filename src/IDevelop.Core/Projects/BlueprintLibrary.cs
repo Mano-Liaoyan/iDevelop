@@ -18,7 +18,7 @@ public sealed record LibraryContents(ImmutableArray<Blueprint> Blueprints, Immut
 /// </summary>
 public sealed partial class BlueprintLibrary
 {
-    public const string Format = "idevelop.blueprint/1";
+    private const string BlueprintFormat = "idevelop.blueprint/1";
 
     private readonly string? _projectFolder;
 
@@ -130,7 +130,7 @@ public sealed partial class BlueprintLibrary
         var dto = BlueprintJson.ToDto(blueprint);
         var file = new FileDto
         {
-            Format = Format,
+            Format = BlueprintFormat,
             Id = dto.Id,
             Version = dto.Version,
             Name = dto.Name,
@@ -146,7 +146,7 @@ public sealed partial class BlueprintLibrary
     }
 
     /// <exception cref="ProjectException">The file is not a blueprint this version reads.</exception>
-    public static Blueprint Parse(ReadOnlySpan<byte> utf8, string path)
+    private static Blueprint Parse(ReadOnlySpan<byte> utf8, string path)
     {
         if (utf8.StartsWith("﻿"u8))
         {
@@ -157,9 +157,9 @@ public sealed partial class BlueprintLibrary
         try
         {
             var format = JsonSerializer.Deserialize<WorkflowFile.HeaderDto>(utf8, WorkflowFile.HeaderOptions)?.Format;
-            file = format == Format
+            file = format == BlueprintFormat
                 ? JsonSerializer.Deserialize<FileDto>(utf8, WorkflowFile.Options)!
-                : throw new ProjectException($"{path} has format \"{format}\". This version of iDevelop reads {Format}.");
+                : throw new ProjectException($"{path} has format \"{format}\". This version of iDevelop reads {BlueprintFormat}.");
         }
         catch (JsonException e)
         {
@@ -190,7 +190,7 @@ public sealed partial class BlueprintLibrary
             : throw new ProjectException($"{path} holds blueprint {blueprint.Key.Id}, so its name must be {blueprint.Key.Id}.json.");
     }
 
-    [GeneratedRegex(@"[^a-z0-9]+")]
+    [GeneratedRegex("[^a-z0-9]+")]
     private static partial Regex NotIdText();
 
     private sealed class FileDto : BlueprintDto

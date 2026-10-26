@@ -30,15 +30,13 @@ internal static class ConversationFixtures
 }
 
 /// <summary>A node's conversation whose lines the test writes.</summary>
-internal sealed class FakeConversation(TaskId node) : IConversation
+internal sealed class FakeConversation : IConversation
 {
-    public TaskId Node { get; } = node;
-
     public ImmutableList<ConversationLine> Lines { get; private set; } = [];
 
-    public string? TerminalCommand { get; set; }
+    public string? TerminalCommand => null;
 
-    public ImmutableArray<BackgroundTask> Background { get; set; } = [];
+    public ImmutableArray<BackgroundTask> Background { get; } = [];
 
     public bool Disposed { get; private set; }
 

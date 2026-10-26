@@ -35,7 +35,7 @@ public sealed class CommandResolverTests : IDisposable
     {
         var old = _temp.Create("old");
         var installed = _temp.Create("installed");
-        File.WriteAllText(Path.Combine(installed, "pi.cmd"), "@echo off\r\n");
+        await File.WriteAllTextAsync(Path.Combine(installed, "pi.cmd"), "@echo off\r\n");
         List<string> userPath = [old];
         var resolver = new CommandResolver(() => Task.FromResult<System.Collections.Immutable.ImmutableArray<string>>([.. userPath]), [".cmd"]);
         await resolver.ReloadAsync();

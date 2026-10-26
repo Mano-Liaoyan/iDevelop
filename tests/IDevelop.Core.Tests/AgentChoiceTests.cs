@@ -384,7 +384,7 @@ public sealed class AgentChoiceTests
 
         var accepted = workflow.Must(proposal.Accept(workflow, new HashSet<TaskId> { Backend, Signed }, task => task == Backend, null, planned, planned));
 
-        Assert.All(new[] { Backend, Frontend, Signed }, task => Assert.Null(accepted.Tasks[task].Execution));
+        Assert.All([Backend, Frontend, Signed], task => Assert.Null(accepted.Tasks[task].Execution));
         Assert.Equal("The export opens.", accepted.Tasks[Signed].Field("checklist"));
     }
 
@@ -401,7 +401,7 @@ public sealed class AgentChoiceTests
 
     /// <summary>A planner's context on <paramref name="clients"/>, with the built-ins and <see cref="Careful"/> as its types.</summary>
     private static PlanningContext Planning(IReadOnlyDictionary<ClientId, ClientStatus> clients) =>
-        new PlanningContext([], Types) { Agents = PlanningContext.Offers(clients) };
+        new([], Types) { Agents = PlanningContext.Offers(clients) };
 
     private static TaskId Id(Proposal proposal, string name) => proposal.Nodes.Single(node => node.Name == name).Id;
 

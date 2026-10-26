@@ -56,13 +56,12 @@ internal sealed partial class GitRepository
     private readonly GitLimits _limits;
     private readonly IReadOnlyDictionary<string, string> _environment;
 
-    private GitRepository(string root, string prefix, string commonDirectory, string version, IReadOnlyDictionary<string, string> environment, GitLimits limits)
+    private GitRepository(string root, string prefix, string commonDirectory, IReadOnlyDictionary<string, string> environment, GitLimits limits)
     {
         Root = root;
         Prefix = prefix;
         ProjectFolder = ProjectIn(root);
         CommonDirectory = commonDirectory;
-        Version = version;
         _environment = new Dictionary<string, string>(environment);
         _limits = limits;
     }
@@ -78,12 +77,9 @@ internal sealed partial class GitRepository
 
     public string ProjectFolder { get; }
     public string CommonDirectory { get; }
-    public string Version { get; }
 
     /// <summary>The project's folder in <paramref name="checkout"/>, a work tree of this repository.</summary>
     public string ProjectIn(string checkout) => Prefix.Length == 0 ? checkout : Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(checkout, Prefix)));
-
-    public static RepositoryOpen Open(string projectFolder) => Open(projectFolder, new Dictionary<string, string>());
 
     internal static RepositoryOpen Open(string projectFolder, IReadOnlyDictionary<string, string> environment, GitLimits? limits = null)
     {
@@ -105,7 +101,7 @@ internal sealed partial class GitRepository
             return new RepositoryOpen.Refused(toplevel.Stderr + common.Stderr);
         }
         return new RepositoryOpen.Opened(new(toplevel.Text.TrimEnd('\r', '\n'), prefix.Text.TrimEnd('\r', '\n'),
-            common.Text.TrimEnd('\r', '\n'), version.Text.TrimEnd('\r', '\n'), environment, limits));
+            common.Text.TrimEnd('\r', '\n'), environment, limits));
     }
 
     public GitRead<CommitId?> ResolveCommit(string revision)
@@ -323,7 +319,7 @@ internal sealed partial class GitRepository
         // current folder, and a git found there could be one planted in a repository.
         if (!OperatingSystem.IsWindows())
         {
-            var searchPath = environment is not null && environment.TryGetValue("PATH", out var given) ? given : System.Environment.GetEnvironmentVariable("PATH");
+            var searchPath = environment is not null && environment.TryGetValue("PATH", out var given) ? given : Environment.GetEnvironmentVariable("PATH");
             if (CommandResolver.Create((searchPath ?? "").Split(Path.PathSeparator), []).Resolve("git")?.Path is not { } git)
                 return new(-1, [], "git was not found on PATH.");
             start.FileName = git;
@@ -347,37 +343,62 @@ internal sealed partial class GitRepository
             using var stdoutPipe = process.Output;
             using var stderrPipe = process.Error;
             using var stdinPipe = process.Input;
-            var stdout = Task.Run(() => stdoutPipe.CopyToAsync(output, stop.Token));
-            var stderr = Task.Run(() => stderrPipe.ReadToEndAsync(stop.Token));
-            var input = Task.Run(async () =>
-            {
-                if (stdin is not null) await stdinPipe.WriteAsync(stdin, stop.Token).ConfigureAwait(false);
-                stdinPipe.Close();
-            });
+            var stdout = CopyAsync(stdoutPipe, output, stop.Token);
+            var stderr = ReadAsync(stderrPipe, stop.Token);
+            var input = WriteAsync(stdinPipe, stdin, stop.Token);
             var pipes = Task.WhenAll(stdout, stderr, input);
             try
             {
-                if (process.WaitForExit(Remaining()) && Task.WaitAll([stdout, stderr, input], Remaining()))
-                    return new(process.ExitCode, output.ToArray(), stderr.Result);
+                try
+                {
+                    if (process.WaitForExit(Remaining()) && Task.WaitAll([stdout, stderr, input], Remaining()))
+                        return new(process.ExitCode, output.ToArray(), stderr.Result);
+                }
+                catch (AggregateException error) when (error.GetBaseException() is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+                {
+                    if (input.IsFaulted && input.Exception?.GetBaseException() is IOException && stdout.IsCompletedSuccessfully && stderr.IsCompletedSuccessfully)
+                        return new(-1, output.ToArray(), stderr.Result + error.GetBaseException().Message);
+                    throw error.GetBaseException();
+                }
+                // The group or job also stops what a hook started after its parent exited, which no tree kill finds. A process
+                // that left them can still hold the pipes open. On Windows, closing a pipe does not end a read blocked on it,
+                // so the reads are canceled first.
+                process.Stop();
+                process.WaitForExit(Settle);
+                if (Task.WaitAny([pipes], Settle) < 0) stop.Cancel();
+                return new(-1, [], (stderr.IsCompletedSuccessfully ? stderr.Result : "") + "Git timed out.");
             }
-            catch (AggregateException error) when (error.GetBaseException() is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+            finally
             {
-                if (input.IsFaulted && input.Exception?.GetBaseException() is IOException && stdout.IsCompletedSuccessfully && stderr.IsCompletedSuccessfully)
-                    return new(-1, output.ToArray(), stderr.Result + error.GetBaseException().Message);
-                throw error.GetBaseException();
+                // A canceled read or write can still run. Wait for it to end before its pipe and buffer are disposed.
+                stop.Cancel();
+                Task.WaitAny([pipes], Settle);
             }
-            // The group or job also stops what a hook started after its parent exited, which no tree kill finds. A process
-            // that left them can still hold the pipes open. On Windows, closing a pipe does not end a read blocked on it,
-            // so the reads are canceled first.
-            process.Stop();
-            process.WaitForExit(Settle);
-            if (Task.WaitAny([pipes], Settle) < 0) stop.Cancel();
-            return new(-1, [], (stderr.IsCompletedSuccessfully ? stderr.Result : "") + "Git timed out.");
         }
         catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
             return new(-1, [], error.Message);
         }
+    }
+
+    // Each pipe runs on the thread pool, as a read or write on a Windows pipe can block its thread.
+    private static async Task CopyAsync(Stream from, Stream to, CancellationToken stop)
+    {
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        await from.CopyToAsync(to, stop).ConfigureAwait(false);
+    }
+
+    private static async Task<string> ReadAsync(StreamReader from, CancellationToken stop)
+    {
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        return await from.ReadToEndAsync(stop).ConfigureAwait(false);
+    }
+
+    private static async Task WriteAsync(Stream to, byte[]? bytes, CancellationToken stop)
+    {
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        if (bytes is not null) await to.WriteAsync(bytes, stop).ConfigureAwait(false);
+        to.Close();
     }
 
     /// <summary>

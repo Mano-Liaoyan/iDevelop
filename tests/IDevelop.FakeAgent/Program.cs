@@ -135,8 +135,12 @@ else
 }
 
 var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-using var stdout = new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true, NewLine = "\n" };
-using var stderr = new StreamWriter(Console.OpenStandardError(), utf8) { AutoFlush = true, NewLine = "\n" };
+using var stdout = new StreamWriter(Console.OpenStandardOutput(), utf8);
+stdout.AutoFlush = true;
+stdout.NewLine = "\n";
+using var stderr = new StreamWriter(Console.OpenStandardError(), utf8);
+stderr.AutoFlush = true;
+stderr.NewLine = "\n";
 using var rules = JsonDocument.Parse(File.ReadAllBytes(rulesFile));
 if (rules.RootElement.TryGetProperty("launches", out var launches))
 {
@@ -145,7 +149,7 @@ if (rules.RootElement.TryGetProperty("launches", out var launches))
     JsonSerializer.Serialize(marker, clientArguments);
 }
 
-using var stdin = new StreamReader(Console.OpenStandardInput(), utf8);
+var stdin = new StreamReader(Console.OpenStandardInput(), utf8);
 var appServer = clientArguments.Contains("app-server");
 var claudeStream = clientArguments.Contains("--include-partial-messages");
 string? prompt = null;
@@ -229,7 +233,11 @@ string? ReadWireLine()
 
 JsonElement ReadInput() => JsonDocument.Parse(ReadWireLine() ?? throw new IOException("stdin ended before the next frame.")).RootElement.Clone();
 
-return Run(matched.GetProperty("steps")) ?? 0;
+var exitCode = Run(matched.GetProperty("steps")) ?? 0;
+// Keep the locked files and the signal traps until the steps are complete.
+GC.KeepAlive(held);
+GC.KeepAlive(traps);
+return exitCode;
 
 int? Run(JsonElement steps)
 {
@@ -368,11 +376,7 @@ int? Run(JsonElement steps)
                 var trapFile = value.GetString()!;
                 foreach (var signal in new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP, PosixSignal.SIGQUIT })
                 {
-                    traps.Add(PosixSignalRegistration.Create(signal, context =>
-                    {
-                        File.AppendAllText(trapFile, context.Signal + "\n");
-                        context.Cancel = true;
-                    }));
+                    traps.Add(Trap(signal, trapFile));
                 }
 
                 break;
@@ -489,6 +493,12 @@ int? Run(JsonElement steps)
     return null;
 }
 
+static PosixSignalRegistration Trap(PosixSignal signal, string file) => PosixSignalRegistration.Create(signal, context =>
+{
+    File.AppendAllText(file, context.Signal + "\n");
+    context.Cancel = true;
+});
+
 void Print(string line)
 {
     if (!appServer)
@@ -509,9 +519,9 @@ void Print(string line)
     object? translated = type.GetString() switch
     {
         "thread.started" => new { method = "thread/started", @params = new { thread = new { id = root.GetProperty("thread_id").GetString() } } },
-        "item.started" when item?.GetProperty("type").GetString() == "command_execution" => new { method = "item/started", @params = new { item = new { type = "commandExecution", command = item?.GetProperty("command").GetString() } } },
-        "item.completed" when item?.GetProperty("type").GetString() == "agent_message" => new { method = "item/completed", @params = new { item = new { type = "agentMessage", id = item?.GetProperty("id").GetString(), text = item?.GetProperty("text").GetString() } } },
-        "item.completed" when item?.GetProperty("type").GetString() == "error" => new { method = "error", @params = new { error = new { message = item?.GetProperty("message").GetString() } } },
+        "item.started" when item?.GetProperty("type").GetString() == "command_execution" => new { method = "item/started", @params = new { item = new { type = "commandExecution", command = item.Value.GetProperty("command").GetString() } } },
+        "item.completed" when item?.GetProperty("type").GetString() == "agent_message" => new { method = "item/completed", @params = new { item = new { type = "agentMessage", id = item.Value.GetProperty("id").GetString(), text = item.Value.GetProperty("text").GetString() } } },
+        "item.completed" when item?.GetProperty("type").GetString() == "error" => new { method = "error", @params = new { error = new { message = item.Value.GetProperty("message").GetString() } } },
         "error" => new { method = "error", @params = new { error = new { message = root.GetProperty("message").GetString() } } },
         "turn.completed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "completed" } } },
         "turn.failed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "failed", error = root.GetProperty("error") } } },
@@ -679,7 +689,7 @@ internal static class FakeSkills
     {
         var format = options.GetProperty("format").GetString();
         var late = options.TryGetProperty("lateAfterMs", out var after)
-            && DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime >= TimeSpan.FromMilliseconds(after.GetInt32());
+            && DateTime.Now - Process.GetCurrentProcess().StartTime >= TimeSpan.FromMilliseconds(after.GetInt32());
         var skills = Strings(options, "folders").Concat(late ? Strings(options, "late") : []).SelectMany(Read).ToArray();
         var disabled = Strings(options, "disabled").ToHashSet();
         var id = request.TryGetProperty("id", out var rpcId) ? rpcId : request.GetProperty("request_id");

@@ -66,7 +66,7 @@ public sealed class FluentDefaultsTests : IDisposable
         new Window { Content = box }.Show();
         shell.Render();
 
-        var parts = box.GetVisualDescendants();
+        var parts = box.GetVisualDescendants().ToArray();
         Assert.Equal(
             (Color.Parse("#1E6EF4"), Colors.White),
             (Fill(parts.OfType<Border>().Single(border => border.Name == "NormalRectangle").Background),

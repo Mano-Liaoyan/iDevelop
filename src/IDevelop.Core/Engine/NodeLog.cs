@@ -88,22 +88,22 @@ internal sealed record NodeRecord(ImmutableList<NodeResult> History, string? Ses
 {
     public static NodeRecord Empty { get; } = new([], null, null, null, null, false);
 
-    public bool Resolving { get; init; }
+    public bool Resolving { get; private init; }
 
     /// <summary>The rounds of feedback in the node's current loop. Any turn but routing's next round starts a new loop.</summary>
-    public int Rounds { get; init; }
+    public int Rounds { get; private init; }
 
     /// <summary>The node's last turn continued its session rather than starting a fresh one.</summary>
-    public bool Continued { get; init; }
+    public bool Continued { get; private init; }
 
     /// <summary>The handles the session's planner read when it started.</summary>
-    public PlanningHandles? Planning { get; init; }
+    public PlanningHandles? Planning { get; private init; }
 
     /// <summary>The folder the session started in.</summary>
-    public string? SessionFolder { get; init; }
+    public string? SessionFolder { get; private init; }
 
     /// <summary>The background work the open turn's client last listed.</summary>
-    public ImmutableArray<BackgroundTask> Background { get; init; } = [];
+    public ImmutableArray<BackgroundTask> Background { get; private init; } = [];
 
     public NodeRecord Apply(NodeEntry entry) => entry switch
     {

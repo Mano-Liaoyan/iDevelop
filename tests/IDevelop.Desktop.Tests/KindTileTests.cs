@@ -144,7 +144,7 @@ public sealed class KindTileTests
         Assert.Equal("#6D7CFF #22201D #22201D #6D7CFF #22201D", Badges(ThemeVariant.Dark));
 
         var small = Render(ThemeVariant.Light, new KindTile { TileSize = 18 }, new KindTile { TileSize = 18, IsLibrary = true });
-        var rows = Enumerable.Range(-Inset, 18 + 2 * Inset);
+        var rows = Enumerable.Range(-Inset, 18 + 2 * Inset).ToArray();
         Assert.Equal(
             rows.Select(y => string.Join(" ", Enumerable.Range(0, 18 + Inset).Select(x => At(small, 0, 18, x, y)))),
             rows.Select(y => string.Join(" ", Enumerable.Range(0, 18 + Inset).Select(x => At(small, 1, 18, x, y)))));

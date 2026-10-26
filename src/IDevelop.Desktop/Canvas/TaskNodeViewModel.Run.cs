@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
@@ -30,10 +31,9 @@ public sealed partial class TaskNodeViewModel
     private (int Index, string Text)? _lastReply;
     private (int Index, string Text)? _proposed;
     private string? _latest;
-    private System.Collections.Immutable.ImmutableArray<IDevelop.Clients.BackgroundTask> _background = [];
+    private System.Collections.Immutable.ImmutableArray<Clients.BackgroundTask> _background = [];
     private IConversation? _log;
     private int _logChanged;
-    private string _sendBackNote = "";
     private RelayCommand _run = null!;
     private RelayCommand _retry = null!;
     private RelayCommand _stop = null!;
@@ -93,17 +93,18 @@ public sealed partial class TaskNodeViewModel
     public bool ShowsMarkResolved => Waits(EngineState.Conflict);
 
     /// <summary>The note that Send back returns, which the inspector writes.</summary>
+    [AllowNull]
     public string SendBackNote
     {
-        get => _sendBackNote;
+        get;
         set
         {
-            if (SetProperty(ref _sendBackNote, value ?? ""))
+            if (SetProperty(ref field, value ?? ""))
             {
                 _sendBack.NotifyCanExecuteChanged();
             }
         }
-    }
+    } = "";
 
     /// <summary>The node's results, newest first, each with whether it is the current one.</summary>
     public IReadOnlyList<ResultViewModel> Results => [.. _history.Select((result, index) => new ResultViewModel(result, index + 1,
@@ -172,17 +173,11 @@ public sealed partial class TaskNodeViewModel
         _sendBack = new RelayCommand(SendBack, () => ShowsSendBack && !string.IsNullOrWhiteSpace(SendBackNote));
         _continue = new RelayCommand(() => Act(engine => engine.Send(Id, "Continue where you left off.", interrupt: false)), () => ShowsContinue);
         _markResolved = new RelayCommand(() => Act(engine => engine.MarkResolved(Id)), () => ShowsMarkResolved);
-        _openWorktree = new RelayCommand(async () =>
-        {
-            if (_canvas.Engine.Folder(Id) is not { } folder || !await _canvas.OpenFolder(folder))
-            {
-                _canvas.Notice("Couldn't open the node's worktree.");
-            }
-        }, () => ShowsMarkResolved);
+        _openWorktree = new RelayCommand(() => UiWork.Start(OpenWorktree, _canvas.Notice), () => ShowsMarkResolved);
         _send = new RelayCommand(() => Send(interrupt: false),
             () => HasAgent && State != NodeState.Idle && (!string.IsNullOrWhiteSpace(Draft) || IsAsking && _questions.All(question => question.HasChoice)));
         _stopAndSend = new RelayCommand(() => Send(interrupt: true), () => CanStopAndSend && !string.IsNullOrWhiteSpace(Draft));
-        _openInTerminal = new RelayCommand(OpenInTerminal, () => HasAgent && State is not (NodeState.Idle or NodeState.Running) && !IsAsking);
+        _openInTerminal = new RelayCommand(() => UiWork.Start(OpenInTerminal, _canvas.Notice), () => HasAgent && State is not (NodeState.Idle or NodeState.Running) && !IsAsking);
     }
 
     /// <summary>Reads the node from the engine again: its state, why it cannot run, its results, and its agent's latest reply.</summary>
@@ -354,7 +349,7 @@ public sealed partial class TaskNodeViewModel
         {
             // The draft answers each question without a choice, or the last one when every question has a choice.
             var open = _questions.Where(question => !question.HasChoice).DefaultIfEmpty(_questions[^1]).ToHashSet();
-            var reply = new IDevelop.Clients.QuestionsReply([.. _questions.Select(question => question.Answer(open.Contains(question) ? text.Trim() : ""))]);
+            var reply = new Clients.QuestionsReply([.. _questions.Select(question => question.Answer(open.Contains(question) ? text.Trim() : ""))]);
             if (Act(engine => engine.Answer(Id, asked.Key, reply)) && Draft == text) Draft = "";
             return;
         }
@@ -365,7 +360,15 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    private async void OpenInTerminal()
+    private async Task OpenWorktree()
+    {
+        if (_canvas.Engine.Folder(Id) is not { } folder || !await _canvas.OpenFolder(folder))
+        {
+            _canvas.Notice("Couldn't open the node's worktree.");
+        }
+    }
+
+    private async Task OpenInTerminal()
     {
         using var conversation = _canvas.Engine.Conversation(Id);
         if (conversation.TerminalCommand is not { } command)

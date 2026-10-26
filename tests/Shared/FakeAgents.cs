@@ -16,7 +16,7 @@ internal static class FakeAgents
     // Pi's RPC mode keeps running after it answers and exits when its input ends, as the real one does.
     public static readonly FakeRule PiModels = PiRpc();
 
-    public static readonly FakeRule AgyModels = On("models").Replay(Fixture.Path("agy-models.txt"));
+    private static readonly FakeRule AgyModels = On("models").Replay(Fixture.Path("agy-models.txt"));
 
     /// <summary>
     /// Claude Code's skill listing, which a turn tells apart by its partial messages: its initialize answer lists the skills
@@ -34,7 +34,7 @@ internal static class FakeAgents
     /// Codex's answer to each skills/list, which holds the skills in <paramref name="late"/> only once the app-server has run
     /// <paramref name="lateAfterMs"/>, as Codex lists its remote plugins' skills once it has loaded them in the background.
     /// </summary>
-    public static FakeRule CodexSkills(string[] folders, string[]? late, int lateAfterMs)
+    private static FakeRule CodexSkills(string[] folders, string[]? late, int lateAfterMs)
     {
         string[] all = [".agents/skills", ".codex/skills", .. folders];
         return On("app-server").Thread("skills/list").ListSkills("codex", all, late: late, lateAfterMs: lateAfterMs)
@@ -151,12 +151,12 @@ internal static class FakeAgents
         var root = json.RootElement;
         var type = root.GetProperty("type").GetString();
         var item = root.TryGetProperty("item", out var found) ? found : (JsonElement?)null;
-        object? translated = type switch
+        object translated = type switch
         {
             "thread.started" => new { method = "thread/started", @params = new { thread = new { id = root.GetProperty("thread_id").GetString() } } },
-            "item.started" when item?.GetProperty("type").GetString() == "command_execution" => new { method = "item/started", @params = new { item = new { type = "commandExecution", command = item?.GetProperty("command").GetString() } } },
-            "item.completed" when item?.GetProperty("type").GetString() == "agent_message" => new { method = "item/completed", @params = new { item = new { type = "agentMessage", id = item?.GetProperty("id").GetString(), text = item?.GetProperty("text").GetString() } } },
-            "item.completed" when item?.GetProperty("type").GetString() == "error" => new { method = "error", @params = new { error = new { message = item?.GetProperty("message").GetString() } } },
+            "item.started" when item?.GetProperty("type").GetString() == "command_execution" => new { method = "item/started", @params = new { item = new { type = "commandExecution", command = item.Value.GetProperty("command").GetString() } } },
+            "item.completed" when item?.GetProperty("type").GetString() == "agent_message" => new { method = "item/completed", @params = new { item = new { type = "agentMessage", id = item.Value.GetProperty("id").GetString(), text = item.Value.GetProperty("text").GetString() } } },
+            "item.completed" when item?.GetProperty("type").GetString() == "error" => new { method = "error", @params = new { error = new { message = item.Value.GetProperty("message").GetString() } } },
             "error" => new { method = "error", @params = new { error = new { message = root.GetProperty("message").GetString() } } },
             "turn.completed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "completed" } } },
             "turn.failed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "failed", error = root.GetProperty("error") } } },

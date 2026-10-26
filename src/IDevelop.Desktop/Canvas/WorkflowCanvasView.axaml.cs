@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
 using IDevelop.Workflows;
+using JetBrains.Annotations;
 using Nodify;
 
 namespace IDevelop.Desktop.Canvas;
@@ -45,6 +46,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         canvas?.HoldSelection();
     }
 
+    [UsedImplicitly]
     public WorkflowCanvasView()
     {
         InitializeComponent();

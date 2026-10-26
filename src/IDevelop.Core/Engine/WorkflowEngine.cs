@@ -100,7 +100,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     /// <summary>The node's conversation, which follows its log until it is disposed.</summary>
     public IConversation Conversation(TaskId node)
     {
-        lock (_gate) return new NodeConversation(node, Log(node), () => TerminalCommand(node));
+        lock (_gate) return new NodeConversation(Log(node), () => TerminalCommand(node));
     }
 
     /// <summary>
@@ -595,7 +595,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
             }
 
             var (question, request) = live.Asked[index];
-            string? Words(AskedQuestion item) => reply.Answers.Where(answer => answer.QuestionId == item.Id).ToList() is [var answer]
+            string? Words(AskedQuestion item) => reply.Answers.Where(given => given.QuestionId == item.Id).ToList() is [var answer]
                 && (item.MultiSelect || answer.OptionIds.Length <= 1) && answer.OptionIds.All(id => item.Options.Any(option => option.Id == id))
                 && answer.Words(answer.OptionIds.Select(id => item.Options.First(option => option.Id == id).Label)) is { Length: > 0 } words ? words : null;
             var words = question.Questions.Select(Words).ToList();
@@ -684,7 +684,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     {
         ({ Approves: true }, _) => new NodeEntry.Completed(new NodeResult(NewId(), text, null, basis)),
         ({ } verdict, _) => new NodeEntry.Feedback(Render(id, review.Fix, Findings(verdict))),
-        (_, var problem) => new NodeEntry.Waiting($"iDevelop could not read the verdict. {problem}", text),
+        var (_, problem) => new NodeEntry.Waiting($"iDevelop could not read the verdict. {problem}", text),
     };
 
     /// <summary>Each finding under a heading with its id, severity, and location, then its text and the change that would settle it.</summary>

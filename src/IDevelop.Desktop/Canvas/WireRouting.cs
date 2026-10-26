@@ -16,7 +16,7 @@ internal static class WireRouting
     /// How far a wire runs straight out of a port before it turns: the connection's 6 px offset to the edge of the
     /// handle and its 20 px spacing, both set in CanvasStyles.axaml.
     /// </summary>
-    public const double Stub = 26;
+    private const double Stub = 26;
 
     // How far a detour keeps from a card's container: half the gap that FreeSpot leaves between the cards it stacks, so a
     // detour can still pass between them.
@@ -26,10 +26,6 @@ internal static class WireRouting
     private const double TurnCost = 60;
 
     private const double Tolerance = 0.01;
-
-    /// <summary>The bounds of a card whose container sits at the location, its ports included.</summary>
-    public static Rect Card(Point location) =>
-        new(location, new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight));
 
     /// <summary>
     /// The corners of a wire from the output port centered at <paramref name="source"/> to the input port centered at

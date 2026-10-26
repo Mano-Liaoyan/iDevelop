@@ -49,7 +49,7 @@ public sealed class SkillListingTests : IDisposable
             new SkillOption("verify-idevelop", "Drives the built app's real window."),
         ]), listing);
         Assert.False(((SkillListing.Listed)listing).LeavesOutBuiltIns);
-        Assert.Equal(Path.GetFullPath(_project), File.ReadAllText(folder));
+        Assert.Equal(Path.GetFullPath(_project), await File.ReadAllTextAsync(folder));
         Assert.Equal(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"], Read<string[]>(arguments));
         Assert.True(SkillChoices.CanChoose(ClientId.ClaudeCode));
     }
@@ -87,7 +87,7 @@ public sealed class SkillListingTests : IDisposable
 
         Assert.Equal(new SkillListing.Listed([new SkillOption("imagegen", "Makes images."), new SkillOption("release", "Cuts a release.")]), listing);
         Assert.Equal(["app-server"], Read<string[]>(arguments));
-        using var request = JsonDocument.Parse(File.ReadAllText(arguments + ".thread.json"));
+        using var request = JsonDocument.Parse(await File.ReadAllTextAsync(arguments + ".thread.json"));
         Assert.Equal([Path.GetFullPath(_project)], request.RootElement.GetProperty("params").GetProperty("cwds").EnumerateArray().Select(cwd => cwd.GetString()));
         Assert.False(((SkillListing.Listed)listing).LeavesOutBuiltIns);
     }
@@ -110,7 +110,7 @@ public sealed class SkillListingTests : IDisposable
         var listing = await ListedAsync(directory, ClientId.Codex, _project);
 
         Assert.Equal(new SkillListing.Listed([new SkillOption("imagegen", "Makes images."), new SkillOption("pages:write-page", "Writes a page.")]), listing);
-        Assert.True(File.ReadAllLines(frames).Count(frame => frame.Contains("skills/list", StringComparison.Ordinal)) >= 2, "Codex was asked once.");
+        Assert.True((await File.ReadAllLinesAsync(frames)).Count(frame => frame.Contains("skills/list", StringComparison.Ordinal)) >= 2, "Codex was asked once.");
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public sealed class SkillListingTests : IDisposable
 
         var trust = Path.Combine(_fakes.User.PiAgent, "trust.json");
         Directory.CreateDirectory(_fakes.User.PiAgent);
-        File.WriteAllText(trust, JsonSerializer.Serialize(new Dictionary<string, bool> { [PiTrust.RealPath(_project)] = true }));
+        await File.WriteAllTextAsync(trust, JsonSerializer.Serialize(new Dictionary<string, bool> { [PiTrust.RealPath(_project)] = true }));
         await directory.RefreshAsync();
         var trusted = await UntilAsync(directory, ClientId.Pi, _project, listing => listing is SkillListing.Listed { ProjectNotTrusted: false });
 

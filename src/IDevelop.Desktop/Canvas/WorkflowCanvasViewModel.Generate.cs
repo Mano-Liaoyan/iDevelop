@@ -27,14 +27,12 @@ public sealed partial class WorkflowCanvasViewModel
     private readonly Dictionary<TaskId, bool> _usesPlannerAgent = [];
     private TaskId? _latestGenerated;
     private RelayCommand? _openGenerate;
-    private GenerateWorkflowViewModel? _sheet;
-    private GenerateProgress _generateProgress;
 
     /// <summary>The open Generate Workflow sheet, or null.</summary>
     public GenerateWorkflowViewModel? Sheet
     {
-        get => _sheet;
-        private set => SetProperty(ref _sheet, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public ICommand OpenGenerateCommand => _openGenerate ??= new RelayCommand(OpenSheet);
@@ -44,10 +42,10 @@ public sealed partial class WorkflowCanvasViewModel
 
     public GenerateProgress GenerateProgress
     {
-        get => _generateProgress;
+        get;
         private set
         {
-            if (SetProperty(ref _generateProgress, value))
+            if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(GenerateLabel));
                 OnPropertyChanged(nameof(IsGenerateIdle));
@@ -135,9 +133,9 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>The description's first line that has text, cut to 60 characters, or "Plan".</summary>
     internal static string PlannerTitle(string prompt) =>
-        prompt.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) is not { } line ? "Plan"
-        : line.Length <= TitleLength ? line
-        : $"{line[..(TitleLength - 1)].TrimEnd()}…";
+        prompt.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) is not { } first ? "Plan"
+        : first.Length <= TitleLength ? first
+        : $"{first[..(TitleLength - 1)].TrimEnd()}…";
 
     partial void InitializeGenerate()
     {

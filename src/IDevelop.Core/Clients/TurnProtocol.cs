@@ -51,26 +51,25 @@ internal sealed class OneShotProtocol(LaunchArguments launch, Func<string, Immut
             _messageId = "local:" + _ordinal++;
         }
 
-        var update = root.Property("assistantMessageEvent");
-        if (root.String("type") == "message_update" && update?.String("type") == "text_delta" && update?.String("delta") is { } delta)
+        if (root.String("type") == "message_update" && root.Property("assistantMessageEvent") is { } update
+            && update.String("type") == "text_delta" && update.String("delta") is { } delta)
         {
             return new([new AgentEvent.MessageDelta(_messageId, delta)], [], false);
         }
 
-        var step = root.Property("step_update");
-        if (root.String("event") == "step_update" && step?.String("step_type") == "agent_response")
+        if (root.String("event") == "step_update" && root.Property("step_update") is { } step && step.String("step_type") == "agent_response")
         {
-            var id = step?.Property("step_index")?.GetRawText() is { } index ? "step:" + index : _messageId;
-            if (step?.String("text_delta") is { } text)
+            var id = step.Property("step_index")?.GetRawText() is { } index ? "step:" + index : _messageId;
+            if (step.String("text_delta") is { } text)
             {
                 _steps[id] = _steps.GetValueOrDefault(id, "") + text;
-                if (step?.String("state") != "DONE")
+                if (step.String("state") != "DONE")
                 {
                     return new([new AgentEvent.MessageDelta(id, text)], [], false);
                 }
             }
 
-            if (step?.String("state") == "DONE" && _steps.Remove(id, out var complete))
+            if (step.String("state") == "DONE" && _steps.Remove(id, out var complete))
             {
                 return new([new AgentEvent.Message(complete.TrimEnd()) { Id = id }], [], false);
             }

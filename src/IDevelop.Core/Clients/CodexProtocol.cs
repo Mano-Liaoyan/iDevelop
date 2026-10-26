@@ -90,7 +90,7 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
             if (id == "turn-1")
             {
                 _turn = root.Property("result")?.Property("turn")?.String("id");
-                return _interruptPending ? Interrupt() ?? ProtocolOutput.Empty : ProtocolOutput.Empty;
+                return _interruptPending ? Interrupt() : ProtocolOutput.Empty;
             }
 
             return ProtocolOutput.Empty;
@@ -105,11 +105,11 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
         {
             case "turn/started":
                 _turn = parameters?.Property("turn")?.String("id");
-                return _interruptPending ? Interrupt() ?? ProtocolOutput.Empty : ProtocolOutput.Empty;
+                return _interruptPending ? Interrupt() : ProtocolOutput.Empty;
             case "thread/started" when parameters?.Property("thread")?.String("id") is { } session:
                 _thread = session;
                 return new([new AgentEvent.SessionStarted(session)], [], false);
-            case "item/agentMessage/delta" when parameters?.String("itemId") is { } itemId && parameters?.String("delta") is { } delta:
+            case "item/agentMessage/delta" when parameters is { } fields && fields.String("itemId") is { } itemId && fields.String("delta") is { } delta:
                 return new([new AgentEvent.MessageDelta(itemId, delta)], [], false);
             case "item/completed" when parameters?.Property("item") is { } item && item.String("type") == "agentMessage" && item.String("text") is { } text:
                 return new([new AgentEvent.Message(text) { Id = item.String("id"), Partial = _interrupted }], [], false);
@@ -167,7 +167,7 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
         id = _requests[requestId].GetProperty("id"), result = new { decision = "decline" },
     })], false);
 
-    public override ProtocolOutput? Interrupt()
+    public override ProtocolOutput Interrupt()
     {
         _interrupted = true;
         _interruptPending = true;

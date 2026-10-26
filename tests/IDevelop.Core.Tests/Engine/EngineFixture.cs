@@ -47,7 +47,7 @@ internal sealed class EngineFixture : IAsyncDisposable
 
     public string Project { get; }
 
-    public string Evidence { get; }
+    private string Evidence { get; }
 
     public Workflow Workflow { get; set; } = Workflow.Empty(WorkflowId.New());
 

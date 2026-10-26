@@ -8,5 +8,6 @@
     <Project Path="tests/IDevelop.GitExit/IDevelop.GitExit.csproj" />
     <Project Path="tests/IDevelop.Desktop.Tests/IDevelop.Desktop.Tests.csproj" />
     <Project Path="tests/IDevelop.FakeAgent/IDevelop.FakeAgent.csproj" />
+    <Project Path="tests/Shared/IDevelop.TestSupport.csproj" />
   </Folder>
 </Solution>

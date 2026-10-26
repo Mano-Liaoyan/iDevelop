@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
-             xmlns:conversation="using:IDevelop.Desktop.Conversation"
              xmlns:execution="using:IDevelop.Desktop.Execution"
              xmlns:inspector="using:IDevelop.Desktop.Inspector"
              xmlns:theme="using:IDevelop.Desktop.Theme"
@@ -86,7 +85,7 @@
                   <theme:KindTile Grid.RowSpan="2" Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" />
                   <!-- Until the box has focus, a text block over it shows the title, wrapped as the box wraps it, so the header
                        reads as a title rather than a field. -->
-                  <Panel Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0">
+                  <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0">
                     <TextBox Classes="headerTitle" Text="{Binding Title}"
                              AutomationProperties.AutomationId="TaskTitle"
                              AutomationProperties.Name="Title" />
@@ -108,7 +107,7 @@
                       </Border>
                     </StackPanel>
                   </inspector:SeparatedLine>
-                  <Button Grid.Column="3" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
+                  <Button Grid.Row="0" Grid.Column="3" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
                           AutomationProperties.AutomationId="InspectorMore"
                           AutomationProperties.Name="More">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
@@ -151,7 +150,7 @@
                   <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconLink}" />
                   </Border>
-                  <TextBlock Grid.Column="2" Classes="headerName" Text="{Binding Kind}" />
+                  <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Kind}" />
                   <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="Connection" />
                 </Grid>
               </inspector:InspectorGrid>
@@ -177,7 +176,7 @@
                   <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
                   </Border>
-                  <TextBlock Grid.Column="2" Classes="headerName" Text="{Binding Name}" />
+                  <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Name}" />
                   <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding TaskCount}" />
                 </Grid>
               </inspector:InspectorGrid>
@@ -502,10 +501,10 @@
                                       <inspector:InspectorRow Classes="firstLine" Layout="Full" Label="{Binding Label}">
                                         <inspector:InspectorRow.Actions>
                                           <Button Classes="glyph" Classes.open="{Binding Agent.IsEditing, FallbackValue=False}"
-                                                  IsVisible="{Binding HasAgent}" Command="{Binding Agent.EditCommand}"
+                                                  IsVisible="{Binding HasAgent}" Command="{Binding Agent.EditCommand, FallbackValue={x:Null}}"
                                                   ToolTip.Tip="Change the agent"
                                                   AutomationProperties.AutomationId="ProposalAgentEdit"
-                                                  AutomationProperties.Name="{Binding Agent.EditName}">
+                                                  AutomationProperties.Name="{Binding Agent.EditName, FallbackValue={x:Null}}">
                                             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" Width="14" Height="14" />
                                           </Button>
                                         </inspector:InspectorRow.Actions>
@@ -530,19 +529,19 @@
                                           <StackPanel Margin="54,-3,0,0" Spacing="4" IsVisible="{Binding HasAgent}">
                                             <!-- The agent on a card's two lines, the client and then the model and level, so every row reads alike. -->
                                             <StackPanel AutomationProperties.AutomationId="ProposalAgent"
-                                                        AutomationProperties.Name="{Binding Agent.Label}">
-                                              <TextBlock Classes="agentLine" Text="{Binding Agent.Client}" />
-                                              <TextBlock Classes="agentLine" Text="{Binding Agent.Model}"
+                                                        AutomationProperties.Name="{Binding Agent.Label, FallbackValue={x:Null}}">
+                                              <TextBlock Classes="agentLine" Text="{Binding Agent.Client, FallbackValue={x:Null}}" />
+                                              <TextBlock Classes="agentLine" Text="{Binding Agent.Model, FallbackValue={x:Null}}"
                                                          IsVisible="{Binding Agent.Model, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
                                             </StackPanel>
-                                            <TextBlock Classes="caption" Text="{Binding Agent.Reason}" TextWrapping="Wrap"
+                                            <TextBlock Classes="caption" Text="{Binding Agent.Reason, FallbackValue={x:Null}}" TextWrapping="Wrap"
                                                        IsVisible="{Binding Agent.Reason, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
                                                        AutomationProperties.AutomationId="ProposalAgentReason" />
                                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6"
                                                   IsVisible="{Binding Agent.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
                                               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
                                                         VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
-                                              <TextBlock Grid.Column="1" Text="{Binding Agent.Note}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                              <TextBlock Grid.Column="1" Text="{Binding Agent.Note, FallbackValue={x:Null}}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                                          AutomationProperties.AutomationId="ProposalAgentNote" />
                                             </Grid>
                                           </StackPanel>
@@ -649,13 +648,13 @@
                             </StackPanel>
                           </Button>
                           <Button Classes.primary="{Binding !ShowsAcceptAndFinish}" Classes.action="{Binding ShowsAcceptAndFinish}"
-                                  Command="{Binding Proposal.AcceptCommand}"
+                                  Command="{Binding Proposal.AcceptCommand, FallbackValue={x:Null}}"
                                   ToolTip.Tip="{Binding Proposal.AcceptTip, FallbackValue={x:Null}}"
                                   AutomationProperties.AutomationId="AcceptProposal"
                                   AutomationProperties.Name="{Binding Proposal.AcceptLabel, FallbackValue=Accept}">
                             <TextBlock Text="{Binding Proposal.AcceptLabel, FallbackValue=Accept}" />
                           </Button>
-                          <Button Classes="action" Command="{Binding Proposal.DismissCommand}"
+                          <Button Classes="action" Command="{Binding Proposal.DismissCommand, FallbackValue={x:Null}}"
                                   ToolTip.Tip="{Binding Proposal.DismissTip, FallbackValue={x:Null}}"
                                   AutomationProperties.AutomationId="DismissProposal"
                                   AutomationProperties.Name="Dismiss">

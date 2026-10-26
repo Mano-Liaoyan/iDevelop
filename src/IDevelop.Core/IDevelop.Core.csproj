@@ -1,11 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <RootNamespace>IDevelop</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="JetBrains.Annotations" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="IDevelop.Core.Tests" />
     <InternalsVisibleTo Include="IDevelop.GitExit" />
     <InternalsVisibleTo Include="IDevelop.Desktop" />
     <InternalsVisibleTo Include="IDevelop.Desktop.Tests" />
+    <InternalsVisibleTo Include="IDevelop.TestSupport" />
   </ItemGroup>
 </Project>

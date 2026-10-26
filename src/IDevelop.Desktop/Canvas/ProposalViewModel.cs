@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Windows.Input;
 using Avalonia;
-using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Clients;
 using IDevelop.Nodes;
@@ -39,7 +38,7 @@ public sealed class ProposalItemViewModel(
         : hasText ? $"Fills {slot} · Has your text"
         : $"Fills {slot}";
 
-    public string Preview { get; } = preview;
+    private string Preview { get; } = preview;
 
     /// <summary>The agent the task takes once accepted, or null for a task that takes no agent.</summary>
     public ProposalAgentViewModel? Agent { get; } = agent;
@@ -93,6 +92,8 @@ public sealed class ProposalViewModel : ObservableObject
     private string? _problem;
     private IReadOnlyList<string> _connections = [];
 
+    /// <param name="canvas">The canvas that shows the planner and the proposal's ghosts.</param>
+    /// <param name="read">The proposal that the planner's reply holds, or the problem that stops its read.</param>
     /// <param name="identity">Names the planner's reply the proposal was read from, which a new reply replaces.</param>
     internal ProposalViewModel(WorkflowCanvasViewModel canvas, ProposalRead read, object identity)
     {
@@ -192,7 +193,7 @@ public sealed class ProposalViewModel : ObservableObject
     /// <summary>Hides the proposal until the planner proposes again.</summary>
     public ICommand DismissCommand => _dismiss;
 
-    internal Proposal? Proposal { get; }
+    private Proposal? Proposal { get; }
 
     /// <summary>The planner's agent while the box is ticked, which a new task without an agent of its own takes, else null.</summary>
     internal ExecutionSettings? Fallback => UsePlannerAgent ? _canvas.Workflow.Tasks.GetValueOrDefault(Proposal!.Planner)?.Execution : null;
@@ -240,8 +241,7 @@ public sealed class ProposalViewModel : ObservableObject
             // A fill shows the model of the agent it takes, its task's own or the planner's choice, on the card's second line.
             var agent = agents.GetValueOrDefault(fill.Slot);
             cards.Add(new GhostCardViewModel(
-                Place(fill.Slot, workflow.Positions[fill.Slot]), "Fills", fill.Title ?? slot.Title,
-                Preview(slot.Blueprint, fill.Fields), _canvas.KindOf(slot.Blueprint))
+                Place(fill.Slot, workflow.Positions[fill.Slot]), "Fills", fill.Title ?? slot.Title, _canvas.KindOf(slot.Blueprint))
             {
                 Detail = agent?.Model,
                 Note = agent?.GhostNote,
@@ -255,8 +255,7 @@ public sealed class ProposalViewModel : ObservableObject
             var agent = agents.GetValueOrDefault(node.Id);
             var hasAgent = agent?.Settings is not null;
             cards.Add(new GhostCardViewModel(
-                Place(node.Id, layout[node.Id]), hasAgent ? agent!.Client : $"New {node.Blueprint.Name}", node.Title,
-                Preview(node.Blueprint, node.Fields), _canvas.KindOf(node.Blueprint))
+                Place(node.Id, layout[node.Id]), hasAgent ? agent!.Client : $"New {node.Blueprint.Name}", node.Title, _canvas.KindOf(node.Blueprint))
             {
                 Detail = hasAgent ? agent!.Model : null,
                 Note = agent?.GhostNote,
@@ -394,7 +393,7 @@ public sealed class ProposalViewModel : ObservableObject
     /// <summary>The first value the proposal gives, in the blueprint's field order, as a card previews its first field.</summary>
     private static string Preview(Blueprint? blueprint, IReadOnlyDictionary<string, string> fields) =>
         (blueprint?.Fields.Select(field => field.Key) ?? fields.Keys)
-            .Select(key => fields.GetValueOrDefault(key))
+            .Select(fields.GetValueOrDefault)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
 
     /// <summary>"Added 3 tasks.", "Filled 1 task.", or both, leaving out a count of none.</summary>

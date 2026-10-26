@@ -1,6 +1,5 @@
 using IDevelop.Engine;
 using IDevelop.TestSupport;
-using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Engine.EngineFixture;
 using static IDevelop.TestSupport.FakeRule;
 
@@ -37,7 +36,7 @@ public sealed class SchedulingTests : IAsyncLifetime
         await Until<NodeState.Running>(engine, c);
         Assert.Equal((new NodeState.Completed(), new NodeState.Idle()), (engine.State(a), engine.State(d)));
         Assert.Equal("It waits for B.", engine.CanRun(d));
-        File.WriteAllText(gate, "");
+        await File.WriteAllTextAsync(gate, "");
         await Until<NodeState.Completed>(engine, d);
         var prompt = _f.Prompt("d.txt");
         Assert.Contains("### B\n\nReport B\n\n### C\n\nReport C", prompt, StringComparison.Ordinal);
