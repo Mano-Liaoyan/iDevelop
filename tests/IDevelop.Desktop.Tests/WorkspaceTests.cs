@@ -208,6 +208,16 @@ public sealed class WorkspaceTests : IDisposable
 
     private static FakeRule Hangs() => On().Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-1")).Hang();
 
+    /// <summary>
+    /// Waits until the window lets the closed project go. It does once the project's nodes stopped and closing resumes on
+    /// the UI thread, a moment after the engine reports the last stop, and until then opening the project again is refused.
+    /// </summary>
+    private static void WaitUntilLetGo(Shell shell, string folder) => shell.WaitUntil(() =>
+    {
+        using var free = IDevelop.Engine.ProjectLock.TryTake(folder);
+        return free is not null;
+    }, "the window lets the closed project go");
+
     [AvaloniaFact]
     public void A_project_whose_lock_cannot_be_written_stays_closed_and_the_status_says_why()
     {
@@ -262,6 +272,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
         shell.Choose("StopAndLeave");
         shell.WaitUntil(() => shell.Tree().Length == 0 && !project.RunningNodes.Any(), "alpha closes and its node stops");
+        WaitUntilLetGo(shell, alpha);
 
         Assert.Equal("iDevelop", shell.Window.Title);
         shell.Window.ViewModel.Open(alpha);
@@ -511,6 +522,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("beta - iDevelop: Design, Implement", ("beta", "Build")), (Shown(shell), shell.Breadcrumb()));
         shell.WaitUntil(() => whenStopped is not null, "alpha's task stops");
         Assert.Equal((false, "beta"), whenStopped);
+        WaitUntilLetGo(shell, alpha);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
         Assert.Equal("Input required · interrupted", shell.CardText("Design", "CardStatus"));

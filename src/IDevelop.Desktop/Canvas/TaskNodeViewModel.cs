@@ -46,6 +46,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private bool _isLibrary;
     private NodeState _state;
     private NodeRole _role;
+    private IReadOnlyList<ClientChoice> _clientChoices = [];
+    private IReadOnlyList<Choice> _modelChoices = [];
+    private IReadOnlyList<Choice> _reasoningChoices = [];
 
     internal TaskNodeViewModel(WorkflowCanvasViewModel canvas, TaskDefinition task, CanvasPoint position)
     {
@@ -166,24 +169,24 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     /// <summary>The card's second line in every state: the model and its level, or empty while the task names neither.</summary>
     public string AgentModel => RunText.AgentLines(_task.Execution, Status).Model ?? "";
 
-    public IReadOnlyList<ClientChoice> ClientChoices =>
-        [new(Id, null, "None"), .. ClientCatalog.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))];
+    public IReadOnlyList<ClientChoice> ClientChoices => Kept(ref _clientChoices,
+        [new(Id, null, "None"), .. ClientCatalog.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))]);
 
     public ClientChoice SelectedClient => ClientChoices.First(choice => choice.Id == _task.Execution?.Client);
 
     public bool HasClient => _task.Execution is not null;
 
     /// <summary>The models this machine offers, then the task's model when it is not one of them, marked.</summary>
-    public IReadOnlyList<Choice> ModelChoices => _task.Execution is { } settings
+    public IReadOnlyList<Choice> ModelChoices => Kept(ref _modelChoices, _task.Execution is { } settings
         ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, Status)))]
-        : [];
+        : []);
 
     public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Model);
 
     /// <summary>The levels the task's model offers, then the task's level when the model does not offer it, marked.</summary>
-    public IReadOnlyList<Choice> ReasoningChoices => _task.Execution is { } settings
+    public IReadOnlyList<Choice> ReasoningChoices => Kept(ref _reasoningChoices, _task.Execution is { } settings
         ? [.. ExecutionChoices.Reasoning(settings, Status).Select(choice => new Choice(Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
-        : [];
+        : []);
 
     public Choice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Reasoning);
 
@@ -260,6 +263,10 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
         Location = WorkflowCanvasViewModel.ToPoint(position);
     }
+
+    // A picker whose list is replaced rebuilds its entries, which can swallow a click or key the person gives it at that
+    // moment, so a list that came out the same, as after a skill listing lands, stays the very list the picker shows.
+    private static IReadOnlyList<T> Kept<T>(ref IReadOnlyList<T> shown, IReadOnlyList<T> now) => now.SequenceEqual(shown) ? shown : shown = now;
 
     /// <summary>The task's agent changed, or what the clients offer did.</summary>
     internal void OnAgentChanged()

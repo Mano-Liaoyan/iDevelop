@@ -191,6 +191,24 @@ public sealed class SkillPickerTests : IDisposable
         Assert.Same(Choice(shell, "probe-alpha"), note.FindAncestorOfType<CheckBox>());
     }
 
+    [AvaloniaFact]
+    public void A_listing_that_lands_while_the_person_clicks_a_skill_keeps_the_click()
+    {
+        var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["verify-idevelop"] })));
+        OpenList(shell);
+        var at = shell.Center(Choice(shell, "find-skills"));
+
+        Avalonia.Headless.HeadlessWindowExtensions.MouseMove(shell.Window, at);
+        Avalonia.Headless.HeadlessWindowExtensions.MouseDown(shell.Window, at, MouseButton.Left);
+        // Another listing of the same skills lands, as one that Refresh agents or the node's opening started does.
+        shell.Window.ViewModel.Canvas!.OnClientsChanged();
+        Avalonia.Headless.HeadlessWindowExtensions.MouseUp(shell.Window, at, MouseButton.Left);
+        shell.Render();
+
+        Assert.Equal(["find-skills", "verify-idevelop"], Execution(shell).Skills!);
+        Assert.Equal([("find-skills", true), ("simplify", false), ("verify-idevelop", true)], Ticks(shell));
+    }
+
     [AvaloniaTheory]
     [InlineData(280)]
     [InlineData(320)]
