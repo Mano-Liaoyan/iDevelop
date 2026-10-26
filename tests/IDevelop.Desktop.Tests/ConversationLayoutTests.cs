@@ -10,8 +10,8 @@ using IDevelop.TestSupport;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// A run task's conversation over the canvas, at the smallest and a large window and with the inspector at its least,
-/// default, and greatest width: its header, the run's strip, and the composer keep every control whole and apart, and the
+/// The conversation of a task that ran, over the canvas, at the smallest and a large window and with the inspector at its least,
+/// default, and greatest width: its header, the bar's strip, and the composer keep every control whole and apart, and the
 /// first message folds iDevelop's artifact instructions into a one-line note.
 /// </summary>
 [Collection(ProcessCollection.Name)]

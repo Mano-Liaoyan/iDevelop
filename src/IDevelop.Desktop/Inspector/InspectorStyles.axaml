@@ -328,7 +328,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-  <!-- A short note, whose tooltip holds the full text where a paragraph used to be. It wraps rather than losing its end. -->
+  <!-- A short note, whose tooltip holds the full text. It wraps rather than losing its end. -->
   <Style Selector="TextBlock.note">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />

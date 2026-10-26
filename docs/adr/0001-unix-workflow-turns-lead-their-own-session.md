@@ -1,6 +1,6 @@
 # Unix workflow turns lead their own session and process group
 
-On Linux and macOS, a workflow turn's client root starts through iDevelop's own `posix_spawn` launcher with `POSIX_SPAWN_SETSID`, so it leads a new session and a process group whose ID is its own before the command runs, and cleanup and Stop signal that group. The first design used `POSIX_SPAWN_SETPGROUP` with group 0. The new session was added during the 2026-10-08 implementation run, so that a client has no controlling terminal: when iDevelop runs in a terminal, a client that reads the terminal fails at once, as under a desktop launch, instead of stopping on `SIGTTIN` or `SIGTTOU`.
+On Linux and macOS, a workflow turn's client root starts through iDevelop's own `posix_spawn` launcher with `POSIX_SPAWN_SETSID`, so it leads a new session and a process group whose ID is its own before the command runs, and cleanup and Stop signal that group. The new session gives a client no controlling terminal: when iDevelop runs in a terminal, a client that reads the terminal fails at once, as under a desktop launch, instead of stopping on `SIGTTIN` or `SIGTTOU`.
 
 ## The launch
 

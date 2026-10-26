@@ -37,12 +37,9 @@ In this note, "resume" always means a client's own session resume, such as `clau
 | Pi | The same session id and file, but only when the turn runs in the same folder. Otherwise Pi starts an empty session under that id. | Supported in RPC mode (`--mode rpc`), which iDevelop does not use for turns. | Allow-list: `--no-skills --skill <path>` per launch. |
 | Antigravity CLI | The same conversation id, per its docs and D0. | Supported for input. It has no stdin interrupt, so a stop ends the process. | No per-run control. A generated custom agent (`--agent`) might work, but that is unverified. |
 
-Every client's resume already continues its own session. None of them copies the history into a new session unless asked to. Two things can still make a conversation look as if it starts again:
+Every client's resume continues its own session. None of them copies the history into a new session unless asked to. A new client process per turn still starts the client again, reloads the stored history, and re-runs startup work such as hooks, MCP servers, and plugins.
 
-- A new client process per turn. Every turn starts the client again, reloads the stored history, and re-runs startup work such as hooks, MCP servers, and plugins.
-- iDevelop's own attempts. A message to a task that is not running starts a new attempt that continues the earlier attempt's session (see [What iDevelop does today](#what-idevelop-does-today)). The conversation view then shows the earlier attempts above a "New attempt" marker. That probably explains much of what the owner described, but no one has confirmed it with the owner.
-
-## What iDevelop does today
+## What iDevelop's launches do
 
 - Each turn is one client process. A resumed turn sends the person's message alone, with the session id ([`LaunchPlan.cs`](../../src/IDevelop.Core/Clients/LaunchPlan.cs)). No iDevelop prompt copies earlier messages into a resumed turn.
 - The launches:
@@ -51,7 +48,6 @@ Every client's resume already continues its own session. None of them copies the
   - Pi: `-p --mode json --session-id <id>` ([`Pi.cs`](../../src/IDevelop.Core/Clients/Pi.cs)).
   - Antigravity CLI: `--conversation <id>` with one stdin line ([`Antigravity.cs`](../../src/IDevelop.Core/Clients/Antigravity.cs)).
 - Claude Code and Codex close stdin at the turn's terminal event (`result`, `turn/completed`), so the process exits ([agent-clients.md](../agent-clients.md#conversation-protocols-from-c1)).
-- A message to a task that is not running starts a new attempt whose first turn continues the latest attempt's session ([context.md](../context.md#working-decisions)). `ProjectRuns.EarlierAttempts` chains those attempts (`ProjectRuns.cs`). The conversation view shows each one under a "New attempt" marker and lists them in an attempt picker ([`ConversationItems.cs`](../../src/IDevelop.Desktop/Conversation/ConversationItems.cs), [`ConversationView.axaml`](../../src/IDevelop.Desktop/Conversation/ConversationView.axaml)). Only a reply to a waiting attempt, in May ask or Chat mode, is the next turn of the same attempt ([glossary](../../GLOSSARY.md): Attempt, Continuation).
 
 ### What the probes recorded
 
@@ -61,7 +57,6 @@ Every client's resume already continues its own session. None of them copies the
 - **D0, 2026-10-06.** Case 8, "resume in new process", passed for all five launch modes as "same session recalled".
   - Case 6, live input: Claude Code queued input as the next turn, Codex app-server took `turn/steer` in the same turn, Pi's `steer` ran inside the same agent run, and Antigravity CLI queued a second stdin line as the next turn.
   - Case 7, Stop and send in the same process, passed for Claude Code, Codex app-server, and Pi.
-  - D0 noted that `TurnEnded` and `UserMessageDelivered` events are needed only if one client process is kept across turns ([D0 record](../handoffs/2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server)).
 - **Claude Code's session files.** The Claude Code 2.1.289 probes on 2026-10-04 and 2026-10-05 left seven scratch folders. Each holds a single transcript, and every entry in it carries the file's own session id, although each resume case ran two processes. So a resumed `-p` turn appended to the same file rather than writing a copy. That is inferred from the file structure; no contents were read.
 - **Codex's rollout files.** Two Codex 0.160.1 rollout files that iDevelop wrote on 2026-10-09 each hold four turns under one `session_meta`. iDevelop starts one process per turn, so each resumed turn appended to the same file. This too is inferred from the file structure alone.
 
@@ -144,30 +139,6 @@ Every client's resume already continues its own session. None of them copies the
 - `--input-format stream-json` "reads one NDJSON message per line from stdin and runs a turn for each" (`agy --help`). The 1.1.15 changelog says it runs "one turn per message in a single conversation, so a driver can keep a session open" (`agy changelog`).
 - The docs: "a single `conversation_id` tracks the entire session, and `init` is only sent once". "Each prompt executes a full turn and emits its own `result` event", and "the process exits after the input pipe is closed and the current turn completes".
 - There is no stdin interrupt. A `control_request` or `control_response` line ends the session with an `ERROR` result and exit code 2 ([headless mode](https://antigravity.google/docs/cli/headless)). Stopping a turn therefore means a signal, which ends the process (D0: SIGINT gave `interrupted` and exit 1). Stop and send then has to continue with `--conversation` in a new process.
-
-## What one live session per attempt would need
-
-All four clients can keep one process across turns. Keeping one would be an addition to the runner, not a replacement for resume: the process dies when iDevelop closes or crashes, and Continue fix, a reopened run, and Open in terminal all still need the client's resume.
-
-**Runner work** (inferred from the code and the protocols above):
-
-- **A turn stops being a process.** `TurnProtocol` ends a process at the terminal event and closes stdin. A live attempt needs a session host that keeps stdin open, starts each continuation by writing to the same process, and tells a turn's end apart from the process's end. These are D0's `TurnEnded` and `UserMessageDelivered` events.
-  - Claude Code: the next `user` line, with `--replay-user-messages` as the delivery receipt.
-  - Codex: the next `turn/start` on the same `threadId`, whose response carries the turn id.
-  - Pi: RPC `prompt`, which means moving Pi from `-p --mode json` to `--mode rpc`.
-  - Antigravity CLI: the next stdin line.
-- **Mid-turn input** can go into the running turn: Codex `turn/steer`, Pi `steer` or `follow_up`. Claude Code and Antigravity CLI queue it as the next turn.
-- **Stop and send** stays in the process for Claude Code (`interrupt`), Codex (`turn/interrupt`), and Pi (`abort`). Antigravity CLI must be stopped and resumed in a new process.
-- **Settings changed between turns** need a client channel. Codex takes overrides on `turn/start`. Claude Code has `set_model` and `set_permission_mode`; changing its effort in a live process is unverified. Pi's RPC `set_model` can change the user's default model, which iDevelop never sends ([agent-clients.md](../agent-clients.md#pi-101)). Antigravity CLI has no such channel. So a settings change, the "Settings changed" marker in the conversation view, would have to restart the process with a resume.
-- **Read-only and policy changes** also need a restart. Antigravity CLI cannot turn a resumed session read-only at all ([agent-clients.md](../agent-clients.md#sessions)).
-- **Pi's folder.** A turn that runs in another folder than the session's first turn silently starts a new session, whether or not turns stay one process per turn. The research suggested `--session-dir` or `--session <path>` as the fix. The [probe](#probe-results-2026-10-09) found that `--session-dir` does not carry a session to another folder, and that `--session <path>` keeps the history but runs Pi in the session's own folder.
-
-**Records this would change.** These are product decisions for the owner:
-
-- The [node model record](../handoffs/2026-10-04-node-model.md#interaction-resumes-the-clients-own-session) says "A turn is one client process … No process runs between turns, so a waiting node costs nothing and survives quitting iDevelop". [Product direction](../product-direction.md#nodes-have-types-that-users-define) says "a conversation resumes the client's own session, so no process runs while a node waits". [context.md](../context.md#working-decisions) says "a node that waits for the person holds no process and no lock". The glossary defines a Turn as "one client process within an attempt".
-- The `.idp/attempts/<task-id>/run.lock` lock is held per turn. A live process would hold it while the node waits, unless the lock moves to the session host.
-
-**A cheaper first step** (inference): iDevelop could keep the process per turn and change what the person sees and what a message starts. For example, a message to a resting task could continue the same attempt instead of starting a new one, or the conversation could show one continuous thread with no "New attempt" marker when the session is the same. The Pi folder fix applies either way. Only the owner can say which of these the request means.
 
 ## Skills by client
 
@@ -284,9 +255,8 @@ Each item below needs the owner's approval to run a real client.
 
 These are product decisions, and the research made none of them:
 
-1. Whether "one live session" means a client process kept alive while a node waits, which changes the records listed in [What one live session per attempt would need](#what-one-live-session-per-attempt-would-need), or one continuous attempt and conversation over the existing per-turn resume.
-2. How long an idle live process may stay idle before iDevelop closes it and falls back to resume.
-3. Whether a node's skill choice is stored per client, and what an Antigravity CLI node offers while no per-run control is confirmed.
+1. Whether "one live session" means a client process kept alive while a node waits, or one continuous conversation over the per-turn resume.
+2. Whether a node's skill choice is stored per client, and what an Antigravity CLI node offers while no per-run control is confirmed.
 
 ## Probe results (2026-10-09)
 
@@ -417,13 +387,13 @@ The live-process, mid-turn input, stop, and skill questions stay open.
 
 ### Where the probe differs from the research
 
-- Pi: `--session-dir` is not a fix. [What one live session per attempt would need](#what-one-live-session-per-attempt-would-need) now says so.
+- Pi: `--session-dir` is not a fix.
 - Codex: the app-server exited as soon as stdin closed. The 45-second watchdog did not delay these turns.
 - Claude Code: plan mode did not stop the auto-memory writes to `~/.claude/projects/<folder>/memory/`, and a resumed turn received a memory note written after the session started. The research did not cover auto-memory.
 
 ## Owner's decisions (2026-10-09)
 
-- [#92](https://github.com/Mano-Liaoyan/iDevelop/issues/92): keep resuming the same session for each message, with no long-lived idle processes. Fix Pi. Show a continued session as one conversation, with no "New attempt" divider when the session is the same.
+- [#92](https://github.com/Mano-Liaoyan/iDevelop/issues/92): keep resuming the same session for each message, with no long-lived idle processes. Fix Pi. Show a continued session as one conversation.
 - [#93](https://github.com/Mano-Liaoyan/iDevelop/issues/93): the skill picker lists the node client's installed skills. Claude Code and Pi use an allow-list, Codex a deny-list, and Antigravity is disabled with the note "Antigravity CLI uses all of its installed skills; it can't limit them per task."
 
 ## Sources

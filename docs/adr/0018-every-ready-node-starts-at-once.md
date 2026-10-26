@@ -1,6 +1,6 @@
 # Every ready node starts at once
 
-The engine starts every node that is ready at once, each with its own client process. A node is ready when all its predecessors are completed and none of their results is stale. When a node completes, its result goes along every outgoing edge, and each node after it that is now ready starts. The owner decided on 2026-10-09 in issue [#89](https://github.com/Mano-Liaoyan/iDevelop/issues/89), after a fan-out ran its tasks one after another, that everything ready starts, because the [product direction](../product-direction.md) asks to run independent work concurrently. Map issue [#179](https://github.com/Mano-Liaoyan/iDevelop/issues/179) keeps it ([ADR 0042](0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md)).
+The engine starts every node that is ready at once, each with its own client process. A node is ready when all its predecessors are completed and none of their results is stale. When a node completes, its result goes along every outgoing edge, and each node after it that is now ready starts. The owner decided on 2026-10-09 in issue [#89](https://github.com/Mano-Liaoyan/iDevelop/issues/89) that everything ready starts, because the [product direction](../product-direction.md) asks to run independent work concurrently. Map issue [#179](https://github.com/Mano-Liaoyan/iDevelop/issues/179) keeps it ([ADR 0042](0042-execution-v2-a-node-is-an-agent-and-the-engine-only-routes-results.md)).
 
 ## How it works
 

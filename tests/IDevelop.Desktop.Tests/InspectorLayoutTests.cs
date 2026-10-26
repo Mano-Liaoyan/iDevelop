@@ -599,8 +599,8 @@ public sealed class InspectorLayoutTests : IDisposable
 
     /// <summary>
     /// At the narrowest, the default, and the widest inspector: the panel's two right edges, nothing cut short, nothing
-    /// past the action edge, and every paragraph and box at the value edge. Views that only a run reaches, such as an
-    /// approval's request, call it once they show. The inspector goes back to its width afterwards.
+    /// past the action edge, and every paragraph and box at the value edge. Views that only running a node reaches, such as
+    /// an approval's request, call it once they show. The inspector goes back to its width afterwards.
     /// </summary>
     internal static void AssertLaidOut(Shell shell)
     {
