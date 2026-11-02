@@ -2,6 +2,7 @@ namespace IDevelop.TestSupport;
 
 internal sealed class TempFolder(string? root = null) : IDisposable
 {
+    private static readonly TimeSpan LockPatience = TimeSpan.FromSeconds(10);
     private readonly string _root = root ?? NewRoot();
 
     // The app names a folder as its file system spells it, which TEMP need not (C:\TEMP for C:\Temp).
@@ -48,7 +49,28 @@ internal sealed class TempFolder(string? root = null) : IDisposable
                 }
             }
 
-            Directory.Delete(_root, recursive: true);
+            Delete();
+        }
+    }
+
+    // Windows deletes no file or folder that is open. A process that the test stopped can keep its working folder open
+    // for a short time after it exits, and a skill listing or a client check that the app started can still run when
+    // the test ends. These locks go away in less than a second, so the delete tries again. A lock that stays, such as a
+    // project's window.lock that is not closed, still fails the test after the deadline.
+    private void Delete()
+    {
+        var deadline = DateTime.UtcNow + LockPatience;
+        while (true)
+        {
+            try
+            {
+                Directory.Delete(_root, recursive: true);
+                return;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException && DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(100);
+            }
         }
     }
 }
