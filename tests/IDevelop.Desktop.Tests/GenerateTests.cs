@@ -290,7 +290,7 @@ public sealed class GenerateTests : IDisposable
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Plan export")));
         shell.RunNode();
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
         InspectorLayoutTests.AssertLaidOut(shell);
 
         Assert.False(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsChecked);
@@ -317,7 +317,7 @@ public sealed class GenerateTests : IDisposable
         Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
 
         File.WriteAllText(release, "");
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
         Assert.Equal("Review Proposal", ButtonLabel(shell));
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
@@ -447,7 +447,7 @@ public sealed class GenerateTests : IDisposable
         var shell = OpenEmpty(Fresh(ClientId.Codex).CaptureStdin(prompt).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, Reply)));
 
         SubmitOnCodex(shell);
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
 
         var text = File.ReadAllText(prompt);
         Assert.Contains("\nAgents you may choose:\n- claude-code (Claude Code):\n  - claude-fable-5-1, Claude Fable 5.1. Reasoning: low, medium, high, xhigh, max.\n", text);
@@ -607,7 +607,7 @@ public sealed class GenerateTests : IDisposable
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         SubmitOnCodex(shell);
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
         var shown = Review(shell).ToDictionary(row => row.Title, row => row.Agent);
         var ghosts = Ghosts(shell);
         // The blueprint's own agent wins over the planner's choice, usable or not, and the row says so.
@@ -644,7 +644,7 @@ public sealed class GenerateTests : IDisposable
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         SubmitOnCodex(shell);
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
         Assert.Equal(("Own", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null), Assert.Single(Review(shell)));
 
         shell.Click(EditButton(shell, "Own"));
@@ -683,7 +683,7 @@ public sealed class GenerateTests : IDisposable
             Assert.True(codexReady.Task.Wait(TimeSpan.FromSeconds(60)), "Codex is ready");
             var shell = Shell.Open(_temp.Create("seed"), clients);
             Submit(shell, Prompt);
-            shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+            shell.WaitForProposal();
 
             Assert.IsType<ClientStatus.Checking>(clients.Current[ClientId.Antigravity]);
             Assert.DoesNotContain("antigravity", File.ReadAllText(prompt));
@@ -754,7 +754,7 @@ public sealed class GenerateTests : IDisposable
             """;
         var shell = OpenEmpty(Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
         Submit(shell, Prompt);
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
 
         Assert.Equal(["Codex · GPT-5.5 · low Export API", "New Approval Sign off"], Ghosts(shell));
         Assert.Equal([("Export API", "Codex · GPT-5.5 · low", "Routine.", null), ("Sign off", null, null, null)], Review(shell));
@@ -785,7 +785,7 @@ public sealed class GenerateTests : IDisposable
     {
         var shell = OpenEmpty(Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, Reply)));
         Submit(shell, Prompt);
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
         return shell;
     }
 
@@ -795,7 +795,7 @@ public sealed class GenerateTests : IDisposable
         Install(_fakes, ClientId.ClaudeCode);
         var shell = OpenEmpty(Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, ChoosingReply)));
         SubmitOnCodex(shell);
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
         return shell;
     }
 

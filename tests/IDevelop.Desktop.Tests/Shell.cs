@@ -301,6 +301,14 @@ internal sealed partial class Shell
         Render();
     }
 
+    /// <summary>
+    /// Waits until the inspector shows a planner's proposal and the planner's turn has ended. The reply can come in through
+    /// the planner's log before the turn ends. When the turn ends, the node reads the reply again, so a choice made before
+    /// that can be lost, and a button that needs the planner to wait does nothing.
+    /// </summary>
+    public void WaitForProposal() =>
+        WaitUntil(() => Has<StackPanel>("Proposal") && !Window.ViewModel.RunningNodes.Any(), "the proposal shows and the planner's turn ends");
+
     /// <summary>Runs the UI thread's jobs until the condition holds, for work that ends on another thread.</summary>
     public void WaitUntil(Func<bool> condition, string what)
     {

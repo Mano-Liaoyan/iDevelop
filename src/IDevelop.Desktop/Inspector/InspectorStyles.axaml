@@ -345,8 +345,9 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
-    <!-- Its text starts 12 px in and its chevron ends 10 px in, where a ComboBox draws them. -->
-    <Setter Property="Padding" Value="11,5,9,5" />
+    <!-- Its text starts 12 px in and its chevron ends 10 px in, where a ComboBox draws them. With its 1 px border, its text
+         starts 5 px down and ends 5 px up, as in a ComboBox of a row. -->
+    <Setter Property="Padding" Value="11,4,9,4" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
@@ -429,6 +430,11 @@
   <Style Selector="inspector|InspectorRow ComboBox, inspector|InspectorRow TextBox">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
+  </Style>
+  <!-- Fluent pads a ComboBox 5 px above its text and 7 px below. On Windows, Inter's line at 13 px takes 18 px, so the box
+       was 30 px high and sat 1 px below its label. With 5 px above and below, it is one line high, as the skill picker is. -->
+  <Style Selector="inspector|InspectorRow ComboBox">
+    <Setter Property="Padding" Value="12,5,0,5" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox.multiline">
     <Setter Property="MinHeight" Value="72" />

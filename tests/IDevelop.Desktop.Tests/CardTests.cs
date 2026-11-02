@@ -294,7 +294,7 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Header(shell.Node("Plan export")));
 
         shell.RunNode("Plan export");
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
 
         var ring = shell.CardLayer("Plan export", "stateStroke");
         Assert.Equal(["Plan export", "Proposal · 2 tasks", "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Plan export")));

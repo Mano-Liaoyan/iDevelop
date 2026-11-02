@@ -396,7 +396,7 @@ public sealed class PlanningTests : IDisposable
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design export")));
         shell.RunNode();
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
         return shell;
     }
 

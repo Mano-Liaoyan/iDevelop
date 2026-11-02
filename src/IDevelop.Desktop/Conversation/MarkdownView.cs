@@ -353,7 +353,13 @@ public sealed class MarkdownView : StackPanel
         }
     }
 
-    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    // Markdown breaks its lines with "\n". Indented JSON breaks them with Environment.NewLine unless it is told otherwise.
+    private static readonly JsonSerializerOptions IndentedJson = new()
+    {
+        WriteIndented = true,
+        NewLine = "\n",
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     // A long run with no break opportunity takes time that grows with its square to wrap, so it runs past the edge instead.
     private static SelectableTextBlock Plain(string source) => new() { Classes = { "md", "mdMono" }, Text = source, TextWrapping = TextWrapping.WrapWithOverflow };

@@ -125,6 +125,9 @@ public sealed class SessionTests : IAsyncLifetime
         Assert.Equal(ClientId.Pi, Assert.Single(expected.Checking));
         Assert.Equal(expected, engine.Planned(a));
         Assert.Null(engine.Planned(b));
+        // The engine can still write the turn's last entries after it says the node completed. On Windows, a second engine
+        // cannot open a log that the first one writes, so the first engine closes, as the window does before a reopen.
+        await engine.DisposeAsync();
         await using var reopened = new WorkflowEngine(_f.Project, _f.Workflow, await _f.Fakes.DiscoverAsync());
         Assert.Equal(expected, reopened.Planned(a));
     }
@@ -189,8 +192,11 @@ public sealed class SessionTests : IAsyncLifetime
         Assert.Equal(new NodeState.InputRequired(NodeState.Interrupted), engine.State(a));
         await engine.Send(a, "Go on.", interrupt: false);
         await Until<NodeState.Completed>(engine, a);
+        var result = engine.History(a)[0];
+        // The first engine closes before the reopen, so it writes no entry while the second engine reads the log.
+        await engine.DisposeAsync();
         await using var reopened = new WorkflowEngine(_f.Project, _f.Workflow, await _f.Fakes.DiscoverAsync());
-        Assert.Equal((new NodeState.Completed(), engine.History(a)[0]), (reopened.State(a), Assert.Single(reopened.History(a))));
+        Assert.Equal((new NodeState.Completed(), result), (reopened.State(a), Assert.Single(reopened.History(a))));
         Assert.Contains(new NodeEntry.PersonMessage("Go on."), reopened.Entries(a));
         Assert.Contains("nodes/\n", await File.ReadAllTextAsync(Path.Combine(_f.Project, ".idp", ".gitignore")), StringComparison.Ordinal);
     }

@@ -212,6 +212,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
             if (SetProperty(ref _proposal, value))
             {
                 ShowState();
+                // The planner's reply can come in through its log before the engine says the node changed, so the canvas
+                // draws the proposal's ghosts now and not only at the engine's next change.
+                _canvas.ShowGhosts();
             }
         }
     }
