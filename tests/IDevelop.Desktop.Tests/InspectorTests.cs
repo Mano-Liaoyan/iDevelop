@@ -427,7 +427,7 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design export")));
         shell.RunNode();
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
         shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · reply", "the planner waits");
         return shell;
     }

@@ -37,7 +37,7 @@ public sealed class CliAgentTests : IDisposable
     public async Task The_turn_waits_past_the_success_exit_time_for_a_background_subagent_and_takes_the_later_result()
     {
         Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).Print(SessionLine(ClientId.ClaudeCode, Session)).Print(ClaudeBackgroundStart())
-            .WaitForStdinEnd().Sleep(800).Print(ClaudeBackgroundEnd(Session, "Found 3 files.", Answer)));
+            .WaitForStdinEnd().Sleep(2500).Print(ClaudeBackgroundEnd(Session, "Found 3 files.", Answer)));
 
         var (outcome, events) = await Turn();
 
@@ -53,7 +53,7 @@ public sealed class CliAgentTests : IDisposable
         Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).Print(SessionLine(ClientId.ClaudeCode, Session)).Print(ClaudeBackgroundStart())
             .WaitForStdinEnd().Print(ClaudeBackgroundEnd(Session, "Found 3 files.", Answer)).Hang());
 
-        var (outcome, _) = await Turn();
+        var (outcome, _) = await Turn(successExitMilliseconds: 200);
 
         Assert.Equal(new TurnOutcome.Failed("Claude Code reported success but did not shut down."), outcome);
     }
@@ -81,12 +81,14 @@ public sealed class CliAgentTests : IDisposable
         Assert.Equal(new AgentEvent.Notice("Every tool runs without asking for permission."), events[0]);
     }
 
-    private async Task<(TurnOutcome Outcome, AgentEvent[] Events)> Turn()
+    // A fake client is a dotnet process. Under the load of the whole suite on Windows, it can take more than 200 ms to exit
+    // after it reports success, so a turn that expects a clean exit gives it 2 seconds.
+    private async Task<(TurnOutcome Outcome, AgentEvent[] Events)> Turn(int successExitMilliseconds = 2000)
     {
         var node = TestNodes.Implement(TestTasks.Design, "Survey", "Survey the files",
             execution: new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" });
         var events = new ConcurrentQueue<AgentEvent>();
-        var agent = new CliAgent(await _fakes.DiscoverAsync(), _project) { SuccessExitTime = TimeSpan.FromMilliseconds(200) };
+        var agent = new CliAgent(await _fakes.DiscoverAsync(), _project) { SuccessExitTime = TimeSpan.FromMilliseconds(successExitMilliseconds) };
         var outcome = await agent.Turn(node, _project, "Survey the files", null, events.Enqueue, Channel.CreateUnbounded<QuestionReply>().Reader, CancellationToken.None).WaitAsync(Patience);
         return (outcome, [.. events]);
     }

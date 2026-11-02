@@ -149,7 +149,9 @@ public sealed class SkillStartTests : IDisposable
         Assert.IsType<TurnOutcome.Done>(outcome);
         Assert.Contains(new AgentEvent.Notice("Pi runs without gone, which is not installed."), events);
         var arguments = JsonSerializer.Deserialize<string[]>(await File.ReadAllTextAsync(Path.Combine(evidence, "arguments.json")))!;
-        Assert.Equal(["--no-skills", "--skill", Path.Combine(Path.GetFullPath(project), ".pi", "skills", "deploy", "SKILL.md")],
+        // Pi gets the file with forward slashes on Windows, so it passes through pi.cmd.
+        var deploy = Path.Combine(Path.GetFullPath(project), ".pi", "skills", "deploy", "SKILL.md");
+        Assert.Equal(["--no-skills", "--skill", OperatingSystem.IsWindows() ? deploy.Replace('\\', '/') : deploy],
             arguments.SkipWhile(argument => argument != "--no-skills").TakeWhile(argument => argument != "--session-id"));
     }
 

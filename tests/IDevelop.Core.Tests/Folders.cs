@@ -5,14 +5,14 @@ internal static class Folders
     /// <summary>
     /// The folder as a process started in it reports its current folder. On Linux and macOS that is without links, which
     /// matters on macOS, where the temporary folder sits under /var, a link to /private/var. Windows keeps a junction or
-    /// a link as given.
+    /// a link as given, and spells each part as the disk does, so TEMP=C:\TEMP gives C:\Temp.
     /// </summary>
     public static string AsCurrentFolder(string path)
     {
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         if (OperatingSystem.IsWindows())
         {
-            return full;
+            return Projects.ProjectFolders.OnDisk(full);
         }
 
         var resolved = Path.GetPathRoot(full)!;

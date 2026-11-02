@@ -89,7 +89,7 @@ public sealed class MinimapTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Plan export")));
         shell.RunNode();
-        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        shell.WaitForProposal();
 
         Assert.Equal(["Plan export", "Ghost Backend API", "Ghost Review the API"], Titles(shell));
         Assert.Equal(Color.Parse("#1E6EF4"), ((ISolidColorBrush)Ring(Item(shell, "Plan export")).BorderBrush!).Color);

@@ -86,7 +86,8 @@ public sealed class ConversationTests
 
         shell.Press(Key.Enter, RawInputModifiers.Control);
 
-        shell.WaitUntil(() => shell.NodeModel("Say hi").LastReply == "Wrote both.", "the continued turn ends");
+        // The reply comes in through the log before the engine records the turn's result.
+        shell.WaitUntil(() => shell.NodeModel("Say hi") is { LastReply: "Wrote both.", Results.Count: 2 }, "the continued turn ends");
         Assert.Equal("one\ntwo", ResumedWith(f));
         Assert.Equal(2, shell.NodeModel("Say hi").Results.Count);
     }
