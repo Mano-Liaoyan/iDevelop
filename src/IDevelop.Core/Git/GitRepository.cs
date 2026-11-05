@@ -416,7 +416,7 @@ internal sealed partial class GitRepository
                 return;
             }
             _job?.Terminate();
-            ProcessCheck.KillTreeQuietly(_process!);
+            ProcessTree.KillQuietly(_process!);
         }
 
         public void Dispose()

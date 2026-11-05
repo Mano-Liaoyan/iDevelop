@@ -35,12 +35,12 @@ public sealed class ChildProcessTests : IDisposable
         var shim = Path.Combine(_fakes.Folder, "bash-client.cmd");
         await File.WriteAllTextAsync(shim, $"@\"{GitBashFactAttribute.Bash}\" -c \"bash -c 'sleep 300 & cat /proc/$!/winpid > {sleeper.Replace('\\', '/')}; wait'\"\r\n");
         var client = ChildProcess.Start(new ResolvedCommand(shim, IsBatchShim: true), [], _folder, ProcessLifetime.Probe);
-        _spawned.Add(client.Identity.Id);
+        _spawned.Add(client.Id);
         var sleepId = await _spawned.PidAsync(sleeper);
 
         client.StopTree();
 
-        AssertGone(client.Identity.Id);
+        AssertGone(client.Id);
         AssertGone(sleepId);
         client.Dispose();
     }
@@ -51,12 +51,12 @@ public sealed class ChildProcessTests : IDisposable
         var sleeper = Path.Combine(_evidence, "sleeper.pid");
         var shim = _fakes.Install("client", On().SpawnThroughCmd(sleeper).Hang());
         var client = ChildProcess.Start(new ResolvedCommand(shim, IsBatchShim: true), [], _folder, ProcessLifetime.Probe);
-        _spawned.Add(client.Identity.Id);
+        _spawned.Add(client.Id);
         var sleeperId = await _spawned.PidAsync(sleeper);
 
         client.Dispose();
 
-        AssertGone(client.Identity.Id);
+        AssertGone(client.Id);
         AssertGone(sleeperId);
     }
 }

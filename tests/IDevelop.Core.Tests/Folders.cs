@@ -12,7 +12,7 @@ internal static class Folders
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         if (OperatingSystem.IsWindows())
         {
-            return Projects.ProjectFolders.OnDisk(full);
+            return TestSupport.FolderSpelling.OnDisk(full);
         }
 
         var resolved = Path.GetPathRoot(full)!;

@@ -24,6 +24,32 @@ internal sealed class SpawnedProcesses : IDisposable
         }
     }
 
+    public static bool IsAlive(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    public static void Stop(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit(Patience);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+        {
+        }
+    }
+
     public void Add(int id) => _ids.Add(id);
 
     /// <summary>Waits until the fake agent has written the pid of the process it started, and adds that process.</summary>
@@ -52,15 +78,7 @@ internal sealed class SpawnedProcesses : IDisposable
     {
         foreach (var id in _ids)
         {
-            try
-            {
-                using var process = Process.GetProcessById(id);
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit(Patience);
-            }
-            catch (Exception e) when (e is ArgumentException or InvalidOperationException)
-            {
-            }
+            Stop(id);
         }
     }
 }
