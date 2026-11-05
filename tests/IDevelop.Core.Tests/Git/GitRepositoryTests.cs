@@ -3,7 +3,6 @@ using System.Text;
 using IDevelop.Clients;
 using IDevelop.Git;
 using IDevelop.TestSupport;
-using static IDevelop.Core.Tests.Git.GitFixture;
 
 namespace IDevelop.Core.Tests.Git;
 
@@ -40,7 +39,7 @@ public sealed class GitRepositoryTests
         Assert.Equal(0, repository.AddWorktree(".worktrees/r/t", "idp/r/task/t", a).ExitCode);
         var checkout = Path.Combine(project, ".worktrees", "r", "t");
         Assert.True(File.Exists(Path.Combine(checkout, "a.txt")));
-        Assert.Contains(Read(repository.Worktrees()), worktree => Path.GetFullPath(worktree) == checkout);
+        Assert.Contains(repository.Worktrees(), worktree => Path.GetFullPath(worktree) == checkout);
         Assert.Equal(Path.Combine(checkout, "services", "api"), repository.ProjectIn(checkout));
 
         repository.EnsureExcluded();
@@ -89,14 +88,14 @@ public sealed class GitRepositoryTests
         f.Write("a.txt", "A captured\n");
         f.Write("new.txt", "new\n");
         var repository = f.Open();
-        var capture = Read(repository.Capture(f.Folder));
+        var capture = repository.Capture(f.Folder);
         Assert.Equal("c6809faa4972f0ec56cec88ce6a6b841c8694660", capture.Hex);
         var recipe = new CommitRecipe(capture, [a], "captured\n\nIDP-Run: fixture\n", "E2 <e2@example.test>", "E2 <e2@example.test>",
             DateTimeOffset.Parse("2026-10-07T00:00:00Z"));
-        Assert.Equal("5135dc4ae170e2e50ce912b0adddc4abf43d2c6d", Read(repository.CreateCommit(recipe)).Hex);
-        Assert.Equal("5135dc4ae170e2e50ce912b0adddc4abf43d2c6d", Read(repository.CreateCommit(recipe)).Hex);
+        Assert.Equal("5135dc4ae170e2e50ce912b0adddc4abf43d2c6d", repository.CreateCommit(recipe).Hex);
+        Assert.Equal("5135dc4ae170e2e50ce912b0adddc4abf43d2c6d", repository.CreateCommit(recipe).Hex);
         Assert.Equal("commit", f.Git("cat-file", "-t", "5135dc4ae170e2e50ce912b0adddc4abf43d2c6d").Trim());
-        var commit = Read(repository.ReadCommit(new("5135dc4ae170e2e50ce912b0adddc4abf43d2c6d")));
+        var commit = repository.ReadCommit(new("5135dc4ae170e2e50ce912b0adddc4abf43d2c6d"));
         Assert.Equal("c6809faa4972f0ec56cec88ce6a6b841c8694660", commit.Tree.Hex);
         Assert.Equal(["adfe40b30c176fb407933286f51d15ea9b54cdc3"], commit.Parents.Select(parent => parent.Hex));
     }
@@ -109,12 +108,12 @@ public sealed class GitRepositoryTests
         var repository = f.Open();
         f.Write("a.txt", "A captured\n");
         f.Write("new.txt", "new\n");
-        var recipe = new CommitRecipe(Read(repository.Capture(f.Folder)), [a, new("7c64b20d5be53b5c1a291863ef191aa28f6f4d51")],
+        var recipe = new CommitRecipe(repository.Capture(f.Folder), [a, new("7c64b20d5be53b5c1a291863ef191aa28f6f4d51")],
             "ordered\n", "Writer <writer@example.test>", "Publisher <publisher@example.test>", DateTimeOffset.Parse("2026-10-07T02:00:00+02:00"));
-        var commit = Read(repository.CreateCommit(recipe));
+        var commit = repository.CreateCommit(recipe);
         Assert.Equal("88a42f9848acad2c7d4fb2d65ddc2c0102a16e70", commit.Hex);
         Assert.Equal(["adfe40b30c176fb407933286f51d15ea9b54cdc3", "7c64b20d5be53b5c1a291863ef191aa28f6f4d51"],
-            Read(repository.ReadCommit(commit)).Parents.Select(parent => parent.Hex));
+            repository.ReadCommit(commit).Parents.Select(parent => parent.Hex));
     }
 
     [Fact]
@@ -132,7 +131,7 @@ public sealed class GitRepositoryTests
         f.Write(".worktrees/nested/file", "nested\n");
         var index = f.Git("rev-parse", "--path-format=absolute", "--git-path", "index").Trim();
         var before = File.ReadAllBytes(index);
-        var capture = Read(repository.Capture(f.Folder));
+        var capture = repository.Capture(f.Folder);
         Assert.Equal(before, File.ReadAllBytes(index));
         Assert.Equal("100644 blob 5ea2ed416fbd4a4cbe227b75fe255dd7fa6bd4d6\ta.txt\n" +
             "100644 blob d8649da39ddf7910d29982e2f19cd9c0ff5ffe96\troot.txt\n" +
@@ -152,14 +151,54 @@ public sealed class GitRepositoryTests
         var tip = f.Commit("b.txt");
         Assert.Equal("40abc7bebc8957e22d11b4c6b9603180652d95f1", tip.Hex);
         var repository = f.Open();
-        Assert.Equal(new GitAncestry.No(), repository.IsAncestor(a, tip));
-        Assert.Equal(new GitAncestry.Yes(), repository.IsAncestor(below, tip));
+        Assert.False(repository.IsAncestor(a, tip));
+        Assert.True(repository.IsAncestor(below, tip));
         File.WriteAllText(Path.Combine(repository.CommonDirectory, "info", "grafts"), tip.Hex + " " + a.Hex + "\n");
-        Assert.Equal(new GitAncestry.No(), repository.IsAncestor(a, tip));
-        Assert.Equal(new GitAncestry.Yes(), repository.IsAncestor(below, tip));
-        Assert.Equal(["81ddb7c330112c7f16700ed002803a04b0bce693"], Read(repository.ReadCommit(tip)).Parents.Select(parent => parent.Hex));
-        var failed = Assert.IsType<GitAncestry.Failed>(repository.IsAncestor(new(new string('9', 40)), tip));
-        Assert.Equal("fatal: Not a valid commit name 9999999999999999999999999999999999999999\n", failed.Detail);
+        Assert.False(repository.IsAncestor(a, tip));
+        Assert.True(repository.IsAncestor(below, tip));
+        Assert.Equal(["81ddb7c330112c7f16700ed002803a04b0bce693"], repository.ReadCommit(tip).Parents.Select(parent => parent.Hex));
+    }
+
+    [Fact]
+    public void Ancestry_answers_no_for_exit_code_one_and_throws_for_any_other_failure()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        var below = new CommitId("81ddb7c330112c7f16700ed002803a04b0bce693");
+        var repository = f.Open();
+        Assert.Equal(1, f.Run(f.Folder, "merge-base", "--is-ancestor", a.Hex, below.Hex).ExitCode);
+        Assert.False(repository.IsAncestor(a, below));
+        var missing = new CommitId(new string('9', 40));
+        var failure = Assert.Throws<GitFailure>(() => repository.IsAncestor(missing, a));
+        Assert.Equal("fatal: Not a valid commit name 9999999999999999999999999999999999999999", failure.Message);
+    }
+
+    [Fact]
+    public void Reads_that_find_nothing_stay_values()
+    {
+        using var f = new GitFixture();
+        var repository = f.Open();
+        Assert.Null(repository.ResolveCommit("HEAD"));
+        Assert.Null(repository.ResolveCommit("HEAD", f.Folder));
+        var a = f.Diamond();
+        repository = f.Open();
+        Assert.Equal(a, repository.ResolveCommit("HEAD", f.Folder));
+        Assert.Null(repository.ResolveCommit("refs/heads/missing"));
+        Assert.Equal("refs/heads/main", repository.SymbolicHead(f.Folder));
+        f.Git("checkout", "-q", "--detach", a.Hex);
+        Assert.Null(repository.SymbolicHead(f.Folder));
+    }
+
+    [Fact]
+    public void Reads_that_Git_refuses_throw_its_message()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var repository = f.Open();
+        Assert.Throws<GitFailure>(() => repository.ReadCommit(new(new string('9', 40))));
+        f.Git("update-index", "--assume-unchanged", "a.txt");
+        var hidden = Assert.Throws<GitFailure>(() => repository.Capture(f.Folder));
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", hidden.Message);
     }
 
     [UnixFact]
@@ -170,7 +209,7 @@ public sealed class GitRepositoryTests
         var (bin, environment) = ShimBin(f);
         var child = Path.Combine(bin, "child");
         Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(while echo tick; do sleep 0.1; done) &\necho $! > {Quote(child)}\n");
-        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         var elapsed = System.Diagnostics.Stopwatch.StartNew();
         var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
         elapsed.Stop();
@@ -194,7 +233,7 @@ public sealed class GitRepositoryTests
         var (bin, environment) = ShimBin(f);
         var child = Path.Combine(bin, "child");
         Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(sleep 300 & echo $! > {Quote(child)})\nexec sleep 60\n");
-        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         var elapsed = System.Diagnostics.Stopwatch.StartNew();
         var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
         elapsed.Stop();
@@ -252,7 +291,7 @@ public sealed class GitRepositoryTests
         using var f = new GitFixture();
         var (bin, environment) = ShimBin(f);
         Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\necho 'fatal: boom' >&2\nexit 128\n");
-        var limits = new GitLimits(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        var limits = new GitLimits(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
         var result = GitRepository.Run(["update-index"], f.Folder, GitOperation.Worktree, limits, environment, new byte[8 << 20]);
         Assert.Equal((-1, "fatal: boom\nBroken pipe"), (result.ExitCode, result.Stderr));
     }
@@ -263,7 +302,7 @@ public sealed class GitRepositoryTests
         using var f = new GitFixture();
         var (bin, environment) = ShimBin(f);
         Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\nexec sleep 60\n");
-        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         var result = GitRepository.Run(["update-index"], f.Folder, GitOperation.Worktree, limits, environment, new byte[8 << 20]);
         Assert.Equal((-1, "Git timed out."), (result.ExitCode, result.Stderr));
     }
@@ -274,7 +313,7 @@ public sealed class GitRepositoryTests
         using var f = new GitFixture();
         var (bin, environment) = ShimBin(f);
         Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\necho 'waiting for the lock' >&2\n(sleep 2 &)\nexec sleep 60\n");
-        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
         Assert.Equal((-1, "waiting for the lock\nGit timed out."), (result.ExitCode, result.Stderr));
     }
@@ -292,7 +331,7 @@ public sealed class GitRepositoryTests
         var repository = Assert.IsType<RepositoryOpen.Opened>(GitRepository.Open(f.Folder, environment)).Repository;
         try
         {
-            var capture = Read(repository.Capture(f.Folder));
+            var capture = repository.Capture(f.Folder);
             Assert.Equal("C\n", f.Git("show", capture.Hex + ":a.txt"));
         }
         finally
@@ -345,11 +384,11 @@ public sealed class GitRepositoryTests
         var repository = f.Open();
         f.Write("folder/keep", "mine\n");
         f.Write("a.txt", "changed\n");
-        var capture = Read(repository.Capture(f.Folder));
+        var capture = repository.Capture(f.Folder);
         Assert.Equal("changed\n", f.Git("show", capture.Hex + ":a.txt"));
         Assert.Equal("78471d56e16a5aeb662aff8461f6882fb3c4c76d", capture.Hex);
-        var saved = Read(repository.CreateCommit(new(capture, [a], "salvage\n", "E2 <e2@example.test>", "E2 <e2@example.test>",
-            DateTimeOffset.Parse("2026-10-07T00:00:00Z"))));
+        var saved = repository.CreateCommit(new(capture, [a], "salvage\n", "E2 <e2@example.test>", "E2 <e2@example.test>",
+            DateTimeOffset.Parse("2026-10-07T00:00:00Z")));
         Assert.Equal("3e82c1ec96d334dc6e07fcb174b64369c5175e8b", saved.Hex);
         Assert.Equal(0, repository.ResetCheckout(f.Folder, a).ExitCode);
         Assert.Equal("A\n", File.ReadAllText(f.PathOf("a.txt")));

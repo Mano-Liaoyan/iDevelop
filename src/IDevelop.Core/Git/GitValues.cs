@@ -13,8 +13,5 @@ internal sealed record StageEntry([UsedImplicitly] string Mode, [UsedImplicitly]
 internal sealed record CommitRecipe(TreeId Tree, ImmutableArray<CommitId> Parents, string Message, string Author, string Committer,
     DateTimeOffset Timestamp);
 
-/// <summary>One of <c>git merge-tree --messages</c>' informational messages.</summary>
-internal sealed record MergeMessage(ImmutableArray<string> Paths, string Type, string Text);
-
 internal sealed record ConfigEntry(string Key, string Value);
 

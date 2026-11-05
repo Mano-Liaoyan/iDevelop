@@ -129,6 +129,5 @@ internal sealed class GitFixture : IDisposable
         return new(process.ExitCode, bytes.ToArray(), stderr.GetAwaiter().GetResult());
     }
 
-    public static T Read<T>(GitRead<T> result) => Assert.IsType<GitRead<T>.Read>(result).Value;
     public void Dispose() => _temp.Dispose();
 }
