@@ -1,6 +1,4 @@
 using Avalonia.Automation;
-using Avalonia.Automation.Peers;
-using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
@@ -32,9 +30,6 @@ public sealed class QuestionTests
 
     private static string Answered(NodeFixture f) => File.ReadAllText(Path.Combine(f.Evidence, "answer.json"));
 
-    private static void Invoke(Control control) =>
-        ControlAutomationPeer.CreatePeerForElement(control).GetProvider<IInvokeProvider>()!.Invoke();
-
     [AvaloniaFact]
     public void The_card_shows_the_question_with_its_choices_and_Send_answers_with_the_chosen_one_while_the_turn_runs()
     {
@@ -56,7 +51,7 @@ public sealed class QuestionTests
 
         shell.Click(choices[1]);
         Assert.True(node.SendCommand.CanExecute(null));
-        Invoke(shell.InCard<Button>("Paint", "CardSend"));
+        Shell.Invoke(shell.InCard<Button>("Paint", "CardSend"));
 
         shell.WaitForState("Paint", NodeState.Completed);
         Assert.Contains("\"Which color?\":\"Blue\"", Answered(f));
@@ -96,7 +91,7 @@ public sealed class QuestionTests
         Assert.Equal(["Red", "Blue"], conversation.Questions.Single().Choices.Select(choice => choice.Label));
         Assert.True(shell.Find<Control>("ConversationQuestions").IsEffectivelyVisible);
         shell.Find<TextBox>("ConversationComposer").Text = "Green, please.";
-        Invoke(shell.Find<Button>("ConversationSend"));
+        Shell.Invoke(shell.Find<Button>("ConversationSend"));
 
         shell.WaitForState("Paint", NodeState.Completed);
         Assert.Contains("\"Which color?\":\"Green, please.\"", Answered(f));

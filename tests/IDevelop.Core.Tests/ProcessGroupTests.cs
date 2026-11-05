@@ -223,7 +223,7 @@ public sealed class ProcessGroupTests : IDisposable
     public async Task Stopping_a_workflow_tree_stops_a_descendant_whose_parent_exited()
     {
         var orphan = Path.Combine(_evidence, "orphan.pid");
-        using var child = Start(Script("client", $"(sleep 300 >/dev/null 2>&1 </dev/null & echo $! > {Quote(orphan)})\nexec sleep 300\n"));
+        using var child = Start(Script("client", $"(sleep 300 >/dev/null 2>&1 </dev/null & echo $! > {Executable.Quote(orphan)})\nexec sleep 300\n"));
         var orphanId = await _spawned.PidAsync(orphan).WaitAsync(Patience);
 
         child.StopTree();
@@ -255,13 +255,13 @@ public sealed class ProcessGroupTests : IDisposable
         var pidFile = Path.Combine(_evidence, "stubborn.pid");
         var terminated = Path.Combine(_evidence, "terminated");
         using var child = Start(Script("client",
-            $"sh -c 'trap \"echo term >> {Quote(terminated)}\" TERM; echo $$ > {Quote(pidFile)}; while :; do sleep 0.1; done' >/dev/null 2>&1 </dev/null &\nexit 0\n"));
+            $"sh -c 'trap \"echo term >> {Executable.Quote(terminated)}\" TERM; echo $$ > {Executable.Quote(pidFile)}; while :; do sleep 0.1; done' >/dev/null 2>&1 </dev/null &\nexit 0\n"));
         var stubborn = await _spawned.PidAsync(pidFile).WaitAsync(Patience);
         Assert.Equal(0, await child.WaitForExitAsync().WaitAsync(Patience));
 
         // A grace longer than the wait below shows that only the clock ends it.
         var cleanup = child.CleanUpAsync(TimeSpan.FromMinutes(2), _clock, CancellationToken.None);
-        await WaitUntilAsync(() => File.Exists(terminated));
+        await Wait.Until(() => File.Exists(terminated));
         _clock.Advance(TimeSpan.FromSeconds(119));
         await Task.Delay(200);
         Assert.False(cleanup.IsCompleted);
@@ -360,7 +360,7 @@ public sealed class ProcessGroupTests : IDisposable
     }
 
     private string OrphanMaker(string pidFile) =>
-        Script("client", $"(sleep 300 >/dev/null 2>&1 </dev/null & echo $! > {Quote(pidFile)})\nexit 0\n");
+        Script("client", $"(sleep 300 >/dev/null 2>&1 </dev/null & echo $! > {Executable.Quote(pidFile)})\nexit 0\n");
 
     private ChildProcess Start(string script)
     {
@@ -415,18 +415,6 @@ public sealed class ProcessGroupTests : IDisposable
 
     [DllImport("libc", EntryPoint = "getsid")]
     private static extern int GetSid(int process);
-
-    private static string Quote(string text) => "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
-
-    private static async Task WaitUntilAsync(Func<bool> done)
-    {
-        var deadline = Stopwatch.StartNew();
-        while (!done())
-        {
-            Assert.True(deadline.Elapsed < Patience, "The condition did not become true in time.");
-            await Task.Delay(20);
-        }
-    }
 
     private sealed record Launch(int Id, Containment Containment, string[] Output, string[] Errors, int Exit);
 }

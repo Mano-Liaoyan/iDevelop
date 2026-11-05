@@ -2,6 +2,7 @@ using IDevelop.Engine;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Engine.EngineFixture;
+using static IDevelop.TestSupport.AgyTurn;
 using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Core.Tests.Engine;

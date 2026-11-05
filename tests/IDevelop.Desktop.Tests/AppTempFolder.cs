@@ -38,16 +38,20 @@ internal static class AppTempFolder
     /// <summary>Makes the folder a Git repository with one empty commit, so a node that edits it can run in its own worktree.</summary>
     public static void InitGit(string folder)
     {
-        foreach (var arguments in new[] { new[] { "init", "-q", "-b", "main" }, ["commit", "-q", "--allow-empty", "-m", "base"] })
-        {
-            var start = new System.Diagnostics.ProcessStartInfo("git") { WorkingDirectory = folder, RedirectStandardOutput = true, RedirectStandardError = true };
-            foreach (var argument in arguments) start.ArgumentList.Add(argument);
-            foreach (var (key, value) in Git) start.Environment[key] = value;
-            using var process = System.Diagnostics.Process.Start(start)!;
-            var error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}");
-        }
+        RunGit(folder, "init", "-q", "-b", "main");
+        RunGit(folder, "commit", "-q", "--allow-empty", "-m", "base");
+    }
+
+    public static void RunGit(string folder, params string[] arguments)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("git") { WorkingDirectory = folder, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        foreach (var (key, value) in Git) start.Environment[key] = value;
+        using var process = System.Diagnostics.Process.Start(start)!;
+        process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}");
     }
 
     /// <summary>

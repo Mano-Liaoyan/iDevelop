@@ -2,6 +2,7 @@ using IDevelop.Engine;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Engine.EngineFixture;
+using static IDevelop.TestSupport.AgyTurn;
 using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Core.Tests.Engine;
@@ -264,7 +265,7 @@ public sealed class FeedbackTests : IAsyncLifetime
 
         await File.WriteAllTextAsync(gate, "");
 
-        await Eventually(() => engine.Entries(r).OfType<NodeEntry.Feedback>().Any());
+        await Wait.Until(() => engine.Entries(r).OfType<NodeEntry.Feedback>().Any());
         Assert.Equal(new NodeState.Stale(), engine.State(a));
         Assert.Single(engine.History(a));
         Assert.False(File.Exists(_f.File("fix.txt")));

@@ -1,5 +1,3 @@
-using Avalonia.Automation.Peers;
-using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -9,7 +7,7 @@ using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.Desktop.Tests.ConversationFixtures;
-using static IDevelop.Desktop.Tests.NodeFixture;
+using static IDevelop.TestSupport.AgyTurn;
 using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
@@ -25,9 +23,6 @@ public sealed class ConversationWindowTests : IDisposable
     private string Project(params WorkflowEdit[] edits) =>
         _temp.Seed(edits.Length > 0 ? edits : [TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it.")]);
 
-    private static void Invoke(Control control) =>
-        ControlAutomationPeer.CreatePeerForElement(control).GetProvider<IInvokeProvider>()!.Invoke();
-
     private static ConversationViewModel Conversation(Shell shell) =>
         shell.Window.ViewModel.Conversation ?? throw new InvalidOperationException("No conversation is open.");
 
@@ -41,7 +36,7 @@ public sealed class ConversationWindowTests : IDisposable
     private static void OpenFromInspector(Shell shell, string title)
     {
         shell.Click(shell.Header(shell.Node(title)));
-        Invoke(shell.InView<Button>("OpenConversation"));
+        Shell.Invoke(shell.InView<Button>("OpenConversation"));
         shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Items.Count > 0, "the conversation shows its history");
         shell.Render();
     }
@@ -84,7 +79,7 @@ public sealed class ConversationWindowTests : IDisposable
         Assert.True(attention.IsEffectivelyVisible);
         Assert.StartsWith("Failed: ", Avalonia.Automation.AutomationProperties.GetName(attention));
         Assert.Equal((240.0, 64.0), (shell.Node("Design").Bounds.Width - 20, shell.Node("Design").Bounds.Height));
-        Invoke(attention);
+        Shell.Invoke(attention);
         shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Items.Count > 1, "the conversation opens");
         shell.Render();
 
@@ -101,10 +96,10 @@ public sealed class ConversationWindowTests : IDisposable
         string Watermark(string title)
         {
             shell.Click(shell.Header(shell.Node(title)));
-            Invoke(shell.InView<Button>("OpenConversation"));
+            Shell.Invoke(shell.InView<Button>("OpenConversation"));
             shell.Render();
             var watermark = shell.Find<TextBox>("ConversationComposer").Watermark ?? "";
-            Invoke(shell.Find<Button>("CloseConversation"));
+            Shell.Invoke(shell.Find<Button>("CloseConversation"));
             shell.Render();
             return watermark;
         }
@@ -118,18 +113,18 @@ public sealed class ConversationWindowTests : IDisposable
         var shell = Shell.Open(Project());
         var canvas = shell.Window.CanvasHost.Bounds.Height;
         shell.Click(shell.Header(shell.Node("Design")));
-        Invoke(shell.InView<Button>("OpenConversation"));
+        Shell.Invoke(shell.InView<Button>("OpenConversation"));
         shell.Render();
         var expanded = shell.Find<ConversationView>("ConversationView").Bounds.Height;
 
-        Invoke(shell.Find<Button>("ConversationLayout"));
+        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
         shell.Render();
-        Invoke(shell.Find<Button>("ConversationLayout"));
+        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
         shell.Render();
         var again = shell.Find<ConversationView>("ConversationView").Bounds.Height;
-        Invoke(shell.Find<Button>("ConversationLayout"));
+        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
         shell.Render();
-        Invoke(shell.Find<Button>("CloseConversation"));
+        Shell.Invoke(shell.Find<Button>("CloseConversation"));
         shell.Render();
 
         Assert.Equal((800.0, 800.0, 800.0, 800.0), (canvas, expanded, again, shell.Window.CanvasHost.Bounds.Height));
@@ -142,9 +137,9 @@ public sealed class ConversationWindowTests : IDisposable
             TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it."),
             TaskAt(TestTasks.Build, "Build", 105, 300, CodexHigh, "Build it.")));
         shell.Click(shell.Header(shell.Node("Design")));
-        Invoke(shell.InView<Button>("OpenConversation"));
+        Shell.Invoke(shell.InView<Button>("OpenConversation"));
         shell.Render();
-        Invoke(shell.Find<Button>("ConversationLayout"));
+        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
         shell.Render();
         Assert.True(shell.Window.ViewModel.IsConversationDocked);
 
@@ -159,14 +154,14 @@ public sealed class ConversationWindowTests : IDisposable
 
         Assert.Equal("Check edge cases", shell.Find<TextBox>("ConversationComposer").Text);
         Assert.Equal("Check edge cases", shell.Find<TextBox>("Composer").Text);
-        Invoke(shell.Find<Button>("ConversationLayout"));
+        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
         shell.Render();
         Assert.False(shell.Window.ViewModel.IsConversationDocked);
         Assert.Equal("Check edge cases", shell.Find<TextBox>("ConversationComposer").Text);
         shell.Press(Key.Escape);
         Assert.Null(shell.Window.ViewModel.Conversation);
         shell.Click(shell.Header(shell.Node("Build")));
-        Invoke(shell.InView<Button>("OpenConversation"));
+        Shell.Invoke(shell.InView<Button>("OpenConversation"));
         shell.Render();
         Assert.Equal("Review output", shell.Find<TextBox>("ConversationComposer").Text);
     }
