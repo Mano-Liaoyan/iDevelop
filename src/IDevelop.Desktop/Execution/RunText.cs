@@ -113,7 +113,7 @@ public static class RunText
 
     private static string PermissionNote(ClientId client) => client switch
     {
-        ClientId.ClaudeCode => "Claude Code may edit files in the project folder. It denies any command its settings do not already allow.",
+        ClientId.ClaudeCode => "Claude Code runs any tool without asking, so it may edit any file and run any command. Deny rules in its settings still apply.",
         ClientId.Codex => "Codex may edit files in the project folder. Its commands run in its workspace sandbox.",
         ClientId.Pi => "Pi has no permission system. It may edit any file and run any command that your account can.",
         ClientId.Antigravity => "Antigravity CLI may edit files in the project folder. It blocks commands in its accept-edits mode.",
@@ -125,7 +125,7 @@ public static class RunText
         (ClientId.Pi, true) => "Can't run read-only tasks.",
         (ClientId.Codex, true) => "Reads only, in a read-only sandbox.",
         (_, true) => "Reads only, in plan mode.",
-        (ClientId.ClaudeCode, false) => "Edits files. Runs only allowed commands.",
+        (ClientId.ClaudeCode, false) => "Edits files and runs any command.",
         (ClientId.Codex, false) => "Edits files. Runs commands in a sandbox.",
         (ClientId.Pi, false) => "Edits files and runs any command.",
         (ClientId.Antigravity, false) => "Edits files. Runs no commands.",

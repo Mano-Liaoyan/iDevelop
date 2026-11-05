@@ -181,7 +181,7 @@ public sealed class InspectorTests : IDisposable
 
     [AvaloniaTheory]
     [InlineData(ClientId.Codex, "Autonomous", "Edits files. Runs commands in a sandbox.", "Works without waiting for you.")]
-    [InlineData(ClientId.ClaudeCode, "May ask", "Edits files. Runs only allowed commands.", "May stop to ask you a question.")]
+    [InlineData(ClientId.ClaudeCode, "May ask", "Edits files and runs any command.", "May stop to ask you a question.")]
     [InlineData(ClientId.Pi, "Chat", "Edits files and runs any command.", "Waits for you after every turn.")]
     [InlineData(ClientId.Antigravity, "Autonomous", "Edits files. Runs no commands.", "Works without waiting for you.")]
     public void Each_agent_note_lives_in_its_info_glyph_and_no_line_under_the_pickers_repeats_it(ClientId client, string conversation, string permission, string mode)
