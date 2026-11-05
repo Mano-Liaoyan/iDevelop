@@ -44,9 +44,9 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
             return new TurnOutcome.Failed(Problem(node) ?? "The agent cannot start.");
         }
 
-        if (session is null && plan.Request.Policy?.Native is NativePolicy.Claude { Mode: "bypassPermissions" })
+        if (session is null && !plan.Request.ReadOnly && plan.Client.EditNotice is { } permissions)
         {
-            report(new AgentEvent.Notice("Every tool runs without asking for permission."));
+            report(new AgentEvent.Notice(permissions));
         }
 
         if (session is null && SkillChoices.TurnNote(plan.Settings.Client, plan.Settings.Skills, skills) is { } note) report(new AgentEvent.Notice(note));
@@ -104,7 +104,6 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
             await foreach (var reply in replies.ReadAllAsync(CancellationToken.None)) inbox.Writer.TryWrite(reply);
         }, CancellationToken.None);
         await using var registration = stop.Register(() => inbox.Writer.TryWrite(stop));
-        var asks = plan.Request.Policy?.Questions == QuestionHandling.Surface;
 
         AgentEvent? verdict = null;
         string? lastMessage = null;
@@ -144,7 +143,7 @@ internal sealed class CliAgent(ClientDirectory clients, string projectFolder) : 
                         background = !tasks.Tasks.IsEmpty;
                         report(e);
                         break;
-                    case AgentEvent.QuestionAsked when asks:
+                    case AgentEvent.QuestionAsked when plan.Request.Surfaces:
                         report(e);
                         break;
                     case AgentEvent.QuestionAsked question:

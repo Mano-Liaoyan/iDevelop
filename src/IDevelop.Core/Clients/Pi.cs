@@ -65,28 +65,20 @@ internal static class Pi
 
     private static SkillListing ParseSkills(ProbeOutput output)
     {
-        foreach (var line in TextLines.Lines(output.Stdout).Where(IsCommandsResponse))
+        foreach (var response in TextLines.Lines(output.Stdout).Where(IsCommandsResponse).Select(JsonFields.Parse).OfType<JsonElement>())
         {
-            try
+            if (response.Bool("success") != true)
             {
-                using var json = JsonDocument.Parse(line);
-                var response = json.RootElement;
-                if (response.Bool("success") != true)
-                {
-                    return new SkillListing.Unavailable($"Pi did not list its skills: {response.String("error") ?? "it reported a failure"}.");
-                }
+                return new SkillListing.Unavailable($"Pi did not list its skills: {response.String("error") ?? "it reported a failure"}.");
+            }
 
-                // A skill's command is its name after "skill:".
-                return new SkillListing.Listed(SkillChoices.Distinct(response.Property("data")?.Items("commands")
-                    .Where(command => command.String("source") == "skill" && command.String("name") is { } name && name.StartsWith("skill:", StringComparison.Ordinal))
-                    .Select(command => new SkillOption(command.String("name")!["skill:".Length..], command.String("description") ?? "")
-                    {
-                        Path = command.Property("sourceInfo")?.String("path"),
-                    }) ?? []));
-            }
-            catch (JsonException)
-            {
-            }
+            // A skill's command is its name after "skill:".
+            return new SkillListing.Listed(SkillChoices.Distinct(response.Property("data")?.Items("commands")
+                .Where(command => command.String("source") == "skill" && command.String("name") is { } name && name.StartsWith("skill:", StringComparison.Ordinal))
+                .Select(command => new SkillOption(command.String("name")!["skill:".Length..], command.String("description") ?? "")
+                {
+                    Path = command.Property("sourceInfo")?.String("path"),
+                }) ?? []));
         }
 
         return new SkillListing.Unavailable($"Pi did not list its skills. {Probes.Failure("pi --mode rpc", output)}");
@@ -94,23 +86,15 @@ internal static class Pi
 
     private static CatalogParse ParseCatalog(ProbeOutput output)
     {
-        foreach (var line in TextLines.Lines(output.Stdout).Where(IsModelsResponse))
+        foreach (var response in TextLines.Lines(output.Stdout).Where(IsModelsResponse).Select(JsonFields.Parse).OfType<JsonElement>())
         {
-            try
+            if (response.Bool("success") != true)
             {
-                using var json = JsonDocument.Parse(line);
-                var response = json.RootElement;
-                if (response.Bool("success") != true)
-                {
-                    return new CatalogParse.Problem($"Pi did not list its models: {response.String("error") ?? "it reported a failure"}.");
-                }
+                return new CatalogParse.Problem($"Pi did not list its models: {response.String("error") ?? "it reported a failure"}.");
+            }
 
-                ImmutableArray<ModelOption> models = [.. response.Property("data")?.Items("models").Select(Model).OfType<ModelOption>() ?? []];
-                return models.IsEmpty ? new CatalogParse.Problem("Pi listed no models.") : new CatalogParse.Models(models);
-            }
-            catch (JsonException)
-            {
-            }
+            ImmutableArray<ModelOption> models = [.. response.Property("data")?.Items("models").Select(Model).OfType<ModelOption>() ?? []];
+            return models.IsEmpty ? new CatalogParse.Problem("Pi listed no models.") : new CatalogParse.Models(models);
         }
 
         return new CatalogParse.Problem($"Pi did not list its models. {Probes.Failure("pi --mode rpc", output)}");
@@ -158,18 +142,11 @@ internal static class Pi
 
     private static ReadinessProblem? SignInProblem(string provider, ProbeOutput output)
     {
-        try
+        if (JsonFields.Parse(output.Stdout)?.String("status") is { } status)
         {
-            using var json = JsonDocument.Parse(output.Stdout);
-            if (json.RootElement.String("status") is { } status)
-            {
-                return status == "ready"
-                    ? null
-                    : new ReadinessProblem($"Pi's sign-in for {provider} is {status}. Sign in to {provider} in Pi again.", SignedOut: true);
-            }
-        }
-        catch (JsonException)
-        {
+            return status == "ready"
+                ? null
+                : new ReadinessProblem($"Pi's sign-in for {provider} is {status}. Sign in to {provider} in Pi again.", SignedOut: true);
         }
 
         return new ReadinessProblem(Probes.Failure($"pi auth check --provider {provider}", output), SignedOut: false);

@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using IDevelop.Workflows;
 
 namespace IDevelop.Clients;
 
@@ -36,6 +35,15 @@ internal sealed record ClientDefinition
     /// node would run with write access, so it does not start.
     /// </summary>
     public required bool HasReadOnlyMode { get; init; }
+
+    /// <summary>
+    /// The client brings its questions and permission requests to iDevelop on its own channel, as Claude Code does. A node
+    /// that never asks the person, an Autonomous node or a reviewer, does not take them, see <see cref="LaunchRequest.Surfaces"/>.
+    /// </summary>
+    public bool Surfaces { get; init; }
+
+    /// <summary>What a fresh turn that may edit says about the client's permissions, or null to say nothing.</summary>
+    public string? EditNotice { get; init; }
 
     /// <summary>
     /// The client finds a session only in the folder where it ran, so it cannot continue one after that folder moved. Pi
@@ -84,13 +92,11 @@ internal sealed record LaunchRequest(string Model, string? Reasoning, string Pro
 
     public string? WorkingFolder { get; init; }
 
-    public EffectivePolicy? Policy { get; init; }
+    /// <summary>The client's questions and permission requests go to the person. Otherwise iDevelop declines them.</summary>
+    public bool Surfaces { get; init; }
 
     /// <summary>The skills the node chose, as this machine's client lists them. Null leaves the client's own skills as they are.</summary>
     public SkillLaunch? Skills { get; init; }
-
-    public EffectivePolicy PolicyFor(ClientId client) => Policy ?? ClientPolicy.For(
-        client, ReadOnly, ConversationMode.Autonomous, reviewer: false);
 }
 
 internal sealed record LaunchArguments(ImmutableArray<string> Arguments, string Stdin);

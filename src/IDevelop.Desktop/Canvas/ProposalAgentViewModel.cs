@@ -160,7 +160,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     private (string Client, string? Model) Lines => RunText.AgentLines(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
 
-    private bool ReadOnly => _blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
+    private bool ReadOnly => _blueprint.Work.ReadOnly;
 
     /// <summary>The agent the task's blueprint saves, or a fill's task has now, which wins over the planner's choice.</summary>
     private ExecutionSettings? Own => _own();

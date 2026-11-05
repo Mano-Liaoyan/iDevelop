@@ -10,7 +10,8 @@ namespace IDevelop.Core.Tests.Engine;
 
 /// <summary>
 /// A Claude Code turn ends when its client exits after its background work (ADR 0030), and a Claude Code editing node says
-/// that every tool runs without asking for permission (ADR 0039).
+/// that every tool runs without asking for permission (ADR 0039). A Claude Code node that does not ask the person declines
+/// a question.
 /// </summary>
 public sealed class CliAgentTests : IDisposable
 {
@@ -81,11 +82,67 @@ public sealed class CliAgentTests : IDisposable
         Assert.Equal(new AgentEvent.Notice("Every tool runs without asking for permission."), events[0]);
     }
 
+    public static TheoryData<ClientId, string, ConversationMode, bool> PermissionNotices => new()
+    {
+        { ClientId.ClaudeCode, "Implement", ConversationMode.Autonomous, true },
+        { ClientId.ClaudeCode, "Implement", ConversationMode.Chat, true },
+        { ClientId.ClaudeCode, "Merge", ConversationMode.Autonomous, true },
+        { ClientId.ClaudeCode, "Plan", ConversationMode.Autonomous, false },
+        { ClientId.ClaudeCode, "Review", ConversationMode.Autonomous, false },
+        { ClientId.Codex, "Implement", ConversationMode.Autonomous, false },
+        { ClientId.Antigravity, "Implement", ConversationMode.Autonomous, false },
+    };
+
+    [Theory]
+    [MemberData(nameof(PermissionNotices))]
+    public async Task Only_a_Claude_Code_node_that_may_edit_says_that_every_tool_runs_without_asking(ClientId client, string blueprint, ConversationMode mode, bool says)
+    {
+        Install(_fakes, client, Fresh(client).Print(SessionLine(client, Session)).Print(ReplyLines(client, "Done.")));
+
+        var (_, events) = await Turn(node: Node(client, blueprint, mode));
+
+        Assert.Equal(says, events.Contains(new AgentEvent.Notice("Every tool runs without asking for permission.")));
+    }
+
+    [Theory]
+    [InlineData("Implement", ConversationMode.Autonomous)]
+    [InlineData("Review", ConversationMode.Autonomous)]
+    [InlineData("Review", ConversationMode.MayAsk)]
+    [InlineData("Review", ConversationMode.Chat)]
+    public async Task A_Claude_Code_node_that_does_not_ask_the_person_declines_a_question(string blueprint, ConversationMode mode)
+    {
+        var answer = _temp.Path("answer.json");
+        Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).Print(SessionLine(ClientId.ClaudeCode, Session))
+            .Print(ClaudeAsks("Which color?", "Red", "Blue")).ReadLine(answer).Print(ReplyLines(ClientId.ClaudeCode, "Done.")));
+
+        var (_, events) = await Turn(node: Node(ClientId.ClaudeCode, blueprint, mode));
+
+        Assert.Contains(new AgentEvent.Notice("iDevelop declined the question, because this node does not ask the person: Which color?"), events);
+        Assert.Empty(events.OfType<AgentEvent.QuestionAsked>());
+        Assert.Contains("\"behavior\":\"deny\"", await File.ReadAllTextAsync(answer));
+    }
+
+    private static TaskDefinition Node(ClientId client, string blueprint, ConversationMode mode) =>
+        new(TestTasks.Design, BuiltInBlueprints.All.Single(candidate => candidate.Name == blueprint))
+        {
+            Execution = new ExecutionSettings(client)
+            {
+                Model = client switch
+                {
+                    ClientId.ClaudeCode => "claude-haiku-4-5",
+                    ClientId.Codex => "gpt-6-sol",
+                    _ => EngineFixture.Agy.Model,
+                },
+                Reasoning = client == ClientId.Antigravity ? EngineFixture.Agy.Reasoning : "high",
+            },
+            Conversation = mode,
+        };
+
     // A fake client is a dotnet process. Under the load of the whole suite on Windows, it can take more than 200 ms to exit
     // after it reports success, so a turn that expects a clean exit gives it 2 seconds.
-    private async Task<(TurnOutcome Outcome, AgentEvent[] Events)> Turn(int successExitMilliseconds = 2000)
+    private async Task<(TurnOutcome Outcome, AgentEvent[] Events)> Turn(int successExitMilliseconds = 2000, TaskDefinition? node = null)
     {
-        var node = TestNodes.Implement(TestTasks.Design, "Survey", "Survey the files",
+        node ??= TestNodes.Implement(TestTasks.Design, "Survey", "Survey the files",
             execution: new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" });
         var events = new ConcurrentQueue<AgentEvent>();
         var agent = new CliAgent(await _fakes.DiscoverAsync(), _project) { SuccessExitTime = TimeSpan.FromMilliseconds(successExitMilliseconds) };

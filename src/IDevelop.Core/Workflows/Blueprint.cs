@@ -53,6 +53,9 @@ public abstract record WorkSpec
     /// <summary>The template's own variables beside the title, the fields, and the inputs.</summary>
     public abstract ImmutableArray<string> Variables { get; }
 
+    /// <summary>The work changes no file, so its agent needs a client with a read-only mode. A review only reads.</summary>
+    public bool ReadOnly => this is Agent { Access: AgentAccess.ReadOnly } or Review;
+
     /// <summary>One agent session. <paramref name="Proposes"/> says whether it proposes graph edits.</summary>
     public sealed record Agent(AgentAccess Access, bool Proposes, PromptTemplate Template) : WorkSpec
     {

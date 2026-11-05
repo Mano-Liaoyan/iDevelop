@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using IDevelop.Workflows;
 using static IDevelop.Clients.JsonFields;
 
 namespace IDevelop.Clients;
@@ -28,7 +27,7 @@ internal static class Antigravity
     [
         "--input-format", "stream-json", "--output-format", "stream-json", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
-        "--mode", ((NativePolicy.Antigravity)request.PolicyFor(ClientId.Antigravity).Native).Mode, "--print=",
+        "--mode", request.ReadOnly ? "plan" : "accept-edits", "--print=",
         .. request.ResumeSession is { } session ? ["--conversation", session] : Array.Empty<string>(),
     ],
     UserLine(request.Prompt));

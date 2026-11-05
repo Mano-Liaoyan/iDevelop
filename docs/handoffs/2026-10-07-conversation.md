@@ -64,7 +64,7 @@ For Claude Code and Codex, Stop and send and Stop first send the client's own in
 
 ### Questions surface, and permission requests are declined or never asked
 
-`ClientPolicy.For` is the one table that launch arguments, request handling, and capability text read.
+Each client's row maps a read-only turn to its own flags. `LaunchPlan.For` sets whether the turn surfaces its requests, and `CliAgent` reads that setting.
 
 | Turn | Claude Code launch | Questions | Permission requests |
 | --- | --- | --- | --- |
