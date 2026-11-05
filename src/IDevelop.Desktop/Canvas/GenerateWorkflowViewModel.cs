@@ -7,31 +7,12 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>An entry in the sheet's client picker, which shows its label.</summary>
-public sealed record PlannerClientChoice(ClientId Id, string Label)
-{
-    public override string ToString() => Label;
-}
-
-/// <summary>An entry in the sheet's model or reasoning picker: the client's own id and what the picker shows.</summary>
-public sealed record PlannerChoice(string Id, string Label)
-{
-    public override string ToString() => Label;
-}
-
 /// <summary>
 /// The Generate Workflow sheet: the person's description and the planner's agent. Submitting places a Plan node in Chat
 /// mode and runs it, and its proposal lands as any planner's does.
 /// </summary>
-public sealed class GenerateWorkflowViewModel : ObservableObject
+public sealed class GenerateWorkflowViewModel : ObservableObject, IAgentPickerHost
 {
-    // A new list clears its picker's selection, so each list is raised before its selection.
-    private static readonly string[] PickerProperties =
-    [
-        nameof(ClientChoices), nameof(SelectedClient), nameof(ModelChoices), nameof(SelectedModel),
-        nameof(ReasoningChoices), nameof(SelectedReasoning), nameof(HasReasoning), nameof(Problem),
-    ];
-
     // Planning a whole workflow is the deepest task an agent does here, so the planner starts at its model's high level.
     private const string PlanningLevel = "high";
 
@@ -45,6 +26,7 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
     {
         _canvas = canvas;
         _planner = DefaultPlanner();
+        Picker = new AgentPicker(null, [.. PlanningClients], () => _planner, Status, Choose, ForPlanning);
         _submit = new RelayCommand(Submit, () => CanSubmit);
         CancelCommand = new RelayCommand(canvas.CloseSheet);
         canvas.Clients.Changed += OnClientsChanged;
@@ -63,26 +45,8 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
         }
     }
 
-    /// <summary>The clients that have a read-only mode, because a planner changes no file.</summary>
-    public IReadOnlyList<PlannerClientChoice> ClientChoices =>
-        [.. PlanningClients.Select(id => new PlannerClientChoice(id, RunText.ClientChoice(id, Status(id))))];
-
-    public PlannerClientChoice? SelectedClient => ClientChoices.FirstOrDefault(choice => choice.Id == _planner?.Client);
-
-    public IReadOnlyList<PlannerChoice> ModelChoices => _planner is { } planner
-        ? [.. ExecutionChoices.Models(planner, Status(planner.Client)).Select(choice => new PlannerChoice(choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, Status(planner.Client))))]
-        : [];
-
-    public PlannerChoice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == _planner?.Model);
-
-    public IReadOnlyList<PlannerChoice> ReasoningChoices => _planner is { } planner
-        ? [.. ExecutionChoices.Reasoning(planner, Status(planner.Client)).Select(choice => new PlannerChoice(choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
-        : [];
-
-    public PlannerChoice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == _planner?.Reasoning);
-
-    /// <summary>False when the model takes no reasoning level.</summary>
-    public bool HasReasoning => ReasoningChoices.Count > 0;
+    /// <summary>The planner's pickers. They offer the clients that have a read-only mode, because a planner changes no file.</summary>
+    public AgentPicker Picker { get; }
 
     /// <summary>Why the planner cannot run on the chosen agent, which keeps Generate off, or null.</summary>
     public string? Problem => _planner is not { } planner
@@ -110,32 +74,6 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
 
     private static IEnumerable<ClientId> PlanningClients => ClientCatalog.All.Where(ClientCatalog.HasReadOnlyMode);
 
-    internal void ChooseClient(PlannerClientChoice choice)
-    {
-        if (choice.Id != _planner?.Client)
-        {
-            _clientChosen = true;
-            Choose(ForPlanning(choice.Id));
-        }
-    }
-
-    internal void ChooseModel(PlannerChoice choice)
-    {
-        if (_planner is { } planner && choice.Id != planner.Model && ExecutionChoices.OfferedModel(Status(planner.Client), choice.Id) is { } model)
-        {
-            Choose(ExecutionChoices.ForModel(planner, model));
-        }
-    }
-
-    internal void ChooseReasoning(PlannerChoice choice)
-    {
-        if (_planner is { } planner && choice.Id != planner.Reasoning
-            && ExecutionChoices.OfferedModel(Status(planner.Client), planner.Model) is { } model && model.ReasoningLevels.Contains(choice.Id))
-        {
-            Choose(planner with { Reasoning = choice.Id });
-        }
-    }
-
     /// <summary>Stops following the clients, once the sheet closes.</summary>
     internal void Detach() => _canvas.Clients.Changed -= OnClientsChanged;
 
@@ -154,19 +92,17 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
 
     private ClientStatus Status(ClientId client) => _canvas.Clients.Current[client];
 
-    private void Choose(ExecutionSettings planner)
+    private void Choose(ExecutionSettings? planner)
     {
+        _clientChosen |= planner?.Client != _planner?.Client;
         _planner = planner;
         ShowPlanner();
     }
 
     private void ShowPlanner()
     {
-        foreach (var property in PickerProperties)
-        {
-            OnPropertyChanged(property);
-        }
-
+        Picker.Show();
+        OnPropertyChanged(nameof(Problem));
         _submit.NotifyCanExecuteChanged();
     }
 

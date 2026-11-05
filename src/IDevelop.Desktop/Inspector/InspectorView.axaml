@@ -250,7 +250,7 @@
                     <StackPanel>
                       <inspector:InspectorRow Label="Client" Icon="{StaticResource IconAgent}" Info="{Binding PermissionNote}" InfoName="{Binding PermissionSummary}" InfoId="PermissionNote"
                                               RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding CanRevertAgent}" RevertId="RevertAgent">
-                        <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnClientChosen"
+                        <ComboBox ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   AutomationProperties.AutomationId="TaskClient"
                                   AutomationProperties.Name="Client">
                           <ComboBox.ItemTemplate>
@@ -261,7 +261,7 @@
                         </ComboBox>
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Label="Model" Icon="{StaticResource IconModel}" IsShown="{Binding HasClient}">
-                        <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnModelChosen"
+                        <ComboBox ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   PlaceholderText="Choose a model"
                                   AutomationProperties.AutomationId="TaskModel"
                                   AutomationProperties.Name="Model">
@@ -272,8 +272,8 @@
                           </ComboBox.ItemTemplate>
                         </ComboBox>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Label="Reasoning" Icon="{StaticResource IconReasoning}" IsShown="{Binding HasReasoning}">
-                        <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnReasoningChosen"
+                      <inspector:InspectorRow Label="Reasoning" Icon="{StaticResource IconReasoning}" IsShown="{Binding Picker.HasReasoning}">
+                        <ComboBox ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   PlaceholderText="Choose a level"
                                   AutomationProperties.AutomationId="TaskReasoning"
                                   AutomationProperties.Name="Reasoning">
@@ -552,7 +552,7 @@
                                           <DataTemplate DataType="canvas:ProposalAgentViewModel">
                                             <StackPanel Margin="0,0,0,6">
                                               <inspector:InspectorRow Label="Client" Icon="{StaticResource IconAgent}">
-                                                <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnProposalClientChosen"
+                                                <ComboBox ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           AutomationProperties.AutomationId="ProposalAgentClient"
                                                           AutomationProperties.Name="Client">
                                                   <ComboBox.ItemTemplate>
@@ -563,7 +563,7 @@
                                                 </ComboBox>
                                               </inspector:InspectorRow>
                                               <inspector:InspectorRow Label="Model" Icon="{StaticResource IconModel}">
-                                                <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnProposalModelChosen"
+                                                <ComboBox ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           PlaceholderText="Choose a model"
                                                           AutomationProperties.AutomationId="ProposalAgentModel"
                                                           AutomationProperties.Name="Model">
@@ -574,8 +574,8 @@
                                                   </ComboBox.ItemTemplate>
                                                 </ComboBox>
                                               </inspector:InspectorRow>
-                                              <inspector:InspectorRow Label="Reasoning" Icon="{StaticResource IconReasoning}" IsShown="{Binding HasReasoning}">
-                                                <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnProposalReasoningChosen"
+                                              <inspector:InspectorRow Label="Reasoning" Icon="{StaticResource IconReasoning}" IsShown="{Binding Picker.HasReasoning}">
+                                                <ComboBox ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           PlaceholderText="Choose a level"
                                                           AutomationProperties.AutomationId="ProposalAgentReasoning"
                                                           AutomationProperties.Name="Reasoning">

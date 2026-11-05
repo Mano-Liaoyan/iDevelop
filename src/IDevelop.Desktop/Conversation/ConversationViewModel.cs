@@ -63,7 +63,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The project and workflow the node belongs to, as the breadcrumb names them.</summary>
     public string Breadcrumb => $"{Target.Canvas.Project.Name} › {Target.Canvas.Name}";
 
-    public string AgentName => _node.SelectedClient.Id is { } client ? ClientCatalog.Name(client) : "The agent";
+    public string AgentName => _node.Definition.Execution?.Client is { } client ? ClientCatalog.Name(client) : "The agent";
 
     public string StatusLabel => _node.StatusLabel;
 
@@ -73,7 +73,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// How the agent asks: Claude Code asks with its choices while its turn runs, and any other client asks in its reply,
     /// which the person answers with a message.
     /// </summary>
-    public string Limitations => _node.SelectedClient.Id == ClientId.ClaudeCode
+    public string Limitations => _node.Definition.Execution?.Client == ClientId.ClaudeCode
         ? "Claude Code asks with its choices while its turn runs. Choose, or answer in your own words."
         : "The agent's questions arrive in its reply. Answer them with your message.";
 
@@ -97,7 +97,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _ => "Sending continues the node's session.",
     };
 
-    public string Watermark => _node.SelectedClient.Id is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
+    public string Watermark => _node.Definition.Execution?.Client is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
 
     public bool HasEarlier => _start > 0;
 
