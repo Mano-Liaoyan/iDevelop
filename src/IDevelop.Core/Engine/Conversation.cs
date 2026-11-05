@@ -66,31 +66,7 @@ internal sealed class NodeConversation : IConversation
         log.Appended += OnAppended;
     }
 
-    public ImmutableList<ConversationLine> Lines
-    {
-        get
-        {
-            var lines = ImmutableList.CreateBuilder<ConversationLine>();
-            string? said = null;
-            foreach (var entry in _log.Entries)
-            {
-                // A client whose verdict carries the reply, such as Antigravity CLI, sends no message of it.
-                if (entry is NodeEntry.Agent { Event: AgentEvent.Succeeded { Result: { Length: > 0 } result } } && result != said)
-                {
-                    lines.Add(new ConversationLine.Agent(result));
-                }
-
-                foreach (var line in Read(entry))
-                {
-                    lines.Add(line);
-                    if (line is ConversationLine.Agent { Subagent: null } agent) said = agent.Text;
-                    else if (line is ConversationLine.Person or ConversationLine.Marker { Kind: MarkerKind.Fresh }) said = null;
-                }
-            }
-
-            return lines.ToImmutable();
-        }
-    }
+    public ImmutableList<ConversationLine> Lines => _log.Record.Conversation.Lines;
 
     public string? TerminalCommand => _terminal();
 
@@ -104,6 +80,35 @@ internal sealed class NodeConversation : IConversation
     }
 
     private void OnAppended() => Changed?.Invoke();
+}
+
+/// <summary>
+/// The lines of a node's log so far, which the log folds as each entry arrives, so a read costs nothing.
+/// <paramref name="Said"/> is the agent's last message since the person spoke or a fresh session began.
+/// </summary>
+internal sealed record ConversationFold(ImmutableList<ConversationLine> Lines, string? Said)
+{
+    public static ConversationFold Empty { get; } = new([], null);
+
+    public ConversationFold Add(NodeEntry entry)
+    {
+        var lines = Lines;
+        var said = Said;
+        // A client whose verdict carries the reply, such as Antigravity CLI, sends no message of it.
+        if (entry is NodeEntry.Agent { Event: AgentEvent.Succeeded { Result: { Length: > 0 } result } } && result != said)
+        {
+            lines = lines.Add(new ConversationLine.Agent(result));
+        }
+
+        foreach (var line in Read(entry))
+        {
+            lines = lines.Add(line);
+            if (line is ConversationLine.Agent { Subagent: null } agent) said = agent.Text;
+            else if (line is ConversationLine.Person or ConversationLine.Marker { Kind: MarkerKind.Fresh }) said = null;
+        }
+
+        return new ConversationFold(lines, said);
+    }
 
     private static IEnumerable<ConversationLine> Read(NodeEntry entry) => entry switch
     {

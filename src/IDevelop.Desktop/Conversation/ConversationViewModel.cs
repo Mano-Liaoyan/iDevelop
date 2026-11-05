@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
-using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
@@ -33,8 +32,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     private readonly Func<string, Task> _copy;
     private readonly TaskNodeViewModel _node;
     private readonly RelayCommand _loadEarlier;
+    private readonly UiBatch _changed;
     private int _start = -1;
-    private int _posted;
     private bool _disposed;
 
     internal ConversationViewModel(ConversationTarget target, ConversationState state, IConversation conversation, Func<string, Task> copy)
@@ -45,9 +44,11 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _copy = copy;
         _node = target.Canvas.Nodes.First(node => node.Id == target.Task);
         _loadEarlier = new RelayCommand(LoadEarlier, () => HasEarlier);
+        // The log tells of each line, often several at once and off the UI thread, so the view reads once per batch.
+        _changed = new UiBatch(Refresh);
         state.PropertyChanged += OnStateChanged;
         _node.PropertyChanged += OnNodeChanged;
-        conversation.Changed += OnConversationChanged;
+        conversation.Changed += _changed.Request;
         Refresh();
     }
 
@@ -131,7 +132,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
-        _conversation.Changed -= OnConversationChanged;
+        _conversation.Changed -= _changed.Request;
         _conversation.Dispose();
         State.PropertyChanged -= OnStateChanged;
         _node.PropertyChanged -= OnNodeChanged;
@@ -176,21 +177,6 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     {
         _start = Math.Max(0, _start - PageSize);
         Refresh();
-    }
-
-    // The log tells of each line, often several at once and off the UI thread, so the view reads once per batch.
-    private void OnConversationChanged()
-    {
-        if (Interlocked.Exchange(ref _posted, 1) == 1)
-        {
-            return;
-        }
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            Interlocked.Exchange(ref _posted, 0);
-            Refresh();
-        });
     }
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)

@@ -19,8 +19,8 @@ public sealed partial class TaskNodeViewModel
     [
         nameof(EngineState), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
-        nameof(CanStopAndSend), nameof(Results), nameof(HasResults), nameof(LastReply), nameof(ReviewSummary),
-        nameof(Findings), nameof(Preview), nameof(SendProblem), nameof(Latest), nameof(Questions), nameof(IsAsking),
+        nameof(CanStopAndSend), nameof(HasResults), nameof(LastReply), nameof(ReviewSummary),
+        nameof(Preview), nameof(SendProblem), nameof(Latest), nameof(Questions), nameof(IsAsking),
     ];
 
     private EngineState _engineState = new EngineState.Idle();
@@ -30,10 +30,13 @@ public sealed partial class TaskNodeViewModel
     private IReadOnlyList<NodeResult> _history = [];
     private (int Index, string Text)? _lastReply;
     private (int Index, string Text)? _proposed;
+    private IReadOnlyList<ResultViewModel> _results = [];
+    private IReadOnlyList<FindingViewModel> _findings = [];
+    private (IReadOnlyList<NodeResult>, NodeState, string?) _shownRows;
     private string? _latest;
     private System.Collections.Immutable.ImmutableArray<Clients.BackgroundTask> _background = [];
     private IConversation? _log;
-    private int _logChanged;
+    private UiBatch _logChanged = null!;
     private RelayCommand _run = null!;
     private RelayCommand _retry = null!;
     private RelayCommand _stop = null!;
@@ -107,8 +110,7 @@ public sealed partial class TaskNodeViewModel
     } = "";
 
     /// <summary>The node's results, newest first, each with whether it is the current one.</summary>
-    public IReadOnlyList<ResultViewModel> Results => [.. _history.Select((result, index) => new ResultViewModel(result, index + 1,
-        current: index == _history.Count - 1 && State == NodeState.Completed)).Reverse()];
+    public IReadOnlyList<ResultViewModel> Results => _results;
 
     public bool HasResults => _history.Count > 0;
 
@@ -126,7 +128,7 @@ public sealed partial class TaskNodeViewModel
         ? verdict.Approves ? "Approved" : verdict.Findings.Length == 1 ? "1 open finding" : $"{verdict.Findings.Length} open findings"
         : null;
 
-    public IReadOnlyList<FindingViewModel> Findings => Verdict is { } verdict ? [.. verdict.Findings.Select(finding => new FindingViewModel(finding))] : [];
+    public IReadOnlyList<FindingViewModel> Findings => _findings;
 
     public ICommand RunCommand => _run;
 
@@ -162,6 +164,13 @@ public sealed partial class TaskNodeViewModel
 
     partial void InitializeRun()
     {
+        _logChanged = new UiBatch(() =>
+        {
+            if (_log is not null)
+            {
+                ShowEngine();
+            }
+        });
         _run = new RelayCommand(() => Act(engine => engine.Run(Id)), () => ShowsRun && RunRefusal is null);
         _retry = new RelayCommand(() => Act(engine => engine.Retry(Id)), () => ShowsRetry && RunRefusal is null);
         _stop = new RelayCommand(() => Act(engine => engine.Stop(Id)), () => ShowsStop);
@@ -194,6 +203,7 @@ public sealed partial class TaskNodeViewModel
         _background = HasAgent ? Log(engine).Background : [];
         ShowProposal();
         ShowState();
+        ShowRows();
         foreach (var property in RunDependents)
         {
             OnPropertyChanged(property);
@@ -203,6 +213,23 @@ public sealed partial class TaskNodeViewModel
         {
             command.NotifyCanExecuteChanged();
         }
+    }
+
+    /// <summary>Builds the rows of the node's results and findings, and raises them, only when what they show changed.</summary>
+    private void ShowRows()
+    {
+        var shown = (_history, State, IsReview ? _lastReply?.Text : null);
+        if (shown == _shownRows)
+        {
+            return;
+        }
+
+        _shownRows = shown;
+        _results = [.. _history.Select((result, index) => new ResultViewModel(result, index + 1,
+            current: index == _history.Count - 1 && State == NodeState.Completed)).Reverse()];
+        _findings = Verdict is { } verdict ? [.. verdict.Findings.Select(finding => new FindingViewModel(finding))] : [];
+        OnPropertyChanged(nameof(Results));
+        OnPropertyChanged(nameof(Findings));
     }
 
     /// <summary>A review that runs on this node's result marks it, or nothing does.</summary>
@@ -281,27 +308,10 @@ public sealed partial class TaskNodeViewModel
         if (_log is null)
         {
             _log = engine.Conversation(Id);
-            _log.Changed += OnLogChanged;
+            _log.Changed += _logChanged.Request;
         }
 
         return _log;
-    }
-
-    private void OnLogChanged()
-    {
-        if (Interlocked.Exchange(ref _logChanged, 1) == 1)
-        {
-            return;
-        }
-
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            Interlocked.Exchange(ref _logChanged, 0);
-            if (_log is not null)
-            {
-                ShowEngine();
-            }
-        });
     }
 
     /// <summary>The node leaves the canvas, or its project closes, so it stops following its log.</summary>
@@ -309,7 +319,7 @@ public sealed partial class TaskNodeViewModel
     {
         if (_log is { } log)
         {
-            log.Changed -= OnLogChanged;
+            log.Changed -= _logChanged.Request;
             log.Dispose();
             _log = null;
         }

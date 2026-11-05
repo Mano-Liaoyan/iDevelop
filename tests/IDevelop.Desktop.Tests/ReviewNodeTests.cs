@@ -65,4 +65,43 @@ public sealed class ReviewNodeTests
 
         shell.WaitForState("Check", NodeState.Completed);
     }
+
+    [AvaloniaFact]
+    public void A_new_reply_replaces_the_verdict_and_the_findings_the_review_shows()
+    {
+        using var f = new NodeFixture(Task(A, "A", 105), Review(R, "Check", 405), Dependency(A, R), new WorkflowEdit.SetRoundLimit(R, 1));
+        f.Install(
+            Reply("s-a", "A fixed.", FakeAgents.Resuming(ClientId.Antigravity, "s-a")),
+            On().Choose((Fresh("A"), Reply("s-a", "A ready.", On().Write("a.txt", "A\n"))), (Fresh("Check"), Reply("s-r", Rejects))));
+        var shell = f.Open();
+        shell.Click(shell.Find<Button>("RunWorkflow"));
+        var check = shell.NodeModel("Check");
+        shell.WaitUntil(() => check.EngineState is Engine.NodeState.InputRequired { Why: Engine.NodeState.RoundLimit }, "the review reaches its round limit", () => check.StatusLabel);
+        Assert.Single(check.Findings);
+
+        f.Install(Reply("s-r2", Approves));
+        check.RetryCommand.Execute(null);
+
+        shell.WaitUntil(() => check.ReviewSummary == "Approved", "the review's new reply approves", () => $"{check.StatusLabel} / {check.LastReply}");
+        Assert.Empty(check.Findings);
+    }
+
+    [AvaloniaFact]
+    public void A_reply_during_a_running_review_shows_its_findings()
+    {
+        using var f = new NodeFixture(Review(R, "Check", 405));
+        var said = System.Text.Json.JsonSerializer.Serialize(Rejects);
+        f.Install(On()
+            .Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-r"))
+            .Print($$$"""{"event":"step_update","step_update":{"step_index":1,"state":"DONE","step_type":"agent_response","text_delta":{{{said}}}}}""")
+            .Hang());
+        var shell = f.Open();
+        var check = shell.NodeModel("Check");
+        check.RunCommand.Execute(null);
+
+        shell.WaitUntil(() => check.LastReply is not null, "the review replies during its turn", () => check.StatusLabel);
+
+        Assert.Equal(NodeState.Running, check.State);
+        Assert.Single(check.Findings);
+    }
 }
