@@ -47,35 +47,4 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>"Under review by Check the diff", on the review badge of a node that a review goes on with.</summary>
     public string? ReviewerTip => _reviewer is { } reviewer ? $"Under review by {reviewer}" : null;
-
-    partial void InitializeCard()
-    {
-        PropertyChanged += (_, e) => OnCardChanged(e.PropertyName);
-    }
-
-    private void OnCardChanged(string? property)
-    {
-        switch (property)
-        {
-            case nameof(State):
-                OnPropertyChanged(nameof(ShowsAgent));
-                OnPropertyChanged(nameof(Subtitle));
-                OnPropertyChanged(nameof(SubtitleChoices));
-                break;
-            case nameof(Role):
-                OnPropertyChanged(nameof(ShowsAgent));
-                OnPropertyChanged(nameof(Subtitle));
-                OnPropertyChanged(nameof(SubtitleChoices));
-                OnPropertyChanged(nameof(IsUnderReview));
-                break;
-            case nameof(Proposal) or nameof(StatusLabel):
-                OnPropertyChanged(nameof(Subtitle));
-                OnPropertyChanged(nameof(SubtitleChoices));
-                break;
-            case nameof(AgentLabel):
-                OnPropertyChanged(nameof(AgentClient));
-                OnPropertyChanged(nameof(AgentModel));
-                break;
-        }
-    }
 }

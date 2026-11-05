@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Windows.Input;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
@@ -9,18 +8,6 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>What the inspector shows of a node beyond the card: section titles, changed counts, reverts, and Accept and Finish.</summary>
 public sealed partial class TaskNodeViewModel
 {
-    // Each inspector property follows the node properties it is computed from, which the node raises on its own.
-    private static readonly Dictionary<string, string[]> InspectorDependents = new()
-    {
-        [nameof(Preview)] = [nameof(TaskChanges)],
-        [nameof(AgentLabel)] = [nameof(AgentChanges), nameof(CanRevertAgent)],
-        [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
-        [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish)],
-        [nameof(Proposal)] = [nameof(ShowsAcceptAndFinish)],
-        [nameof(PermissionNote)] = [nameof(PermissionSummary)],
-        [nameof(ConversationNote)] = [nameof(ConversationSummary)],
-    };
-
     private RelayCommand? _acceptAndFinish;
     private ProposalViewModel? _watchedProposal;
 
@@ -86,25 +73,6 @@ public sealed partial class TaskNodeViewModel
         _acceptAndFinish = new RelayCommand(
             AcceptAndFinish,
             () => ShowsAcceptAndFinish && Proposal!.AcceptCommand.CanExecute(null));
-        PropertyChanged += OnInspectedChanged;
-    }
-
-    private void OnInspectedChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(Proposal))
-        {
-            WatchProposal();
-        }
-
-        if (e.PropertyName is { } name && InspectorDependents.TryGetValue(name, out var dependents))
-        {
-            foreach (var dependent in dependents)
-            {
-                OnPropertyChanged(dependent);
-            }
-
-            _acceptAndFinish?.NotifyCanExecuteChanged();
-        }
     }
 
     private void WatchProposal()
