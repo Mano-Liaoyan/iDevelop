@@ -4,39 +4,15 @@ using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Workflows;
-using JetBrains.Annotations;
 
 namespace IDevelop.Desktop.Canvas;
-
-// A picker's UI Automation value is its chosen entry's text, so each entry's text is its label. The inspector reuses
-// its pickers for every task, and a picker keeps its selected entry when the new list holds an equal one, so an entry
-// names its task.
-
-/// <summary>An entry in the inspector's client picker. A null client is "None".</summary>
-public sealed record ClientChoice([UsedImplicitly] TaskId Task, ClientId? Id, string Label)
-{
-    public override string ToString() => Label;
-}
-
-/// <summary>An entry in the model or reasoning picker: the client's own id and what the picker shows.</summary>
-public sealed record Choice([UsedImplicitly] TaskId Task, string Id, string Label)
-{
-    public override string ToString() => Label;
-}
 
 /// <summary>
 /// A node on the canvas. The card, the canvas actions, and the inspector each extend it in a file of their own and react
 /// to its changes through its own <see cref="ObservableObject.PropertyChanged"/>.
 /// </summary>
-public sealed partial class TaskNodeViewModel : ObservableObject
+public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHost
 {
-    // A new list clears its picker's selection, so each list is raised before its selection.
-    private static readonly string[] PickerProperties =
-    [
-        nameof(ClientChoices), nameof(SelectedClient), nameof(HasClient), nameof(ModelChoices), nameof(SelectedModel),
-        nameof(ReasoningChoices), nameof(SelectedReasoning), nameof(HasReasoning), nameof(PermissionNote),
-    ];
-
     private readonly WorkflowCanvasViewModel _canvas;
     private TaskDefinition _task;
     private Point _location;
@@ -52,6 +28,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         Fields = [.. task.Blueprint.Fields.Select(field => new FieldViewModel(this, field))];
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
+        Picker = new AgentPicker(task.Id, [null, .. ClientCatalog.All], () => _task.Execution, id => _canvas.Clients.Current[id], SetExecution,
+            id => ExecutionChoices.ForClient(id, _canvas.Clients.Current[id]));
         Skills = new SkillPickerViewModel(this);
         DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
         SaveAsBlueprintCommand = new RelayCommand(() => _canvas.Blueprints.SaveAs(_task));
@@ -148,10 +126,10 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         ? "The reviewer reads your guidance in its next turn. Ctrl+Enter sends."
         : "Write to the agent. Ctrl+Enter sends.";
 
-    public IReadOnlyList<Choice> ConversationChoices =>
-        [.. Enum.GetValues<ConversationMode>().Select(mode => new Choice(Id, mode.ToString(), RunText.ConversationChoice(mode)))];
+    public IReadOnlyList<ConversationChoice> ConversationChoices =>
+        [.. Enum.GetValues<ConversationMode>().Select(mode => new ConversationChoice(Id, mode, RunText.ConversationChoice(mode)))];
 
-    public Choice SelectedConversation => ConversationChoices.First(choice => choice.Id == _task.Conversation.ToString());
+    public ConversationChoice SelectedConversation => ConversationChoices.First(choice => choice.Mode == _task.Conversation);
 
     public string ConversationNote => RunText.ConversationNote(_task.Conversation);
 
@@ -163,38 +141,10 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     /// <summary>The card's second line in every state: the model and its level, or empty while the task names neither.</summary>
     public string AgentModel => RunText.AgentLines(_task.Execution, Status).Model ?? "";
 
-    public IReadOnlyList<ClientChoice> ClientChoices
-    {
-        get => Kept(ref field,
-            [new(Id, null, "None"), .. ClientCatalog.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))]);
-    } = [];
-
-    public ClientChoice SelectedClient => ClientChoices.First(choice => choice.Id == _task.Execution?.Client);
+    /// <summary>The pickers of the node's agent.</summary>
+    public AgentPicker Picker { get; }
 
     public bool HasClient => _task.Execution is not null;
-
-    /// <summary>The models this machine offers, then the task's model when it is not one of them, marked.</summary>
-    public IReadOnlyList<Choice> ModelChoices
-    {
-        get => Kept(ref field, _task.Execution is { } settings
-            ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, Status)))]
-            : []);
-    } = [];
-
-    public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Model);
-
-    /// <summary>The levels the task's model offers, then the task's level when the model does not offer it, marked.</summary>
-    public IReadOnlyList<Choice> ReasoningChoices
-    {
-        get => Kept(ref field, _task.Execution is { } settings
-            ? [.. ExecutionChoices.Reasoning(settings, Status).Select(choice => new Choice(Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
-            : []);
-    } = [];
-
-    public Choice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Reasoning);
-
-    /// <summary>False when the model takes no reasoning level, such as an Antigravity model without a level suffix.</summary>
-    public bool HasReasoning => ReasoningChoices.Count > 0;
 
     /// <summary>The skills the node's agent may use (#93), which the inspector, and any other view of the node, picks.</summary>
     public SkillPickerViewModel Skills { get; }
@@ -270,56 +220,21 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         Location = WorkflowCanvasViewModel.ToPoint(position);
     }
 
-    // A picker whose list is replaced rebuilds its entries, which can swallow a click or key the person gives it at that
-    // moment, so a list that came out the same, as after a skill listing lands, stays the very list the picker shows.
-    private static IReadOnlyList<T> Kept<T>(ref IReadOnlyList<T> shown, IReadOnlyList<T> now) => now.SequenceEqual(shown) ? shown : shown = now;
-
     /// <summary>The task's agent changed, or what the clients offer did.</summary>
     internal void OnAgentChanged()
     {
         OnPropertyChanged(nameof(AgentLabel));
-        foreach (var property in PickerProperties)
-        {
-            OnPropertyChanged(property);
-        }
-
+        Picker.Show();
+        OnPropertyChanged(nameof(HasClient));
+        OnPropertyChanged(nameof(PermissionNote));
         Skills.Refresh();
     }
 
-    internal void ChooseClient(ClientChoice choice)
+    internal void ChooseConversation(ConversationChoice choice)
     {
-        if (choice.Id != _task.Execution?.Client)
+        if (choice.Mode != _task.Conversation && _canvas.Edit(new WorkflowEdit.SetConversation(Id, choice.Mode)) is EditResult.Rejected)
         {
-            SetExecution(choice.Id is { } id ? ExecutionChoices.ForClient(id, _canvas.Clients.Current[id]) : null);
-        }
-    }
-
-    internal void ChooseModel(Choice choice)
-    {
-        if (_task.Execution is { } settings && choice.Id != settings.Model
-            && ExecutionChoices.OfferedModel(Status, choice.Id) is { } model)
-        {
-            SetExecution(ExecutionChoices.ForModel(settings, model));
-        }
-    }
-
-    internal void ChooseReasoning(Choice choice)
-    {
-        if (_task.Execution is { } settings && choice.Id != settings.Reasoning
-            && ExecutionChoices.OfferedModel(Status, settings.Model) is { } model && model.ReasoningLevels.Contains(choice.Id))
-        {
-            SetExecution(settings with { Reasoning = choice.Id });
-        }
-    }
-
-    internal void ChooseConversation(Choice choice)
-    {
-        if (Enum.TryParse<ConversationMode>(choice.Id, out var mode) && mode != _task.Conversation)
-        {
-            if (_canvas.Edit(new WorkflowEdit.SetConversation(Id, mode)) is EditResult.Rejected)
-            {
-                OnPropertyChanged(nameof(SelectedConversation));
-            }
+            OnPropertyChanged(nameof(SelectedConversation));
         }
     }
 

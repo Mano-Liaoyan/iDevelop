@@ -174,8 +174,8 @@
     <StackPanel Classes="cardSection" IsVisible="{Binding HasAgent}">
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8">
         <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" ToolTip.Tip="Client" />
-        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}"
-                  SelectionChanged="OnClientChosen"
+        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}"
+                  SelectionChanged="OnAgentChosen"
                   AutomationProperties.AutomationId="CardPickClient" AutomationProperties.Name="Client">
           <ComboBox.ItemTemplate>
             <DataTemplate DataType="canvas:ClientChoice">
@@ -186,8 +186,8 @@
       </Grid>
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding HasClient}">
         <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconModel}" ToolTip.Tip="Model" />
-        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}"
-                  SelectionChanged="OnModelChosen" PlaceholderText="Choose a model"
+        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}"
+                  SelectionChanged="OnAgentChosen" PlaceholderText="Choose a model"
                   AutomationProperties.AutomationId="CardPickModel" AutomationProperties.Name="Model">
           <ComboBox.ItemTemplate>
             <DataTemplate DataType="canvas:Choice">
@@ -196,10 +196,10 @@
           </ComboBox.ItemTemplate>
         </ComboBox>
       </Grid>
-      <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding HasReasoning}">
+      <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding Picker.HasReasoning}">
         <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconReasoning}" ToolTip.Tip="Reasoning" />
-        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}"
-                  SelectionChanged="OnReasoningChosen" PlaceholderText="Choose a level"
+        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}"
+                  SelectionChanged="OnAgentChosen" PlaceholderText="Choose a level"
                   AutomationProperties.AutomationId="CardPickReasoning" AutomationProperties.Name="Reasoning">
           <ComboBox.ItemTemplate>
             <DataTemplate DataType="canvas:Choice">

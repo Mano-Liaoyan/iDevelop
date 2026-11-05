@@ -13,16 +13,9 @@ namespace IDevelop.Desktop.Canvas;
 /// when this machine can run it, else the planner's agent while the proposal's box is ticked. A planner's choice this
 /// machine cannot run says why, on the task's row and its ghost card.
 /// </summary>
-public sealed class ProposalAgentViewModel : ObservableObject
+public sealed class ProposalAgentViewModel : ObservableObject, IAgentPickerHost
 {
     private static readonly string[] Summary = [nameof(Label), nameof(Client), nameof(Model), nameof(Reason), nameof(Note)];
-
-    // A new list clears its picker's selection, so each list is raised before its selection.
-    private static readonly string[] Pickers =
-    [
-        nameof(ClientChoices), nameof(SelectedClient), nameof(ModelChoices), nameof(SelectedModel), nameof(ReasoningChoices),
-        nameof(SelectedReasoning), nameof(HasReasoning),
-    ];
 
     private readonly ProposalViewModel _proposal;
     private string Title { get; }
@@ -52,6 +45,9 @@ public sealed class ProposalAgentViewModel : ObservableObject
         _own = own;
         _fills = fills;
         _check = Check();
+        // A task that only reads takes only a client with a read-only mode. It has no "None" entry.
+        Picker = new AgentPicker(id, [.. ClientCatalog.All.Where(client => !blueprint.Work.ReadOnly || ClientCatalog.HasReadOnlyMode(client))],
+            () => Settings, _proposal.Status, Change, client => ExecutionChoices.ForClient(client, _proposal.Status(client)));
         EditCommand = new RelayCommand(() => _proposal.Edit(this));
     }
 
@@ -119,27 +115,8 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     public string EditName => _isEditing ? $"Done changing the agent of \"{Title}\"" : $"Change the agent of \"{Title}\"";
 
-    /// <summary>Every client, or only those with a read-only mode for a task that only reads.</summary>
-    public IReadOnlyList<ClientChoice> ClientChoices =>
-        [.. ClientCatalog.All.Where(id => !ReadOnly || ClientCatalog.HasReadOnlyMode(id)).Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _proposal.Status(id))))];
-
-    public ClientChoice? SelectedClient => ClientChoices.FirstOrDefault(choice => choice.Id == Settings?.Client);
-
-    public IReadOnlyList<Choice> ModelChoices => Settings is { } settings
-        ? [.. ExecutionChoices.Models(settings, _proposal.Status(settings.Client))
-            .Select(choice => new Choice(Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, _proposal.Status(settings.Client))))]
-        : [];
-
-    public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == Settings?.Model);
-
-    public IReadOnlyList<Choice> ReasoningChoices => Settings is { } settings
-        ? [.. ExecutionChoices.Reasoning(settings, _proposal.Status(settings.Client)).Select(choice => new Choice(Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
-        : [];
-
-    public Choice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == Settings?.Reasoning);
-
-    /// <summary>False when the model takes no reasoning level.</summary>
-    public bool HasReasoning => ReasoningChoices.Count > 0;
+    /// <summary>The pickers of the task's agent.</summary>
+    public AgentPicker Picker { get; }
 
     internal TaskId Id { get; }
 
@@ -160,39 +137,12 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     private (string Client, string? Model) Lines => RunText.AgentLines(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
 
-    private bool ReadOnly => _blueprint.Work.ReadOnly;
-
     /// <summary>The agent the task's blueprint saves, or a fill's task has now, which wins over the planner's choice.</summary>
     private ExecutionSettings? Own => _own();
 
 
     /// <summary>A planner's choice that falls back: one the machine cannot run, for a task without an agent of its own.</summary>
     private AgentCheck.Unusable? Unusable => _changed is null && Own is null ? _check as AgentCheck.Unusable : null;
-
-    internal void ChooseClient(ClientChoice choice)
-    {
-        if (choice.Id is { } id && id != Settings?.Client)
-        {
-            Change(ExecutionChoices.ForClient(id, _proposal.Status(id)));
-        }
-    }
-
-    internal void ChooseModel(Choice choice)
-    {
-        if (Settings is { } settings && choice.Id != settings.Model && ExecutionChoices.OfferedModel(_proposal.Status(settings.Client), choice.Id) is { } model)
-        {
-            Change(ExecutionChoices.ForModel(settings, model));
-        }
-    }
-
-    internal void ChooseReasoning(Choice choice)
-    {
-        if (Settings is { } settings && choice.Id != settings.Reasoning
-            && ExecutionChoices.OfferedModel(_proposal.Status(settings.Client), settings.Model) is { } model && model.ReasoningLevels.Contains(choice.Id))
-        {
-            Change(settings with { Reasoning = choice.Id });
-        }
-    }
 
     /// <summary>Checks the planner's choice again, after what the clients offer changed.</summary>
     internal void Recheck() => _check = Check();
@@ -210,15 +160,12 @@ public sealed class ProposalAgentViewModel : ObservableObject
     internal void Show()
     {
         ShowSummary();
-        foreach (var property in Pickers)
-        {
-            OnPropertyChanged(property);
-        }
+        Picker.Show();
     }
 
     private AgentCheck Check() => AgentCheck.Of(_agent, _blueprint, _proposal.ClientStatuses);
 
-    private void Change(ExecutionSettings settings)
+    private void Change(ExecutionSettings? settings)
     {
         _changed = settings;
         _proposal.OnAgentChanged();
