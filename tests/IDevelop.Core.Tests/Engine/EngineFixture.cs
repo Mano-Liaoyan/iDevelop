@@ -130,13 +130,6 @@ internal sealed class EngineFixture : IAsyncDisposable
         return engine;
     }
 
-    /// <summary>The steps of a turn that reports <paramref name="session"/> and replies <paramref name="reply"/>, after <paramref name="first"/>.</summary>
-    public static FakeRule Reply(string session, string reply, FakeRule? first = null) =>
-        (first ?? On()).Print(FakeAgents.SessionLine(ClientId.Antigravity, session)).Print(FakeAgents.ReplyLines(ClientId.Antigravity, reply));
-
-    /// <summary>The start of the stdin line of a fresh turn of the node titled <paramref name="title"/>.</summary>
-    public static string Fresh(string title) => """{"event":"user","message":{"role":"user","content":"# """ + title + "\\n";
-
     /// <summary>The prompt a turn captured, which a turn that chose its steps by the prompt captured as agy's stdin line.</summary>
     public string Prompt(string name)
     {
@@ -170,13 +163,6 @@ internal sealed class EngineFixture : IAsyncDisposable
         {
             engine.NodeChanged -= Changed;
         }
-    }
-
-    /// <summary>Waits until <paramref name="condition"/> holds, for what no state change announces.</summary>
-    public static async Task Eventually(Func<bool> condition)
-    {
-        using var timeout = new CancellationTokenSource(Patience);
-        while (!condition()) await Task.Delay(20, timeout.Token);
     }
 
     public static Task<NodeState> Until<T>(WorkflowEngine engine, TaskId node) where T : NodeState => Until(engine, node, state => state is T);

@@ -208,7 +208,7 @@ public sealed class GitRepositoryTests
         f.Diamond();
         var (bin, environment) = ShimBin(f);
         var child = Path.Combine(bin, "child");
-        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(while echo tick; do sleep 0.1; done) &\necho $! > {Quote(child)}\n");
+        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(while echo tick; do sleep 0.1; done) &\necho $! > {Executable.Quote(child)}\n");
         var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         var elapsed = System.Diagnostics.Stopwatch.StartNew();
         var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
@@ -232,7 +232,7 @@ public sealed class GitRepositoryTests
         using var f = new GitFixture();
         var (bin, environment) = ShimBin(f);
         var child = Path.Combine(bin, "child");
-        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(sleep 300 & echo $! > {Quote(child)})\nexec sleep 60\n");
+        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(sleep 300 & echo $! > {Executable.Quote(child)})\nexec sleep 60\n");
         var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         var elapsed = System.Diagnostics.Stopwatch.StartNew();
         var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
@@ -271,7 +271,7 @@ public sealed class GitRepositoryTests
         var (bin, environment) = ShimBin(f);
         var child = Path.Combine(bin, "child");
         Executable.Write(Path.Combine(bin, "git"),
-            $"#!/bin/sh\n(sleep 300 >/dev/null 2>&1 </dev/null & echo $! > {Quote(child)})\nexec {Quote(RealGit)} \"$@\"\n");
+            $"#!/bin/sh\n(sleep 300 >/dev/null 2>&1 </dev/null & echo $! > {Executable.Quote(child)})\nexec {Executable.Quote(RealGit)} \"$@\"\n");
         var result = GitRepository.Run(["rev-parse", "--is-inside-work-tree"], f.Folder, GitOperation.Metadata, GitLimits.Default, environment);
         var id = int.Parse(File.ReadAllText(child), CultureInfo.InvariantCulture);
         try
@@ -327,7 +327,7 @@ public sealed class GitRepositoryTests
         var (bin, environment) = ShimBin(f);
         var lockPath = Path.Combine(bin, "lock");
         Executable.Write(Path.Combine(bin, "git"),
-            $"#!/bin/sh\n{Quote(RealGit)} \"$@\"\nstatus=$?\ncase \" $* \" in *\" write-tree \"*) mkdir \"$GIT_INDEX_FILE.lock\" && printf %s \"$GIT_INDEX_FILE.lock\" > {Quote(lockPath)};; esac\nexit $status\n");
+            $"#!/bin/sh\n{Executable.Quote(RealGit)} \"$@\"\nstatus=$?\ncase \" $* \" in *\" write-tree \"*) mkdir \"$GIT_INDEX_FILE.lock\" && printf %s \"$GIT_INDEX_FILE.lock\" > {Executable.Quote(lockPath)};; esac\nexit $status\n");
         var repository = Assert.IsType<RepositoryOpen.Opened>(GitRepository.Open(f.Folder, environment)).Repository;
         try
         {
@@ -350,8 +350,6 @@ public sealed class GitRepositoryTests
             ["PATH"] = bin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
         });
     }
-
-    private static string Quote(string text) => "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 
     private static bool Exits(int id, TimeSpan patience)
     {

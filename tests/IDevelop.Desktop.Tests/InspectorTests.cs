@@ -207,7 +207,7 @@ public sealed class InspectorTests : IDisposable
     public void After_each_run_the_Run_section_lists_its_results_newest_first_and_marks_the_current_one()
     {
         using var f = new NodeFixture(NodeFixture.Plan(Design, "Say hi", 105));
-        f.Install(NodeFixture.Reply("s-1", "Said hi."));
+        f.Install(AgyTurn.Reply("s-1", "Said hi."));
         var shell = f.Open();
         shell.Click(shell.Header(shell.Node("Say hi")));
         Assert.False(shell.Find<ItemsControl>("Results").IsEffectivelyVisible);

@@ -43,7 +43,7 @@ public sealed class InspectorLayoutTests : IDisposable
     public void The_composer_s_buttons_end_where_its_box_ends_and_wrap_before_it(double width)
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105, ConversationMode.Chat));
-        f.Install(NodeFixture.Reply("s-1", "Which fruit?"));
+        f.Install(AgyTurn.Reply("s-1", "Which fruit?"));
         var shell = f.Open();
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));

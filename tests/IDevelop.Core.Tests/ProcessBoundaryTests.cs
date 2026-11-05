@@ -186,7 +186,7 @@ public sealed class ProcessBoundaryTests : IDisposable
         using var child = ChildProcess.Start(fakes.Resolver.Resolve(definition.Command)!, definition.Launch(request).Arguments, _project, ProcessLifetime.Probe);
         _spawned.Add(child.Id);
 
-        await WaitUntilAsync(() => Directory.GetFiles(folder, "*.json") is [var file] &&
+        await Wait.Until(() => Directory.GetFiles(folder, "*.json") is [var file] &&
             JsonSerializer.Deserialize<string[]>(File.ReadAllBytes(file)) is { Length: > 0 });
         Assert.Equal(1, LaunchMarkers.Runs(folder, client));
         var marker = Assert.Single(Directory.GetFiles(folder, "*.json"));
@@ -229,25 +229,4 @@ public sealed class ProcessBoundaryTests : IDisposable
 
     private static TaskDefinition TaskDefinition() => TestNodes.Implement(TestTasks.Build, "Build", "Say DONE.",
         execution: new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" });
-
-    private static async Task WaitUntilAsync(Func<bool> done)
-    {
-        var deadline = DateTime.UtcNow + Patience;
-        while (true)
-        {
-            try
-            {
-                if (done())
-                {
-                    return;
-                }
-            }
-            catch (Exception error) when (error is IOException or JsonException)
-            {
-            }
-
-            Assert.True(DateTime.UtcNow < deadline, "The condition did not become true in time.");
-            await Task.Delay(50);
-        }
-    }
 }

@@ -66,7 +66,7 @@ public sealed class CanvasChromeTests : IDisposable
     public void An_open_proposal_and_a_waiting_planner_leave_the_breadcrumb_the_pill_and_both_buttons_apart_at_every_size()
     {
         using var f = FanOut.Fixture();
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Generate(shell);
         Assert.Equal(("1 task waits for you", "Review Proposal"), (shell.Text("WaitingCount"), AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
         Assert.True(shell.ShowsUnsavedChanges);
@@ -87,7 +87,7 @@ public sealed class CanvasChromeTests : IDisposable
     public void A_running_workflow_keeps_its_run_bar_on_the_bottom_edge_between_the_zoom_controls_and_the_minimap_at_every_size()
     {
         using var f = FanOut.Fixture();
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
         Assert.Equal("2 tasks wait for you", shell.Text("WaitingCount"));
@@ -105,7 +105,7 @@ public sealed class CanvasChromeTests : IDisposable
     public void The_docked_conversation_keeps_a_few_lines_of_transcript_and_the_canvas_keeps_its_cards_clear_in_the_smallest_window()
     {
         using var f = FanOut.Fixture();
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
         shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
@@ -162,7 +162,7 @@ public sealed class CanvasChromeTests : IDisposable
     public void Docking_moves_the_cards_and_the_proposals_ghosts_into_view_clear_of_the_floating_controls()
     {
         using var f = FanOut.Fixture();
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
         Resize(shell, 1600, 1000, 320);
@@ -182,7 +182,7 @@ public sealed class CanvasChromeTests : IDisposable
     public void Docking_keeps_the_persons_zoom_and_pan_when_no_card_in_view_would_hide_and_resizing_never_moves_them()
     {
         using var f = FanOut.Fixture();
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Run(shell);
         Resize(shell, 1600, 1000, 320);
         shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
@@ -210,7 +210,7 @@ public sealed class CanvasChromeTests : IDisposable
     public void Fit_to_view_uses_the_room_a_long_status_leaves_on_the_docked_canvas()
     {
         using var f = FanOut.Fixture();
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Run(shell);
         shell.Pan(shell.InEditor(260, 700), new Vector(-100, 0));
         shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
@@ -257,7 +257,7 @@ public sealed class CanvasChromeTests : IDisposable
     public void Fit_to_view_keeps_the_cards_clear_of_the_top_row_and_the_bottom_row(double width, double height, double inspector, bool docked, double margin)
     {
         using var f = FanOut.Fixture();
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
         if (docked)
@@ -295,7 +295,7 @@ public sealed class CanvasChromeTests : IDisposable
     public void Ghost_cards_and_wires_shrink_with_the_zoom_as_the_cards_do()
     {
         using var f = FanOut.Fixture();
-        var shell = f.Window();
+        var shell = f.Open();
         FanOut.Generate(shell);
 
         shell.Editor.ViewportZoom = 0.5;

@@ -10,6 +10,7 @@ using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.Desktop.Tests.NodeFixture;
+using static IDevelop.TestSupport.AgyTurn;
 using static IDevelop.TestSupport.FakeRule;
 using static IDevelop.Workflows.WorkflowEdit;
 

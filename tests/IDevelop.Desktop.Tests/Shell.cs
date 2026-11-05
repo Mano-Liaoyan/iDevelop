@@ -309,17 +309,24 @@ internal sealed partial class Shell
     public void WaitForProposal() =>
         WaitUntil(() => Has<StackPanel>("Proposal") && !Window.ViewModel.RunningNodes.Any(), "the proposal shows and the planner's turn ends");
 
-    /// <summary>Runs the UI thread's jobs until the condition holds, for work that ends on another thread.</summary>
-    public void WaitUntil(Func<bool> condition, string what)
+    /// <summary>
+    /// Runs the UI thread's jobs until the condition holds, for work that ends on another thread, and says what
+    /// <paramref name="seen"/> reports when it never does.
+    /// </summary>
+    public void WaitUntil(Func<bool> condition, string what, Func<string>? seen = null)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         while (!condition())
         {
-            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.");
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.{(seen is null ? "" : $" Saw: {seen()}")}");
             Thread.Sleep(20);
             Render();
         }
     }
+
+    /// <summary>Invokes the control through its automation peer, as a screen reader does.</summary>
+    public static void Invoke(Control control) =>
+        ControlAutomationPeer.CreatePeerForElement(control).GetProvider<IInvokeProvider>()!.Invoke();
 
     public void Render()
     {

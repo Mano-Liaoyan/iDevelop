@@ -4,6 +4,7 @@ using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.NodeFixture;
+using static IDevelop.TestSupport.AgyTurn;
 
 namespace IDevelop.Desktop.Tests;
 

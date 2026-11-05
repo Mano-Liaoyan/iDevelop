@@ -17,6 +17,9 @@ internal static class Executable
         File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
+    /// <summary>The text as one word of a POSIX shell script.</summary>
+    public static string Quote(string text) => "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
     public static void Copy(string source, string path)
     {
         if (OperatingSystem.IsWindows())

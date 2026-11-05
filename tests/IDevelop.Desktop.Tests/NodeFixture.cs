@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Diagnostics;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Clients;
 using IDevelop.TestSupport;
@@ -27,20 +26,11 @@ internal sealed class NodeFixture : IDisposable
         Project = _temp.Seed(edits);
         Evidence = _temp.Create("evidence");
         Fakes = new FakeClients(_temp.Create("bin"));
-        var config = Path.Combine(_temp.Create("git"), "config");
-        File.WriteAllText(config, "[maintenance]\n\tauto = false\n");
-        Git = new Dictionary<string, string>
-        {
-            ["GIT_CONFIG_NOSYSTEM"] = "1", ["GIT_CONFIG_GLOBAL"] = config,
-            ["GIT_AUTHOR_NAME"] = "E3", ["GIT_AUTHOR_EMAIL"] = "e3@example.test", ["GIT_COMMITTER_NAME"] = "E3", ["GIT_COMMITTER_EMAIL"] = "e3@example.test",
-            ["GIT_TERMINAL_PROMPT"] = "0", ["LC_ALL"] = "C", ["GIT_OPTIONAL_LOCKS"] = "0",
-        };
-        Run("init", "-q", "--object-format=sha1", "-b", "main");
-        Run("config", "core.autocrlf", "false");
+        AppTempFolder.RunGit(Project, "config", "core.autocrlf", "false");
         File.WriteAllText(Path.Combine(Project, ".gitignore"), ".idp/\n.worktrees/\n");
         File.WriteAllText(Path.Combine(Project, "base.txt"), "base\n");
-        Run("add", "base.txt", ".gitignore");
-        Run("commit", "-q", "-m", "base");
+        AppTempFolder.RunGit(Project, "add", "base.txt", ".gitignore");
+        AppTempFolder.RunGit(Project, "commit", "-q", "-m", "base");
     }
 
     public string Project { get; }
@@ -48,8 +38,6 @@ internal sealed class NodeFixture : IDisposable
     public string Evidence { get; }
 
     public FakeClients Fakes { get; }
-
-    private IReadOnlyDictionary<string, string> Git { get; }
 
     /// <summary>An Implement node of Antigravity whose prompt starts with its title.</summary>
     public static WorkflowEdit.PlaceNode Task(TaskId id, string title, double x, ConversationMode conversation = ConversationMode.Autonomous) =>
@@ -72,13 +60,6 @@ internal sealed class NodeFixture : IDisposable
 
     public static WorkflowEdit.Connect Dependency(TaskId from, TaskId to) => new(new ConnectionKey(from, to), ConnectionKind.Dependency);
 
-    /// <summary>The steps of a turn that reports <paramref name="session"/> and replies <paramref name="reply"/>, after <paramref name="first"/>.</summary>
-    public static FakeRule Reply(string session, string reply, FakeRule? first = null) =>
-        (first ?? On()).Print(FakeAgents.SessionLine(ClientId.Antigravity, session)).Print(FakeAgents.ReplyLines(ClientId.Antigravity, reply));
-
-    /// <summary>The start of the stdin line of a fresh turn of the node titled <paramref name="title"/>.</summary>
-    public static string Fresh(string title) => """{"event":"user","message":{"role":"user","content":"# """ + title + "\\n";
-
     /// <summary>A file a turn waits for, which <see cref="Release"/> writes.</summary>
     public string Gate(string name) => Path.Combine(Evidence, $"gate-{name}");
 
@@ -90,7 +71,7 @@ internal sealed class NodeFixture : IDisposable
 
     private ClientDirectory Clients() => _clients ??= Fakes.DiscoverAsync().Result;
 
-    /// <summary>Opens the project in a new window whose engines run Git with the fixture's configuration.</summary>
+    /// <summary>Opens the project in a new window.</summary>
     public Shell Open()
     {
         foreach (var earlier in _windows)
@@ -100,26 +81,10 @@ internal sealed class NodeFixture : IDisposable
         }
 
         var shell = Shell.Show(Clients());
-        shell.Window.ViewModel.GitEnvironment = Git;
         shell.Window.ViewModel.Open(Project);
         shell.Render();
         _windows.Add(shell);
         return shell;
-    }
-
-    /// <summary>Opens the project in a new window, as <see cref="Open"/> does.</summary>
-    public Shell Window() => Open();
-
-    private void Run(params string[] arguments)
-    {
-        var start = new ProcessStartInfo("git") { WorkingDirectory = Project, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var argument in arguments) start.ArgumentList.Add(argument);
-        foreach (var (key, value) in Git) start.Environment[key] = value;
-        using var process = Process.Start(start)!;
-        process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}");
     }
 
     public void Dispose()
@@ -157,18 +122,6 @@ internal sealed partial class Shell
 
     public void WaitForCard(string title, string status) =>
         WaitUntil(() => CardText(title, "CardStatus") == status, $"\"{title}\" shows {status}", () => $"It shows {CardText(title, "CardStatus")}.");
-
-    /// <summary>Runs the UI thread's jobs until the condition holds, and says what it saw when it never does.</summary>
-    public void WaitUntil(Func<bool> condition, string what, Func<string> seen)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}. Saw: {seen()}");
-            Thread.Sleep(20);
-            Render();
-        }
-    }
 
     /// <summary>Waits until the node's card shows the state.</summary>
     public void WaitForState(string title, NodeState state) =>

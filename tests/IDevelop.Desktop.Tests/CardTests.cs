@@ -201,7 +201,7 @@ public sealed class CardTests : IDisposable
     public void A_running_card_rings_in_its_kinds_stroke_and_says_so()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105));
-        f.Install(NodeFixture.Reply("s-1", "Drafted.", On().WaitForFile(f.Gate("go"))));
+        f.Install(AgyTurn.Reply("s-1", "Drafted.", On().WaitForFile(f.Gate("go"))));
         var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
@@ -222,7 +222,7 @@ public sealed class CardTests : IDisposable
     public void A_card_that_needs_the_person_rings_in_orange_and_names_why()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105, ConversationMode.Chat));
-        f.Install(NodeFixture.Reply("s-1", "Which file?"));
+        f.Install(AgyTurn.Reply("s-1", "Which file?"));
         var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
@@ -241,7 +241,7 @@ public sealed class CardTests : IDisposable
     public void A_finished_card_shows_its_ending_in_its_ring(bool fails, string label, string ring)
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105));
-        f.Install(fails ? On().Stderr("The model is not available.").Exit(2) : NodeFixture.Reply("s-1", "Drafted."));
+        f.Install(fails ? On().Stderr("The model is not available.").Exit(2) : AgyTurn.Reply("s-1", "Drafted."));
         var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
@@ -258,7 +258,7 @@ public sealed class CardTests : IDisposable
     public void A_stale_card_rings_in_the_warning_colour_after_its_instruction_changes()
     {
         using var f = new NodeFixture(NodeFixture.Plan(Design, "Design", 105));
-        f.Install(NodeFixture.Reply("s-1", "Planned."));
+        f.Install(AgyTurn.Reply("s-1", "Planned."));
         var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.RunNode("Design");
@@ -282,7 +282,7 @@ public sealed class CardTests : IDisposable
             Fields = ImmutableDictionary<string, string>.Empty.Add("goal", "Export the report as CSV."),
             Settings = new NodeSettings(NodeFixture.Agy, ConversationMode.Chat),
         });
-        f.Install(NodeFixture.Reply("s-1", """
+        f.Install(AgyTurn.Reply("s-1", """
             ```idevelop
             {"status": "proposal",
              "add": [{"id": "api", "type": "type-1", "title": "Backend API"}, {"id": "ui", "type": "type-1", "title": "Export button"}],

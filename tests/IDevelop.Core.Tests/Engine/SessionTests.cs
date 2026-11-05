@@ -4,6 +4,7 @@ using IDevelop.Nodes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Engine.EngineFixture;
+using static IDevelop.TestSupport.AgyTurn;
 using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Core.Tests.Engine;
@@ -51,7 +52,7 @@ public sealed class SessionTests : IAsyncLifetime
             On().Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-a")).WaitForFile(_f.File("never")));
         var engine = await _f.Open();
         await engine.Run(a);
-        await Eventually(() => engine.Entries(a).Any(entry => entry is NodeEntry.Agent { Event: AgentEvent.SessionStarted }));
+        await Wait.Until(() => engine.Entries(a).Any(entry => entry is NodeEntry.Agent { Event: AgentEvent.SessionStarted }));
 
         await engine.Send(a, "Stop and finish.", interrupt: true);
 
