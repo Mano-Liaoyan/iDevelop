@@ -31,7 +31,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     private readonly IConversation _conversation;
     private readonly Func<string, Task> _copy;
-    private readonly TaskNodeViewModel? _node;
+    private readonly TaskNodeViewModel _node;
     private readonly RelayCommand _loadEarlier;
     private int _start = -1;
     private int _posted;
@@ -43,14 +43,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         State = state;
         _conversation = conversation;
         _copy = copy;
-        _node = target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task);
+        _node = target.Canvas.Nodes.First(node => node.Id == target.Task);
         _loadEarlier = new RelayCommand(LoadEarlier, () => HasEarlier);
         state.PropertyChanged += OnStateChanged;
-        if (_node is not null)
-        {
-            _node.PropertyChanged += OnNodeChanged;
-        }
-
+        _node.PropertyChanged += OnNodeChanged;
         conversation.Changed += OnConversationChanged;
         Refresh();
     }
@@ -62,29 +58,29 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     internal ConversationState State { get; }
 
-    public string Title => _node?.Title ?? "Node";
+    public string Title => _node.Title;
 
     /// <summary>The project and workflow the node belongs to, as the breadcrumb names them.</summary>
     public string Breadcrumb => $"{Target.Canvas.Project.Name} › {Target.Canvas.Name}";
 
-    public string AgentName => _node?.SelectedClient.Id is { } client ? ClientCatalog.Name(client) : "The agent";
+    public string AgentName => _node.SelectedClient.Id is { } client ? ClientCatalog.Name(client) : "The agent";
 
-    public string StatusLabel => _node?.StatusLabel ?? "";
+    public string StatusLabel => _node.StatusLabel;
 
-    public StatusTone Tone => _node?.Tone ?? StatusTone.Neutral;
+    public StatusTone Tone => _node.Tone;
 
     /// <summary>
     /// How the agent asks: Claude Code asks with its choices while its turn runs, and any other client asks in its reply,
     /// which the person answers with a message.
     /// </summary>
-    public string Limitations => _node?.SelectedClient.Id == ClientId.ClaudeCode
+    public string Limitations => _node.SelectedClient.Id == ClientId.ClaudeCode
         ? "Claude Code asks with its choices while its turn runs. Choose, or answer in your own words."
         : "The agent's questions arrive in its reply. Answer them with your message.";
 
     /// <summary>What the agent asks while its turn runs, each question with its choices, which Send answers.</summary>
-    public IReadOnlyList<QuestionViewModel> Questions => _node?.Questions ?? [];
+    public IReadOnlyList<QuestionViewModel> Questions => _node.Questions;
 
-    public bool IsAsking => _node?.IsAsking ?? false;
+    public bool IsAsking => _node.IsAsking;
 
     public ObservableCollection<ConversationItemViewModel> Items { get; } = [];
 
@@ -94,40 +90,38 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         set => State.Draft = value;
     }
 
-    public string ComposerHint => IsAsking ? "Sending answers the agent's question with your choices and your words." : _node?.State switch
+    public string ComposerHint => IsAsking ? "Sending answers the agent's question with your choices and your words." : _node.State switch
     {
         NodeState.Running => "Your message waits for this turn to end. Stop and send ends the turn first.",
         NodeState.Idle => "Run the node first. A message continues its session.",
         _ => "Sending continues the node's session.",
     };
 
-    public string Watermark => _node?.SelectedClient.Id is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
+    public string Watermark => _node.SelectedClient.Id is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
 
     public bool HasEarlier => _start > 0;
 
-    public bool ShowsStopAndSend => _node?.CanStopAndSend ?? false;
+    public bool ShowsStopAndSend => _node.CanStopAndSend;
 
     /// <summary>A Chat node's reply, which approving makes its result.</summary>
-    public bool ShowsApprove => _node?.ShowsApprove ?? false;
+    public bool ShowsApprove => _node.ShowsApprove;
 
-    public bool ShowsStop => _node?.ShowsStop ?? false;
+    public bool ShowsStop => _node.ShowsStop;
 
-    public ICommand SendCommand => _node?.SendCommand ?? Disabled;
+    public ICommand SendCommand => _node.SendCommand;
 
-    public ICommand StopAndSendCommand => _node?.StopAndSendCommand ?? Disabled;
+    public ICommand StopAndSendCommand => _node.StopAndSendCommand;
 
-    public ICommand ApproveCommand => _node?.ApproveCommand ?? Disabled;
+    public ICommand ApproveCommand => _node.ApproveCommand;
 
-    public ICommand StopCommand => _node?.StopCommand ?? Disabled;
+    public ICommand StopCommand => _node.StopCommand;
 
-    public ICommand OpenInTerminalCommand => _node?.OpenInTerminalCommand ?? Disabled;
+    public ICommand OpenInTerminalCommand => _node.OpenInTerminalCommand;
 
     public ICommand LoadEarlierCommand => _loadEarlier;
 
     /// <summary>Asks the view to follow the end again, as after the person sends.</summary>
     internal event Action? FollowRequested;
-
-    private static ICommand Disabled { get; } = new RelayCommand(() => { }, () => false);
 
     public void Dispose()
     {
@@ -140,10 +134,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _conversation.Changed -= OnConversationChanged;
         _conversation.Dispose();
         State.PropertyChanged -= OnStateChanged;
-        if (_node is not null)
-        {
-            _node.PropertyChanged -= OnNodeChanged;
-        }
+        _node.PropertyChanged -= OnNodeChanged;
     }
 
     internal Task CopyAsync(string text) => _copy(text);

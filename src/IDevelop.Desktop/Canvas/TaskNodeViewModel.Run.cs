@@ -19,8 +19,8 @@ public sealed partial class TaskNodeViewModel
     [
         nameof(EngineState), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
-        nameof(CanStopAndSend), nameof(Results), nameof(HasResults), nameof(LastReply), nameof(ReviewSummary), nameof(FindingsSummary),
-        nameof(Findings), nameof(HasFindings), nameof(Preview), nameof(SendProblem), nameof(Latest), nameof(Questions), nameof(IsAsking),
+        nameof(CanStopAndSend), nameof(Results), nameof(HasResults), nameof(LastReply), nameof(ReviewSummary),
+        nameof(Findings), nameof(Preview), nameof(SendProblem), nameof(Latest), nameof(Questions), nameof(IsAsking),
     ];
 
     private EngineState _engineState = new EngineState.Idle();
@@ -121,16 +121,12 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The verdict of a review's latest reply, or null.</summary>
     private Verdict? Verdict => IsReview && _lastReply is { Text: var reply } ? Verdict.Read(reply).Verdict : null;
 
-    /// <summary>"Approved" or "2 open findings" for a review's latest verdict, or null, which its card shows.</summary>
+    /// <summary>"Approved" or "2 open findings" for a review's latest verdict, or null, which its card and the inspector show.</summary>
     public string? ReviewSummary => Verdict is { } verdict
         ? verdict.Approves ? "Approved" : verdict.Findings.Length == 1 ? "1 open finding" : $"{verdict.Findings.Length} open findings"
         : null;
 
-    public string? FindingsSummary => ReviewSummary;
-
     public IReadOnlyList<FindingViewModel> Findings => Verdict is { } verdict ? [.. verdict.Findings.Select(finding => new FindingViewModel(finding))] : [];
-
-    public bool HasFindings => Findings.Count > 0;
 
     public ICommand RunCommand => _run;
 
@@ -198,7 +194,6 @@ public sealed partial class TaskNodeViewModel
         _background = HasAgent ? Log(engine).Background : [];
         ShowProposal();
         ShowState();
-        OnPropertyChanged(nameof(ShowsApprove));
         foreach (var property in RunDependents)
         {
             OnPropertyChanged(property);

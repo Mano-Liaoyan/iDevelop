@@ -99,9 +99,6 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The peek's line under the title, such as "Implement · Codex · GPT-5.5 · high".</summary>
     public string PeekAgent => HasAgent ? $"{TypeName} · {AgentLabel}" : TypeName;
 
-    /// <summary>Why the node cannot run, for the peek.</summary>
-    public string? PeekProblem => RunRefusal;
-
     /// <summary>A collapsed card's tooltip is its peek. An expanded card shows everything already, and a renamed one shows none.</summary>
     public bool ShowsPeek => !IsExpanded && !IsRenaming;
 
@@ -168,9 +165,6 @@ public sealed partial class TaskNodeViewModel
                 break;
             case nameof(Draft):
                 _detail?.OnDraftChanged();
-                break;
-            case nameof(RunRefusal):
-                OnPropertyChanged(nameof(PeekProblem));
                 break;
             case nameof(State):
                 OnPropertyChanged(nameof(ShowsNextRunNote));

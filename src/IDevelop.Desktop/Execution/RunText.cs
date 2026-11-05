@@ -171,21 +171,6 @@ public static class RunText
         ConversationMode.Chat => "Waits for you after every turn.",
     };
 
-    public static string Ago(DateTimeOffset at, DateTimeOffset now, TimeZoneInfo zone)
-    {
-        var age = now - at;
-        var local = TimeZoneInfo.ConvertTime(at, zone);
-        var today = TimeZoneInfo.ConvertTime(now, zone).Date;
-        return age switch
-        {
-            { TotalMinutes: < 1 } => "Just now",
-            { TotalHours: < 1 } => $"{(int)age.TotalMinutes} min ago",
-            _ when local.Date == today => $"Today {local:t}",
-            _ when local.Date == today.AddDays(-1) => $"Yesterday {local:t}",
-            _ => $"{local:g}",
-        };
-    }
-
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 
     /// <summary>The parts that are present, joined by middle dots.</summary>
