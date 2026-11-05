@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using IDevelop.Clients;
 
 namespace IDevelop.Nodes;
 
@@ -27,8 +28,7 @@ public abstract partial record ResultBlock
     {
         public string? Status => Text("status");
 
-        public string? Text(string property) =>
-            Value.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        public string? Text(string property) => Value.String(property);
     }
 
     public static ResultBlock Read(string? finalText) => Find(finalText).Block;

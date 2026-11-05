@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json;
+using IDevelop.Clients;
 
 namespace IDevelop.Nodes;
 
@@ -40,7 +41,7 @@ public sealed record Verdict(bool Approves, ImmutableArray<Standing> Findings)
         }
 
         var standing = ImmutableArray.CreateBuilder<Standing>();
-        foreach (var item in Items(block.Value, "findings"))
+        foreach (var item in block.Value.Items("findings").Where(item => item.ValueKind == JsonValueKind.Object))
         {
             if (Id(item) is not { } id)
             {
@@ -69,21 +70,9 @@ public sealed record Verdict(bool Approves, ImmutableArray<Standing> Findings)
         };
     }
 
-    private static IEnumerable<JsonElement> Items(JsonElement block, string property) =>
-        block.TryGetProperty(property, out var items) && items.ValueKind == JsonValueKind.Array
-            ? items.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object)
-            : [];
-
     /// <summary>A string id, or a number written as one, since agents number their findings.</summary>
-    private static string? Id(JsonElement item) => item.TryGetProperty("id", out var id) ? id.ValueKind switch
-    {
-        JsonValueKind.String when !string.IsNullOrWhiteSpace(id.GetString()) => id.GetString()!.Trim(),
-        JsonValueKind.Number => id.GetRawText(),
-        _ => null,
-    } : null;
+    private static string? Id(JsonElement item) =>
+        item.Property("id") is { ValueKind: JsonValueKind.Number } number ? number.GetRawText() : Text(item, "id");
 
-    private static string? Text(JsonElement item, string property) =>
-        item.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())
-            ? value.GetString()!.Trim()
-            : null;
+    private static string? Text(JsonElement item, string property) => JsonFields.NonBlank(item.String(property))?.Trim();
 }

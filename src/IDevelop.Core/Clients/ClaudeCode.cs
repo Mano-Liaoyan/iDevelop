@@ -64,18 +64,7 @@ internal static class ClaudeCode
     private static bool Succeeded(string line) => Response(line)?.String("subtype") == "success";
 
     /// <summary>A control response's own "response" object, or null for a line that is not one.</summary>
-    private static JsonElement? Response(string line)
-    {
-        try
-        {
-            using var json = JsonDocument.Parse(line);
-            return json.RootElement.Property("response")?.Clone();
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
+    private static JsonElement? Response(string line) => JsonFields.Parse(line)?.Property("response");
 
     /// <summary>
     /// The skills that reload_skills lists. A Claude Code without it lists only its initialize commands, which mark its
@@ -113,25 +102,12 @@ internal static class ClaudeCode
         .Where(entry => entry.String("name") is not null)
         .Select(entry => new SkillOption(entry.String("name")!, entry.String("description") ?? "")) ?? []);
 
-    private static ReadinessProblem? SignInProblem(ProbeOutput output)
+    private static ReadinessProblem? SignInProblem(ProbeOutput output) => JsonFields.Parse(output.Stdout)?.Bool("loggedIn") switch
     {
-        try
-        {
-            using var json = JsonDocument.Parse(output.Stdout);
-            switch (json.RootElement.Bool("loggedIn"))
-            {
-                case true:
-                    return null;
-                case false:
-                    return new ReadinessProblem("Claude Code is not signed in. Run claude in a terminal and sign in.", SignedOut: true);
-            }
-        }
-        catch (JsonException)
-        {
-        }
-
-        return new ReadinessProblem(Probes.Failure("claude auth status", output), SignedOut: false);
-    }
+        true => null,
+        false => new ReadinessProblem("Claude Code is not signed in. Run claude in a terminal and sign in.", SignedOut: true),
+        null => new ReadinessProblem(Probes.Failure("claude auth status", output), SignedOut: false),
+    };
 
     internal static ImmutableArray<AgentEvent> Events(JsonElement root)
     {

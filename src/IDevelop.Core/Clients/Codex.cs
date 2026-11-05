@@ -50,17 +50,12 @@ internal static class Codex
             return new CatalogParse.Problem(Probes.Failure("codex debug models", output));
         }
 
-        ImmutableArray<ModelOption> models;
-        try
-        {
-            using var json = JsonDocument.Parse(output.Stdout);
-            models = [.. json.RootElement.Items("models").Where(model => model.String("visibility") == "list").Select(Model).OfType<ModelOption>()];
-        }
-        catch (JsonException)
+        if (JsonFields.Parse(output.Stdout) is not { } root)
         {
             return new CatalogParse.Problem("codex debug models printed a model list iDevelop could not read.");
         }
 
+        ImmutableArray<ModelOption> models = [.. root.Items("models").Where(model => model.String("visibility") == "list").Select(Model).OfType<ModelOption>()];
         return models.IsEmpty ? new CatalogParse.Problem("Codex listed no models.") : new CatalogParse.Models(models);
     }
 
@@ -125,44 +120,26 @@ internal static class Codex
             JsonSerializer.Serialize(new { id = $"{SkillsRequest}-{++_requests}", method = "skills/list", @params = new { cwds = new[] { folder } } }) + "\n";
 
         /// <summary>Every skill name the answer lists, in order, or null for an answer that is not a list.</summary>
-        private static string? Names(string line)
-        {
-            try
-            {
-                using var json = JsonDocument.Parse(line);
-                return json.RootElement.Property("result") is { } result
-                    ? string.Join("\n", result.Items("data").SelectMany(entry => entry.Items("skills")).Select(skill => skill.String("name")).Order(StringComparer.Ordinal))
-                    : null;
-            }
-            catch (JsonException)
-            {
-                return null;
-            }
-        }
+        private static string? Names(string line) => JsonFields.Parse(line)?.Property("result") is { } result
+            ? string.Join("\n", result.Items("data").SelectMany(entry => entry.Items("skills")).Select(skill => skill.String("name")).Order(StringComparer.Ordinal))
+            : null;
     }
 
     /// <summary>A skill the person's configuration turned off is not loaded, so the listing leaves it out.</summary>
     private static SkillListing ParseSkills(ProbeOutput output)
     {
         // The last answer is the one the listing settled on.
-        foreach (var line in TextLines.Lines(output.Stdout).Where(IsSkillsResponse).Reverse())
+        foreach (var answer in TextLines.Lines(output.Stdout).Where(IsSkillsResponse).Reverse().Select(JsonFields.Parse).OfType<JsonElement>())
         {
-            try
+            if (answer.Property("error") is { } error)
             {
-                using var json = JsonDocument.Parse(line);
-                if (json.RootElement.Property("error") is { } error)
-                {
-                    return new SkillListing.Unavailable($"Codex did not list its skills: {error.String("message") ?? "it reported an error"}.");
-                }
+                return new SkillListing.Unavailable($"Codex did not list its skills: {error.String("message") ?? "it reported an error"}.");
+            }
 
-                return new SkillListing.Listed(SkillChoices.Distinct(json.RootElement.Property("result")?.Items("data")
-                    .SelectMany(entry => entry.Items("skills"))
-                    .Where(skill => skill.Bool("enabled") != false && skill.String("name") is not null)
-                    .Select(skill => new SkillOption(skill.String("name")!, skill.String("description") ?? "")) ?? []));
-            }
-            catch (JsonException)
-            {
-            }
+            return new SkillListing.Listed(SkillChoices.Distinct(answer.Property("result")?.Items("data")
+                .SelectMany(entry => entry.Items("skills"))
+                .Where(skill => skill.Bool("enabled") != false && skill.String("name") is not null)
+                .Select(skill => new SkillOption(skill.String("name")!, skill.String("description") ?? "")) ?? []));
         }
 
         return new SkillListing.Unavailable($"Codex did not list its skills. {Probes.Failure("codex app-server", output)}");
@@ -172,21 +149,6 @@ internal static class Codex
         output.ExitCode == 0 ? null : new ReadinessProblem("Codex is not signed in. Run codex login in a terminal.", SignedOut: true);
 
     /// <summary>Codex passes an API error through as JSON text. Its inner message is the readable part.</summary>
-    internal static string InnerMessage(string message)
-    {
-        if (!message.StartsWith('{'))
-        {
-            return message;
-        }
-
-        try
-        {
-            using var json = JsonDocument.Parse(message);
-            return json.RootElement.Property("error")?.String("message") ?? message;
-        }
-        catch (JsonException)
-        {
-            return message;
-        }
-    }
+    internal static string InnerMessage(string message) =>
+        message.StartsWith('{') ? JsonFields.Parse(message)?.Property("error")?.String("message") ?? message : message;
 }
