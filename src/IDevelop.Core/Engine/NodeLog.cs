@@ -82,7 +82,7 @@ internal abstract record NodeEntry
 /// <summary>
 /// A node's log folded: its results, its session and the basis that session started on, the basis of its last turn, how
 /// that turn ended, whether it has no end yet, whether the session resolves a conflict, and how many rounds of feedback it
-/// sent since it last completed or waited for the person.
+/// sent since it last completed or waited for the person, and its conversation.
 /// </summary>
 internal sealed record NodeRecord(ImmutableList<NodeResult> History, string? Session, Basis? SessionBasis, Basis? TurnBasis, NodeEntry? End, bool Open)
 {
@@ -105,7 +105,12 @@ internal sealed record NodeRecord(ImmutableList<NodeResult> History, string? Ses
     /// <summary>The background work the open turn's client last listed.</summary>
     public ImmutableArray<BackgroundTask> Background { get; private init; } = [];
 
-    public NodeRecord Apply(NodeEntry entry) => entry switch
+    /// <summary>The lines of the log so far.</summary>
+    public ConversationFold Conversation { get; private init; } = ConversationFold.Empty;
+
+    public NodeRecord Apply(NodeEntry entry) => Turn(entry) with { Conversation = Conversation.Add(entry) };
+
+    private NodeRecord Turn(NodeEntry entry) => entry switch
     {
         NodeEntry.TurnStarted { Session: null } start => this with
         {
@@ -177,6 +182,7 @@ internal sealed class NodeLog
         get { lock (_gate) return _entries; }
     }
 
+    /// <summary>The log folded. The appending thread writes it under the gate. Any thread reads it, as an immutable snapshot.</summary>
     public NodeRecord Record { get; private set; } = NodeRecord.Empty;
 
     /// <summary>Raised after each entry is written, on the thread that wrote it.</summary>

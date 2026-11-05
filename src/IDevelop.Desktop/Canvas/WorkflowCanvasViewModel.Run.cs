@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Windows.Input;
-using Avalonia.Threading;
 using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
@@ -21,7 +20,7 @@ public sealed partial class WorkflowCanvasViewModel
     private RelayCommand? _runWorkflow;
     private RelayCommand? _stopAll;
     private RelayCommand? _merge;
-    private int _engineChanged;
+    private UiBatch _engineChanged = null!;
 
     /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
     internal Func<string, Task<bool>> OpenFolder { get; init; } = _ => Task.FromResult(false);
@@ -72,7 +71,15 @@ public sealed partial class WorkflowCanvasViewModel
     private void InitializeEngine(IReadOnlyDictionary<string, string> git)
     {
         Engine = new WorkflowEngine(Project.Folder, Document.Current, Clients, TimeSpan.FromSeconds(5), git) { Planning = Planning };
-        Engine.NodeChanged += (_, _) => PostShowEngine();
+        // The engine tells of each change, often several at once and off the UI thread, so the canvas reads once per batch.
+        _engineChanged = new UiBatch(() =>
+        {
+            if (Workflow.Tasks.Keys.All(id => Nodes.Any(node => node.Id == id)))
+            {
+                ShowEngine();
+            }
+        });
+        Engine.NodeChanged += (_, _) => _engineChanged.Request();
     }
 
     /// <summary>Stops every node's turn, which reopens as interrupted, as the project's closing does.</summary>
@@ -170,24 +177,6 @@ public sealed partial class WorkflowCanvasViewModel
         }
 
         ShowEngine();
-    }
-
-    /// <summary>The engine tells of each change, often several at once and off the UI thread, so the canvas reads once per batch.</summary>
-    private void PostShowEngine()
-    {
-        if (Interlocked.Exchange(ref _engineChanged, 1) == 1)
-        {
-            return;
-        }
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            Interlocked.Exchange(ref _engineChanged, 0);
-            if (Workflow.Tasks.Keys.All(id => Nodes.Any(node => node.Id == id)))
-            {
-                ShowEngine();
-            }
-        });
     }
 
     /// <summary>Whether <paramref name="before"/> is a dependency predecessor of <paramref name="after"/>.</summary>

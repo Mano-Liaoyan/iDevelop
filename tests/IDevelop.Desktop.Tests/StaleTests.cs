@@ -41,6 +41,7 @@ public sealed class StaleTests
         shell.WaitForState("A", NodeState.Stale);
         Assert.Equal(("Stale", false), (shell.CardText("A", "CardStatus"), canvas.CanMergeIntoBranch));
         Assert.Contains("Run it again", shell.NodeModel("A").StateDetail);
+        Assert.Equal("Result 1", Assert.Single(shell.NodeModel("A").Results).Heading);
 
         shell.NodeModel("A").RetryCommand.Execute(null);
 
