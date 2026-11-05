@@ -18,9 +18,6 @@ internal abstract record WorktreeStart
     }
 }
 
-/// <summary>A Git step that failed. Its message is for the person.</summary>
-internal sealed class GitFailure(string message) : InvalidOperationException(message);
-
 /// <summary>
 /// The editing nodes' worktrees of one workflow. Each node has its worktree at <c>.worktrees/&lt;workflow&gt;/&lt;node&gt;</c>
 /// in the project folder, on its branch <c>idp/&lt;workflow&gt;/&lt;node&gt;</c> (ADR 0032). Commits merge with
@@ -68,14 +65,14 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     /// </summary>
     public WorktreeStart Reset(TaskId node, IReadOnlyList<CommitId> inputs) => Locked(repository =>
     {
-        var start = Fold(repository, inputs.Count > 0 ? null : Value(repository.ResolveCommit("HEAD")), inputs);
+        var start = Fold(repository, inputs.Count > 0 ? null : repository.ResolveCommit("HEAD"), inputs);
         var checkout = Checkout(node);
-        if (!Value(repository.Worktrees()).Any(worktree => Same(worktree, checkout)))
+        if (!repository.Worktrees().Any(worktree => Same(worktree, checkout)))
         {
             repository.EnsureExcluded();
             var branch = $"idp/{workflow}/{node}";
             var relative = Path.GetRelativePath(repository.ProjectFolder, checkout);
-            Run(Value(repository.ResolveCommit("refs/heads/" + branch)) is null
+            Run(repository.ResolveCommit("refs/heads/" + branch) is null
                 ? repository.AddWorktree(relative, branch, start.Commit)
                 : repository.AddWorktreeForExistingBranch(relative, branch));
         }
@@ -93,14 +90,14 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     public WorktreeStart Commit(TaskId node, string message, IReadOnlyList<CommitId> inputs, bool resolving) => Locked(repository =>
     {
         var checkout = Checkout(node);
-        var head = Value(repository.ResolveCheckoutHead(checkout)) ?? throw new GitFailure("The worktree has no commit.");
-        var tree = Value(repository.Capture(checkout));
-        var read = Value(repository.ReadCommit(head));
+        var head = repository.ResolveCommit("HEAD", checkout) ?? throw new GitFailure("The worktree has no commit.");
+        var tree = repository.Capture(checkout);
+        var read = repository.ReadCommit(head);
         // A resolution replaces the commit of Git's merge with its markers, on the same parents.
         ImmutableArray<CommitId> parents = resolving && read.Parents.Length == 2 ? read.Parents : [head];
         if (parents.Length > 1 || read.Tree != tree)
         {
-            head = Value(repository.CreateCommit(Recipe(tree, parents, message)));
+            head = repository.CreateCommit(Recipe(tree, parents, message));
         }
 
         var start = Fold(repository, head, inputs);
@@ -123,19 +120,32 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     public ImmutableArray<string> MarkersRemain(TaskId node) => Locked(repository =>
     {
         var checkout = Checkout(node);
-        var head = Value(repository.ResolveCheckoutHead(checkout));
-        return head is { } commit && Value(repository.ReadCommit(commit)).Parents is [var ours, var theirs]
+        var head = repository.ResolveCommit("HEAD", checkout);
+        return head is { } commit && repository.ReadCommit(commit).Parents is [var ours, var theirs]
             && repository.MergeTrees(ours, theirs, ours) is TreeMerge.Conflicted conflicted
             ? MergeMarkers.Remaining(checkout, Paths(conflicted))
             : [];
     });
 
-    /// <summary>Whether any of <paramref name="ends"/> holds work that the checked-out branch's HEAD does not.</summary>
+    /// <summary>
+    /// Whether any of <paramref name="ends"/> holds work that the checked-out branch's HEAD does not. An end that Git cannot
+    /// compare counts as work, so that Merge into my branch stays offered and its click shows the reason.
+    /// </summary>
     public bool HasWorkBeyondHead(IReadOnlyList<CommitId> ends)
     {
         var repository = Repository;
-        if (Value(repository.ResolveCommit("HEAD")) is not { } head) return ends.Count > 0;
-        return ends.Any(end => repository.IsAncestor(end, head) is not GitAncestry.Yes);
+        if (repository.ResolveCommit("HEAD") is not { } head) return ends.Count > 0;
+        return ends.Any(end =>
+        {
+            try
+            {
+                return !repository.IsAncestor(end, head);
+            }
+            catch (GitFailure)
+            {
+                return true;
+            }
+        });
     }
 
     /// <summary>
@@ -145,7 +155,7 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     public void MergeIntoBranch(IReadOnlyList<CommitId> ends) => Locked<object?>(repository =>
     {
         if (ends.Count == 0) throw new InvalidOperationException("No node changed the project.");
-        if (Value(repository.SymbolicHead(repository.Root)) is null)
+        if (repository.SymbolicHead(repository.Root) is null)
         {
             throw new InvalidOperationException("HEAD is detached. Check out the branch to merge into, and try again.");
         }
@@ -157,7 +167,7 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
                 $"The last nodes' work conflicts in {string.Join(", ", conflict.Paths)}. Add a Merge node after them, and run it.");
         }
 
-        var head = Value(repository.ResolveCommit("HEAD")) ?? throw new GitFailure("The branch has no commit.");
+        var head = repository.ResolveCommit("HEAD") ?? throw new GitFailure("The branch has no commit.");
         var target = Fold(repository, head, [work.Commit]);
         if (target.Result is WorktreeStart.Conflict moved)
         {
@@ -182,19 +192,19 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
             {
                 merged = commit;
             }
-            else if (repository.IsAncestor(ours, commit) is GitAncestry.Yes)
+            else if (repository.IsAncestor(ours, commit))
             {
                 merged = commit;
             }
-            else if (repository.IsAncestor(commit, ours) is not GitAncestry.Yes)
+            else if (!repository.IsAncestor(commit, ours))
             {
                 switch (repository.MergeTrees(ours, commit, ours))
                 {
                     case TreeMerge.Clean clean:
-                        merged = Value(repository.CreateCommit(Recipe(clean.Tree, [ours, commit], "Merge the work handed on")));
+                        merged = repository.CreateCommit(Recipe(clean.Tree, [ours, commit], "Merge the work handed on"));
                         break;
                     case TreeMerge.Conflicted conflicted:
-                        var marked = Value(repository.CreateCommit(Recipe(conflicted.Tree, [ours, commit], "Merge the work handed on, with conflicts")));
+                        var marked = repository.CreateCommit(Recipe(conflicted.Tree, [ours, commit], "Merge the work handed on, with conflicts"));
                         return (marked, new WorktreeStart.Conflict(Paths(conflicted)));
                     case TreeMerge.Failed failed:
                         throw new GitFailure(failed.Detail);
@@ -229,8 +239,6 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
     {
         if (result.ExitCode != 0) throw new GitFailure(result.Stderr.Trim());
     }
-
-    private static T Value<T>(GitRead<T> read) => read is GitRead<T>.Read value ? value.Value : throw new GitFailure(((GitRead<T>.Failed)read).Detail.Trim());
 
     private static bool Same(string first, string second) =>
         string.Equals(Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar), Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar),

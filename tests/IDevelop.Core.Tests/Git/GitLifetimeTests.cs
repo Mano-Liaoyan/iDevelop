@@ -30,7 +30,7 @@ public sealed class GitLifetimeTests
         GitResult result;
         try
         {
-            var limits = new GitLimits(TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+            var limits = new GitLimits(TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
             result = GitRepository.Run(["status"], temp.Create("repository"), GitOperation.Metadata, limits);
         }
         finally

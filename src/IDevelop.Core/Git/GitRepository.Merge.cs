@@ -9,7 +9,7 @@ internal abstract record TreeMerge
     private TreeMerge() { }
     internal sealed record Clean(TreeId Tree) : TreeMerge;
     /// <summary>Git's conflicting merge. <see cref="Tree"/> is the tree it left, with conflict markers in each conflicting file.</summary>
-    internal sealed record Conflicted(ImmutableArray<StageEntry> Stages, ImmutableArray<MergeMessage> Messages, byte[] Stdout, string Stderr) : TreeMerge
+    internal sealed record Conflicted(ImmutableArray<StageEntry> Stages) : TreeMerge
     {
         public TreeId Tree { get; init; }
     }
@@ -53,12 +53,8 @@ internal sealed partial class GitRepository
         return new[] { folder, Path.Combine(folder, "merges") }.FirstOrDefault(component => IsLink(new DirectoryInfo(component)));
     }
 
-    /// <summary>
-    /// The merged tree of <paramref name="ours"/> and <paramref name="theirs"/> in an isolated scratch Git directory. Git finds
-    /// their merge base unless <paramref name="mergeBase"/> names it, which replays the change from it to
-    /// <paramref name="theirs"/> onto <paramref name="ours"/>.
-    /// </summary>
-    public TreeMerge MergeTrees(CommitId ours, CommitId theirs, CommitId attributeSource, CommitId? mergeBase = null)
+    /// <summary>The merged tree of <paramref name="ours"/> and <paramref name="theirs"/> in an isolated scratch Git directory.</summary>
+    public TreeMerge MergeTrees(CommitId ours, CommitId theirs, CommitId attributeSource)
     {
         if (MergeScratchLink() is { } link)
             return new TreeMerge.Failed($"The merge scratch folder {link} is a link.");
@@ -82,15 +78,14 @@ internal sealed partial class GitRepository
             };
             var result = Git(Root, GitOperation.Worktree,
                 [.. MergeSettings.SelectMany(setting => new[] { "-c", setting.Key + "=" + setting.Value }),
-                    "--attr-source=" + attributeSource.Hex, "merge-tree", "--write-tree", "-z", "--messages",
-                    .. mergeBase is { } replayed ? new[] { "--merge-base=" + replayed.Hex } : [], ours.Hex, theirs.Hex], pinnedGitEnvironment: environment);
-            if (result.ExitCode is not (0 or 1) || !ParseMerge(result.Stdout, out var tree, out var stages, out var messages))
+                    "--attr-source=" + attributeSource.Hex, "merge-tree", "--write-tree", "-z", "--messages", ours.Hex, theirs.Hex], pinnedGitEnvironment: environment);
+            if (result.ExitCode is not (0 or 1) || !ParseMerge(result.Stdout, out var tree, out var stages))
                 return new TreeMerge.Failed(result.Stderr.Length == 0 ? "Git returned malformed merge-tree output." : result.Stderr);
             return result.ExitCode switch
             {
                 0 when stages.IsEmpty => new TreeMerge.Clean(tree),
                 0 => new TreeMerge.Failed("Git returned conflict stages for a clean merge."),
-                1 => new TreeMerge.Conflicted(stages, messages, result.Stdout, result.Stderr) { Tree = tree },
+                1 => new TreeMerge.Conflicted(stages) { Tree = tree },
                 _ => throw new InvalidOperationException(),
             };
         }
@@ -104,11 +99,10 @@ internal sealed partial class GitRepository
         }
     }
 
-    private static bool ParseMerge(byte[] output, out TreeId tree, out ImmutableArray<StageEntry> stages, out ImmutableArray<MergeMessage> messages)
+    private static bool ParseMerge(byte[] output, out TreeId tree, out ImmutableArray<StageEntry> stages)
     {
         tree = default;
         stages = [];
-        messages = [];
         if (output.Length == 0 || output[^1] != 0) return false;
         var text = Encoding.UTF8.GetString(output);
         var fields = text.Split('\0');
@@ -128,20 +122,16 @@ internal sealed partial class GitRepository
         }
         if (index >= fields.Length - 1) return false;
         index++;
-        var information = ImmutableArray.CreateBuilder<MergeMessage>();
         while (index < fields.Length - 1)
         {
             if (!int.TryParse(fields[index++], NumberStyles.None, CultureInfo.InvariantCulture, out var count) ||
                 count < 0 || count > fields.Length - index - 3) return false;
-            var paths = fields.AsSpan(index, count).ToArray();
-            if (paths.Any(path => path.Length == 0)) return false;
+            if (fields.AsSpan(index, count).ToArray().Any(path => path.Length == 0)) return false;
             index += count;
-            var type = fields[index++];
-            if (type.Length == 0) return false;
-            information.Add(new([.. paths], type, fields[index++]));
+            if (fields[index].Length == 0) return false;
+            index += 2;
         }
         stages = entries.ToImmutable();
-        messages = information.ToImmutable();
         return index == fields.Length - 1;
     }
 

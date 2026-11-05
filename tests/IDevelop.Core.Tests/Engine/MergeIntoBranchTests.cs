@@ -15,6 +15,27 @@ public sealed class MergeIntoBranchTests : IAsyncLifetime
     public Task DisposeAsync() => _f.DisposeAsync().AsTask();
 
     [Fact]
+    public async Task A_lost_end_commit_keeps_the_merge_offered_so_that_a_click_can_show_the_reason()
+    {
+        var a = _f.Node("A");
+        _f.Install(On().Choose((Fresh("A"), Reply("s-a", "Report A", On().Write("a.txt", "A\n")))));
+        var engine = await _f.Open();
+        await engine.Run(a);
+        await Until<NodeState.Completed>(engine, a);
+
+        _f.Repository.Git("worktree", "remove", "--force", _f.Worktree(a));
+        foreach (var branch in _f.Repository.Git("for-each-ref", "--format=%(refname)", "refs/heads").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (branch != _f.Repository.Git("symbolic-ref", "HEAD").Trim()) _f.Repository.Git("update-ref", "-d", branch);
+        }
+
+        _f.Repository.Git("reflog", "expire", "--expire=now", "--all");
+        _f.Repository.Git("gc", "--prune=now");
+
+        Assert.True(engine.CanMergeIntoBranch);
+    }
+
+    [Fact]
     public async Task It_is_refused_until_every_node_is_complete_and_while_one_is_stale()
     {
         var (a, b) = (_f.Node("A"), _f.Node("B"));

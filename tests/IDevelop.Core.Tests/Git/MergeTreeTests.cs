@@ -7,30 +7,6 @@ namespace IDevelop.Core.Tests.Git;
 public sealed class MergeTreeTests
 {
     [Fact]
-    public void A_named_merge_base_replays_only_the_change_after_it()
-    {
-        using var f = new GitFixture();
-        var a = f.Diamond();
-        f.Write("f.txt", "1\n");
-        var start = f.Commit("start");
-        f.Git("checkout", "-q", "-b", "old", start.Hex);
-        f.Write("f.txt", "2\n");
-        var old = f.Commit("old");
-        f.Git("checkout", "-q", "-b", "work", old.Hex);
-        f.Write("g.txt", "G\n");
-        var work = f.Commit("work");
-        f.Git("checkout", "-q", "-b", "updated", start.Hex);
-        f.Write("h.txt", "H\n");
-        var updated = f.Commit("updated");
-        var repository = f.Open();
-        var replayed = Assert.IsType<TreeMerge.Clean>(repository.MergeTrees(updated, work, a, mergeBase: old)).Tree;
-        Assert.Equal(["1\n", "G\n", "H\n"], new[] { "f.txt", "g.txt", "h.txt" }.Select(file => f.Git("show", $"{replayed.Hex}:{file}")));
-        // Git's own merge base would also carry the old base's f.txt.
-        var merged = Assert.IsType<TreeMerge.Clean>(repository.MergeTrees(updated, work, a)).Tree;
-        Assert.Equal("2\n", f.Git("show", $"{merged.Hex}:f.txt"));
-    }
-
-    [Fact]
     public void Clean_merge_returns_the_literal_tree()
     {
         using var f = new GitFixture();
@@ -47,7 +23,7 @@ public sealed class MergeTreeTests
     }
 
     [Fact]
-    public void Conflict_returns_literal_stages_messages_and_raw_diagnostics()
+    public void Conflict_returns_literal_stages()
     {
         using var f = new GitFixture();
         f.Diamond();
@@ -62,11 +38,6 @@ public sealed class MergeTreeTests
         var conflict = Assert.IsType<TreeMerge.Conflicted>(f.Open().MergeTrees(b, c, a));
         Assert.Equal(new[] { new StageEntry("100644", "573541ac9702dd3969c9bc859d2b91ec1f7e6e56", 1, "settings.txt"), new StageEntry("100644", "2e9833d602b8042bdd0e77f3a31aca12944ec21d", 2, "settings.txt"),
             new StageEntry("100644", "986c6e7523fb2a807d8e3526a127e1ced5bc44e4", 3, "settings.txt") }, conflict.Stages);
-        Assert.Equal(["Auto-merging", "CONFLICT (contents)"], conflict.Messages.Select(message => message.Type));
-        Assert.Equal(["Auto-merging settings.txt\n", "CONFLICT (content): Merge conflict in settings.txt\n"], conflict.Messages.Select(message => message.Text));
-        Assert.Equal(["settings.txt", "settings.txt"], conflict.Messages.SelectMany(message => message.Paths));
-        Assert.Contains("CONFLICT (content): Merge conflict in settings.txt\n", Encoding.UTF8.GetString(conflict.Stdout));
-        Assert.Equal("", conflict.Stderr);
     }
 
     [Fact]

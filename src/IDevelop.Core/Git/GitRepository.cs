@@ -14,12 +14,8 @@ internal sealed record GitResult(int ExitCode, byte[] Stdout, string Stderr)
     public string Text => Encoding.UTF8.GetString(Stdout);
 }
 
-internal abstract record GitRead<T>
-{
-    private GitRead() { }
-    internal sealed record Read(T Value) : GitRead<T>;
-    internal sealed record Failed(string Detail) : GitRead<T>;
-}
+/// <summary>A Git step that failed. Its message is for the person.</summary>
+internal sealed class GitFailure(string message) : InvalidOperationException(message);
 
 internal abstract record RepositoryOpen
 {
@@ -34,18 +30,10 @@ internal abstract record RepositoryOpen
 
 internal sealed record GitCommit(TreeId Tree, ImmutableArray<CommitId> Parents);
 
-internal abstract record GitAncestry
+internal enum GitOperation { Metadata, Worktree }
+internal sealed record GitLimits(TimeSpan Metadata, TimeSpan Worktree)
 {
-    private GitAncestry() { }
-    internal sealed record Yes : GitAncestry;
-    internal sealed record No : GitAncestry;
-    internal sealed record Failed(string Detail) : GitAncestry;
-}
-
-internal enum GitOperation { Metadata, Worktree, Network }
-internal sealed record GitLimits(TimeSpan Metadata, TimeSpan Worktree, TimeSpan Network)
-{
-    public static GitLimits Default { get; } = new(TimeSpan.FromSeconds(60), TimeSpan.FromHours(1), TimeSpan.FromHours(4));
+    public static GitLimits Default { get; } = new(TimeSpan.FromSeconds(60), TimeSpan.FromHours(1));
 }
 
 internal sealed partial class GitRepository
@@ -104,54 +92,41 @@ internal sealed partial class GitRepository
             common.Text.TrimEnd('\r', '\n'), environment, limits));
     }
 
-    public GitRead<CommitId?> ResolveCommit(string revision)
+    /// <summary>The commit <paramref name="revision"/> names in <paramref name="checkout"/>, by default <see cref="Root"/>, or null when it names none.</summary>
+    public CommitId? ResolveCommit(string revision, string? checkout = null)
     {
-        var result = Git(Root, GitOperation.Metadata, ["rev-parse", "--verify", "--quiet", revision + "^{commit}"]);
+        var result = Git(checkout ?? Root, GitOperation.Metadata, ["rev-parse", "--verify", "--quiet", revision + "^{commit}"]);
         return result.ExitCode switch
         {
-            0 => new GitRead<CommitId?>.Read(new(result.Text.Trim())),
-            1 => new GitRead<CommitId?>.Read(null),
-            _ => Failure<CommitId?>(result),
+            0 => new(result.Text.Trim()),
+            1 => null,
+            _ => throw Failure(result),
         };
     }
 
-    public GitRead<GitCommit> ReadCommit(CommitId commit)
+    public GitCommit ReadCommit(CommitId commit)
     {
-        var result = Git(Root, GitOperation.Metadata, ["cat-file", "commit", commit.Hex]);
-        if (result.ExitCode != 0)
-        {
-            return Failure<GitCommit>(result);
-        }
-        var headers = result.Text.Split('\n').TakeWhile(line => line.Length != 0).ToArray();
-        return new GitRead<GitCommit>.Read(new(new(headers.Single(line => line.StartsWith("tree ", StringComparison.Ordinal))[5..]),
-            [.. headers.Where(line => line.StartsWith("parent ", StringComparison.Ordinal)).Select(line => new CommitId(line[7..]))]));
+        var headers = Checked(Git(Root, GitOperation.Metadata, ["cat-file", "commit", commit.Hex])).Text.Split('\n').TakeWhile(line => line.Length != 0).ToArray();
+        return new(new(headers.Single(line => line.StartsWith("tree ", StringComparison.Ordinal))[5..]),
+            [.. headers.Where(line => line.StartsWith("parent ", StringComparison.Ordinal)).Select(line => new CommitId(line[7..]))]);
     }
 
-    public GitAncestry IsAncestor(CommitId ancestor, CommitId descendant)
+    /// <summary>Whether <paramref name="descendant"/> holds <paramref name="ancestor"/>. Git's exit code 1 is the answer no.</summary>
+    public bool IsAncestor(CommitId ancestor, CommitId descendant)
     {
         var result = Git(Root, GitOperation.Metadata, ["merge-base", "--is-ancestor", ancestor.Hex, descendant.Hex]);
-        return result.ExitCode switch { 0 => new GitAncestry.Yes(), 1 => new GitAncestry.No(), _ => new GitAncestry.Failed(result.Stderr) };
+        return result.ExitCode switch { 0 => true, 1 => false, _ => throw Failure(result) };
     }
 
-    public GitRead<string?> SymbolicHead(string checkout)
+    /// <summary>The branch <paramref name="checkout"/> has checked out, or null while its HEAD is detached.</summary>
+    public string? SymbolicHead(string checkout)
     {
         var result = Git(checkout, GitOperation.Metadata, ["symbolic-ref", "--quiet", "HEAD"]);
         return result.ExitCode switch
         {
-            0 => new GitRead<string?>.Read(result.Text.TrimEnd('\r', '\n')),
-            1 => new GitRead<string?>.Read(null),
-            _ => Failure<string?>(result),
-        };
-    }
-
-    public GitRead<CommitId?> ResolveCheckoutHead(string checkout)
-    {
-        var result = Git(checkout, GitOperation.Metadata, ["rev-parse", "--verify", "--quiet", "HEAD"]);
-        return result.ExitCode switch
-        {
-            0 => new GitRead<CommitId?>.Read(new(result.Text.Trim())),
-            1 => new GitRead<CommitId?>.Read(null),
-            _ => Failure<CommitId?>(result),
+            0 => result.Text.TrimEnd('\r', '\n'),
+            1 => null,
+            _ => throw Failure(result),
         };
     }
 
@@ -163,52 +138,40 @@ internal sealed partial class GitRepository
         Git(checkout, GitOperation.Worktree, ["merge", "--ff-only", "--no-edit", "--no-stat", commit.Hex]);
 
     /// <summary>The folders of the repository's work trees.</summary>
-    public GitRead<ImmutableArray<string>> Worktrees()
-    {
-        var result = Git(Root, GitOperation.Metadata, ["worktree", "list", "--porcelain", "-z"]);
-        return result.ExitCode == 0
-            ? new GitRead<ImmutableArray<string>>.Read([.. NulFields(result).Where(field => field.StartsWith("worktree ", StringComparison.Ordinal)).Select(field => field[9..])])
-            : Failure<ImmutableArray<string>>(result);
-    }
+    public ImmutableArray<string> Worktrees() =>
+        [.. NulFields(Checked(Git(Root, GitOperation.Metadata, ["worktree", "list", "--porcelain", "-z"]))).Where(field => field.StartsWith("worktree ", StringComparison.Ordinal)).Select(field => field[9..])];
 
     /// <summary>
     /// The tree of the checkout's files as they are, without the project's data folder and worktrees. It refuses an index
     /// that hides changes with assume-unchanged or skip-worktree, whose files the tree would miss.
     /// </summary>
-    public GitRead<TreeId> Capture(string checkout)
+    public TreeId Capture(string checkout)
     {
-        var visible = VisibleIndex(checkout, _environment, _limits);
-        return visible is GitRead<byte[]>.Failed hidden
-            ? new GitRead<TreeId>.Failed(hidden.Detail)
-            : WriteTree(checkout, [Prefix + DataFolder.Name, Prefix + ".worktrees"], _environment, _limits);
+        RefuseHiddenChanges(checkout);
+        return WriteTree(checkout, [Prefix + DataFolder.Name, Prefix + ".worktrees"], _environment, _limits);
     }
 
     private static string[] Pathspec(IEnumerable<string> excludedPaths) =>
         [".", .. excludedPaths.Distinct(StringComparer.Ordinal).Select(exclusion => ":(exclude)" + exclusion)];
 
-    private static GitRead<TreeId> WriteTree(string folder, IEnumerable<string> excludedPaths,
+    private static TreeId WriteTree(string folder, IEnumerable<string> excludedPaths,
         IReadOnlyDictionary<string, string> environment, GitLimits limits)
     {
-        var index = ReadText(Run(["rev-parse", "--path-format=absolute", "--git-path", "index"], folder, GitOperation.Metadata, limits, environment), trim: true);
-        if (index is not GitRead<string>.Read path) return new GitRead<TreeId>.Failed(((GitRead<string>.Failed)index).Detail);
+        var index = Checked(Run(["rev-parse", "--path-format=absolute", "--git-path", "index"], folder, GitOperation.Metadata, limits, environment)).Text.TrimEnd('\r', '\n');
         var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
         try
         {
-            if (File.Exists(path.Value)) File.Copy(path.Value, temporary);
+            if (File.Exists(index)) File.Copy(index, temporary);
             var snapshotEnvironment = new Dictionary<string, string>(environment) { ["GIT_INDEX_FILE"] = temporary };
             var pathspec = Pathspec(excludedPaths);
-            var entries = Run(["ls-files", "--stage", "-z", "--full-name", "--", .. pathspec], folder, GitOperation.Worktree, limits, snapshotEnvironment);
-            if (entries.ExitCode != 0) return Failure<TreeId>(entries);
-            var invalidated = Run(["update-index", "-z", "--index-info"], folder, GitOperation.Worktree, limits, snapshotEnvironment, entries.Stdout);
-            if (invalidated.ExitCode != 0) return Failure<TreeId>(invalidated);
-            var added = Run(["add", "--all", "--", .. pathspec], folder, GitOperation.Worktree, limits, snapshotEnvironment);
-            if (added.ExitCode != 0) return Failure<TreeId>(added);
-            var tree = Run(["write-tree"], folder, GitOperation.Worktree, limits, snapshotEnvironment);
-            return tree.ExitCode == 0 ? new GitRead<TreeId>.Read(new(tree.Text.Trim())) : Failure<TreeId>(tree);
+            var entries = Checked(Run(["ls-files", "--stage", "-z", "--full-name", "--", .. pathspec], folder, GitOperation.Worktree, limits, snapshotEnvironment));
+            Checked(Run(["update-index", "-z", "--index-info"], folder, GitOperation.Worktree, limits, snapshotEnvironment, entries.Stdout));
+            Checked(Run(["add", "--all", "--", .. pathspec], folder, GitOperation.Worktree, limits, snapshotEnvironment));
+            return new(Checked(Run(["write-tree"], folder, GitOperation.Worktree, limits, snapshotEnvironment)).Text.Trim());
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new GitRead<TreeId>.Failed(error.Message);
+            throw new GitFailure(error.Message);
         }
         finally
         {
@@ -229,13 +192,13 @@ internal sealed partial class GitRepository
         }
     }
 
-    public GitRead<CommitId> CreateCommit(CommitRecipe recipe)
+    public CommitId CreateCommit(CommitRecipe recipe)
     {
         var author = Identity(recipe.Author);
         var committer = Identity(recipe.Committer);
         if (author is null || committer is null)
         {
-            return new GitRead<CommitId>.Failed("Commit identities must have the form Name <email>.");
+            throw new GitFailure("Commit identities must have the form Name <email>.");
         }
         var date = $"@{recipe.Timestamp.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)} +0000";
         var environment = new Dictionary<string, string>
@@ -243,9 +206,8 @@ internal sealed partial class GitRepository
             ["GIT_AUTHOR_NAME"] = author.Value.Name, ["GIT_AUTHOR_EMAIL"] = author.Value.Email, ["GIT_AUTHOR_DATE"] = date,
             ["GIT_COMMITTER_NAME"] = committer.Value.Name, ["GIT_COMMITTER_EMAIL"] = committer.Value.Email, ["GIT_COMMITTER_DATE"] = date,
         };
-        var result = Git(Root, GitOperation.Metadata, ["-c", "commit.gpgSign=false", "commit-tree", recipe.Tree.Hex,
-            .. recipe.Parents.SelectMany(parent => new[] { "-p", parent.Hex }), "-F", "-"], environment, Encoding.UTF8.GetBytes(recipe.Message));
-        return result.ExitCode == 0 ? new GitRead<CommitId>.Read(new(result.Text.Trim())) : Failure<CommitId>(result);
+        return new(Checked(Git(Root, GitOperation.Metadata, ["-c", "commit.gpgSign=false", "commit-tree", recipe.Tree.Hex,
+            .. recipe.Parents.SelectMany(parent => new[] { "-p", parent.Hex }), "-F", "-"], environment, Encoding.UTF8.GetBytes(recipe.Message))).Text.Trim());
     }
 
     /// <summary>Where <paramref name="relativePath"/>, from the project folder, is.</summary>
@@ -297,7 +259,6 @@ internal sealed partial class GitRepository
         {
             GitOperation.Metadata => limits.Metadata,
             GitOperation.Worktree => limits.Worktree,
-            GitOperation.Network => limits.Network,
         };
         var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.sparseCheckout=false", "-c", "core.ignoreStat=false", "-c", "core.commitGraph=false", "-c", "core.fsmonitor=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true", .. arguments])
         {
@@ -472,20 +433,14 @@ internal sealed partial class GitRepository
         return match.Success ? (match.Groups[1].Value, match.Groups[2].Value) : null;
     }
 
-    private static GitRead<byte[]> VisibleIndex(string checkout, IReadOnlyDictionary<string, string> environment, GitLimits limits)
+    private void RefuseHiddenChanges(string checkout)
     {
-        var result = Run(["ls-files", "--stage", "-v", "-z"], checkout, GitOperation.Worktree, limits, environment);
-        if (result.ExitCode != 0) return Failure<byte[]>(result);
-        foreach (var entry in NulFields(result).Where(entry => char.IsLower(entry[0]) || entry[0] == 'S'))
-        {
-            var path = entry[(entry.IndexOf('\t') + 1)..];
-            return new GitRead<byte[]>.Failed($"The index hides changes to {path} with assume-unchanged or skip-worktree.");
-        }
-        return new GitRead<byte[]>.Read(result.Stdout);
+        var entries = NulFields(Checked(Git(checkout, GitOperation.Worktree, ["ls-files", "--stage", "-v", "-z"])));
+        if (entries.FirstOrDefault(entry => char.IsLower(entry[0]) || entry[0] == 'S') is { } hidden)
+            throw new GitFailure($"The index hides changes to {hidden[(hidden.IndexOf('\t') + 1)..]} with assume-unchanged or skip-worktree.");
     }
 
     private static string[] NulFields(GitResult result) => result.Text.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-    private static GitRead<string> ReadText(GitResult result, bool trim = false) => result.ExitCode == 0
-        ? new GitRead<string>.Read(trim ? result.Text.TrimEnd('\r', '\n') : result.Text) : Failure<string>(result);
-    private static GitRead<T>.Failed Failure<T>(GitResult result) => new(result.Stderr);
+    private static GitResult Checked(GitResult result) => result.ExitCode == 0 ? result : throw Failure(result);
+    private static GitFailure Failure(GitResult result) => new(result.Stderr.Trim());
 }
