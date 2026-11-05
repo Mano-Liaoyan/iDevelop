@@ -127,12 +127,25 @@ internal sealed class Worktrees(string projectFolder, WorkflowId workflow, IRead
             : [];
     });
 
-    /// <summary>Whether any of <paramref name="ends"/> holds work that the checked-out branch's HEAD does not.</summary>
+    /// <summary>
+    /// Whether any of <paramref name="ends"/> holds work that the checked-out branch's HEAD does not. An end that Git cannot
+    /// compare counts as work, so that Merge into my branch stays offered and its click shows the reason.
+    /// </summary>
     public bool HasWorkBeyondHead(IReadOnlyList<CommitId> ends)
     {
         var repository = Repository;
         if (repository.ResolveCommit("HEAD") is not { } head) return ends.Count > 0;
-        return ends.Any(end => !repository.IsAncestor(end, head));
+        return ends.Any(end =>
+        {
+            try
+            {
+                return !repository.IsAncestor(end, head);
+            }
+            catch (GitFailure)
+            {
+                return true;
+            }
+        });
     }
 
     /// <summary>
