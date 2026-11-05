@@ -223,30 +223,6 @@ public sealed class InspectorTests : IDisposable
         Assert.Equal(["Result 2 · Current", "Said hi.", "Result 1", "Said hi."], Shell.Texts(shell.InView<ItemsControl>("Results")));
     }
 
-    [Theory]
-    [InlineData(0, "Just now")]
-    [InlineData(59, "Just now")]
-    [InlineData(-30, "Just now")]
-    [InlineData(60, "1 min ago")]
-    [InlineData(59 * 60, "59 min ago")]
-    [InlineData(4 * 3600, "Today 10:00")]
-    [InlineData(20 * 3600, "Yesterday 18:00")]
-    [InlineData(3 * 24 * 3600, "10/02/2026 14:00")]
-    public void A_runs_start_reads_relative_to_now(int secondsAgo, string text)
-    {
-        var culture = System.Globalization.CultureInfo.CurrentCulture;
-        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
-        try
-        {
-            var now = new DateTimeOffset(2026, 10, 5, 14, 0, 0, TimeSpan.Zero);
-            Assert.Equal(text, Execution.RunText.Ago(now.AddSeconds(-secondsAgo), now, TimeZoneInfo.Utc));
-        }
-        finally
-        {
-            System.Globalization.CultureInfo.CurrentCulture = culture;
-        }
-    }
-
     [AvaloniaFact]
     public void The_connection_inspector_draws_the_source_kinds_swatch_and_selects_its_ends()
     {

@@ -12,7 +12,7 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     private static readonly string[] Shown =
     [
         nameof(Now), nameof(Heading), nameof(Text), nameof(HasText), nameof(Meta), nameof(Kind), nameof(IsMessage), nameof(IsAnswerable),
-        nameof(IsApproval), nameof(IsResult), nameof(IsStale), nameof(IsStopped), nameof(IsTask), nameof(IsProposal), nameof(Problem),
+        nameof(IsResult), nameof(IsStale), nameof(IsStopped), nameof(IsTask), nameof(IsProposal), nameof(Problem),
         nameof(HasProblem), nameof(IsProblem), nameof(IsQuietStop), nameof(IsInspectorRequest), nameof(IsCallout), nameof(NeedsInspector),
         nameof(AnswerWatermark), nameof(Questions), nameof(IsAsking),
     ];
@@ -43,8 +43,6 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
 
     /// <summary>The agent waits for the person's words: an answer to its question, or a reply to its message.</summary>
     public bool IsAnswerable => Kind is CardNowKind.Question or CardNowKind.Reply;
-
-    public bool IsApproval => Kind == CardNowKind.Approval;
 
     public bool IsResult => Kind == CardNowKind.Result;
 

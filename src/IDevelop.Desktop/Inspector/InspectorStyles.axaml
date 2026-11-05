@@ -484,11 +484,6 @@
   <Style Selector="ContentPresenter:nth-child(1) > Border.fieldGroup">
     <Setter Property="BorderThickness" Value="0" />
   </Style>
-  <!-- Short values side by side, such as the client, model, and reasoning of the last run. -->
-  <Style Selector="WrapPanel.chips">
-    <Setter Property="ItemSpacing" Value="4" />
-    <Setter Property="LineSpacing" Value="4" />
-  </Style>
   <!-- A chip grows to a second line rather than losing the end of a long name. -->
   <Style Selector="Border.chip">
     <Setter Property="MinHeight" Value="22" />

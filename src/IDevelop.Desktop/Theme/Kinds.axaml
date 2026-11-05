@@ -14,10 +14,7 @@
   <Style Selector=":is(Shape).kindStroke.kind-implement">
     <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
   </Style>
-  <Style Selector=":is(Shape).kindFill.kind-implement">
-    <Setter Property="Fill" Value="{DynamicResource KindImplementStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.kindTint.kind-implement, Border.stateTint.kind-implement">
+  <Style Selector="Border.stateTint.kind-implement">
     <Setter Property="Background" Value="{DynamicResource KindImplement10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-implement">
@@ -35,10 +32,7 @@
   <Style Selector=":is(Shape).kindStroke.kind-plan">
     <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
   </Style>
-  <Style Selector=":is(Shape).kindFill.kind-plan">
-    <Setter Property="Fill" Value="{DynamicResource KindPlanStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.kindTint.kind-plan, Border.stateTint.kind-plan">
+  <Style Selector="Border.stateTint.kind-plan">
     <Setter Property="Background" Value="{DynamicResource KindPlan10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-plan">
@@ -56,10 +50,7 @@
   <Style Selector=":is(Shape).kindStroke.kind-architect">
     <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
   </Style>
-  <Style Selector=":is(Shape).kindFill.kind-architect">
-    <Setter Property="Fill" Value="{DynamicResource KindArchitectStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.kindTint.kind-architect, Border.stateTint.kind-architect">
+  <Style Selector="Border.stateTint.kind-architect">
     <Setter Property="Background" Value="{DynamicResource KindArchitect10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-architect">
@@ -77,10 +68,7 @@
   <Style Selector=":is(Shape).kindStroke.kind-review">
     <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
   </Style>
-  <Style Selector=":is(Shape).kindFill.kind-review">
-    <Setter Property="Fill" Value="{DynamicResource KindReviewStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.kindTint.kind-review, Border.stateTint.kind-review">
+  <Style Selector="Border.stateTint.kind-review">
     <Setter Property="Background" Value="{DynamicResource KindReview10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-review">
@@ -98,10 +86,7 @@
   <Style Selector=":is(Shape).kindStroke.kind-approval">
     <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
   </Style>
-  <Style Selector=":is(Shape).kindFill.kind-approval">
-    <Setter Property="Fill" Value="{DynamicResource KindApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.kindTint.kind-approval, Border.stateTint.kind-approval">
+  <Style Selector="Border.stateTint.kind-approval">
     <Setter Property="Background" Value="{DynamicResource KindApproval10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-approval">
@@ -119,10 +104,7 @@
   <Style Selector=":is(Shape).kindStroke.kind-merge">
     <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
   </Style>
-  <Style Selector=":is(Shape).kindFill.kind-merge">
-    <Setter Property="Fill" Value="{DynamicResource KindMergeStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.kindTint.kind-merge, Border.stateTint.kind-merge">
+  <Style Selector="Border.stateTint.kind-merge">
     <Setter Property="Background" Value="{DynamicResource KindMerge10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-merge">
@@ -140,10 +122,7 @@
   <Style Selector=":is(Shape).kindStroke.kind-readonlyagent">
     <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
   </Style>
-  <Style Selector=":is(Shape).kindFill.kind-readonlyagent">
-    <Setter Property="Fill" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.kindTint.kind-readonlyagent, Border.stateTint.kind-readonlyagent">
+  <Style Selector="Border.stateTint.kind-readonlyagent">
     <Setter Property="Background" Value="{DynamicResource KindReadOnlyAgent10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-readonlyagent">

@@ -11,13 +11,10 @@
     { "key": "IconStateSucceeded", "asset": "Checkmark Circle", "file": "ic_fluent_checkmark_circle_16_filled.svg" },
     { "key": "IconStateFailed", "asset": "Error Circle", "file": "ic_fluent_error_circle_16_filled.svg" },
     { "key": "IconStateWaiting", "asset": "Chat Bubbles Question", "file": "ic_fluent_chat_bubbles_question_16_filled.svg" },
-    { "key": "IconStateInReview", "asset": "Arrow Repeat All", "file": "ic_fluent_arrow_repeat_all_16_filled.svg" },
-    { "key": "IconStateInterrupted", "asset": "Pause Circle", "file": "ic_fluent_pause_circle_16_filled.svg" },
     { "key": "IconStateOutOfDate", "asset": "Arrow Sync Circle", "file": "ic_fluent_arrow_sync_circle_16_filled.svg" },
     { "key": "IconStateCancelled", "asset": "Dismiss Circle", "file": "ic_fluent_dismiss_circle_16_filled.svg" },
     { "key": "IconStateNeedsSetup", "asset": "Warning", "file": "ic_fluent_warning_16_filled.svg" },
     { "key": "IconStateRunning", "asset": "Spinner iOS", "file": "ic_fluent_spinner_ios_16_regular.svg" },
-    { "key": "IconStateElsewhere", "asset": "Window Multiple", "file": "ic_fluent_window_multiple_16_regular.svg" },
     { "key": "IconRun", "asset": "Play", "file": "ic_fluent_play_16_filled.svg" },
     { "key": "IconStop", "asset": "Stop", "file": "ic_fluent_stop_16_filled.svg" },
     { "key": "IconAgent", "asset": "Bot", "file": "ic_fluent_bot_16_regular.svg" },
@@ -59,7 +56,6 @@
     { "key": "IconSkills", "asset": "Toolbox", "file": "ic_fluent_toolbox_16_regular.svg" },
     { "key": "IconConversation", "asset": "Chat", "file": "ic_fluent_chat_16_regular.svg" },
     { "key": "IconStatus", "asset": "Status", "file": "ic_fluent_status_16_regular.svg" },
-    { "key": "IconTime", "asset": "History", "file": "ic_fluent_history_16_regular.svg" },
     { "key": "IconField", "asset": "Text Field", "file": "ic_fluent_text_field_16_regular.svg" },
     { "key": "IconBrief", "asset": "Document Text", "file": "ic_fluent_document_text_16_regular.svg" },
     { "key": "IconGoal", "asset": "Target Arrow", "file": "ic_fluent_target_arrow_16_regular.svg" },
@@ -72,7 +68,6 @@
     { "key": "IconCopy", "asset": "Copy", "file": "ic_fluent_copy_16_regular.svg" },
     { "key": "IconPanelBottom", "asset": "Layout Row Two", "file": "ic_fluent_layout_row_two_16_regular.svg" },
     { "key": "IconMaximize", "asset": "Arrow Maximize", "file": "ic_fluent_arrow_maximize_16_regular.svg" },
-    { "key": "IconArrowDown", "asset": "Arrow Down", "file": "ic_fluent_arrow_down_16_regular.svg" },
-    { "key": "IconShieldDismiss", "asset": "Shield Dismiss", "file": "ic_fluent_shield_dismiss_16_regular.svg" }
+    { "key": "IconArrowDown", "asset": "Arrow Down", "file": "ic_fluent_arrow_down_16_regular.svg" }
   ]
 }

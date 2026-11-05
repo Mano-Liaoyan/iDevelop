@@ -666,10 +666,10 @@
                   </inspector:InspectorSection>
 
                   <!-- The findings of the review's latest verdict. -->
-                  <inspector:InspectorSection Key="Findings" Title="Findings" IsShown="{Binding FindingsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                  <inspector:InspectorSection Key="Findings" Title="Findings" IsShown="{Binding ReviewSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <inspector:InspectorRow Layout="Full">
                       <StackPanel Spacing="6" AutomationProperties.AutomationId="Review">
-                        <TextBlock Text="{Binding FindingsSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                        <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                    AutomationProperties.AutomationId="ReviewSummary" />
                         <ItemsControl ItemsSource="{Binding Findings}" ItemTemplate="{StaticResource FindingTemplate}"
                                       AutomationProperties.AutomationId="Findings"

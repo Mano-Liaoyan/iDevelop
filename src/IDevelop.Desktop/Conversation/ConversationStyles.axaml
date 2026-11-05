@@ -146,22 +146,12 @@
     <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
-  <Style Selector="Border.message.application">
-    <Setter Property="Padding" Value="14,10" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-  </Style>
   <!-- Copy shows on the row the pointer is over, and for the keyboard when it has focus. -->
   <Style Selector="Panel.row Button.copy">
     <Setter Property="Opacity" Value="0" />
   </Style>
   <Style Selector="Panel.row:pointerover Button.copy, Panel.row Button.copy:focus-visible">
     <Setter Property="Opacity" Value="1" />
-  </Style>
-  <Style Selector="Border.message.undelivered">
-    <Setter Property="Opacity" Value="0.6" />
   </Style>
   <Style Selector="TextBlock.author">
     <Setter Property="FontSize" Value="12" />
@@ -232,17 +222,6 @@
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="TextAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector="Border.request">
-    <Setter Property="Padding" Value="14,12" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-  </Style>
-  <Style Selector="Border.request.open">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateWaiting40Brush}" />
-    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
   </Style>
   <Style Selector="Border.composer">
     <Setter Property="MaxWidth" Value="808" />
