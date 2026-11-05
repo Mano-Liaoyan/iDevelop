@@ -42,15 +42,6 @@ public sealed partial class TaskNodeViewModel
     partial void InitializeConversation()
     {
         _openConversation = new RelayCommand(() => _canvas.Project.OpenConversation(new ConversationTarget(_canvas, Id)), () => HasAgent);
-        PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(EngineState))
-            {
-                OnPropertyChanged(nameof(Attention));
-                OnPropertyChanged(nameof(HasAttention));
-                OnPropertyChanged(nameof(AttentionLabel));
-            }
-        };
     }
 
     private void OnConversationStateChanged(object? sender, PropertyChangedEventArgs e)

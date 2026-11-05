@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Avalonia;
 
 namespace IDevelop.Desktop.Canvas;
@@ -10,12 +9,6 @@ namespace IDevelop.Desktop.Canvas;
 /// </summary>
 public sealed partial class TaskNodeViewModel
 {
-    private static readonly string[] DetailInputs =
-    [
-        nameof(State), nameof(EngineState), nameof(Role), nameof(StatusLabel), nameof(Proposal), nameof(Preview), nameof(ReviewSummary),
-        nameof(RunRefusal), nameof(LastReply), nameof(Results), nameof(AgentLabel),
-    ];
-
     private Vector _viewOffset;
     private Size _cardSize = new(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight);
     private CardDetailViewModel? _detail;
@@ -140,41 +133,6 @@ public sealed partial class TaskNodeViewModel
     {
         _detailHolds = 0;
         CloseDetail();
-    }
-
-    partial void InitializeExpansion()
-    {
-        PropertyChanged += OnExpansionInputChanged;
-    }
-
-    private void OnExpansionInputChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        switch (e.PropertyName)
-        {
-            case nameof(Location):
-                OnPropertyChanged(nameof(DisplayLocation));
-                break;
-            case nameof(IsRenaming):
-                OnPropertyChanged(nameof(ShowsPeek));
-                break;
-            case nameof(Title):
-                OnPropertyChanged(nameof(ExpandName));
-                break;
-            case nameof(AgentLabel):
-                OnPropertyChanged(nameof(PeekAgent));
-                break;
-            case nameof(Draft):
-                _detail?.OnDraftChanged();
-                break;
-            case nameof(State):
-                OnPropertyChanged(nameof(ShowsNextRunNote));
-                break;
-        }
-
-        if (DetailInputs.Contains(e.PropertyName))
-        {
-            _detail?.Refresh();
-        }
     }
 
     private void OpenDetail() => Detail = new CardDetailViewModel(this);

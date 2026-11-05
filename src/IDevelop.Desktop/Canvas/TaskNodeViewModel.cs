@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows.Input;
 using Avalonia;
 using IDevelop.Clients;
@@ -8,11 +9,30 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// A node on the canvas. The card, the canvas actions, and the inspector each extend it in a file of their own and react
-/// to its changes through its own <see cref="ObservableObject.PropertyChanged"/>.
+/// A node on the canvas. The card, the canvas actions, and the inspector each extend it in a file of their own. One table
+/// here says which of its properties follow which.
 /// </summary>
 public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHost
 {
+    // Each computed property follows the node properties it reads, which the node raises on its own. The handler raises
+    // each list in this order.
+    private static readonly Dictionary<string, string[]> Dependents = new()
+    {
+        [nameof(State)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsNextRunNote)],
+        [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(IsUnderReview)],
+        [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices)],
+        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsAcceptAndFinish)],
+        [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
+        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentChanges), nameof(CanRevertAgent), nameof(PeekAgent)],
+        [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
+        [nameof(Preview)] = [nameof(TaskChanges)],
+        [nameof(PermissionNote)] = [nameof(PermissionSummary)],
+        [nameof(ConversationNote)] = [nameof(ConversationSummary)],
+        [nameof(Location)] = [nameof(DisplayLocation)],
+        [nameof(IsRenaming)] = [nameof(ShowsPeek)],
+        [nameof(Title)] = [nameof(ExpandName)],
+    };
+
     private readonly WorkflowCanvasViewModel _canvas;
     private TaskDefinition _task;
     private Point _location;
@@ -35,10 +55,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
         SaveAsBlueprintCommand = new RelayCommand(() => _canvas.Blueprints.SaveAs(_task));
         (_kind, _isLibrary) = (canvas.KindOf(task.Blueprint), !NodeKinds.IsBuiltIn(task.Blueprint));
         InitializeRun();
-        InitializeCard();
         InitializeInspector();
         InitializeConversation();
-        InitializeExpansion();
+        PropertyChanged += OnOwnPropertyChanged;
     }
 
     public TaskId Id => _task.Id;
@@ -250,13 +269,38 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
 
     partial void InitializeRun();
 
-    partial void InitializeCard();
-
     partial void InitializeInspector();
 
     partial void InitializeConversation();
 
-    partial void InitializeExpansion();
+    private void OnOwnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is { } name && Dependents.TryGetValue(name, out var dependents))
+        {
+            foreach (var dependent in dependents)
+            {
+                OnPropertyChanged(dependent);
+            }
+        }
+
+        switch (e.PropertyName)
+        {
+            case nameof(ShowsAcceptAndFinish):
+                _acceptAndFinish?.NotifyCanExecuteChanged();
+                break;
+            case nameof(Draft):
+                _detail?.OnDraftChanged();
+                break;
+            case nameof(Proposal):
+                WatchProposal();
+                _detail?.Refresh();
+                break;
+            case nameof(State) or nameof(EngineState) or nameof(Role) or nameof(StatusLabel) or nameof(Preview) or nameof(ReviewSummary)
+                or nameof(RunRefusal) or nameof(LastReply) or nameof(Results) or nameof(AgentLabel):
+                _detail?.Refresh();
+                break;
+        }
+    }
 
     /// <summary>Keeps the agent with another skill choice, as the node's skill picker makes it.</summary>
     internal void SetSkills(ExecutionSettings settings) => SetExecution(settings);
