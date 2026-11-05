@@ -100,6 +100,24 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Text_selected_in_a_row_stays_selected_while_new_lines_refresh_the_view()
+    {
+        _conversation.Add([.. Enumerable.Range(0, 250).Select(Said)]);
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        var row = view.GetVisualDescendants().OfType<SelectableTextBlock>().Single(text => Shown(text) == "Message 248");
+        row.SelectionStart = 0;
+        row.SelectionEnd = 7;
+
+        _conversation.Add(new ConversationLine.Person("Later."));
+        Render();
+
+        Assert.True(row.IsEffectivelyVisible);
+        Assert.Same(row, view.GetVisualDescendants().OfType<SelectableTextBlock>().Single(text => Shown(text) == "Message 248"));
+        Assert.Equal("Message", row.SelectedText);
+    }
+
+    [AvaloniaFact]
     public void Closing_the_conversation_lets_go_of_its_log()
     {
         var model = Open();

@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
-using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Markdig;
@@ -16,9 +15,9 @@ namespace IDevelop.Desktop.Conversation;
 
 /// <summary>
 /// One message's Markdown as Avalonia controls. HTML stays literal text, an image shows its description and address and
-/// is never fetched, and a link goes only to the <see cref="ConversationLinkRouter"/>. A new text rebuilds only the blocks
-/// whose source changed, and a block with selected text keeps its old content until the selection clears. A message too
-/// long, too deeply nested, or with too many blocks, table cells, or links to lay out quickly shows as its source.
+/// is never fetched, and a link goes only to the <see cref="ConversationLinkRouter"/>. A row's text never changes, so a new
+/// text means a recycled row, and the view rebuilds its blocks. A message too long, too deeply nested, or with too many
+/// blocks, table cells, or links to lay out quickly shows as its source.
 /// </summary>
 public sealed class MarkdownView : StackPanel
 {
@@ -32,12 +31,7 @@ public sealed class MarkdownView : StackPanel
     private const int MaxLinks = 500;
     private const int MaxBlockWeight = 1_000;
 
-    private const string SourceKey = "\0source";
-
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().DisableHtml().Build();
-
-    private readonly List<string> _sources = [];
-    private SelectableTextBlock? _waitingOn;
 
     public MarkdownView()
     {
@@ -49,9 +43,6 @@ public sealed class MarkdownView : StackPanel
         get => GetValue(MarkdownProperty);
         set => SetValue(MarkdownProperty, value);
     }
-
-    /// <summary>How many blocks were built since the view was created, which shows that unchanged blocks are reused.</summary>
-    internal int BlocksBuilt { get; private set; }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -65,44 +56,14 @@ public sealed class MarkdownView : StackPanel
     private void Render()
     {
         var text = Markdown ?? "";
-        if (Parse(text) is not { } blocks)
+        Children.Clear();
+        if (Parse(text) is { } blocks)
         {
-            ShowSource(text);
-            return;
+            Children.AddRange(blocks.Select(block => Block(block, text)));
         }
-
-        for (var i = 0; i < blocks.Count; i++)
+        else
         {
-            var source = Source(text, blocks[i]);
-            if (i < _sources.Count && _sources[i] == source)
-            {
-                continue;
-            }
-
-            if (i < _sources.Count && Selected(Children[i]) is { } selected)
-            {
-                WaitForSelectionToClear(selected);
-                continue;
-            }
-
-            var control = Block(blocks[i], text);
-            BlocksBuilt++;
-            if (i < _sources.Count)
-            {
-                Children[i] = control;
-                _sources[i] = source;
-            }
-            else
-            {
-                Children.Add(control);
-                _sources.Add(source);
-            }
-        }
-
-        while (_sources.Count > blocks.Count)
-        {
-            _sources.RemoveAt(_sources.Count - 1);
-            Children.RemoveAt(Children.Count - 1);
+            Children.Add(Plain(text));
         }
     }
 
@@ -140,60 +101,10 @@ public sealed class MarkdownView : StackPanel
         _ => 1,
     });
 
-    // A message streams as its source once it passes a limit, so its one block takes the new text in place and keeps a
-    // selection until it clears.
-    private void ShowSource(string text)
-    {
-        if (_sources is [SourceKey] && Children[0] is SelectableTextBlock shown)
-        {
-            if (Selected(shown) is { } selected)
-            {
-                WaitForSelectionToClear(selected);
-            }
-            else
-            {
-                shown.Text = text;
-            }
-
-            return;
-        }
-
-        Children.Clear();
-        _sources.Clear();
-        Children.Add(Plain(text));
-        _sources.Add(SourceKey);
-        BlocksBuilt++;
-    }
-
     private static string Source(string text, Block block)
     {
         var start = Math.Clamp(block.Span.Start, 0, text.Length);
         return text.Substring(start, Math.Clamp(block.Span.Length, 0, text.Length - start));
-    }
-
-    private static SelectableTextBlock? Selected(Control block) =>
-        block.GetSelfAndLogicalDescendants().OfType<SelectableTextBlock>().FirstOrDefault(text => text.SelectionStart != text.SelectionEnd);
-
-    private void WaitForSelectionToClear(SelectableTextBlock selected)
-    {
-        if (_waitingOn is not null)
-        {
-            return;
-        }
-
-        _waitingOn = selected;
-        selected.PropertyChanged += OnSelectionChanged;
-    }
-
-    private void OnSelectionChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
-    {
-        if (_waitingOn is { } text && (e.Property == SelectableTextBlock.SelectionStartProperty || e.Property == SelectableTextBlock.SelectionEndProperty)
-            && text.SelectionStart == text.SelectionEnd)
-        {
-            text.PropertyChanged -= OnSelectionChanged;
-            _waitingOn = null;
-            Render();
-        }
     }
 
     private Control Block(Block block, string text) => block switch
