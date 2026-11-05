@@ -160,7 +160,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
             return " Takes no agent.";
         }
 
-        var readOnly = type.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review
+        var readOnly = type.Work.ReadOnly
             ? " Reads only, so it needs a client with a read-only mode."
             : "";
         var kept = own is { } execution

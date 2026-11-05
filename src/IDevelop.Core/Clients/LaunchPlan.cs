@@ -33,7 +33,7 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
 
         var client = settings.Client;
         var name = ClientCatalog.Name(client);
-        var readOnly = node.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
+        var readOnly = node.Blueprint.Work.ReadOnly;
         if (readOnly && !ClientCatalog.Get(client).HasReadOnlyMode)
         {
             return (null, $"{name} has no read-only mode.");

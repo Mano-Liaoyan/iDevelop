@@ -66,7 +66,7 @@ public abstract record AgentCheck
         }
 
         var name = ClientCatalog.Name(client);
-        if (blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review && !ClientCatalog.HasReadOnlyMode(client))
+        if (blueprint.Work.ReadOnly && !ClientCatalog.HasReadOnlyMode(client))
         {
             return new Unusable($"The planner chose {name}, which has no read-only mode for a {blueprint.Name}.", $"{name} can't run read-only");
         }
