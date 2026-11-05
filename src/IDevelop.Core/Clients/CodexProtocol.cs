@@ -1,5 +1,4 @@
 using System.Text.Json;
-using IDevelop.Workflows;
 using static IDevelop.Clients.JsonFields;
 
 namespace IDevelop.Clients;
@@ -40,13 +39,12 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
                     return ProtocolOutput.Empty;
                 }
 
-                var native = (NativePolicy.Codex)launch.PolicyFor(ClientId.Codex).Native;
                 var args = new Dictionary<string, object?>
                 {
                     ["model"] = launch.Model,
-                    ["approvalPolicy"] = native.ApprovalPolicy,
-                    ["approvalsReviewer"] = native.ApprovalsReviewer,
-                    ["sandbox"] = native.Sandbox,
+                    ["approvalPolicy"] = Codex.ApprovalPolicy,
+                    ["approvalsReviewer"] = "user",
+                    ["sandbox"] = launch.ReadOnly ? "read-only" : "workspace-write",
                 };
                 if (launch.WorkingFolder is { } folder)
                 {

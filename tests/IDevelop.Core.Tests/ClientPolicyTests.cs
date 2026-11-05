@@ -36,24 +36,28 @@ public class ClientPolicyTests
         ];
         foreach (var row in rows)
         {
-            Assert.Equal([.. ClaudeStart, "--permission-mode", row.ClaudeAccess, "--resume", Session, .. row.ClaudePrompts],
-                Start(ClientId.ClaudeCode, row.Blueprint, row.Mode).Plan!.Launch.Arguments.ToArray());
+            var claude = Start(ClientId.ClaudeCode, row.Blueprint, row.Mode).Plan!;
+            Assert.Equal([.. ClaudeStart, "--permission-mode", row.ClaudeAccess, "--resume", Session, .. row.ClaudePrompts], claude.Launch.Arguments.ToArray());
+            Assert.Equal(row.ClaudePrompts == Surface, claude.Request.Surfaces);
 
             var codex = Start(ClientId.Codex, row.Blueprint, row.Mode).Plan!;
             Assert.Equal(["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"], codex.Launch.Arguments.ToArray());
+            Assert.False(codex.Request.Surfaces);
             var protocol = codex.Client.Protocol(codex.Request);
             protocol.Start();
             Assert.Equal(
                 $$$"""{"id":"thread-1","method":"thread/resume","params":{"model":"m","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"{{{row.Sandbox}}}","threadId":"{{{Session}}}","excludeTurns":true}}""",
                 protocol.Read("""{"id":"init-1","result":{}}""").Writes[1]);
 
-            Assert.Equal([.. AgyStart, "--mode", row.AgyMode, "--print=", "--conversation", Session],
-                Start(ClientId.Antigravity, row.Blueprint, row.Mode).Plan!.Launch.Arguments.ToArray());
+            var agy = Start(ClientId.Antigravity, row.Blueprint, row.Mode).Plan!;
+            Assert.Equal([.. AgyStart, "--mode", row.AgyMode, "--print=", "--conversation", Session], agy.Launch.Arguments.ToArray());
+            Assert.False(agy.Request.Surfaces);
 
             var pi = Start(ClientId.Pi, row.Blueprint, row.Mode);
             if (row.PiRuns)
             {
                 Assert.Equal(["-p", "--mode", "json", "--model", "m", "--thinking", "high", "--session-id", Session], pi.Plan!.Launch.Arguments.ToArray());
+                Assert.False(pi.Plan.Request.Surfaces);
             }
             else
             {
@@ -67,41 +71,5 @@ public class ClientPolicyTests
         var node = new TaskDefinition(new TaskId(Guid.NewGuid()), blueprint) { Execution = new ExecutionSettings(client) { Model = "m", Reasoning = "high" }, Conversation = mode };
         var ready = new ClientStatus.Ready(new ResolvedCommand("/usr/bin/client", false), [new ModelOption("m", "M", ["high"])]);
         return LaunchPlan.For(node, "/project", "banana", Session, new Dictionary<ClientId, ClientStatus> { [client] = ready }, null);
-    }
-
-    [Fact]
-    public void The_effective_policy_bypasses_permissions_for_an_editing_Claude_Code_node_and_keeps_native_access_otherwise()
-    {
-        (ClientId Client, bool ReadOnly, ConversationMode Mode, bool Reviewer,
-            NativePolicy Native, QuestionHandling Questions, PermissionPrompts Prompts)[] rows =
-        [
-            (ClientId.ClaudeCode, false, ConversationMode.Autonomous, false, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, true, ConversationMode.Autonomous, false, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, false, ConversationMode.Autonomous, true, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, true, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, false, ConversationMode.Chat, true, new NativePolicy.Claude("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.ClaudeCode, false, ConversationMode.MayAsk, false, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Surface, PermissionPrompts.Host),
-            (ClientId.ClaudeCode, false, ConversationMode.Chat, false, new NativePolicy.Claude("bypassPermissions"), QuestionHandling.Surface, PermissionPrompts.Host),
-            (ClientId.ClaudeCode, true, ConversationMode.MayAsk, false, new NativePolicy.Claude("plan"), QuestionHandling.Surface, PermissionPrompts.Host),
-            (ClientId.ClaudeCode, true, ConversationMode.Chat, false, new NativePolicy.Claude("plan"), QuestionHandling.Surface, PermissionPrompts.Host),
-            (ClientId.Codex, false, ConversationMode.Chat, false, new NativePolicy.Codex("workspace-write"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Codex, true, ConversationMode.MayAsk, false, new NativePolicy.Codex("read-only"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Codex, false, ConversationMode.Chat, true, new NativePolicy.Codex("read-only"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Pi, false, ConversationMode.Chat, false, new NativePolicy.Pi(), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Pi, true, ConversationMode.MayAsk, false, new NativePolicy.Pi(), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Antigravity, false, ConversationMode.Chat, false, new NativePolicy.Antigravity("accept-edits"), QuestionHandling.Decline, PermissionPrompts.None),
-            (ClientId.Antigravity, true, ConversationMode.MayAsk, false, new NativePolicy.Antigravity("plan"), QuestionHandling.Decline, PermissionPrompts.None),
-        ];
-
-        foreach (var row in rows)
-        {
-            var policy = ClientPolicy.For(row.Client, row.ReadOnly, row.Mode, row.Reviewer);
-
-            Assert.Equal((row.Native, row.Questions, row.Prompts), (policy.Native, policy.Questions, policy.PermissionPrompts));
-            if (policy.Native is NativePolicy.Codex codex)
-            {
-                Assert.Equal(("never", "user"), (codex.ApprovalPolicy, codex.ApprovalsReviewer));
-            }
-        }
     }
 }

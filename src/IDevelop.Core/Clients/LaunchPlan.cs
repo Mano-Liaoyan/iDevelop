@@ -33,8 +33,9 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
 
         var client = settings.Client;
         var name = ClientCatalog.Name(client);
+        var definition = ClientCatalog.Get(client);
         var readOnly = node.Blueprint.Work.ReadOnly;
-        if (readOnly && !ClientCatalog.Get(client).HasReadOnlyMode)
+        if (readOnly && !definition.HasReadOnlyMode)
         {
             return (null, $"{name} has no read-only mode.");
         }
@@ -101,9 +102,9 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
         var request = new LaunchRequest(id, settings.Reasoning, prompt)
         {
             ResumeSession = session, ReadOnly = readOnly, Skills = skillLaunch,
-            Policy = ClientPolicy.For(client, readOnly, node.Conversation, node.Blueprint.Work is WorkSpec.Review),
+            Surfaces = definition.Surfaces && node.Blueprint.Work is not WorkSpec.Review && node.Conversation is ConversationMode.MayAsk or ConversationMode.Chat,
         };
-        var plan = new LaunchPlan(ClientCatalog.Get(client), ready.Command, settings, request);
+        var plan = new LaunchPlan(definition, ready.Command, settings, request);
         return ready.Command.UnsafeArgument(plan.Launch.Arguments) is { } argument
             ? (null, $"cmd.exe could misread the argument {argument}.")
             : (plan, null);

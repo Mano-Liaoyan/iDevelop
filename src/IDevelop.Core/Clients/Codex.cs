@@ -1,12 +1,14 @@
 using System.Collections.Immutable;
 using System.Text.Json;
-using IDevelop.Workflows;
 
 namespace IDevelop.Clients;
 
 /// <summary>Codex through <c>codex app-server</c>.</summary>
 internal static class Codex
 {
+    /// <summary>Codex never stops to ask, so its sandbox alone limits a turn.</summary>
+    internal const string ApprovalPolicy = "never";
+
     public static readonly ClientDefinition Definition = new()
     {
         Name = "Codex",
@@ -41,7 +43,7 @@ internal static class Codex
     private const string SkillsRequest = "idevelop-skills";
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
-        ["app-server", "-c", $"approval_policy={((NativePolicy.Codex)request.PolicyFor(ClientId.Codex).Native).ApprovalPolicy}", "-c", "features.default_mode_request_user_input=false"], "");
+        ["app-server", "-c", $"approval_policy={ApprovalPolicy}", "-c", "features.default_mode_request_user_input=false"], "");
 
     private static CatalogParse ParseCatalog(ProbeOutput output)
     {

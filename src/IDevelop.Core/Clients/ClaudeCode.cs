@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Text.Json;
-using IDevelop.Workflows;
 using static IDevelop.Clients.JsonFields;
 
 namespace IDevelop.Clients;
@@ -30,6 +29,8 @@ internal static class ClaudeCode
         Protocol = request => new ClaudeProtocol(request),
         Terminal = session => $"claude --resume {session}",
         HasReadOnlyMode = true,
+        Surfaces = true,
+        EditNotice = "Every tool runs without asking for permission.",
         // reload_skills answers with the session's skills alone, its bundled skills among them, which is what the initialize
         // allow-list chooses from. It follows initialize, as in a turn.
         Skills = new SkillSource(folder => new Probe(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
@@ -49,9 +50,10 @@ internal static class ClaudeCode
     [
         "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
-        "--permission-mode", ((NativePolicy.Claude)request.PolicyFor(ClientId.ClaudeCode).Native).Mode,
+        // ADR 0039: a node that may edit runs every tool without asking.
+        "--permission-mode", request.ReadOnly ? "plan" : "bypassPermissions",
         .. request.ResumeSession is { } session ? ["--resume", session] : Array.Empty<string>(),
-        .. request.PolicyFor(ClientId.ClaudeCode).PermissionPrompts == PermissionPrompts.Host ? ["--permission-prompt-tool", "stdio"] : new[] { "--permission-prompts", "none" },
+        .. request.Surfaces ? ["--permission-prompt-tool", "stdio"] : new[] { "--permission-prompts", "none" },
     ],
     "");
 

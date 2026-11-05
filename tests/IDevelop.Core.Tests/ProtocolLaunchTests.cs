@@ -18,18 +18,12 @@ public sealed class ProtocolLaunchTests
     [Fact]
     public void Every_client_launches_with_literal_arguments_for_each_policy_row()
     {
-        (bool ReadOnly, ConversationMode Mode, bool Reviewer, string[] Claude, string[] Agy)[] rows =
+        (bool ReadOnly, bool Surfaces, string[] Claude, string[] Agy)[] rows =
         [
-            (false, ConversationMode.Autonomous, false, ClaudeEditNone, AgyEdit),
-            (true, ConversationMode.Autonomous, false, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.MayAsk, false, ClaudeEditHost, AgyEdit),
-            (true, ConversationMode.MayAsk, false, ClaudePlanHost, AgyPlan),
-            (false, ConversationMode.Chat, false, ClaudeEditHost, AgyEdit),
-            (true, ConversationMode.Chat, false, ClaudePlanHost, AgyPlan),
-            (false, ConversationMode.Autonomous, true, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.MayAsk, true, ClaudePlanNone, AgyPlan),
-            (false, ConversationMode.Chat, true, ClaudePlanNone, AgyPlan),
-            (true, ConversationMode.Chat, true, ClaudePlanNone, AgyPlan),
+            (false, false, ClaudeEditNone, AgyEdit),
+            (true, false, ClaudePlanNone, AgyPlan),
+            (false, true, ClaudeEditHost, AgyEdit),
+            (true, true, ClaudePlanHost, AgyPlan),
         ];
         foreach (var row in rows)
         {
@@ -37,8 +31,7 @@ public sealed class ProtocolLaunchTests
             {
                 var request = new LaunchRequest("m", "high", "banana")
                 {
-                    ReadOnly = row.ReadOnly, ResumeSession = "session-1",
-                    Policy = ClientPolicy.For(client, row.ReadOnly, row.Mode, row.Reviewer),
+                    ReadOnly = row.ReadOnly, Surfaces = row.Surfaces, ResumeSession = "session-1",
                 };
                 var actual = ClientCatalog.Get(client).Launch(request);
                 Assert.Equal(client switch
