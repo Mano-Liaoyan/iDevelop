@@ -11,7 +11,7 @@ using static IDevelop.Desktop.Tests.ConversationFixtures;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>The message renderer: what each block shows, what it never does with untrusted text, and what it rebuilds.</summary>
+/// <summary>The message renderer: what each block shows, what it never does with untrusted text, and how a new text replaces it.</summary>
 public sealed class MarkdownViewTests
 {
     private readonly List<Uri> _launched = [];
@@ -173,46 +173,26 @@ public sealed class MarkdownViewTests
         window.Close();
     }
 
-    [AvaloniaFact]
-    public void A_message_shown_as_its_source_streams_into_the_same_block_and_waits_while_its_text_is_selected()
-    {
-        var source = "| a |\n|-|\n" + string.Concat(Enumerable.Repeat("| x |\n", 1000));
-        var (window, view) = Show(source);
-        var shown = (SelectableTextBlock)view.Children[0];
-        shown.SelectionStart = 0;
-        shown.SelectionEnd = 5;
-
-        view.Markdown = source + "| y |\n";
-        Assert.Equal((source, 1), (Blocks(view).Single(), view.BlocksBuilt));
-        shown.SelectionEnd = 0;
-
-        Assert.Same(shown, view.Children[0]);
-        Assert.Equal((source + "| y |\n", 1), (Blocks(view).Single(), view.BlocksBuilt));
-        window.Close();
-    }
-
     [Fact]
     public void A_confirmation_shows_a_look_alike_host_as_the_browser_sends_it() =>
         Assert.Equal("https://аpple.com/login\nHost as sent: xn--pple-43d.com", ConversationLinkRouter.Shown(new Uri("https://аpple.com/login")));
 
     [AvaloniaFact]
-    public void Streaming_rebuilds_only_the_changed_last_block_and_waits_while_its_text_is_selected()
+    public void A_new_text_replaces_blocks_with_selected_text_as_a_recycled_row_needs()
     {
-        var (window, view) = Show("First paragraph.\n\nSecond");
-        Assert.Equal(2, view.BlocksBuilt);
+        var source = "| a |\n|-|\n" + string.Concat(Enumerable.Repeat("| x |\n", 1000));
+        var (window, view) = Show("First row.\n\nSecond paragraph");
+        var selected = (SelectableTextBlock)view.Children[1];
+        selected.SelectionEnd = 6;
 
-        view.Markdown = "First paragraph.\n\nSecond line grows";
-        Assert.Equal(3, view.BlocksBuilt);
-        var last = (SelectableTextBlock)view.Children[1];
-        last.SelectionStart = 0;
-        last.SelectionEnd = 6;
-        view.Markdown = "First paragraph.\n\nSecond line grows more";
+        view.Markdown = "Next row.\n\nOther paragraph";
+        Assert.Equal(["Next row.", "Other paragraph"], Blocks(view));
 
-        Assert.Same(last, view.Children[1]);
-        Assert.Equal(["First paragraph.", "Second line grows"], Blocks(view));
-        last.SelectionEnd = 0;
-        Assert.Equal(["First paragraph.", "Second line grows more"], Blocks(view));
-        Assert.Equal(4, view.BlocksBuilt);
+        view.Markdown = source;
+        selected = (SelectableTextBlock)view.Children[0];
+        selected.SelectionEnd = 5;
+        view.Markdown = source + "| y |\n";
+        Assert.Equal(source + "| y |\n", Blocks(view).Single());
         window.Close();
     }
 }

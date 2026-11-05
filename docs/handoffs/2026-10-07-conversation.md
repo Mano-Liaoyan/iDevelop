@@ -10,7 +10,7 @@ Pull request [#40](https://github.com/Mano-Liaoyan/iDevelop/pull/40) built the c
 
 ### iDevelop renders Markdown with its own view on Markdig
 
-`MarkdownView` is iDevelop's own renderer on Markdig 1.4.0, which is BSD-2-Clause with no dependencies. It parses with `UsePipeTables().DisableHtml()` and maps blocks to Avalonia controls. A streamed message rebuilds only its changed blocks, and a block with selected text waits until the selection clears. History is a virtualized list.
+`MarkdownView` is iDevelop's own renderer on Markdig 1.4.0, which is BSD-2-Clause with no dependencies. It parses with `UsePipeTables().DisableHtml()` and maps blocks to Avalonia controls. History is a virtualized list.
 
 A prototype measured three candidates on Linux with a Release build under Xvfb with software rendering. Each stream paced one 16-character chunk to each animation frame. CPU per append counts all threads. Each timing is the median of five runs, or of three for the 20 KB stream. The 500-message history used a virtualized list.
 
