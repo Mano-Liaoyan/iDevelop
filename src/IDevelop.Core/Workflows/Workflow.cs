@@ -266,6 +266,22 @@ public sealed class Workflow
 
     public ImmutableSortedDictionary<BlueprintKey, Blueprint> Blueprints { get; }
 
+    // A snapshot never changes, so each lookup stays true for its life. Two threads can build the same lookup, and either copy is correct.
+    private ILookup<TaskId, TaskId> Before => field ??= Dependencies.ToLookup(key => key.To, key => key.From);
+
+    private ILookup<TaskId, TaskId> After => field ??= Dependencies.ToLookup(key => key.From, key => key.To);
+
+    private IEnumerable<ConnectionKey> Dependencies => Connections.Where(connection => connection.Value.Blocks()).Select(connection => connection.Key);
+
+    /// <summary>The nodes with a dependency connection to the node, in id order.</summary>
+    public IEnumerable<TaskId> Predecessors(TaskId id) => Before[id];
+
+    /// <summary>The nodes with a dependency connection from the node, in id order.</summary>
+    public IEnumerable<TaskId> Successors(TaskId id) => After[id];
+
+    /// <summary>The nodes that dependency connections reach from <paramref name="start"/>, nearest first, without <paramref name="start"/>.</summary>
+    public IEnumerable<TaskId> Reachable(TaskId start) => Walk(start).Select(step => step.Task);
+
     public static Workflow Empty(WorkflowId id) => new(
         id,
         ImmutableSortedDictionary<TaskId, TaskDefinition>.Empty,
@@ -387,9 +403,9 @@ public sealed class Workflow
             return Reject(new EditRejection.DuplicateConnection(e.Key, existing));
         }
 
-        if (e.Kind.Blocks() && FindOrderingPath(to, from) is { } path)
+        if (OrderingCycle(e.Key, e.Kind) is { } cycle)
         {
-            return Reject(new EditRejection.OrderingCycle([from, .. path]));
+            return Reject(cycle);
         }
 
         if (e.Kind == ConnectionKind.Dependency && SecondSubject(e.Key) is { } second)
@@ -412,9 +428,9 @@ public sealed class Workflow
             return Applied(this);
         }
 
-        if (e.Kind.Blocks() && !current.Blocks() && FindOrderingPath(e.Key.To, e.Key.From) is { } path)
+        if (OrderingCycle(e.Key, e.Kind) is { } cycle)
         {
-            return Reject(new EditRejection.OrderingCycle([e.Key.From, .. path]));
+            return Reject(cycle);
         }
 
         if (e.Kind == ConnectionKind.Dependency && SecondSubject(e.Key) is { } second)
@@ -484,13 +500,17 @@ public sealed class Workflow
             ? new EditRejection.SecondSubject(key.To, subject)
             : null;
 
+    /// <summary>Why a connection of this kind would close a cycle, or null.</summary>
+    private EditRejection? OrderingCycle(ConnectionKey key, ConnectionKind kind) =>
+        kind.Blocks() && FindOrderingPath(key.To, key.From) is { } path ? new EditRejection.OrderingCycle([key.From, .. path]) : null;
+
+    /// <summary>The shortest path from <paramref name="start"/> to <paramref name="goal"/>, two different nodes, or null.</summary>
     private ImmutableArray<TaskId>? FindOrderingPath(TaskId start, TaskId goal)
     {
-        var successors = Connections.Where(c => c.Value.Blocks()).ToLookup(c => c.Key.From, c => c.Key.To);
-        var parents = new Dictionary<TaskId, TaskId> { [start] = start };
-        var queue = new Queue<TaskId>([start]);
-        while (queue.TryDequeue(out var task))
+        var parents = new Dictionary<TaskId, TaskId>();
+        foreach (var (task, parent) in Walk(start))
         {
+            parents[task] = parent;
             if (task == goal)
             {
                 var path = new List<TaskId> { goal };
@@ -502,17 +522,27 @@ public sealed class Workflow
                 path.Reverse();
                 return [.. path];
             }
-
-            foreach (var successor in successors[task])
-            {
-                if (parents.TryAdd(successor, task))
-                {
-                    queue.Enqueue(successor);
-                }
-            }
         }
 
         return null;
+    }
+
+    /// <summary>Each node the dependency connections reach from <paramref name="start"/>, with the node it was reached from.</summary>
+    private IEnumerable<(TaskId Task, TaskId Parent)> Walk(TaskId start)
+    {
+        var seen = new HashSet<TaskId> { start };
+        var queue = new Queue<TaskId>([start]);
+        while (queue.TryDequeue(out var task))
+        {
+            foreach (var next in After[task])
+            {
+                if (seen.Add(next))
+                {
+                    yield return (next, task);
+                    queue.Enqueue(next);
+                }
+            }
+        }
     }
 
     private static EditResult.Applied Applied(Workflow workflow) => new(workflow);

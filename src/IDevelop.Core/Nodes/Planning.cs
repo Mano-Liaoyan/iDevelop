@@ -59,21 +59,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
     /// <param name="started">Whether a node has run.</param>
     public static PlanningContext For(Workflow workflow, TaskId planner, IEnumerable<Blueprint> placeable, Func<TaskId, bool> started)
     {
-        var successors = workflow.Connections.Where(connection => connection.Value.Blocks()).ToLookup(connection => connection.Key.From, connection => connection.Key.To);
-        var reached = new HashSet<TaskId>();
-        var queue = new Queue<TaskId>([planner]);
-        while (queue.TryDequeue(out var task))
-        {
-            foreach (var next in successors[task])
-            {
-                if (reached.Add(next))
-                {
-                    queue.Enqueue(next);
-                }
-            }
-        }
-
-        return new([.. reached.Order().Where(id => !started(id)).Select(id => workflow.Tasks[id]).Where(IsEmpty)], [.. placeable]);
+        return new([.. workflow.Reachable(planner).Order().Where(id => !started(id)).Select(id => workflow.Tasks[id]).Where(IsEmpty)], [.. placeable]);
     }
 
     public static bool IsEmpty(TaskDefinition node) => node.Fields.Values.All(string.IsNullOrWhiteSpace);

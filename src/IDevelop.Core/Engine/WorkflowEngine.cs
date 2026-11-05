@@ -300,7 +300,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     }
 
     /// <summary>The commits of the end nodes, the nodes with no successors.</summary>
-    private ImmutableArray<CommitId> EndCommits() => [.. _workflow.Tasks.Keys.Where(id => !Successors(id).Any()).SelectMany(Handed).Distinct()];
+    private ImmutableArray<CommitId> EndCommits() => [.. _workflow.Tasks.Keys.Where(id => !_workflow.Successors(id).Any()).SelectMany(Handed).Distinct()];
 
     /// <summary>Merges every end node's commit, the commits of the nodes with no successors, into the checked-out branch.</summary>
     /// <exception cref="InvalidOperationException">
@@ -332,7 +332,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
                 throw new InvalidOperationException("The node waits for no approval.");
             }
 
-            foreach (var predecessor in Predecessors(_workflow, node))
+            foreach (var predecessor in _workflow.Predecessors(node))
             {
                 if (_live.ContainsKey(predecessor)) throw new InvalidOperationException($"{Title(predecessor)} is running.");
             }
@@ -613,7 +613,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     /// </summary>
     private void Route(TaskId id)
     {
-        foreach (var next in Successors(id))
+        foreach (var next in _workflow.Successors(id))
         {
             if (StateOf(next) is NodeState.Running or NodeState.Completed || Refusal(next) is not null) continue;
             var node = _workflow.Tasks[next];
@@ -660,20 +660,9 @@ public sealed class WorkflowEngine : IAsyncDisposable
     /// <summary>The predecessors feedback goes to: each one that is not downstream of another, whose new result reruns it.</summary>
     private List<TaskId> Targets(TaskId id)
     {
-        var predecessors = Predecessors(_workflow, id).ToList();
-        return [.. predecessors.Where(p => !predecessors.Any(other => other != p && Upstream(p).Contains(other)))];
-    }
-
-    private HashSet<TaskId> Upstream(TaskId id)
-    {
-        var seen = new HashSet<TaskId>();
-        var queue = new Queue<TaskId>(Predecessors(_workflow, id));
-        while (queue.TryDequeue(out var next))
-        {
-            if (seen.Add(next)) foreach (var before in Predecessors(_workflow, next)) queue.Enqueue(before);
-        }
-
-        return seen;
+        var predecessors = _workflow.Predecessors(id).ToList();
+        var downstream = predecessors.SelectMany(_workflow.Reachable).ToHashSet();
+        return [.. predecessors.Where(p => !downstream.Contains(p))];
     }
 
     /// <summary>
@@ -696,13 +685,9 @@ public sealed class WorkflowEngine : IAsyncDisposable
 
     private void StopDescendants(TaskId id)
     {
-        var queue = new Queue<TaskId>(Successors(id));
-        var seen = new HashSet<TaskId>();
-        while (queue.TryDequeue(out var next))
+        foreach (var next in _workflow.Reachable(id))
         {
-            if (!seen.Add(next)) continue;
             if (_live.TryGetValue(next, out var live)) RequestStop(live, Halt.Upstream);
-            foreach (var after in Successors(next)) queue.Enqueue(after);
         }
     }
 
@@ -719,7 +704,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     {
         var node = _workflow.Tasks[id];
         if (_live.ContainsKey(id)) return "It is running.";
-        foreach (var predecessor in Predecessors(_workflow, id))
+        foreach (var predecessor in _workflow.Predecessors(id))
         {
             if (StateOf(predecessor) is not NodeState.Completed) return $"It waits for {Title(predecessor)}.";
         }
@@ -736,12 +721,12 @@ public sealed class WorkflowEngine : IAsyncDisposable
     private static bool Edits(TaskDefinition node) => node.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } or WorkSpec.Merge;
 
     /// <summary>The distinct commits the node's predecessors hand on, in predecessor order.</summary>
-    private ImmutableArray<CommitId> InputCommits(TaskId id) => [.. Predecessors(_workflow, id).SelectMany(Handed).Distinct()];
+    private ImmutableArray<CommitId> InputCommits(TaskId id) => [.. _workflow.Predecessors(id).SelectMany(Handed).Distinct()];
 
     /// <summary>The node's latest commit, or the commits it was given when its latest result has none, as a node that only reads.</summary>
     private IEnumerable<CommitId> Handed(TaskId id) => Log(id).Record.History.LastOrDefault() is { Commit: { } commit }
         ? [new CommitId(commit)]
-        : Predecessors(_workflow, id).SelectMany(Handed);
+        : _workflow.Predecessors(id).SelectMany(Handed);
 
     private NodeEntry.Waiting? Waiting(TaskId id) =>
         !_live.ContainsKey(id) && Log(id).Record is { Open: false, End: NodeEntry.Waiting waiting } ? waiting : null;
@@ -771,7 +756,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         var instruction = node.Blueprint.Work is WorkSpec.Agent
             ? AgentPrompt.For(node, "")
             : string.Join("\n", node.Fields.Select(field => $"{field.Key}: {field.Value}"));
-        return new Basis([.. Predecessors(workflow, id).Select(p => new BasisInput(p, Log(p).Record.History.LastOrDefault()?.Id))], instruction,
+        return new Basis([.. workflow.Predecessors(id).Select(p => new BasisInput(p, Log(p).Record.History.LastOrDefault()?.Id))], instruction,
             node.Execution is { } settings ? new AgentModel(settings.Client, settings.Model, settings.Reasoning) : null);
     }
 
@@ -810,7 +795,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     }
 
     /// <summary>The predecessors' latest reports, each under its node's title.</summary>
-    private string Inputs(TaskId id) => string.Join("\n\n", Predecessors(_workflow, id)
+    private string Inputs(TaskId id) => string.Join("\n\n", _workflow.Predecessors(id)
         .Select(p => Log(p).Record.History.LastOrDefault() is { } result ? $"### {Title(p)}\n\n{result.Report.TrimEnd()}" : null)
         .OfType<string>());
 
@@ -821,7 +806,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     private string Render(TaskId id, PromptTemplate template, string findings)
     {
         var node = _workflow.Tasks[id];
-        string Each(Func<TaskId, string> part) => string.Join("\n\n", Predecessors(_workflow, id).Select(part));
+        string Each(Func<TaskId, string> part) => string.Join("\n\n", _workflow.Predecessors(id).Select(part));
         return template.Render(name => name switch
         {
             "title" => node.Title,
@@ -856,12 +841,6 @@ public sealed class WorkflowEngine : IAsyncDisposable
     };
 
     private string Title(TaskId id) => _workflow.Tasks[id] is { Title.Length: > 0 } node ? node.Title : _workflow.Tasks[id].Blueprint.Name;
-
-    private static IEnumerable<TaskId> Predecessors(Workflow workflow, TaskId id) =>
-        workflow.Connections.Where(c => c.Value == ConnectionKind.Dependency && c.Key.To == id).Select(c => c.Key.From);
-
-    private IEnumerable<TaskId> Successors(TaskId id) =>
-        _workflow.Connections.Where(c => c.Value == ConnectionKind.Dependency && c.Key.From == id).Select(c => c.Key.To);
 
     private NodeLog Log(TaskId id)
     {

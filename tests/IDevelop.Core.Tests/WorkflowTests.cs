@@ -47,6 +47,54 @@ public class WorkflowTests
     }
 
     [Fact]
+    public void Graph_queries_follow_dependencies_and_ignore_context()
+    {
+        var check = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000066"));
+        var diamond = ThreeTasks()
+            .Must(Place(Implement(check, "Check"), new CanvasPoint(0, 400)))
+            .Must(new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency))
+            .Must(new Connect(new ConnectionKey(Design, Review), ConnectionKind.Dependency))
+            .Must(new Connect(new ConnectionKey(Build, check), ConnectionKind.Dependency))
+            .Must(new Connect(new ConnectionKey(Review, check), ConnectionKind.Dependency))
+            .Must(new Connect(new ConnectionKey(Review, Build), ConnectionKind.Context));
+        TaskId[] order = [Build, Review];
+        Array.Sort(order);
+
+        Assert.Equal(order, diamond.Successors(Design));
+        Assert.Equal(order, diamond.Predecessors(check));
+        Assert.Equal([Design], diamond.Predecessors(Build));
+        Assert.Equal([.. order, check], diamond.Reachable(Design));
+        Assert.Equal([check], diamond.Reachable(Review));
+        Assert.Empty(diamond.Reachable(check));
+    }
+
+    [Fact]
+    public void Graph_queries_on_a_node_with_no_connections_are_empty()
+    {
+        var workflow = DesignBuildReview();
+
+        Assert.Empty(workflow.Predecessors(Missing));
+        Assert.Empty(workflow.Successors(Missing));
+        Assert.Empty(workflow.Reachable(Missing));
+    }
+
+    [Fact]
+    public void Graph_queries_belong_to_their_snapshot()
+    {
+        var chain = DesignBuildReview();
+        Assert.Equal([Build, Review], chain.Reachable(Design));
+
+        var cut = chain.Must(new Delete([], [new ConnectionKey(Build, Review)]));
+        var context = chain.Must(new SetConnectionKind(new ConnectionKey(Design, Build), ConnectionKind.Context));
+
+        Assert.Equal([Build], cut.Reachable(Design));
+        Assert.Empty(context.Reachable(Design));
+        Assert.Empty(context.Predecessors(Build));
+        Assert.Equal([Design], chain.Predecessors(Build));
+        Assert.Equal([Build, Review], chain.Reachable(Design));
+    }
+
+    [Fact]
     public void A_batch_applies_every_edit_or_none()
     {
         var workflow = ThreeTasks();
