@@ -14,7 +14,9 @@ public abstract class RenameBox : TextBox
 {
     protected override Type StyleKeyOverride => typeof(TextBox);
 
+    /// <summary>The text that the box opens with, or null while the box has no item. A box with no item takes no focus.</summary>
     protected abstract string? ItemText { get; }
+
     protected abstract Control? FocusTarget { get; }
 
     /// <summary>Ends the rename with the new text, or with null to keep the old one.</summary>
