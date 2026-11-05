@@ -64,31 +64,28 @@ internal sealed class ChildProcess : IDisposable
     private Task _stderr = Task.CompletedTask;
     private bool _disposed;
 
-    private ChildProcess(Process process, ProcessLifetime lifetime, string? noGroup)
+    private ChildProcess(Process process, string? noGroup)
     {
         _process = process;
         _job = OperatingSystem.IsWindows() ? ProcessJob.Assign(process) : null;
-        Identity = ProcessCheck.Identify(process);
-        Lifetime = lifetime;
+        Id = process.Id;
         Containment = _job is not null ? new Containment.Job() : new Containment.None(OperatingSystem.IsWindows()
             ? "The client could not join a job object."
             : noGroup is null ? NoGroup : $"{NoGroup} {noGroup}");
     }
 
-    private ChildProcess(ProcessGroup group, ProcessLifetime lifetime)
+    private ChildProcess(ProcessGroup group)
     {
         _group = group;
         Input = new StreamWriter(group.Input, Utf8, PipeBuffer) { AutoFlush = true };
         _groupOutput = new StreamReader(group.Output, Utf8, detectEncodingFromByteOrderMarks: true, PipeBuffer);
         _groupError = new StreamReader(group.Error, Utf8, detectEncodingFromByteOrderMarks: true, PipeBuffer);
-        Identity = group.Identity;
-        Lifetime = lifetime;
+        Id = group.Id;
         Containment = new Containment.Group(group.Id) { Detail = group.SessionDetail };
     }
 
-    public ProcessIdentity Identity { get; }
-
-    public ProcessLifetime Lifetime { get; }
+    /// <summary>The root process's ID.</summary>
+    public int Id { get; }
 
     public Containment Containment { get; }
 
@@ -152,7 +149,7 @@ internal sealed class ChildProcess : IDisposable
             {
                 try
                 {
-                    return new ChildProcess(ProcessGroup.Start(start), lifetime);
+                    return new ChildProcess(ProcessGroup.Start(start));
                 }
                 catch (NotSupportedException e)
                 {
@@ -161,7 +158,7 @@ internal sealed class ChildProcess : IDisposable
                 }
             }
 
-            return new ChildProcess(Process.Start(start) ?? throw new LaunchException($"{command.Path} did not start."), lifetime, noGroup);
+            return new ChildProcess(Process.Start(start) ?? throw new LaunchException($"{command.Path} did not start."), noGroup);
         }
         catch (Win32Exception e)
         {
@@ -253,7 +250,7 @@ internal sealed class ChildProcess : IDisposable
 
             _job?.Terminate();
             // The job holds the process only from just after its start, and a probe on Linux or macOS has neither.
-            ProcessCheck.KillTreeQuietly(_process!);
+            ProcessTree.KillQuietly(_process!);
         }
     }
 
@@ -286,7 +283,7 @@ internal sealed class ChildProcess : IDisposable
             }
 
             return Task.FromResult(new Cleanup(CleanupResult.Incomplete, ((Containment.None)Containment).Reason,
-                [new CleanupStep(at, "killTree", ProcessCheck.KillTree(_process!))]));
+                [new CleanupStep(at, "killTree", ProcessTree.Kill(_process!))]));
         }
     }
 

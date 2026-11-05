@@ -94,25 +94,25 @@ public sealed class ProcessGroupTests : IDisposable
 
         using (child)
         {
-            _spawned.Add(child.Identity.Id);
+            _spawned.Add(child.Id);
             Assert.Equal(0, await child.WaitForExitAsync().WaitAsync(Patience));
             var ids = (await File.ReadAllTextAsync(session)).Split(' ').Select(id => int.Parse(id, CultureInfo.InvariantCulture)).ToArray();
-            Assert.Equal(child.Identity.Id, ids[0]);
+            Assert.Equal(child.Id, ids[0]);
             if (launch == "workflow")
             {
-                Assert.Equal((child.Identity.Id, child.Identity.Id), (ids[1], ids[2]));
+                Assert.Equal((child.Id, child.Id), (ids[1], ids[2]));
                 Assert.NotEqual(GetSid(0), ids[1]);
-                Assert.Equal(new Containment.Group(child.Identity.Id), child.Containment);
+                Assert.Equal(new Containment.Group(child.Id), child.Containment);
                 Assert.Null(((Containment.Group)child.Containment).Detail);
             }
             else if (launch == "probe")
             {
                 Assert.Equal(GetSid(0), ids[1]);
-                Assert.NotEqual(child.Identity.Id, ids[2]);
+                Assert.NotEqual(child.Id, ids[2]);
             }
             else
             {
-                Assert.Equal((GetSid(0), child.Identity.Id), (ids[1], ids[2]));
+                Assert.Equal((GetSid(0), child.Id), (ids[1], ids[2]));
                 Assert.Equal("The client shares iDevelop's terminal session, so a read from that terminal would stop it. " +
                     "posix_spawn refused POSIX_SPAWN_SETSID: Invalid argument", ((Containment.Group)child.Containment).Detail);
             }
@@ -239,9 +239,9 @@ public sealed class ProcessGroupTests : IDisposable
         using var fakes = new FakeClients(_temp.Create("fakes"));
         fakes.Install("client", FakeRule.On().SpawnEscapedWriter(pidFile, Path.Combine(_evidence, "gate"), "late.txt", "late\n").Hang());
         using var child = ChildProcess.Start(fakes.Resolver.Resolve("client")!, [], _folder, ProcessLifetime.Workflow);
-        _spawned.Add(child.Identity.Id);
+        _spawned.Add(child.Id);
         var escaped = await _spawned.PidAsync(pidFile).WaitAsync(Patience);
-        Assert.NotEqual(child.Identity.Id, GroupOf(escaped));
+        Assert.NotEqual(child.Id, GroupOf(escaped));
 
         child.StopTree();
 
@@ -303,7 +303,7 @@ public sealed class ProcessGroupTests : IDisposable
             ProcessGroup.SignalFailure = null;
         }
 
-        Assert.Equal((CleanupResult.Incomplete, $"Process group {child.Identity.Id} still had processes after cleanup."), (refused.Result, refused.Detail));
+        Assert.Equal((CleanupResult.Incomplete, $"Process group {child.Id} still had processes after cleanup."), (refused.Result, refused.Detail));
         Assert.Equal(["terminateGroup", "killGroup"], refused.Steps.Select(step => step.Action));
         Assert.All(refused.Steps, step => Assert.Equal("Operation not permitted", step.Failure));
         using (var survivor = Process.GetProcessById(orphanId))
@@ -329,11 +329,11 @@ public sealed class ProcessGroupTests : IDisposable
         Assert.Equal(0, await child.WaitForExitAsync().WaitAsync(Patience));
         await Task.Delay(100);
 
-        using (Process.GetProcessById(child.Identity.Id))
+        using (Process.GetProcessById(child.Id))
         {
             if (OperatingSystem.IsLinux())
             {
-                var stat = await File.ReadAllTextAsync($"/proc/{child.Identity.Id}/stat");
+                var stat = await File.ReadAllTextAsync($"/proc/{child.Id}/stat");
                 Assert.Equal('Z', stat[stat.LastIndexOf(')') + 2]);
             }
         }
@@ -341,14 +341,14 @@ public sealed class ProcessGroupTests : IDisposable
         if (cleanUp)
         {
             Assert.Equal(CleanupResult.Completed, (await child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience)).Result);
-            AssertGone(child.Identity.Id);
+            AssertGone(child.Id);
             child.Dispose();
             AssertGone(orphanId);
         }
         else
         {
             child.Dispose();
-            AssertGone(child.Identity.Id);
+            AssertGone(child.Id);
             using var survivor = Process.GetProcessById(orphanId);
             Assert.False(survivor.HasExited);
             var released = await child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
@@ -365,14 +365,14 @@ public sealed class ProcessGroupTests : IDisposable
     private ChildProcess Start(string script)
     {
         var child = ChildProcess.Start(new ResolvedCommand(script, IsBatchShim: false), [], _folder, ProcessLifetime.Workflow);
-        _spawned.Add(child.Identity.Id);
+        _spawned.Add(child.Id);
         return child;
     }
 
     private async Task<Launch> Run(ResolvedCommand command, string[] arguments, ProcessLifetime lifetime)
     {
         using var child = ChildProcess.Start(command, arguments, _folder, lifetime);
-        _spawned.Add(child.Identity.Id);
+        _spawned.Add(child.Id);
         List<string> output = [];
         List<string> errors = [];
         child.ReadStdout(output.Add);
@@ -386,7 +386,7 @@ public sealed class ProcessGroupTests : IDisposable
             await child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
         }
 
-        return new Launch(child.Identity.Id, child.Containment, [.. output], [.. errors], exit);
+        return new Launch(child.Id, child.Containment, [.. output], [.. errors], exit);
     }
 
     private string Script(string name, string body)

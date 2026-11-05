@@ -71,14 +71,11 @@ internal sealed class ProcessGroup : IDisposable
         {
         }
 
-        Identity = _root is null ? new ProcessIdentity(id, DateTimeOffset.UtcNow) : ProcessCheck.Identify(_root);
         new Thread(WaitForRoot) { IsBackground = true, Name = $"Process group {id}" }.Start();
     }
 
     /// <summary>The root's process ID, which is also the group ID.</summary>
     public int Id { get; }
-
-    public ProcessIdentity Identity { get; }
 
     /// <summary>Why the root shares iDevelop's session and terminal, or null when it leads a session of its own.</summary>
     public string? SessionDetail { get; }
@@ -165,7 +162,7 @@ internal sealed class ProcessGroup : IDisposable
             // The tree first, while the root lives: once it exits, its children belong to init and no tree reaches them.
             if (_root is not null)
             {
-                ProcessCheck.KillTreeQuietly(_root);
+                ProcessTree.KillQuietly(_root);
             }
 
             if (SignalFailure is null)

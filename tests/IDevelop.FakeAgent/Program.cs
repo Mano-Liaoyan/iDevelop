@@ -23,31 +23,21 @@ using System.Text.Json;
 //   readLine <file>               read and record one stdin frame
 //   waitForLine <pattern>         wait for a stdin frame containing the pattern
 //   echoId <line>                 print the line with $id replaced by the last matched frame's id
-//   closeStdin                   close this process's pipe readers, so host writes fail
 //   waitForStdinEnd               read stdin until it closes
 //   print <line>, stderr <line>   write one line
 //   replay <file>                 write a recorded stream line by line
 //   sleep <milliseconds>
-//   lockFile <file>               open the file with no sharing and hold it until exit, as another iDevelop holds run.lock
 //   waitForFile <file>            wait until the file exists, so a test decides when the client goes on. Exit 97 if its
 //                                 folder is deleted, because the test that owned it has ended
 //   spawnSleepingChild <file>     start a copy with --sleep-forever that shares the pipes, and write its pid
 //   spawnThroughCmd <file>        Windows only: run a copy through cmd.exe /c that starts a sleeping copy, writes its
 //                                 pid, and exits, so the sleeper shares the pipes and its parent is gone
-//   spawnResponder [<pid file>, <ping>, <pong>]
-//                                 start a copy that holds none of the pipes, waits for <ping>, and writes "pong" to <pong>
 //   spawnEscapedWriter [<pid file>, <gate>, <file>, <text>]
 //                                 Linux and macOS only: start a copy that leaves the process group with setsid, writes
 //                                 its pid, waits for <gate>, and writes the text to the file in the current folder
-//   spawnPartialWriter [<pid file>, <file>, <text>]
-//                                 start a copy that writes the text to the file in the current folder, keeps it open,
-//                                 writes its pid, and hangs, as a writer cut off in the middle of its write
 //   recordSession <file>          Linux and macOS only: write "<pid> <session id> <process group id>"
-//   trapSignals <file>            Linux and macOS only: record SIGTERM, SIGINT, SIGHUP, and SIGQUIT in the file instead
-//                                 of stopping
 //   hang                          wait until killed
 //   write [<file>, <text>]        write the text to the file, relative to the current folder
-//   outbox [<name>, <base64>]     write the bytes and declare them as one artifact in the outbox the prompt names
 //   scripted <folder>             count this call in <folder>/count, copy stdin to <folder>/<n>.stdin, and run the steps in
 //                                 <folder>/<n>.json, so each turn of a conversation can answer differently
 //   choose [{"prompt": <text>, "steps": [...]}, ...]
@@ -82,20 +72,9 @@ if (args is ["--spawn-sleeper", var sleeperFile])
     return 0;
 }
 
-if (args is ["--respond", var ping, var pong])
-{
-    if (!WaitFor(ping))
-    {
-        return 97;
-    }
-
-    File.WriteAllText(pong, "pong");
-    return 0;
-}
-
 if (args is ["--escape", var escapedPid, var escapeGate, var lateFile, var lateText])
 {
-    if (NativePipes.NewSession() < 0)
+    if (NativeSession.NewSession() < 0)
     {
         return 95;
     }
@@ -107,17 +86,6 @@ if (args is ["--escape", var escapedPid, var escapeGate, var lateFile, var lateT
     }
 
     File.WriteAllText(lateFile, lateText);
-    return 0;
-}
-
-if (args is ["--write-and-hang", var writerPid, var partialFile, var partialText])
-{
-    var partial = new FileStream(partialFile, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
-    partial.Write(new UTF8Encoding(false).GetBytes(partialText));
-    partial.Flush(flushToDisk: true);
-    File.WriteAllText(writerPid, Environment.ProcessId.ToString());
-    Thread.Sleep(Timeout.Infinite);
-    GC.KeepAlive(partial);
     return 0;
 }
 
@@ -157,8 +125,6 @@ string? framesFile = null;
 JsonElement? matchedLine = null;
 JsonElement? threadRequest = null;
 JsonElement? turnRequest = null;
-List<FileStream> held = [];
-List<PosixSignalRegistration> traps = [];
 var listing = false;
 if (appServer)
 {
@@ -196,11 +162,6 @@ if (threadRequest is { } thread && !listing)
     var turn = ReadInput();
     turnRequest = turn;
     prompt = turn.GetProperty("params").GetProperty("input")[0].GetProperty("text").GetString();
-    if (matched.TryGetProperty("beforeTurnResponse", out var beforeTurn) && Run(beforeTurn) is { } code)
-    {
-        return code;
-    }
-
     stdout.WriteLine(JsonSerializer.Serialize(new { id = turn.GetProperty("id"), result = new { turn = new { id = "turn-1" } } }));
 }
 
@@ -233,11 +194,7 @@ string? ReadWireLine()
 
 JsonElement ReadInput() => JsonDocument.Parse(ReadWireLine() ?? throw new IOException("stdin ended before the next frame.")).RootElement.Clone();
 
-var exitCode = Run(matched.GetProperty("steps")) ?? 0;
-// Keep the locked files and the signal traps until the steps are complete.
-GC.KeepAlive(held);
-GC.KeepAlive(traps);
-return exitCode;
+return Run(matched.GetProperty("steps")) ?? 0;
 
 int? Run(JsonElement steps)
 {
@@ -314,10 +271,6 @@ int? Run(JsonElement steps)
                 var lastId = last.TryGetProperty("id", out var rpcId) ? rpcId : last.GetProperty("request_id");
                 stdout.WriteLine(value.GetString()!.Replace("$id", lastId.GetRawText(), StringComparison.Ordinal));
                 break;
-            case "closeStdin":
-                stdin.Dispose();
-                NativePipes.CloseInput();
-                break;
             case "print":
                 Print(value.GetString()!);
                 break;
@@ -333,9 +286,6 @@ int? Run(JsonElement steps)
                 break;
             case "sleep":
                 Thread.Sleep(value.GetInt32());
-                break;
-            case "lockFile":
-                held.Add(new FileStream(value.GetString()!, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
                 break;
             case "waitForFile":
                 var gate = value.GetString()!;
@@ -359,53 +309,18 @@ int? Run(JsonElement steps)
                 var copy = string.Join(' ', parts.Select(part => $"\"{part}\""));
                 Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec")!, $"/s /c \"{copy}\"") { UseShellExecute = false })!.Dispose();
                 break;
-            case "spawnResponder":
-                StartDetached(value[0].GetString()!, "--respond", value[1].GetString()!, value[2].GetString()!);
-                break;
             case "spawnEscapedWriter":
                 StartDetached(value[0].GetString()!, "--escape", value[0].GetString()!, value[1].GetString()!,
                     value[2].GetString()!, value[3].GetString()!);
                 break;
-            case "spawnPartialWriter":
-                StartDetached(value[0].GetString()!, "--write-and-hang", value[0].GetString()!, value[1].GetString()!, value[2].GetString()!);
-                break;
             case "recordSession":
-                File.WriteAllText(value.GetString()!, $"{Environment.ProcessId} {NativePipes.Session()} {NativePipes.Group()}");
-                break;
-            case "trapSignals":
-                var trapFile = value.GetString()!;
-                foreach (var signal in new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP, PosixSignal.SIGQUIT })
-                {
-                    traps.Add(Trap(signal, trapFile));
-                }
-
+                File.WriteAllText(value.GetString()!, $"{Environment.ProcessId} {NativeSession.Session()} {NativeSession.Group()}");
                 break;
             case "hang":
                 Thread.Sleep(Timeout.Infinite);
                 break;
             case "write":
                 File.WriteAllText(value[0].GetString()!, value[1].GetString());
-                break;
-            case "copy":
-                File.Copy(value[0].GetString()!, value[1].GetString()!, overwrite: true);
-                break;
-            case "outbox":
-                const string declare = "Declare artifacts in ";
-                var named = prompt ?? "";
-                var start = named.IndexOf(declare, StringComparison.Ordinal);
-                if (start < 0)
-                {
-                    stderr.WriteLine("fake agent: the prompt names no outbox");
-                    return 94;
-                }
-
-                start += declare.Length;
-                var outbox = named[start..named.IndexOf("/manifest.json", start, StringComparison.Ordinal)];
-                Directory.CreateDirectory(outbox);
-                var artifact = value[0].GetString()!;
-                File.WriteAllBytes(Path.Combine(outbox, artifact + ".bin"), Convert.FromBase64String(value[1].GetString()!));
-                File.WriteAllText(Path.Combine(outbox, "manifest.json"),
-                    JsonSerializer.Serialize(new { schema = 1, artifacts = new[] { new { name = artifact, path = artifact + ".bin" } } }));
                 break;
             case "choose":
                 // A client that reads its whole prompt from stdin, as Pi does, is chosen by that text.
@@ -493,12 +408,6 @@ int? Run(JsonElement steps)
     return null;
 }
 
-static PosixSignalRegistration Trap(PosixSignal signal, string file) => PosixSignalRegistration.Create(signal, context =>
-{
-    File.AppendAllText(file, context.Signal + "\n");
-    context.Cancel = true;
-});
-
 void Print(string line)
 {
     if (!appServer)
@@ -559,8 +468,8 @@ static bool Has(JsonElement rule, string[] arguments)
 static bool Lacks(JsonElement rule, string[] arguments) =>
     !rule.TryGetProperty("lacks", out var lacks) || !lacks.EnumerateArray().Any(part => arguments.Contains(part.GetString()!));
 
-// The copy gets pipes whose other ends close at once, so it holds none of this process's pipes. A copy that writes its own
-// pid file is waited for, so this process exits only once the copy has done what it must do first.
+// The copy gets pipes whose other ends close at once, so it holds none of this process's pipes. This process waits for the
+// copy's pid file, so it exits only once the copy has done what it must do first.
 static void StartDetached(string pidFile, params string[] arguments)
 {
     var start = new ProcessStartInfo(Environment.ProcessPath!, [.. HostArguments(), .. arguments])
@@ -571,12 +480,6 @@ static void StartDetached(string pidFile, params string[] arguments)
     copy.StandardInput.Close();
     copy.StandardOutput.Close();
     copy.StandardError.Close();
-    if (arguments[0] == "--respond")
-    {
-        File.WriteAllText(pidFile, copy.Id.ToString());
-        return;
-    }
-
     while (!File.Exists(pidFile) && !copy.HasExited)
     {
         Thread.Sleep(10);
@@ -606,49 +509,8 @@ static Process StartSleeper() =>
 static string[] HostArguments() =>
     Path.GetFileNameWithoutExtension(Environment.ProcessPath) == "dotnet" ? [typeof(Program).Assembly.Location] : [];
 
-internal static class NativePipes
+internal static class NativeSession
 {
-    public static void CloseInput()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            var input = GetStdHandle(-10);
-            if (input == 0 || input == -1 || !CloseHandle(input))
-            {
-                throw new IOException("The fake could not close stdin.");
-            }
-
-            SetStdHandle(-10, 0);
-            return;
-        }
-
-        // Console keeps a duplicate of the inherited descriptor. Every descriptor with stdin's device and inode is a
-        // reader of the same pipe, and only once all are closed does the host's write fail. The first 16 bytes of
-        // struct stat hold that identity on Linux and Darwin.
-        var descriptors = OperatingSystem.IsLinux() ? "/proc/self/fd" : "/dev/fd";
-        var status = Marshal.AllocHGlobal(512);
-        try
-        {
-            if (Stat(0, status) != 0)
-            {
-                throw new IOException("The fake could not inspect stdin.");
-            }
-
-            var identity = (Marshal.ReadInt64(status), Marshal.ReadInt64(status, 8));
-            var readers = Directory.EnumerateFiles(descriptors).Select(path => int.Parse(Path.GetFileName(path)))
-                .Where(descriptor => Stat(descriptor, status) == 0 && (Marshal.ReadInt64(status), Marshal.ReadInt64(status, 8)) == identity)
-                .ToArray();
-            foreach (var descriptor in readers)
-            {
-                Close(descriptor);
-            }
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(status);
-        }
-    }
-
     public static int NewSession() => SetSid();
 
     public static int Session() => GetSid(0);
@@ -663,23 +525,6 @@ internal static class NativePipes
 
     [DllImport("libc", EntryPoint = "setsid")]
     private static extern int SetSid();
-
-    [DllImport("libc", EntryPoint = "close")]
-    private static extern int Close(int descriptor);
-
-    [DllImport("libc", EntryPoint = "fstat")]
-    private static extern int Stat(int descriptor, nint status);
-
-    [DllImport("kernel32.dll")]
-    private static extern nint GetStdHandle(int standardHandle);
-
-    [DllImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetStdHandle(int standardHandle, nint handle);
-
-    [DllImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(nint handle);
 }
 
 /// <summary>The skills in fake skill folders, answered as each client lists them. Only names and descriptions are read.</summary>

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Channels;
 using IDevelop.Clients;
@@ -46,13 +45,11 @@ public sealed class ProcessBoundaryTests : IDisposable
 
         var cleanup = await child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
 
-        Assert.Equal(ProcessLifetime.Workflow, child.Lifetime);
-        Assert.Equal(new Containment.Group(child.Identity.Id), child.Containment);
+        Assert.Equal(new Containment.Group(child.Id), child.Containment);
         Assert.Equal(CleanupResult.Completed, cleanup.Result);
         Assert.Null(cleanup.Detail);
         Assert.Equal([new CleanupStep(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), "terminateGroup", null)], cleanup.Steps.ToArray());
-        AssertGone(sleeper.Id);
-        Assert.Equal(ProcessMatch.Gone, ProcessCheck.Check(sleeper));
+        AssertGone(sleeper);
     }
 
     [WindowsFact]
@@ -69,8 +66,7 @@ public sealed class ProcessBoundaryTests : IDisposable
         Assert.Equal(CleanupResult.Completed, cleanup.Result);
         Assert.Null(cleanup.Detail);
         Assert.Equal([new CleanupStep(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), "terminateJob", null)], cleanup.Steps.ToArray());
-        AssertGone(sleeper.Id);
-        Assert.Equal(ProcessMatch.Gone, ProcessCheck.Check(sleeper));
+        AssertGone(sleeper);
     }
 
     [WindowsFact]
@@ -95,11 +91,11 @@ public sealed class ProcessBoundaryTests : IDisposable
         Assert.Equal(CleanupResult.Incomplete, cleanup.Result);
         Assert.Equal("Win32 error 5", cleanup.Detail);
         Assert.Equal([new CleanupStep(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), "terminateJob", "Win32 error 5")], cleanup.Steps.ToArray());
-        Assert.Equal(ProcessMatch.Same, ProcessCheck.Check(sleeper));
+        Assert.True(IsAlive(sleeper));
         var control = await child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
         Assert.Equal(CleanupResult.Completed, control.Result);
         Assert.Null(Assert.Single(control.Steps).Failure);
-        AssertGone(sleeper.Id);
+        AssertGone(sleeper);
     }
 
     [WindowsFact]
@@ -128,8 +124,8 @@ public sealed class ProcessBoundaryTests : IDisposable
             Assert.Equal(CleanupResult.Incomplete, cleanup.Result);
             Assert.Equal("The client could not join a job object.", cleanup.Detail);
             Assert.Equal(["killTree"], cleanup.Steps.Select(step => step.Action));
-            Assert.Equal(ProcessMatch.Same, ProcessCheck.Check(sleeper));
-            Assert.Equal(ProcessMatch.Same, ProcessCheck.StopIfSame(sleeper));
+            Assert.True(IsAlive(sleeper));
+            Stop(sleeper);
         }
     }
 
@@ -146,17 +142,17 @@ public sealed class ProcessBoundaryTests : IDisposable
         Assert.Equal(CleanupResult.Incomplete, cleanup.Result);
         Assert.Equal("The turn's process was already released.", cleanup.Detail);
         Assert.Empty(cleanup.Steps);
-        ProcessCheck.StopIfSame(child.Identity);
-        ProcessCheck.StopIfSame(sleeper);
-        AssertGone(sleeper.Id);
+        Stop(child.Id);
+        Stop(sleeper);
+        AssertGone(sleeper);
 
         var controlPid = Path.Combine(_evidence, "control.pid");
         using var control = Start(On().SpawnSleepingChild(controlPid).Hang());
         var controlSleeper = await Sleeper(controlPid);
         var beforeDispose = await control.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
         Assert.Contains(Assert.Single(beforeDispose.Steps).Action, new[] { "terminateJob", "terminateGroup" });
-        AssertGone(control.Identity.Id);
-        AssertGone(controlSleeper.Id);
+        AssertGone(control.Id);
+        AssertGone(controlSleeper);
     }
 
     [Fact]
@@ -188,15 +184,15 @@ public sealed class ProcessBoundaryTests : IDisposable
         var request = new LaunchRequest("m", null, "banana");
         var definition = ClientCatalog.Get(client);
         using var child = ChildProcess.Start(fakes.Resolver.Resolve(definition.Command)!, definition.Launch(request).Arguments, _project, ProcessLifetime.Probe);
-        _spawned.Add(child.Identity.Id);
+        _spawned.Add(child.Id);
 
         await WaitUntilAsync(() => Directory.GetFiles(folder, "*.json") is [var file] &&
             JsonSerializer.Deserialize<string[]>(File.ReadAllBytes(file)) is { Length: > 0 });
         Assert.Equal(1, LaunchMarkers.Runs(folder, client));
         var marker = Assert.Single(Directory.GetFiles(folder, "*.json"));
-        Assert.StartsWith(child.Identity.Id + "-", Path.GetFileName(marker));
+        Assert.StartsWith(child.Id + "-", Path.GetFileName(marker));
         Assert.Equal(definition.Launch(request).Arguments.ToArray(), JsonSerializer.Deserialize<string[]>(await File.ReadAllBytesAsync(marker)));
-        Assert.Equal(ProcessMatch.Same, ProcessCheck.Check(child.Identity));
+        Assert.True(IsAlive(child.Id));
         Assert.False(File.Exists(ran));
 
         var protocol = definition.Protocol(request);
@@ -225,16 +221,11 @@ public sealed class ProcessBoundaryTests : IDisposable
     {
         _fakes.Install("client", rule);
         var child = ChildProcess.Start(_fakes.Resolver.Resolve("client")!, [], _project, ProcessLifetime.Workflow);
-        _spawned.Add(child.Identity.Id);
+        _spawned.Add(child.Id);
         return child;
     }
 
-    private async Task<ProcessIdentity> Sleeper(string file)
-    {
-        var pid = await _spawned.PidAsync(file).WaitAsync(Patience);
-        using var process = Process.GetProcessById(pid);
-        return ProcessCheck.Identify(process);
-    }
+    private Task<int> Sleeper(string file) => _spawned.PidAsync(file).WaitAsync(Patience);
 
     private static TaskDefinition TaskDefinition() => TestNodes.Implement(TestTasks.Build, "Build", "Say DONE.",
         execution: new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" });
