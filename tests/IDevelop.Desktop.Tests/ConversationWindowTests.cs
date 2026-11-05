@@ -88,6 +88,33 @@ public sealed class ConversationWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_conversation_that_switches_to_another_node_follows_that_node_and_no_longer_the_first()
+    {
+        using var f = new NodeFixture(NodeFixture.Task(TestTasks.Design, "Design", 105), NodeFixture.Task(TestTasks.Build, "Build", 300));
+        f.Install(On().Stderr("The model is not available.").Exit(2));
+        var shell = f.Open();
+        var (design, build) = (shell.NodeModel("Design"), shell.NodeModel("Build"));
+        design.OpenConversationCommand.Execute(null);
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView"), "the first conversation opens");
+        shell.Render();
+        var opened = Conversation(shell);
+
+        build.OpenConversationCommand.Execute(null);
+        shell.WaitUntil(() => Conversation(shell) != opened, "the conversation switches");
+        shell.Render();
+        Assert.Equal("Build", shell.Find<TextBlock>("ConversationTitle").Text);
+
+        design.Title = "Sketch";
+        build.Title = "Assemble";
+        build.RunCommand.Execute(null);
+        shell.WaitForState("Assemble", NodeState.Failed);
+        shell.Render();
+
+        Assert.Equal("Assemble", shell.Find<TextBlock>("ConversationTitle").Text);
+        Assert.Equal("Failed", shell.Find<TextBlock>("ConversationStatus").Text);
+    }
+
+    [AvaloniaFact]
     public void A_task_that_never_ran_names_its_chosen_agent_in_the_composer()
     {
         var shell = Shell.Open(Project(

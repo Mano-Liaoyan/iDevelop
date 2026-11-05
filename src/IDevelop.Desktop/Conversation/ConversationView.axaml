@@ -9,7 +9,7 @@
              x:DataType="conversation:ConversationViewModel"
              Background="{DynamicResource AppShellBrush}"
              AutomationProperties.AutomationId="ConversationView"
-             AutomationProperties.Name="{Binding Title, StringFormat='Conversation with {0}'}">
+             AutomationProperties.Name="{Binding Node.Title, StringFormat='Conversation with {0}'}">
   <UserControl.KeyBindings>
     <KeyBinding Gesture="Escape" Command="{Binding $parent[local:MainWindow].ViewModel.CloseConversationCommand, FallbackValue={x:Null}}" />
   </UserControl.KeyBindings>
@@ -23,7 +23,7 @@
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChat}" Foreground="{DynamicResource TextMutedBrush}" />
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-            <TextBlock Classes="conversationTitle" Text="{Binding Title}"
+            <TextBlock Classes="conversationTitle" Text="{Binding Node.Title}"
                        AutomationProperties.AutomationId="ConversationTitle" />
             <!-- The canvas's breadcrumb shows above the dock, so the docked header leaves it out. -->
             <TextBlock Classes="caption" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
@@ -64,12 +64,12 @@
         </Button>
         <!-- The node's state, as its card names it. -->
         <Border Classes="pill" VerticalAlignment="Center" theme:SpillRow.BesideOnly="True"
-                Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
-                Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
-          <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="ConversationStatus" />
+                Classes.running="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                Classes.complete="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                Classes.problem="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                Classes.waiting="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
+                Classes.warning="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
+          <TextBlock Text="{Binding Node.StatusLabel}" AutomationProperties.AutomationId="ConversationStatus" />
         </Border>
       </theme:SpillRow>
     </Border>
@@ -142,7 +142,7 @@
     <Border Grid.Row="4" Classes="composer">
       <StackPanel Spacing="6">
         <!-- The choices of a question the running turn waits on, which Send answers with the draft. -->
-        <ItemsControl ItemsSource="{Binding Questions}" IsVisible="{Binding IsAsking}" AutomationProperties.AutomationId="ConversationQuestions">
+        <ItemsControl ItemsSource="{Binding Node.Questions}" IsVisible="{Binding Node.IsAsking}" AutomationProperties.AutomationId="ConversationQuestions">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="canvas:QuestionViewModel">
               <StackPanel Spacing="4" Margin="4,0,0,4">
@@ -171,8 +171,8 @@
                  AutomationProperties.AutomationId="ConversationComposer"
                  AutomationProperties.Name="Message">
           <TextBox.KeyBindings>
-            <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}" />
-            <KeyBinding Gesture="Meta+Enter" Command="{Binding SendCommand}" />
+            <KeyBinding Gesture="Ctrl+Enter" Command="{Binding Node.SendCommand}" />
+            <KeyBinding Gesture="Meta+Enter" Command="{Binding Node.SendCommand}" />
           </TextBox.KeyBindings>
         </TextBox>
         <!-- The hint keeps 200 px beside the buttons, and otherwise takes its own line above them. The buttons end where the
@@ -181,24 +181,24 @@
           <TextBlock Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" Margin="4,0,0,0"
                      Text="{Binding ComposerHint}"
                      AutomationProperties.AutomationId="ComposerHint" />
-          <Button Classes="action" Command="{Binding OpenInTerminalCommand}"
+          <Button Classes="action" Command="{Binding Node.OpenInTerminalCommand}"
                   ToolTip.Tip="Copies the command that continues the session in a terminal"
                   AutomationProperties.AutomationId="ConversationTerminal"
                   AutomationProperties.Name="Open in terminal">
             <TextBlock Text="Open in terminal" />
           </Button>
-          <Button Classes="action" Command="{Binding ApproveCommand}" IsVisible="{Binding ShowsApprove}"
+          <Button Classes="action" Command="{Binding Node.ApproveCommand}" IsVisible="{Binding Node.ShowsApprove}"
                   ToolTip.Tip="Makes the agent's last reply the node's result"
                   AutomationProperties.AutomationId="ConversationApprove"
                   AutomationProperties.Name="Approve">
             <TextBlock Text="Approve" />
           </Button>
-          <Button Classes="action" Command="{Binding StopCommand}" IsVisible="{Binding ShowsStop}"
+          <Button Classes="action" Command="{Binding Node.StopCommand}" IsVisible="{Binding Node.ShowsStop}"
                   AutomationProperties.AutomationId="ConversationStop"
                   AutomationProperties.Name="Stop">
             <TextBlock Text="Stop" />
           </Button>
-          <Button Classes="action" Command="{Binding StopAndSendCommand}" IsVisible="{Binding ShowsStopAndSend}"
+          <Button Classes="action" Command="{Binding Node.StopAndSendCommand}" IsVisible="{Binding Node.CanStopAndSend}"
                   AutomationProperties.AutomationId="ConversationStopAndSend"
                   AutomationProperties.Name="Stop and send">
             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -206,7 +206,7 @@
               <TextBlock Text="Stop and send" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
-          <Button Classes="primary" Command="{Binding SendCommand}"
+          <Button Classes="primary" Command="{Binding Node.SendCommand}"
                   ToolTip.Tip="Send (Ctrl+Enter)"
                   AutomationProperties.AutomationId="ConversationSend"
                   AutomationProperties.Name="Send">
