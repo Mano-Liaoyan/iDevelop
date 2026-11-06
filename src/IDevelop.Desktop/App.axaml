@@ -9,6 +9,7 @@
         <ResourceInclude Source="/Theme/Tokens.axaml" />
         <ResourceInclude Source="/Theme/FluentIcons.axaml" />
         <ResourceInclude Source="/Theme/Glyph.axaml" />
+        <ResourceInclude Source="/Theme/Choices.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

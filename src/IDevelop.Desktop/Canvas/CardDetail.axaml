@@ -176,37 +176,19 @@
         <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" ToolTip.Tip="Client" />
         <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}"
                   SelectionChanged="OnAgentChosen"
-                  AutomationProperties.AutomationId="CardPickClient" AutomationProperties.Name="Client">
-          <ComboBox.ItemTemplate>
-            <DataTemplate DataType="canvas:ClientChoice">
-              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
+                  AutomationProperties.AutomationId="CardPickClient" AutomationProperties.Name="Client" ItemTemplate="{StaticResource WrappedChoice}" />
       </Grid>
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding HasClient}">
         <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconModel}" ToolTip.Tip="Model" />
         <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}"
                   SelectionChanged="OnAgentChosen" PlaceholderText="Choose a model"
-                  AutomationProperties.AutomationId="CardPickModel" AutomationProperties.Name="Model">
-          <ComboBox.ItemTemplate>
-            <DataTemplate DataType="canvas:Choice">
-              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
+                  AutomationProperties.AutomationId="CardPickModel" AutomationProperties.Name="Model" ItemTemplate="{StaticResource WrappedChoice}" />
       </Grid>
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding Picker.HasReasoning}">
         <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconReasoning}" ToolTip.Tip="Reasoning" />
         <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}"
                   SelectionChanged="OnAgentChosen" PlaceholderText="Choose a level"
-                  AutomationProperties.AutomationId="CardPickReasoning" AutomationProperties.Name="Reasoning">
-          <ComboBox.ItemTemplate>
-            <DataTemplate DataType="canvas:Choice">
-              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
+                  AutomationProperties.AutomationId="CardPickReasoning" AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource WrappedChoice}" />
       </Grid>
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding ShowsNextRunNote}">
         <TextBlock Grid.Column="1" Classes="cardMeta" Text="A change stops the running turn, and the node waits for your Run."

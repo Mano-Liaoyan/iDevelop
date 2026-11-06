@@ -66,121 +66,62 @@
         </ContentControl.Content>
         <ContentControl.DataTemplates>
           <DataTemplate DataType="canvas:TaskNodeViewModel">
-            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
-              <inspector:InspectorGrid>
-                <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. The
-                     title ends at the value edge, before the trailing column, where More sits on its line; the kind line,
-                     with nothing after it, takes the trailing column too. -->
-                <Grid Grid.ColumnSpan="5">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="10" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="{x:Static inspector:InspectorGrid.TrailColumn}" />
-                  </Grid.ColumnDefinitions>
-                  <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
-                  </Grid.RowDefinitions>
-                  <theme:KindTile Grid.RowSpan="2" Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" />
-                  <!-- Until the box has focus, a text block over it shows the title, wrapped as the box wraps it, so the header
-                       reads as a title rather than a field. -->
-                  <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0">
-                    <TextBox Classes="headerTitle" Text="{Binding Title}"
-                             AutomationProperties.AutomationId="TaskTitle"
-                             AutomationProperties.Name="Title" />
-                    <TextBlock Classes="headerTitle" Text="{Binding Title}" IsHitTestVisible="False"
-                               AutomationProperties.AccessibilityView="Raw" />
-                  </Panel>
-                  <!-- Where the kind line does not fit, the version and its help glyph go under the type, without the dot. -->
-                  <inspector:SeparatedLine Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center"
-                                           AutomationProperties.AutomationId="InspectorKind">
-                    <TextBlock Classes="kindLine" Text="{Binding TypeName}"
-                               AutomationProperties.AutomationId="TaskType" />
-                    <TextBlock Classes="kindLine" Text=" · " ClipToBounds="True" />
-                    <StackPanel Orientation="Horizontal">
-                      <TextBlock Classes="kindLine" Text="{Binding TypeVersion}"
-                                 AutomationProperties.AutomationId="TaskTypeVersion" />
-                      <Border Classes="infoGlyph kindHelp" Margin="2,0,0,0" ToolTip.Tip="{Binding Description}"
-                              IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
-                      </Border>
-                    </StackPanel>
-                  </inspector:SeparatedLine>
-                  <Button Grid.Row="0" Grid.Column="3" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
-                          AutomationProperties.AutomationId="InspectorMore"
-                          AutomationProperties.Name="More">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
-                    <Button.Flyout>
-                      <MenuFlyout Placement="BottomEdgeAlignedRight">
-                        <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}">
-                          <MenuItem.Icon>
-                            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
-                          </MenuItem.Icon>
-                        </MenuItem>
-                        <MenuItem Header="Save as Blueprint…" Command="{Binding SaveAsBlueprintCommand}">
-                          <MenuItem.Icon>
-                            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
-                          </MenuItem.Icon>
-                        </MenuItem>
-                      </MenuFlyout>
-                    </Button.Flyout>
-                  </Button>
-                </Grid>
-              </inspector:InspectorGrid>
-            </Border>
+            <inspector:InspectorHeader>
+              <theme:KindTile Grid.RowSpan="2" Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" />
+              <!-- Until the box has focus, a text block over it shows the title, wrapped as the box wraps it, so the header
+                   reads as a title rather than a field. -->
+              <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0">
+                <TextBox Classes="headerTitle" Text="{Binding Title}"
+                         AutomationProperties.AutomationId="TaskTitle"
+                         AutomationProperties.Name="Title" />
+                <TextBlock Classes="headerTitle" Text="{Binding Title}" IsHitTestVisible="False"
+                           AutomationProperties.AccessibilityView="Raw" />
+              </Panel>
+              <!-- Where the kind line does not fit, the version and its help glyph go under the type, without the dot. -->
+              <inspector:SeparatedLine Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="InspectorKind">
+                <TextBlock Classes="kindLine" Text="{Binding TypeName}"
+                           AutomationProperties.AutomationId="TaskType" />
+                <TextBlock Classes="kindLine" Text=" · " ClipToBounds="True" />
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Classes="kindLine" Text="{Binding TypeVersion}"
+                             AutomationProperties.AutomationId="TaskTypeVersion" />
+                  <Border Classes="infoGlyph kindHelp" Margin="2,0,0,0" ToolTip.Tip="{Binding Description}"
+                          IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
+                  </Border>
+                </StackPanel>
+              </inspector:SeparatedLine>
+              <Button Grid.Row="0" Grid.Column="3" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
+                      AutomationProperties.AutomationId="InspectorMore"
+                      AutomationProperties.Name="More">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
+                <Button.Flyout>
+                  <MenuFlyout Placement="BottomEdgeAlignedRight">
+                    <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}" theme:MenuGlyph.Data="{StaticResource IconDerive}" />
+                    <MenuItem Header="Save as Blueprint…" Command="{Binding SaveAsBlueprintCommand}" theme:MenuGlyph.Data="{StaticResource IconSaveAs}" />
+                  </MenuFlyout>
+                </Button.Flyout>
+              </Button>
+            </inspector:InspectorHeader>
           </DataTemplate>
           <DataTemplate DataType="canvas:ConnectionViewModel">
-            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
-              <inspector:InspectorGrid>
-                <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. The
-                     title ends at the value edge, before the trailing column, where More sits on its line; the kind line,
-                     with nothing after it, takes the trailing column too. -->
-                <Grid Grid.ColumnSpan="5">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="10" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="{x:Static inspector:InspectorGrid.TrailColumn}" />
-                  </Grid.ColumnDefinitions>
-                  <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
-                  </Grid.RowDefinitions>
-                  <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconLink}" />
-                  </Border>
-                  <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Kind}" />
-                  <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="Connection" />
-                </Grid>
-              </inspector:InspectorGrid>
-            </Border>
+            <inspector:InspectorHeader>
+              <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconLink}" />
+              </Border>
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Kind}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="Connection" />
+            </inspector:InspectorHeader>
           </DataTemplate>
           <DataTemplate DataType="inspector:WorkflowOverviewViewModel">
-            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
-              <inspector:InspectorGrid>
-                <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. The
-                     title ends at the value edge, before the trailing column, where More sits on its line; the kind line,
-                     with nothing after it, takes the trailing column too. -->
-                <Grid Grid.ColumnSpan="5">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="10" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="{x:Static inspector:InspectorGrid.TrailColumn}" />
-                  </Grid.ColumnDefinitions>
-                  <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
-                  </Grid.RowDefinitions>
-                  <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
-                  </Border>
-                  <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Name}" />
-                  <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding TaskCount}" />
-                </Grid>
-              </inspector:InspectorGrid>
-            </Border>
+            <inspector:InspectorHeader>
+              <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
+              </Border>
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Name}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding TaskCount}" />
+            </inspector:InspectorHeader>
           </DataTemplate>
         </ContentControl.DataTemplates>
       </ContentControl>
@@ -197,16 +138,8 @@
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFilter}" />
             <Button.Flyout>
               <MenuFlyout Placement="BottomEdgeAlignedRight">
-                <MenuItem Header="Expand All" Click="OnExpandAll" AutomationProperties.AutomationId="ExpandAllSections">
-                  <MenuItem.Icon>
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" />
-                  </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="Collapse All" Click="OnCollapseAll" AutomationProperties.AutomationId="CollapseAllSections">
-                  <MenuItem.Icon>
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" />
-                  </MenuItem.Icon>
-                </MenuItem>
+                <MenuItem Header="Expand All" Click="OnExpandAll" AutomationProperties.AutomationId="ExpandAllSections" theme:MenuGlyph.Data="{StaticResource IconChevronDown}" />
+                <MenuItem Header="Collapse All" Click="OnCollapseAll" AutomationProperties.AutomationId="CollapseAllSections" theme:MenuGlyph.Data="{StaticResource IconChevronRight}" />
               </MenuFlyout>
             </Button.Flyout>
           </Button>
@@ -252,37 +185,19 @@
                                               RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding CanRevertAgent}" RevertId="RevertAgent">
                         <ComboBox ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   AutomationProperties.AutomationId="TaskClient"
-                                  AutomationProperties.Name="Client">
-                          <ComboBox.ItemTemplate>
-                            <DataTemplate DataType="canvas:ClientChoice">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                          </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  AutomationProperties.Name="Client" ItemTemplate="{StaticResource WrappedChoice}" />
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Label="Model" Icon="{StaticResource IconModel}" IsShown="{Binding HasClient}">
                         <ComboBox ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   PlaceholderText="Choose a model"
                                   AutomationProperties.AutomationId="TaskModel"
-                                  AutomationProperties.Name="Model">
-                          <ComboBox.ItemTemplate>
-                            <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                          </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  AutomationProperties.Name="Model" ItemTemplate="{StaticResource WrappedChoice}" />
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Label="Reasoning" Icon="{StaticResource IconReasoning}" IsShown="{Binding Picker.HasReasoning}">
                         <ComboBox ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   PlaceholderText="Choose a level"
                                   AutomationProperties.AutomationId="TaskReasoning"
-                                  AutomationProperties.Name="Reasoning">
-                          <ComboBox.ItemTemplate>
-                            <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                          </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource WrappedChoice}" />
                       </inspector:InspectorRow>
                       <!-- The skill picker opens its list in place, under the box, so the list keeps the panel's edges and scroll. -->
                       <inspector:InspectorRow Label="Skills" Icon="{StaticResource IconSkills}" IsShown="{Binding HasClient}"
@@ -330,13 +245,7 @@
                                               RevertCommand="{Binding RevertConversationCommand}" CanRevert="{Binding CanRevertConversation}" RevertId="RevertConversation">
                         <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
                                   AutomationProperties.AutomationId="TaskConversation"
-                                  AutomationProperties.Name="Conversation">
-                          <ComboBox.ItemTemplate>
-                            <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                          </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  AutomationProperties.Name="Conversation" ItemTemplate="{StaticResource WrappedChoice}" />
                       </inspector:InspectorRow>
                     </StackPanel>
                   </inspector:InspectorSection>
@@ -554,37 +463,19 @@
                                               <inspector:InspectorRow Label="Client" Icon="{StaticResource IconAgent}">
                                                 <ComboBox ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           AutomationProperties.AutomationId="ProposalAgentClient"
-                                                          AutomationProperties.Name="Client">
-                                                  <ComboBox.ItemTemplate>
-                                                    <DataTemplate DataType="canvas:ClientChoice">
-                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                                                    </DataTemplate>
-                                                  </ComboBox.ItemTemplate>
-                                                </ComboBox>
+                                                          AutomationProperties.Name="Client" ItemTemplate="{StaticResource TrimmedChoice}" />
                                               </inspector:InspectorRow>
                                               <inspector:InspectorRow Label="Model" Icon="{StaticResource IconModel}">
                                                 <ComboBox ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           PlaceholderText="Choose a model"
                                                           AutomationProperties.AutomationId="ProposalAgentModel"
-                                                          AutomationProperties.Name="Model">
-                                                  <ComboBox.ItemTemplate>
-                                                    <DataTemplate DataType="canvas:Choice">
-                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                                                    </DataTemplate>
-                                                  </ComboBox.ItemTemplate>
-                                                </ComboBox>
+                                                          AutomationProperties.Name="Model" ItemTemplate="{StaticResource TrimmedChoice}" />
                                               </inspector:InspectorRow>
                                               <inspector:InspectorRow Label="Reasoning" Icon="{StaticResource IconReasoning}" IsShown="{Binding Picker.HasReasoning}">
                                                 <ComboBox ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           PlaceholderText="Choose a level"
                                                           AutomationProperties.AutomationId="ProposalAgentReasoning"
-                                                          AutomationProperties.Name="Reasoning">
-                                                  <ComboBox.ItemTemplate>
-                                                    <DataTemplate DataType="canvas:Choice">
-                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                                                    </DataTemplate>
-                                                  </ComboBox.ItemTemplate>
-                                                </ComboBox>
+                                                          AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource TrimmedChoice}" />
                                               </inspector:InspectorRow>
                                             </StackPanel>
                                           </DataTemplate>
