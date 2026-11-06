@@ -61,8 +61,8 @@ public sealed class CardNowTests
         var question = Of(new EngineState.InputRequired("Which branch?"));
         var interrupted = Of(new EngineState.InputRequired(EngineState.Interrupted), status: "Input required · interrupted", detail: "Continue or retry.");
 
-        Assert.Equal((CardNowKind.Reply, "The agent replied", "Which file?"), (reply.Kind, reply.Heading, reply.Text));
-        Assert.Equal((CardNowKind.Question, "The agent asks", "Which branch?"), (question.Kind, question.Heading, question.Text));
+        Assert.Equal((CardNowKind.Reply, "Reply", "Which file?"), (reply.Kind, reply.Heading, reply.Text));
+        Assert.Equal((CardNowKind.Question, "Question", "Which branch?"), (question.Kind, question.Heading, question.Text));
         Assert.Equal((CardNowKind.Stopped, "Input required · interrupted", "Continue or retry."), (interrupted.Kind, interrupted.Heading, interrupted.Text));
     }
 

@@ -94,6 +94,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
                 }
 
                 OnPropertyChanged(nameof(Inspected));
+                OnPropertyChanged(nameof(ShowsNodeSelection));
             }
         }
     }
@@ -182,6 +183,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(ExpandLabel));
+                OnPropertyChanged(nameof(ShowsNodeSelection));
             }
         }
     }

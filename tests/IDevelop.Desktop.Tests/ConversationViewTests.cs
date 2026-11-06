@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Avalonia;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Theme;
 using IDevelop.Engine;
 using IDevelop.TestSupport;
 using static IDevelop.Desktop.Tests.AppTempFolder;
@@ -125,7 +126,7 @@ public sealed class ConversationViewTests : IDisposable
         var model = Open();
         using var window = new DisposableWindow(Host(model, out var view));
         var group = Assert.IsType<StepGroupItemViewModel>(model.Items[0]);
-        var row = view.GetVisualDescendants().OfType<ToggleButton>().Single(button => button.Classes.Contains("steps"));
+        var row = view.GetVisualDescendants().OfType<ToggleButton>().Last(button => button.Classes.Contains("steps"));
 
         row.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Right, Source = row });
         Assert.True(group.IsOpen);
@@ -180,10 +181,34 @@ public sealed class ConversationViewTests : IDisposable
         Assert.False(model.ShowsEmpty);
     }
 
+    [Theory]
+    [InlineData("I can do both. Which do you want?", "Which do you want?")]
+    [InlineData("Should the window follow the `longer` one?\n\nI stopped here.", "Should the window follow the longer one?")]
+    [InlineData("All done.", null)]
+    public void The_card_holds_the_question_that_the_agent_ended_on(string reply, string? question) =>
+        Assert.Equal(question, ConversationViewModel.LastQuestion(reply));
+
+    [Theory]
+    [InlineData(new double[] { 40, 300, 300 }, 340, 150)]
+    [InlineData(new double[] { 40, 100 }, 400, double.PositiveInfinity)]
+    public void A_row_takes_width_from_its_widest_children_first(double[] widths, double room, double cap) =>
+        Assert.Equal(cap, FairRow.Cap(widths, room));
+
+    [AvaloniaFact]
+    public void The_task_opens_the_transcript_and_a_finished_turn_keeps_no_closing_line()
+    {
+        _conversation.Add([new ConversationLine.Marker(MarkerKind.Fresh, null), new ConversationLine.Agent("Done.")]);
+        var model = Open();
+        var fields = model.Node.Fields.Where(field => field.Text.Length > 0).ToList();
+
+        Assert.Equal(fields.Count > 0, model.ShowsTask);
+        Assert.Equal(fields.FirstOrDefault()?.Text.Split('\n')[0], model.TaskPreview);
+    }
+
     [AvaloniaTheory]
-    [InlineData(678, 2, 120)]
-    [InlineData(356, 1, 96)]
-    public void The_strip_shows_the_chips_that_fit_and_the_rest_behind_its_more_chip(double width, int shown, double chip)
+    [InlineData(678, 2)]
+    [InlineData(356, 1)]
+    public void The_strip_shows_the_chips_that_fit_and_the_rest_behind_its_more_chip(double width, int shown)
     {
         var other = IDevelop.Workflows.TaskId.New();
         var shell = Shell.Open(_temp.Seed(
@@ -194,7 +219,6 @@ public sealed class ConversationViewTests : IDisposable
         var model = new ConversationViewModel(new ConversationTarget(canvas, TestTasks.Design), new ConversationState(), _conversation, _ => Task.CompletedTask);
         model.FitChips(width);
 
-        Assert.Equal(chip, model.ChipWidth);
         Assert.Equal((shown, 3 - shown, $"+{3 - shown}"), (model.ShownOutputs.Count, model.MoreOutputs.Count, model.MoreOutputsLabel));
     }
 

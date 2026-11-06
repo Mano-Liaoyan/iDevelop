@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 
@@ -96,17 +97,32 @@ public partial class SidebarView : UserControl
         }
     }
 
-    // The chosen node's card takes the keys next, so Enter goes on to its conversation.
+    // The chosen node's card takes the keys next, so Enter goes on to its conversation. The tree shows the row again after the
+    // next layout, and the canvas of another workflow only takes the keys then too.
     private bool Choose()
     {
-        if (!ViewModel.Find.Choose())
+        if (ViewModel.Find.Choose() is not { } result)
         {
             return false;
         }
 
         Window?.CanvasFocusTarget?.Focus();
         _beforeFind = null;
+        Dispatcher.UIThread.Post(() =>
+        {
+            Reveal(result);
+            Window?.CanvasFocusTarget?.Focus();
+        }, DispatcherPriority.Background);
         return true;
+    }
+
+    private void Reveal(FindResult result)
+    {
+        object target = (object?)result.Node ?? result.Canvas;
+        result.Canvas.Project.IsExpanded = true;
+        Rows.GetVisualDescendants().OfType<Control>()
+            .FirstOrDefault(row => row.DataContext == target && (row is ListBoxItem || (row is Button && row.Classes.Contains("workflow"))))?
+            .BringIntoView();
     }
 
     private IReadOnlyList<Control> KeyRows() => [.. Rows.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible && control switch
@@ -195,8 +211,28 @@ public partial class SidebarView : UserControl
         _ => rows[at],
     };
 
-    private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e) =>
+    private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
         TreeRows.Margin = new Thickness(0, 0, Tree.ScrollBarMaximum.Y > 0 ? 16 : 8, 8);
+        // A row that the bottom edge would cut fades out, and only the top row of a project's rows stays pinned.
+        Tree.Classes.Set("more", Tree.Offset.Y < Tree.ScrollBarMaximum.Y - 1);
+        var top = Tree.Offset.Y;
+        var pinned = top < 1 ? null : TreeRows.GetVisualDescendants().OfType<ToggleButton>()
+            .Where(row => row.Classes.Contains("projectRow") && row.DataContext is ProjectViewModel)
+            .LastOrDefault(row => row.TranslatePoint(default, TreeRows)?.Y < top + 1);
+        StickyProject.DataContext = pinned?.DataContext;
+        StickyProject.IsVisible = pinned is not null;
+    }
+
+    private void OnStickyProject(object? sender, RoutedEventArgs e)
+    {
+        var row = TreeRows.GetVisualDescendants().OfType<ToggleButton>()
+            .FirstOrDefault(row => row.Classes.Contains("projectRow") && row.DataContext == StickyProject.DataContext);
+        if (row?.TranslatePoint(default, TreeRows) is { } at)
+        {
+            Tree.Offset = Tree.Offset.WithY(at.Y);
+        }
+    }
 
     private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e) => Window?.TitleBandPressed(e);
 
@@ -247,6 +283,15 @@ public partial class SidebarView : UserControl
         {
             Window?.UpdateLayout();
             this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();
+        }
+    }
+
+    // The header's New workflow adds to the project on show.
+    private void OnNewWorkflowHere(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel.Canvas?.Project is { } project)
+        {
+            ViewModel.NewWorkflow(project);
         }
     }
 

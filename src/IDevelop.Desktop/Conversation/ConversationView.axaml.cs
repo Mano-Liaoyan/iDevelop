@@ -76,13 +76,14 @@ public partial class ConversationView : UserControl
     }
 
     // The row of Rows that holds the transcript.
-    private const int TranscriptRow = 3;
+    private const int TranscriptRow = 2;
 
     /// <summary>The least transcript a docked conversation keeps: a few lines of messages.</summary>
     internal const double MinTranscriptHeight = 96;
 
     // What the view keeps for the attention card in a short dock, and its largest share of the view.
     private const double MinCardHeight = 96;
+    private const double MinCompactCardHeight = 36;
     private const double CardShare = 0.45;
 
     private double _aroundCard;
@@ -92,7 +93,7 @@ public partial class ConversationView : UserControl
         RoutedEvent.Register<ConversationView, RoutedEventArgs>("RequiredHeightChanged", RoutingStrategies.Bubble);
 
     /// <summary>
-    /// The height the view needs: its header, the two strips, the status line, and the composer as tall as they lay out at
+    /// The height the view needs: its header, the strip, the status line, and the composer as tall as they lay out at
     /// its width, what the attention card keeps while its own content scrolls, and <see cref="MinTranscriptHeight"/> of transcript.
     /// </summary>
     internal double RequiredHeight { get; private set; }
@@ -104,7 +105,7 @@ public partial class ConversationView : UserControl
         var size = base.ArrangeOverride(finalSize);
         var card = AttentionCard.IsVisible ? AttentionCard.Bounds.Height + AttentionCard.Margin.Top + AttentionCard.Margin.Bottom : 0;
         _aroundCard = Rows.RowDefinitions.Where((_, index) => index != TranscriptRow).Sum(row => row.ActualHeight) - card;
-        var required = _aroundCard + Math.Min(card, MinCardHeight) + MinTranscriptHeight;
+        var required = _aroundCard + Math.Min(card, LeastCard) + MinTranscriptHeight;
         if (Math.Abs(required - RequiredHeight) >= 0.5)
         {
             RequiredHeight = required;
@@ -114,8 +115,11 @@ public partial class ConversationView : UserControl
         return size;
     }
 
+    // A compact card keeps its action on its header's line, so the header alone is enough in a short dock.
+    private double LeastCard => _model?.IsCompactCard == true ? MinCompactCardHeight : MinCardHeight;
+
     // The attention card takes at most 45% of the view and always leaves the transcript its least height. Its own content scrolls.
-    private void LimitCard() => AttentionCard.MaxHeight = Math.Max(MinCardHeight, Math.Min(Bounds.Height * CardShare, Bounds.Height - _aroundCard - MinTranscriptHeight));
+    private void LimitCard() => AttentionCard.MaxHeight = Math.Max(LeastCard, Math.Min(Bounds.Height * CardShare, Bounds.Height - _aroundCard - MinTranscriptHeight));
 
     /// <summary>The entry at the top of the view and how far it scrolled into it, or null at the end.</summary>
     internal (int Entry, double Offset)? Anchor => _follow ? null : _anchor;
@@ -222,6 +226,8 @@ public partial class ConversationView : UserControl
     {
         var atEnd = Scroller.Offset.Y >= Scroller.Extent.Height - Scroller.Viewport.Height - EndSlack;
         JumpToLatest.IsVisible = !atEnd && _model is { Items.Count: > 0 };
+        // Text that scrolled away fades out at the top edge, so the strip above it never cuts a line in half.
+        Scroller.Classes.Set("scrolled", Scroller.Offset.Y > 1);
         var ours = _scrolledTo is { } target && Math.Abs(Scroller.Offset.Y - target) < 1;
         var layoutOnly = (e.ExtentDelta.Y != 0 || e.ViewportDelta.Y != 0) && !_userInput;
         _userInput = false;

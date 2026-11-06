@@ -221,7 +221,7 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.Render();
 
         Assert.Equal(44, row.Bounds.Height);
-        Assert.Equal("0 of 3 · 1 running · Unsaved", shell.WorkflowText(Reports, ReleaseNotes, "WorkflowSummary"));
+        Assert.Equal("0 of 3 · Unsaved", shell.WorkflowText(Reports, ReleaseNotes, "WorkflowSummary"));
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowProgress").IsEffectivelyVisible);
     }
 

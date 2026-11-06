@@ -44,7 +44,7 @@ public static class RunText
             1 => "1 needs setup",
             > 1 => $"{setup} need setup",
             _ when ready == 0 && clients.Any(status => status is ClientStatus.Checking) => "Checking…",
-            _ => $"{ready} ready",
+            _ => ready == 1 ? "1 agent ready" : $"{ready} agents ready",
         };
     }
 

@@ -68,7 +68,7 @@ public sealed class QuestionTests
         shell.WaitUntil(() => node.IsAsking, "the agent asks");
         shell.Render();
 
-        Assert.Equal(("The agent asks", "Which color?"), (node.Detail!.Heading, node.Detail.Text));
+        Assert.Equal(("Question", "Which color?"), (node.Detail!.Heading, node.Detail.Text));
         Assert.True(node.ShowsStop);
         Assert.False(node.ShowsRetry);
         Assert.False(node.SendCommand.CanExecute(null));

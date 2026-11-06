@@ -94,6 +94,10 @@ public partial class MainWindow : Window
     // lines of transcript, and while it can be, it leaves the canvas above it CanvasMinHeight. Its splitter keeps to both.
     private const double DockHeight = 400;
 
+    // A taller window gives the dock more, so the transcript reads as more than a few lines.
+    private const double TallDockHeight = 460;
+    private const double TallWindow = 760;
+
     /// <summary>The canvas's least height above the docked conversation, while the conversation keeps what it needs.</summary>
     internal const double CanvasMinHeight = 280;
 
@@ -111,7 +115,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            dock.Height = new GridLength(DockHeight);
+            dock.Height = new GridLength(MainArea.Bounds.Height >= TallWindow ? TallDockHeight : DockHeight);
             LimitDock();
             // Once the dock has its height, the canvas above it moves its cards out from under its floating controls, if
             // the cards in view before would end up under them. Resizing later never moves the person's view.
@@ -128,6 +132,11 @@ public partial class MainWindow : Window
         }
 
         var dock = MainArea.RowDefinitions[2];
+        if (MainArea.Bounds.Height < TallWindow && dock.Height.Value == TallDockHeight)
+        {
+            dock.Height = new GridLength(DockHeight);
+        }
+
         // The dock's border adds its top line to what the conversation needs.
         var needed = DockedHost.Presenter?.Child is ConversationView { RequiredHeight: > 0 } view ? view.RequiredHeight + 1 : 160;
         dock.MinHeight = Math.Max(160, needed);

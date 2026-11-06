@@ -13,9 +13,9 @@ namespace IDevelop.Desktop.Sidebar;
 public sealed class ActivityViewModel : ObservableObject
 {
     /// <summary>The rows a list shows before Show all, and at the smallest windows.</summary>
-    public const int NormalLimit = 5;
+    public const int NormalLimit = 3;
 
-    public const int SmallLimit = 3;
+    public const int SmallLimit = 2;
 
     private readonly Func<IReadOnlyList<ProjectViewModel>> _projects;
     private readonly Action<TaskNodeViewModel> _open;
@@ -31,7 +31,7 @@ public sealed class ActivityViewModel : ObservableObject
         ShowAllCommand = new RelayCommand(() => IsShowingAll = true);
     }
 
-    /// <summary>The rows in view: waiting, then failed, then running, each in project order and then the node list's order.</summary>
+    /// <summary>The rows in view: failed, then waiting, then running, each in project order and then the node list's order.</summary>
     public ObservableCollection<ActivityRow> Rows { get; } = [];
 
     public bool HasRows => _ordered.Count > 0;
@@ -63,6 +63,36 @@ public sealed class ActivityViewModel : ObservableObject
         }
     }
 
+    /// <summary>The person folded the list down to its heading. The window remembers it.</summary>
+    public bool IsFolded
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(IsOpen));
+                OnPropertyChanged(nameof(FoldLabel));
+            }
+        }
+    }
+
+    public bool IsOpen
+    {
+        get => !IsFolded;
+        set => IsFolded = !value;
+    }
+
+    /// <summary>What the heading's toggle does now, for a screen reader and the tooltip.</summary>
+    public string FoldLabel => IsFolded ? "Show Activity" : "Hide Activity";
+
+    /// <summary>The list reads every open project, so the heading says so once several are open.</summary>
+    public bool SpansProjects
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
     public bool HasMore => !IsShowingAll && _ordered.Count > Limit;
 
     public string ShowAllLabel => $"Show all {_ordered.Count}";
@@ -76,11 +106,13 @@ public sealed class ActivityViewModel : ObservableObject
     internal void Refresh()
     {
         var projects = _projects();
-        var showsProject = projects.Count > 1;
+        SpansProjects = projects.Count > 1;
         var nodes = projects.SelectMany(project => project.Workflows).SelectMany(canvas => canvas.Outline)
             .Where(node => GroupOf(node) is not null)
             .OrderBy(node => GroupOf(node))
             .ToList();
+        // The project's name tells rows apart only while they come from more than one project.
+        var showsProject = nodes.Select(node => node.Canvas.Project).Distinct().Skip(1).Any();
         foreach (var gone in _rows.Keys.Except(nodes).ToList())
         {
             _rows.Remove(gone);
@@ -110,8 +142,8 @@ public sealed class ActivityViewModel : ObservableObject
 
     private static int? GroupOf(TaskNodeViewModel node) => node.State switch
     {
-        NodeState.InputRequired => 0,
-        NodeState.Failed => 1,
+        NodeState.Failed => 0,
+        NodeState.InputRequired => 1,
         NodeState.Running => 2,
         _ => null,
     };
@@ -161,23 +193,43 @@ public sealed class ActivityRow : ObservableObject
 
     public ICommand OpenCommand { get; }
 
-    /// <summary>"Question · Payment webhook hardening", with the project's name first while several projects are open.</summary>
-    public string Detail
+    /// <summary>"Question · Payment webhook hardening", with the project's name before the workflow's while the rows span projects.</summary>
+    public string Detail => $"{Reason} · {Place}";
+
+    /// <summary>Why the node is listed, in the state's own word.</summary>
+    public string Reason
     {
         get;
-        private set => SetProperty(ref field, value);
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(Detail));
+            }
+        }
     } = "";
 
-    internal void Read(bool showsProject) => Detail = Describe(Node, showsProject);
-
-    internal static string Describe(TaskNodeViewModel node, bool showsProject)
+    /// <summary>The node's workflow, after its project's name while the rows span projects.</summary>
+    public string Place
     {
-        var parts = new[] { showsProject ? node.Canvas.Project.Name : null, Reason(node), node.Canvas.Name };
-        return string.Join(" · ", parts.OfType<string>());
+        get;
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(Detail));
+            }
+        }
+    } = "";
+
+    internal void Read(bool showsProject)
+    {
+        Reason = ReasonOf(Node);
+        Place = showsProject ? $"{Node.Canvas.Project.Name} › {Node.Canvas.Name}" : Node.Canvas.Name;
     }
 
     // "Input required · question" names the reason after the state, which the glyph already shows.
-    private static string Reason(TaskNodeViewModel node) => node.State switch
+    private static string ReasonOf(TaskNodeViewModel node) => node.State switch
     {
         NodeState.Running => OneLine(node.Latest) ?? node.StatusLabel,
         NodeState.InputRequired when node.StatusLabel.Split(" · ") is [_, var why] => char.ToUpperInvariant(why[0]) + why[1..],

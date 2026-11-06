@@ -22,6 +22,12 @@ internal static class NodeActions
 
     private static IReadOnlyList<NodeAction> For(TaskNodeViewModel node)
     {
+        // The open conversation holds what the state needs next, and the row must not offer it twice.
+        if (node is { IsConversationShown: true, Proposal: null, State: NodeState.Running or NodeState.InputRequired or NodeState.Failed or NodeState.Stale })
+        {
+            return Row(Conversation(node, "Conversation"));
+        }
+
         if (node.ShowsSendBack)
         {
             return [Approve(node, primary: true), SendBack(node)];

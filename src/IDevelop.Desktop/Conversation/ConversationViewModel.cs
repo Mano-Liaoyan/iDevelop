@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Execution;
@@ -24,10 +25,14 @@ public enum AttentionCard { None, Question, Reply, Approval, Conflict, Interrupt
 /// through one <see cref="IConversation"/>, writes through the node's commands, and keeps nothing the person typed; the
 /// node's <see cref="ConversationState"/> does. Closing it never stops the node.
 /// </summary>
-public sealed class ConversationViewModel : ObservableObject, IDisposable
+public sealed partial class ConversationViewModel : ObservableObject, IDisposable
 {
+    // A run of text that stops at no line break and no sentence's end before its question mark.
+    private static readonly Regex QuestionSentence = QuestionRegex();
+
     internal const int PageSize = 200;
 
+    // How wide the view counts a chip when it decides how many fit. A chip that has room takes more.
     private const double MaxChipWidth = 120;
 
     // On one side of the strip: its label, and the +3 chip.
@@ -101,8 +106,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         : Node.State == NodeState.Running ? "Your message waits for this turn to end. Stop and send ends the turn first."
         : null;
 
-    /// <summary>Send's tooltip.</summary>
-    public string SendHelp => ComposerHint is { } hint ? $"Send (Ctrl+Enter)\n{hint}" : "Send (Ctrl+Enter)";
+    /// <summary>Send's tooltip. While a draft shows the key beside the button, the tooltip leaves it out.</summary>
+    public string SendHelp => string.Join("\n", new[] { HasDraft ? "Send" : "Send (Ctrl+Enter)", ComposerHint }.OfType<string>());
 
     /// <summary>The composer's placeholder, which says what a message does now.</summary>
     public string Watermark => Node.IsAsking ? "Answer in your own words"
@@ -153,9 +158,9 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public string CardTitle => Card switch
     {
-        AttentionCard.Question => Node.Questions is [var only] ? only.Header : "The agent asks",
-        AttentionCard.Reply => HasOwnReason ? "The agent asks" : "The agent replied",
-        AttentionCard.Approval => "Waits for your approval",
+        AttentionCard.Question => Node.Questions is [var only] ? only.Header : "Question",
+        AttentionCard.Reply => HasOwnReason ? "Question" : "Reply",
+        AttentionCard.Approval => "Approval",
         AttentionCard.Conflict => "Conflict",
         AttentionCard.Interrupted => "Interrupted",
         AttentionCard.Failed => "Failed",
@@ -163,22 +168,31 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _ => "",
     };
 
-    /// <summary>What the card explains, or null. A reply needs no words, and a question's rows say it.</summary>
+    /// <summary>What the card explains, or null. A question's rows say it. A wait on the agent's words holds the question it ended on.</summary>
     public string? CardBody => Card switch
     {
         AttentionCard.None => null,
-        AttentionCard.Question => null,
-        AttentionCard.Reply => HasOwnReason && Node.StateDetail?.Trim() != Node.LastReply?.Trim() ? Node.StateDetail : null,
+        AttentionCard.Question => Node.Questions.Count > 0 ? null : LastQuestion(Node.LastReply),
+        AttentionCard.Reply => HasOwnReason && Node.StateDetail?.Trim() != Node.LastReply?.Trim() ? Node.StateDetail : LastQuestion(Node.LastReply),
         _ => Node.StateDetail,
     };
+
+    /// <summary>How to answer a question that has no choices to press, or null.</summary>
+    public string? CardHint => Card == AttentionCard.Question && Node.Questions.Count == 0 ? "Type your answer below. Ctrl+Enter sends." : null;
+
+    /// <summary>Approve's words: an alternative to a reply takes the reply as the result, so it says so.</summary>
+    public string ApproveLabel => Card == AttentionCard.Reply ? "Approve reply as result" : "Approve";
 
     /// <summary>What an approval offers, which the last wait's marker holds, or null.</summary>
     public string? CardOffered => Card == AttentionCard.Approval
         ? Items.OfType<MarkerItemViewModel>().LastOrDefault(marker => marker.Kind == MarkerKind.Waiting)?.Offered
         : null;
 
-    /// <summary>The card has nothing to read, so its actions share the header's line.</summary>
-    public bool IsCompactCard => Card == AttentionCard.Reply && CardBody is null;
+    /// <summary>A reply's one action shares the header's line, so a short dock keeps it in view.</summary>
+    public bool IsCompactCard => Card == AttentionCard.Reply;
+
+    /// <summary>The card has words to read under its header.</summary>
+    public bool ShowsCardBody => CardBody is not null || CardOffered is not null || CardHint is not null || Node.IsAsking;
 
     /// <summary>The person opened the note box of Send back.</summary>
     public bool IsSendBackOpen
@@ -213,12 +227,21 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The node's newest result, on the strip's output side, or null.</summary>
     public ResultViewModel? Result => Node.Results.FirstOrDefault();
 
-    /// <summary>A chip's largest width: 120, or what a narrow strip leaves.</summary>
-    public double ChipWidth
+    /// <summary>The first turn shows while the transcript reaches back to the start and the node has a task to show.</summary>
+    public bool ShowsTask => !HasEarlier && Items.Count > 0 && TaskFields.Count > 0;
+
+    /// <summary>The task's fields that hold text, as the node's agent got them.</summary>
+    public IReadOnlyList<FieldViewModel> TaskFields => [.. Node.Fields.Where(entry => !string.IsNullOrWhiteSpace(entry.Text))];
+
+    /// <summary>The task's first line, which shows while the first turn is folded.</summary>
+    public string? TaskPreview => TaskFields.FirstOrDefault()?.Text.Split('\n', 2)[0];
+
+    /// <summary>The person opened the first turn.</summary>
+    public bool IsTaskOpen
     {
         get;
-        private set => SetProperty(ref field, value);
-    } = MaxChipWidth;
+        set => SetProperty(ref field, value);
+    }
 
     private bool HasOwnReason => Node.EngineState is EngineState.InputRequired { Why: not EngineState.Reply };
 
@@ -251,8 +274,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     internal void FitChips(double width)
     {
         var room = (width - 12) / 2 - StripLabelWidth - MoreChipWidth;
-        ChipWidth = Math.Clamp(room, 48, MaxChipWidth);
-        var chips = Math.Max(1, (int)((room + ChipGap) / (ChipWidth + ChipGap)));
+        var chips = Math.Max(1, (int)((room + ChipGap) / (Math.Clamp(room, 48, MaxChipWidth) + ChipGap)));
         if (chips != _chipRoom)
         {
             _chipRoom = chips;
@@ -276,6 +298,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         choice.IsChosen = !choice.IsChosen;
         return true;
     }
+
+    // The last sentence of the agent's text that ends in a question mark, without Markdown's marks, or null.
+    internal static string? LastQuestion(string? text) => text is null ? null
+        : QuestionSentence.Matches(text.Replace("`", "").Replace("**", "")).LastOrDefault()?.Value.Trim();
 
     private static int ShownCount(int count, int room) => count <= room ? count : room;
 
@@ -331,7 +357,11 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         Relate();
         OnPropertyChanged(nameof(HasEarlier));
         OnPropertyChanged(nameof(ShowsEmpty));
+        OnPropertyChanged(nameof(ShowsTask));
         OnPropertyChanged(nameof(CardOffered));
+        OnPropertyChanged(nameof(CardBody));
+        OnPropertyChanged(nameof(CardHint));
+        OnPropertyChanged(nameof(ShowsCardBody));
         _loadEarlier.NotifyCanExecuteChanged();
     }
 
@@ -408,6 +438,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         {
             marker.IsHeldByCard = marker == before && (Card is AttentionCard.Reply or AttentionCard.Approval or AttentionCard.Question && marker.Kind == MarkerKind.Waiting
                 || Card == AttentionCard.Failed && marker.Kind == MarkerKind.Failed
+                || Node.State == NodeState.Completed && marker.Kind == MarkerKind.Completed
                 || Card == AttentionCard.Conflict && marker.Kind == MarkerKind.Conflict);
         }
 
@@ -461,6 +492,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         {
             OnPropertyChanged(nameof(Draft));
             OnPropertyChanged(nameof(HasDraft));
+            OnPropertyChanged(nameof(SendHelp));
             if (State.Draft.Length == 0)
             {
                 FollowRequested?.Invoke();
@@ -494,11 +526,14 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         }
     }
 
+    [GeneratedRegex(@"[^.!?\n]+\?")]
+    private static partial Regex QuestionRegex();
+
     private static readonly string[] StateProperties =
     [
         nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
         nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
-        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardOffered), nameof(IsCompactCard),
+        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody),
     ];
 
     private static readonly string[] StripProperties =

@@ -7,9 +7,19 @@ namespace IDevelop.Desktop.Sidebar;
 /// <summary>A node or a workflow that Find lists.</summary>
 /// <param name="Canvas">The workflow, or the workflow that holds the node.</param>
 /// <param name="Node">The node, or null for a workflow.</param>
-public sealed record FindResult(WorkflowCanvasViewModel Canvas, TaskNodeViewModel? Node)
+/// <param name="Query">The words the name matched.</param>
+public sealed record FindResult(WorkflowCanvasViewModel Canvas, TaskNodeViewModel? Node, string Query = "")
 {
     public string Name => Node?.Title ?? Canvas.Name;
+
+    private int MatchAt => Query.Length == 0 ? -1 : Name.IndexOf(Query, StringComparison.CurrentCultureIgnoreCase);
+
+    /// <summary>The name before the match, or the whole name when the match is in the project's name.</summary>
+    public string BeforeMatch => MatchAt < 0 ? Name : Name[..MatchAt];
+
+    public string Match => MatchAt < 0 ? "" : Name.Substring(MatchAt, Query.Length);
+
+    public string AfterMatch => MatchAt < 0 ? "" : Name[(MatchAt + Query.Length)..];
 
     public bool IsNode => Node is not null;
 
@@ -45,6 +55,8 @@ public sealed class FindViewModel : ObservableObject
                 Search();
                 OnPropertyChanged(nameof(IsActive));
                 OnPropertyChanged(nameof(HasNoMatch));
+                OnPropertyChanged(nameof(HasResults));
+                OnPropertyChanged(nameof(ResultsLabel));
             }
         }
     } = "";
@@ -53,6 +65,22 @@ public sealed class FindViewModel : ObservableObject
     public bool IsActive => Query.Trim().Length > 0;
 
     public bool HasNoMatch => IsActive && Results.Count == 0;
+
+    public bool HasResults => Results.Count > 0;
+
+    /// <summary>"1 workflow · 3 nodes": how many of each the query found.</summary>
+    public string ResultsLabel
+    {
+        get
+        {
+            var (flows, nodes) = (Results.Count(result => result.IsWorkflow), Results.Count(result => result.IsNode));
+            return string.Join(" · ", new[]
+            {
+                flows switch { 0 => null, 1 => "1 workflow", _ => $"{flows} workflows" },
+                nodes switch { 0 => null, 1 => "1 node", _ => $"{nodes} nodes" },
+            }.OfType<string>());
+        }
+    }
 
     public ObservableCollection<FindResult> Results { get; } = [];
 
@@ -74,18 +102,18 @@ public sealed class FindViewModel : ObservableObject
         }
     }
 
-    /// <summary>Shows the result under <see cref="Index"/> and clears the query. It returns whether there was one.</summary>
-    internal bool Choose()
+    /// <summary>Shows the result under <see cref="Index"/> and clears the query. It returns the result, or null when there was none.</summary>
+    internal FindResult? Choose()
     {
         if (Index < 0 || Index >= Results.Count)
         {
-            return false;
+            return null;
         }
 
         var result = Results[Index];
         Query = "";
         _choose(result);
-        return true;
+        return result;
     }
 
     internal void Clear() => Query = "";
@@ -97,19 +125,17 @@ public sealed class FindViewModel : ObservableObject
         if (query.Length > 0)
         {
             bool Matches(string text) => text.Contains(query, StringComparison.CurrentCultureIgnoreCase);
-            foreach (var project in _projects())
+            var canvases = _projects().SelectMany(project => project.Workflows).ToList();
+            foreach (var canvas in canvases.Where(canvas => Matches(canvas.Name) || Matches(canvas.Project.Name)))
             {
-                foreach (var canvas in project.Workflows)
-                {
-                    if (Matches(canvas.Name) || Matches(project.Name))
-                    {
-                        Results.Add(new FindResult(canvas, null));
-                    }
+                Results.Add(new FindResult(canvas, null, query));
+            }
 
-                    foreach (var node in canvas.Outline.Where(node => Matches(node.Title)))
-                    {
-                        Results.Add(new FindResult(canvas, node));
-                    }
+            foreach (var canvas in canvases)
+            {
+                foreach (var node in canvas.Outline.Where(node => Matches(node.Title)))
+                {
+                    Results.Add(new FindResult(canvas, node, query));
                 }
             }
         }

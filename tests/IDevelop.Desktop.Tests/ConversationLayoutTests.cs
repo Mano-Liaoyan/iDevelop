@@ -42,7 +42,7 @@ public sealed class ConversationLayoutTests
             Assert.Equal(header.Right - 12, shell.Bounds(shell.Find<Control>("CloseConversation")).Right, 0.5);
 
             var strip = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationRunStatus"), "workflowStrip"));
-            AssertWholeAndApart(shell, at, strip.Intersect(view), 12, 4,
+            AssertWholeAndApart(shell, at, strip.Intersect(view), 0, 4,
                 ("Next", shell.Find<Control>("ConversationNext")), ("Stop", shell.Find<Control>("ConversationStopAll")));
 
             var composer = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer"));
@@ -68,11 +68,11 @@ public sealed class ConversationLayoutTests
         {
             window.IsConversationDocked = docked;
             shell.Render();
-            Assert.Equal((AttentionCard.Reply, "The agent replied", true), (model.Card, model.CardTitle, model.IsCompactCard));
+            Assert.Equal((AttentionCard.Reply, "Reply", true), (model.Card, model.CardTitle, model.IsCompactCard));
             Assert.Equal("Reply to Antigravity CLI", model.Watermark);
             var card = shell.Bounds(shell.Find<Control>("ConversationAttention"));
             var composer = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer"));
-            Assert.Equal(8, composer.Top - card.Bottom, 0.5);
+            Assert.Equal(12, composer.Top - card.Bottom, 0.5);
         }
 
         Assert.True(model.Items.OfType<MarkerItemViewModel>().Last().IsHeldByCard);

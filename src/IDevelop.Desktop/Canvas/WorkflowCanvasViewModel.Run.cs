@@ -82,7 +82,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>A node waits for the person or failed, so the bar offers Next.</summary>
     public bool HasAttention => Nodes.Any(NeedsAttention);
 
-    /// <summary>"5 of 9 complete · 1 running · 3 wait for you · 1 failed", with the parts that are not zero.</summary>
+    /// <summary>"5 of 9 complete · 1 running · 3 waiting · 1 failed", with the parts that are not zero.</summary>
     public string BarSummary
     {
         get
@@ -92,7 +92,7 @@ public sealed partial class WorkflowCanvasViewModel
             {
                 counts.Completed > 0 ? $"{counts.Completed} of {counts.Total} complete" : null,
                 counts.Running > 0 ? $"{counts.Running} running" : null,
-                counts.Waiting switch { 0 => null, 1 => "1 waits for you", var count => $"{count} wait for you" },
+                counts.Waiting > 0 ? $"{counts.Waiting} waiting" : null,
                 counts.Failed > 0 ? $"{counts.Failed} failed" : null,
             }.OfType<string>());
         }

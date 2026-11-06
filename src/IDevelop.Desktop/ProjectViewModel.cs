@@ -44,6 +44,14 @@ public sealed class ProjectViewModel : ObservableObject
     /// <summary>One canvas per workflow, kept until the project closes, in the order the project lists them.</summary>
     public ObservableCollection<WorkflowCanvasViewModel> Workflows { get; } = [];
 
+    /// <summary>The window shows one of the project's workflows.</summary>
+    public bool IsCurrent => Workflows.Any(canvas => canvas.IsSelected);
+
+    /// <summary>The first letter of the project's name, which its tile in the left area shows.</summary>
+    public string Initial => Name.Length > 0 ? char.ToUpperInvariant(Name[0]).ToString() : "";
+
+    internal void RaiseCurrent() => OnPropertyChanged(nameof(IsCurrent));
+
     /// <summary>Whether the left area lists the project's workflows. The window remembers it.</summary>
     public bool IsExpanded
     {

@@ -136,10 +136,10 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("beta", "Build"));
 
         Assert.True(shell.TaskRow("alpha", "Build", "Implement").IsSelected);
-        Assert.Equal(shell.Resource("SurfaceMutedBrush"), selected);
+        Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), selected);
         Assert.Equal(Colors.Transparent.A, RowFill()?.A ?? 0);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
-        Assert.Equal(shell.Resource("SurfaceMutedBrush"), RowFill());
+        Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), RowFill());
     }
 
     [AvaloniaFact]
@@ -246,7 +246,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
         Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal([true, false], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowText("alpha", workflow, "WorkflowSummary").Contains("running")));
+        Assert.Equal([true, false], shell.Window.ViewModel.Projects[0].Workflows.Select(canvas => canvas.Summary.Contains("running")));
         Assert.Equal([true, false], shell.Window.ViewModel.Projects.Select(project => project.IsRunning));
         shell.Click(shell.WorkflowRow("beta", "Build"));
         Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
@@ -803,7 +803,7 @@ public sealed class WorkspaceTests : IDisposable
 
         shell.Render();
         var close = ProjectButton(shell, "alpha", "CloseProject");
-        var open = shell.Find<Button>("OpenFolder");
+        var open = shell.Find<Button>("ProjectsNewWorkflow");
 
         Assert.Equal(0, close.TranslatePoint(new Point(close.Bounds.Width, 0), open)!.Value.X - open.Bounds.Width);
     }

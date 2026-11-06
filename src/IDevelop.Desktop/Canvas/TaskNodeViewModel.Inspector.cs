@@ -105,7 +105,7 @@ public sealed partial class TaskNodeViewModel
     }
 
     /// <summary>The header states what the node needs, unless the open conversation asks it in full. A failure's reason always shows.</summary>
-    public bool ShowsStateDetail => !string.IsNullOrEmpty(StateDetail) && !(IsConversationShown && State == NodeState.InputRequired);
+    public bool ShowsStateDetail => !string.IsNullOrEmpty(StateDetail) && !(IsConversationShown && Proposal is null && State is NodeState.InputRequired or NodeState.Failed or NodeState.Stale);
 
     /// <summary>A blueprint without a default agent has nothing to revert to.</summary>
     public bool CanRevertAgent => _task.Blueprint.Defaults.Execution is { } agent && _task.Execution != agent;

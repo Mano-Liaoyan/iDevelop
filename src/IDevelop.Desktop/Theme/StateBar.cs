@@ -11,9 +11,11 @@ public readonly record struct StateCounts(int Completed, int Running, int Waitin
     public bool HasRun => Completed + Running + Waiting + Failed + Stale > 0;
 
     /// <summary>
-    /// "5 of 9 · 1 running · 3 wait · 1 failed · 2 stale", with the counts that are not zero, or "9 nodes" before any node ran,
+    /// "5 of 9 · 1 running · 3 waiting · 1 failed · 2 stale", with the counts that are not zero, or "9 nodes" before any node ran,
     /// or "No nodes yet".
     /// </summary>
+    public string Progress => !HasRun ? Summary() : $"{Completed} of {Total}";
+
     public string Summary()
     {
         if (Total == 0)
@@ -30,7 +32,7 @@ public readonly record struct StateCounts(int Completed, int Running, int Waitin
         {
             $"{Completed} of {Total}",
             Running > 0 ? $"{Running} running" : null,
-            Waiting switch { 0 => null, 1 => "1 waits", var count => $"{count} wait" },
+            Waiting > 0 ? $"{Waiting} waiting" : null,
             Failed > 0 ? $"{Failed} failed" : null,
             Stale > 0 ? $"{Stale} stale" : null,
         }.OfType<string>());
@@ -66,13 +68,13 @@ public sealed class StateBar : Control
         foreach (var (count, brush) in new[]
         {
             (counts.Completed, "StateSuccessStrokeBrush"), (counts.Running, "StateRunningBrush"), (counts.Waiting, "StateWaitingStrokeBrush"),
-            (counts.Failed, "StateFailedStrokeBrush"), (counts.Stale, "StateWarningStrokeBrush"),
+            (counts.Failed, "StateFailedStrokeBrush"), (counts.Stale, "StateNeutralStrokeBrush"),
         })
         {
             if (count > 0)
             {
-                var segment = Math.Max(2, width * count / counts.Total);
-                context.DrawRectangle(Brush(brush), null, new Rect(left, 0, Math.Min(segment, width - left), height));
+                var segment = Math.Max(3, width * count / counts.Total);
+                context.DrawRectangle(Brush(brush), null, new Rect(left, 0, Math.Max(0, Math.Min(segment, width - left)), height));
                 left += segment;
             }
         }

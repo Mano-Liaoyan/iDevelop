@@ -383,7 +383,7 @@ public sealed class CardExpansionTests : IDisposable
         shell.WaitForState("Approve", NodeState.InputRequired);
 
         Assert.Equal("Input required · approval", shell.CardText("Approve", "CardStatus"));
-        Assert.Equal("Waits for your approval", shell.CardText("Approve", "CardNowHeading"));
+        Assert.Equal("Approval", shell.CardText("Approve", "CardNowHeading"));
         Assert.True(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
         Assert.True(shell.InCard<Button>("Approve", "CardSendBack").IsEffectivelyVisible);
         shell.Click(shell.InCard<Button>("Approve", "CardShowInspector"));
@@ -407,7 +407,7 @@ public sealed class CardExpansionTests : IDisposable
         canvas.Nodes.Single().RunCommand.Execute(null);
         shell.WaitForState("A", NodeState.InputRequired);
         shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
-        Assert.Equal(("The agent replied", "Which file?"), (shell.CardText("A", "CardNowHeading"), shell.CardText("A", "CardNowText")));
+        Assert.Equal(("Reply", "Which file?"), (shell.CardText("A", "CardNowHeading"), shell.CardText("A", "CardNowText")));
 
         shell.Click(shell.InCard<TextBox>("A", "CardAnswer"));
         shell.Type("Use the fixture");

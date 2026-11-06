@@ -254,6 +254,7 @@ public sealed class MainWindowViewModel : ObservableObject
         if (result.Node is { } node)
         {
             ShowNode(node);
+            node.Canvas.IsExpanded = true;
             node.Canvas.ShowFound(node);
         }
         else
@@ -384,6 +385,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 }
             }
 
+            Activity.IsFolded = session.ActivityFolded;
             var canvases = Projects.SelectMany(project => project.Workflows).ToList();
             foreach (var canvas in canvases)
             {
@@ -569,6 +571,7 @@ public sealed class MainWindowViewModel : ObservableObject
         if (Canvas is { } shown)
         {
             shown.IsSelected = false;
+            shown.Project.RaiseCurrent();
         }
 
         Canvas = canvas;
@@ -580,6 +583,7 @@ public sealed class MainWindowViewModel : ObservableObject
         if (canvas is not null)
         {
             canvas.IsSelected = true;
+            canvas.Project.RaiseCurrent();
             canvas.Blueprints.Reload();
         }
 
@@ -611,6 +615,7 @@ public sealed class MainWindowViewModel : ObservableObject
             Cards = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.AnyCardExpanded)
                 .Select(canvas => new WorkflowCards(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ExpandedCards))],
             Folded = [.. Projects.Where(project => !project.IsExpanded).Select(project => project.Folder)],
+            ActivityFolded = Activity.IsFolded,
         };
         try
         {

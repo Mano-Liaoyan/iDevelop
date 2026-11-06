@@ -25,8 +25,8 @@ public sealed class ActivityTests : IDisposable
     [InlineData(0, 0, 0, 0, 0, 0, "No nodes yet")]
     [InlineData(0, 0, 0, 0, 0, 1, "1 node")]
     [InlineData(0, 0, 0, 0, 0, 9, "9 nodes")]
-    [InlineData(5, 1, 3, 0, 0, 9, "5 of 9 · 1 running · 3 wait")]
-    [InlineData(5, 0, 1, 2, 1, 9, "5 of 9 · 1 waits · 2 failed · 1 stale")]
+    [InlineData(5, 1, 3, 0, 0, 9, "5 of 9 · 1 running · 3 waiting")]
+    [InlineData(5, 0, 1, 2, 1, 9, "5 of 9 · 1 waiting · 2 failed · 1 stale")]
     [InlineData(9, 0, 0, 0, 0, 9, "9 of 9")]
     public void A_workflow_s_summary_uses_the_run_bar_s_words(int completed, int running, int waiting, int failed, int stale, int total, string summary) =>
         Assert.Equal(summary, new StateCounts(completed, running, waiting, failed, stale, total).Summary());
@@ -36,7 +36,7 @@ public sealed class ActivityTests : IDisposable
     {
         ClientStatus ready = new ClientStatus.Ready(null!, []), missing = new ClientStatus.Missing("none"), unready = new ClientStatus.Unready("signed out");
 
-        Assert.Equal("2 ready", Execution.RunText.AgentsSummary([ready, ready, missing]));
+        Assert.Equal("2 agents ready", Execution.RunText.AgentsSummary([ready, ready, missing]));
         Assert.Equal("1 needs setup", Execution.RunText.AgentsSummary([ready, unready]));
         Assert.Equal("2 need setup", Execution.RunText.AgentsSummary([unready, unready]));
         Assert.Equal("Checking…", Execution.RunText.AgentsSummary([new ClientStatus.Checking(), missing]));
@@ -97,7 +97,7 @@ public sealed class ActivityTests : IDisposable
         shell.Window.ViewModel.Open(beta);
         shell.Render();
 
-        Assert.Equal(["Node 1 | alpha › Build", "Node 2 | alpha › Build", "Node 3 | alpha › Build", "Node docs | beta"], Find(shell, "node"));
+        Assert.Equal(["Node docs | beta", "Node 1 | alpha › Build", "Node 2 | alpha › Build", "Node 3 | alpha › Build"], Find(shell, "node"));
         Assert.True(shell.Find<ListBox>("FindResults").IsEffectivelyVisible);
         Assert.False(shell.Find<ItemsControl>("Projects").IsEffectivelyVisible);
 
@@ -171,7 +171,7 @@ public sealed class ActivityTests : IDisposable
 
         Assert.Equal(["Write docs · Reply · Workflow", "Build the API · Running · Workflow"], view.Activity.Rows.Select(row => $"{row.Node.Title} · {row.Detail}"));
         Assert.True(shell.Find<ItemsControl>("Activity").IsEffectivelyVisible);
-        Assert.Equal("1 of 3 · 1 running · 1 waits", view.Canvas!.Summary);
+        Assert.Equal("1 of 3 · 1 running · 1 waiting", view.Canvas!.Summary);
         Assert.Equal(1, view.Projects[0].WaitingCount);
 
         shell.Click(shell.Window.GetVisualDescendants().OfType<Button>().First(row => row.Classes.Contains("activity")));

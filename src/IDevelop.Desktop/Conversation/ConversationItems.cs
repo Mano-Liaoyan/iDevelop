@@ -174,7 +174,7 @@ public sealed class MarkerItemViewModel(int id, ConversationLine.Marker marker, 
 
     public bool IsWaiting => marker.Kind is MarkerKind.Waiting or MarkerKind.Conflict;
 
-    /// <summary>The last line of a node that waits or failed: the attention card says the same, so the row hides.</summary>
+    /// <summary>The last line of a node that waits, failed, or completed: the attention card or the header's status says the same, so the row hides.</summary>
     public bool IsHeldByCard
     {
         get;

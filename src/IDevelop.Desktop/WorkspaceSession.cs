@@ -18,7 +18,7 @@ internal readonly record struct WorkflowCards(WorkflowRef Workflow, ImmutableArr
 /// <summary>
 /// The projects a window had open, which it opens again at the next start, in the per-user session file beside the theme
 /// preference: <c>{"projects":[folder...],"selected":{"folder":...,"workflow":...},"expanded":[{"folder":...,"workflow":...}],
-/// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}],"folded":[folder...]}</c>. Expanded cards live here, on this machine, and never in
+/// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}],"folded":[folder...],"activityFolded":false}</c>. Expanded cards live here, on this machine, and never in
 /// the workflow's file (ADR 0024).
 /// </summary>
 internal sealed record WorkspaceSession(ImmutableArray<string> Projects, WorkflowRef? Selected, ImmutableArray<WorkflowRef> Expanded)
@@ -28,6 +28,9 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
 
     /// <summary>The folders of the projects whose rows the left area folds.</summary>
     public ImmutableArray<string> Folded { get; init; } = [];
+
+    /// <summary>The left area folds its Activity list down to the heading.</summary>
+    public bool ActivityFolded { get; init; }
 
     public static readonly WorkspaceSession Empty = new([], null, []);
 
@@ -57,6 +60,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
         {
             Cards = [.. Items(session["cards"]).Select(CardsOf).OfType<WorkflowCards>()],
             Folded = [.. Items(session["folded"]).Select(Text).OfType<string>()],
+            ActivityFolded = session["activityFolded"] is JsonValue folded && folded.TryGetValue<bool>(out var isFolded) && isFolded,
         };
     }
 
@@ -74,6 +78,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
                 return (JsonNode)node;
             })]),
             ["folded"] = new JsonArray([.. Folded.Select(folder => JsonValue.Create(folder))]),
+            ["activityFolded"] = ActivityFolded,
         };
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
         AtomicFile.Replace(file, JsonSerializer.SerializeToUtf8Bytes(session));

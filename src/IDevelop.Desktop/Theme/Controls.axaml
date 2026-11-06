@@ -371,7 +371,7 @@
        thing in the list. -->
   <Style Selector="ListBox.tasks ListBoxItem">
     <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="Padding" Value="6,5,8,5" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Background" Value="Transparent" />
@@ -384,7 +384,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="ListBox.tasks ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="ListBox.tasks:not(.hidden) ListBoxItem:selected TextBlock.rowName">
@@ -459,6 +459,12 @@
   <Style Selector="StackPanel.counts">
     <Setter Property="Spacing" Value="8" />
   </Style>
+  <Style Selector="StackPanel.counts.tight">
+    <Setter Property="Spacing" Value="6" />
+  </Style>
+  <Style Selector="StackPanel.counts.tight StackPanel.count">
+    <Setter Property="Spacing" Value="2" />
+  </Style>
   <Style Selector="StackPanel.count">
     <Setter Property="Spacing" Value="4" />
   </Style>
@@ -478,6 +484,82 @@
     <Setter Property="Opacity" Value="1" />
   </Style>
 
+  <!-- A project's letter tile. The project on show takes the accent's tint, so the list marks it. -->
+  <Style Selector="Border.projectTile">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="Border.projectTile.current">
+    <Setter Property="Background" Value="{DynamicResource StateSelected25Brush}" />
+  </Style>
+  <Style Selector="Border.projectTile > TextBlock">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Button.stickyProject">
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+  </Style>
+  <!-- The rows fade at the bottom edge while more follow, so the edge never cuts a row in half. -->
+  <Style Selector="ScrollViewer.tree.more /template/ ScrollContentPresenter#PART_ContentPresenter">
+    <Setter Property="OpacityMask">
+      <LinearGradientBrush StartPoint="0%,90%" EndPoint="0%,100%">
+        <GradientStop Offset="0" Color="Black" />
+        <GradientStop Offset="1" Color="Transparent" />
+      </LinearGradientBrush>
+    </Setter>
+  </Style>
+  <!-- A section heading that folds its list. -->
+  <Style Selector="ToggleButton.sectionFold">
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.sectionFold /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.sectionFold:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.sectionFold:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.sectionFold:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.sectionFold PathIcon">
+    <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
+  </Style>
+  <Style Selector="ToggleButton.sectionFold:checked PathIcon">
+    <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+  </Style>
+  <Style Selector="TextBlock.caption.reason.state-failed">
+    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.caption.reason.state-inputrequired">
+    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
+  </Style>
+  <Style Selector="Run.match">
+    <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
   <!-- A row of the Activity list and a workflow's row have two lines, 44 px. A workflow's row keeps its first line clear of
        its chevron, which draws over the row's left end. -->
   <Style Selector="Button.activity">
@@ -494,15 +576,23 @@
   <Style Selector="Button.activity:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.activity:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
+  <Style Selector="Button.activity.selected /template/ ContentPresenter#PART_ContentPresenter, Button.activity.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
+  </Style>
   <Style Selector="Button.nav.workflow">
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="44" />
-    <Setter Property="Padding" Value="36,4,8,6" />
+    <Setter Property="Padding" Value="44,4,8,4" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="FontWeight" Value="Normal" />
   </Style>
   <Style Selector="Button.nav.workflow.selected /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
+  </Style>
+
+  <!-- The selected node's row holds the fill, and its workflow keeps the edge bar. -->
+  <Style Selector="Button.nav.workflow.selected.holdsNode /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <!-- UI Automation reads which workflow the window shows from its row's status. -->
@@ -539,11 +629,10 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- A workflow row's chevron: a 24 px column as tall as the row, 12 px in from the project's chevron, with its glyph on
-       the first line. -->
+  <!-- A workflow row's chevron: a 20 px column as tall as the row, under the project's name, with its glyph on the first line. -->
   <Style Selector="ToggleButton.workflowChevron">
-    <Setter Property="Width" Value="24" />
-    <Setter Property="Margin" Value="12,0,0,0" />
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Margin" Value="22,0,0,0" />
     <Setter Property="Height" Value="NaN" />
     <Setter Property="VerticalAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Top" />

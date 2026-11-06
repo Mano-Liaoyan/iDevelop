@@ -17,8 +17,8 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="SelectableTextBlock.md.h2">
-    <Setter Property="FontSize" Value="16" />
-    <Setter Property="LineHeight" Value="22" />
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="LineHeight" Value="24" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
@@ -28,9 +28,9 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- With the blocks' 8 px apart, a heading has 16 px above it and 4 px below it. -->
+  <!-- With the blocks' 8 px apart, a heading has 20 px above it and 4 px below it. -->
   <Style Selector="SelectableTextBlock.md.h1, SelectableTextBlock.md.h2, SelectableTextBlock.md.h3, SelectableTextBlock.md.h4">
-    <Setter Property="Margin" Value="0,8,0,-4" />
+    <Setter Property="Margin" Value="0,12,0,-4" />
   </Style>
   <Style Selector="SelectableTextBlock.md.first">
     <Setter Property="Margin" Value="0,0,0,-4" />
@@ -137,7 +137,7 @@
 
   <!-- The conversation view. Its columns are 760 wide at most, with 24 px at the sides, or 16 under 600. -->
   <Style Selector="Border.conversationHeader">
-    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Padding" Value="12,6,12,4" />
     <Setter Property="MinHeight" Value="48" />
     <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />
@@ -163,10 +163,8 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.workflowStrip">
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="12,2" />
-    <Setter Property="BorderThickness" Value="0,0,0,1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="28,0,0,0" />
   </Style>
   <Style Selector="Border.ioStrip">
     <Setter Property="Height" Value="28" />
@@ -181,18 +179,22 @@
     <Setter Property="Margin" Value="0,0,4,0" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
+  <!-- A chip's fill is the warm raised surface, so it keeps the surface's color temperature in both themes. -->
   <Style Selector="Button.chip">
     <Setter Property="Height" Value="20" />
     <Setter Property="MinWidth" Value="0" />
-    <Setter Property="MaxWidth" Value="{Binding $parent[UserControl].((conversation:ConversationViewModel)DataContext).ChipWidth, FallbackValue=120}" />
+    <Setter Property="MaxWidth" Value="280" />
     <Setter Property="Padding" Value="6,0" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Button.chip /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
   <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.chip:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
@@ -234,6 +236,39 @@
   </Style>
   <Style Selector="Border.message">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+  <!-- Prose keeps a reading measure. Code and tables take the column's whole width. -->
+  <Style Selector="Border.message > conversation|MarkdownView > SelectableTextBlock.md">
+    <Setter Property="MaxWidth" Value="620" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Panel.row.taskTurn">
+    <Setter Property="Margin" Value="24,16,24,0" />
+  </Style>
+  <Style Selector="Grid.narrow Panel.row.taskTurn">
+    <Setter Property="Margin" Value="16,16,16,0" />
+  </Style>
+  <Style Selector="Border.taskTurn">
+    <Setter Property="Padding" Value="4,2" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.taskLabel">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <!-- A line that scrolls up fades out before the strip's edge, so no line ends cut in half under it. -->
+  <Style Selector="ScrollViewer.transcript.scrolled /template/ ScrollContentPresenter#PART_ContentPresenter">
+    <Setter Property="OpacityMask">
+      <LinearGradientBrush StartPoint="0,0" EndPoint="0,36">
+        <GradientStop Offset="0.2" Color="Transparent" />
+        <GradientStop Offset="1" Color="Black" />
+      </LinearGradientBrush>
+    </Setter>
   </Style>
   <Style Selector="Border.message.subagent">
     <Setter Property="Margin" Value="0,0,0,0" />
@@ -445,7 +480,7 @@
   <Style Selector="StackPanel.bottomColumn">
     <Setter Property="MaxWidth" Value="808" />
     <Setter Property="Margin" Value="24,4,24,16" />
-    <Setter Property="Spacing" Value="8" />
+    <Setter Property="Spacing" Value="12" />
   </Style>
   <Style Selector="Grid.docked StackPanel.bottomColumn">
     <Setter Property="Margin" Value="24,4,24,12" />
@@ -491,6 +526,18 @@
   <Style Selector="Border.attentionCard.problem PathIcon.attentionGlyph">
     <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
     <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
+  </Style>
+  <Style Selector="Border.attentionCard PathIcon.attentionGlyph.why-reply">
+    <Setter Property="Data" Value="{StaticResource IconChat}" />
+  </Style>
+  <Style Selector="Border.attentionCard PathIcon.attentionGlyph.why-approval">
+    <Setter Property="Data" Value="{StaticResource IconKindApproval}" />
+  </Style>
+  <Style Selector="Border.attentionCard PathIcon.attentionGlyph.why-conflict">
+    <Setter Property="Data" Value="{StaticResource IconDisconnect}" />
+  </Style>
+  <Style Selector="Border.attentionCard PathIcon.attentionGlyph.why-interrupted">
+    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
   </Style>
   <Style Selector="Border.attentionCard.warning PathIcon.attentionGlyph">
     <Setter Property="Data" Value="{StaticResource IconStateOutOfDate}" />
@@ -588,10 +635,9 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BoxShadow" Value="none" />
   </Style>
-  <!-- The composer's frame takes the ring that a text box shows on focus. -->
+  <!-- The conversation opens with the focus here, so focus turns the frame to one quiet accent line and draws no ring. -->
   <Style Selector="Border.composer:focus-within">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource FocusRing}" />
   </Style>
   <!-- The composer sits at the window's bottom, so its tooltips open above it, clear of the pointer. -->
   <Style Selector="Grid.composerBar Button">
@@ -645,15 +691,15 @@
     <Setter Property="Opacity" Value="1" />
   </Style>
   <Style Selector="Button.send:disabled /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AppShellBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="Button.stop">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AppShellBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="Button.stop:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.stop:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AppShellBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="Button.sendMenu">
