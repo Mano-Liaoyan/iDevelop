@@ -66,113 +66,62 @@
         </ContentControl.Content>
         <ContentControl.DataTemplates>
           <DataTemplate DataType="canvas:TaskNodeViewModel">
-            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
-              <inspector:InspectorGrid>
-                <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. The
-                     title ends at the value edge, before the trailing column, where More sits on its line; the kind line,
-                     with nothing after it, takes the trailing column too. -->
-                <Grid Grid.ColumnSpan="5">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="10" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="{x:Static inspector:InspectorGrid.TrailColumn}" />
-                  </Grid.ColumnDefinitions>
-                  <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
-                  </Grid.RowDefinitions>
-                  <theme:KindTile Grid.RowSpan="2" Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" />
-                  <!-- Until the box has focus, a text block over it shows the title, wrapped as the box wraps it, so the header
-                       reads as a title rather than a field. -->
-                  <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0">
-                    <TextBox Classes="headerTitle" Text="{Binding Title}"
-                             AutomationProperties.AutomationId="TaskTitle"
-                             AutomationProperties.Name="Title" />
-                    <TextBlock Classes="headerTitle" Text="{Binding Title}" IsHitTestVisible="False"
-                               AutomationProperties.AccessibilityView="Raw" />
-                  </Panel>
-                  <!-- Where the kind line does not fit, the version and its help glyph go under the type, without the dot. -->
-                  <inspector:SeparatedLine Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center"
-                                           AutomationProperties.AutomationId="InspectorKind">
-                    <TextBlock Classes="kindLine" Text="{Binding TypeName}"
-                               AutomationProperties.AutomationId="TaskType" />
-                    <TextBlock Classes="kindLine" Text=" · " ClipToBounds="True" />
-                    <StackPanel Orientation="Horizontal">
-                      <TextBlock Classes="kindLine" Text="{Binding TypeVersion}"
-                                 AutomationProperties.AutomationId="TaskTypeVersion" />
-                      <Border Classes="infoGlyph kindHelp" Margin="2,0,0,0" ToolTip.Tip="{Binding Description}"
-                              IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
-                      </Border>
-                    </StackPanel>
-                  </inspector:SeparatedLine>
-                  <Button Grid.Row="0" Grid.Column="3" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
-                          AutomationProperties.AutomationId="InspectorMore"
-                          AutomationProperties.Name="More">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
-                    <Button.Flyout>
-                      <MenuFlyout Placement="BottomEdgeAlignedRight">
-                        <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}" theme:MenuGlyph.Data="{StaticResource IconDerive}" />
-                        <MenuItem Header="Save as Blueprint…" Command="{Binding SaveAsBlueprintCommand}" theme:MenuGlyph.Data="{StaticResource IconSaveAs}" />
-                      </MenuFlyout>
-                    </Button.Flyout>
-                  </Button>
-                </Grid>
-              </inspector:InspectorGrid>
-            </Border>
+            <inspector:InspectorHeader>
+              <theme:KindTile Grid.RowSpan="2" Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" />
+              <!-- Until the box has focus, a text block over it shows the title, wrapped as the box wraps it, so the header
+                   reads as a title rather than a field. -->
+              <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0">
+                <TextBox Classes="headerTitle" Text="{Binding Title}"
+                         AutomationProperties.AutomationId="TaskTitle"
+                         AutomationProperties.Name="Title" />
+                <TextBlock Classes="headerTitle" Text="{Binding Title}" IsHitTestVisible="False"
+                           AutomationProperties.AccessibilityView="Raw" />
+              </Panel>
+              <!-- Where the kind line does not fit, the version and its help glyph go under the type, without the dot. -->
+              <inspector:SeparatedLine Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="InspectorKind">
+                <TextBlock Classes="kindLine" Text="{Binding TypeName}"
+                           AutomationProperties.AutomationId="TaskType" />
+                <TextBlock Classes="kindLine" Text=" · " ClipToBounds="True" />
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Classes="kindLine" Text="{Binding TypeVersion}"
+                             AutomationProperties.AutomationId="TaskTypeVersion" />
+                  <Border Classes="infoGlyph kindHelp" Margin="2,0,0,0" ToolTip.Tip="{Binding Description}"
+                          IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
+                  </Border>
+                </StackPanel>
+              </inspector:SeparatedLine>
+              <Button Grid.Row="0" Grid.Column="3" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
+                      AutomationProperties.AutomationId="InspectorMore"
+                      AutomationProperties.Name="More">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
+                <Button.Flyout>
+                  <MenuFlyout Placement="BottomEdgeAlignedRight">
+                    <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}" theme:MenuGlyph.Data="{StaticResource IconDerive}" />
+                    <MenuItem Header="Save as Blueprint…" Command="{Binding SaveAsBlueprintCommand}" theme:MenuGlyph.Data="{StaticResource IconSaveAs}" />
+                  </MenuFlyout>
+                </Button.Flyout>
+              </Button>
+            </inspector:InspectorHeader>
           </DataTemplate>
           <DataTemplate DataType="canvas:ConnectionViewModel">
-            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
-              <inspector:InspectorGrid>
-                <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. The
-                     title ends at the value edge, before the trailing column, where More sits on its line; the kind line,
-                     with nothing after it, takes the trailing column too. -->
-                <Grid Grid.ColumnSpan="5">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="10" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="{x:Static inspector:InspectorGrid.TrailColumn}" />
-                  </Grid.ColumnDefinitions>
-                  <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
-                  </Grid.RowDefinitions>
-                  <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconLink}" />
-                  </Border>
-                  <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Kind}" />
-                  <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="Connection" />
-                </Grid>
-              </inspector:InspectorGrid>
-            </Border>
+            <inspector:InspectorHeader>
+              <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconLink}" />
+              </Border>
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Kind}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="Connection" />
+            </inspector:InspectorHeader>
           </DataTemplate>
           <DataTemplate DataType="inspector:WorkflowOverviewViewModel">
-            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
-              <inspector:InspectorGrid>
-                <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. The
-                     title ends at the value edge, before the trailing column, where More sits on its line; the kind line,
-                     with nothing after it, takes the trailing column too. -->
-                <Grid Grid.ColumnSpan="5">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="10" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="{x:Static inspector:InspectorGrid.TrailColumn}" />
-                  </Grid.ColumnDefinitions>
-                  <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
-                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
-                  </Grid.RowDefinitions>
-                  <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
-                  </Border>
-                  <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Name}" />
-                  <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding TaskCount}" />
-                </Grid>
-              </inspector:InspectorGrid>
-            </Border>
+            <inspector:InspectorHeader>
+              <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
+              </Border>
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="{Binding Name}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding TaskCount}" />
+            </inspector:InspectorHeader>
           </DataTemplate>
         </ContentControl.DataTemplates>
       </ContentControl>

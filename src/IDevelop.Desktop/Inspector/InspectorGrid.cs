@@ -4,7 +4,7 @@ using Avalonia.Controls;
 namespace IDevelop.Desktop.Inspector;
 
 /// <summary>
-/// The inspector's one set of columns, which the header, the filter, each section header, and every row share: a field's
+/// The inspector's one set of columns, which the filter, each section header, and every row share: a field's
 /// glyph or a kind tile, a gap, the label, the value, and two 24 px slots for a row's glyph buttons or a count. The label
 /// column keeps one width, so values start at one place at every width and stay beside their labels in a wide panel. The
 /// panel has two right edges: glyph buttons and rows of buttons end at the panel's inset, and boxes and paragraphs end
@@ -35,9 +35,6 @@ public sealed class InspectorGrid : Grid
     /// keeps clear. A count ends this far before the action edge, so its digits end where the glyphs' ink ends.
     /// </summary>
     public const double GlyphInkInset = 6;
-
-    /// <summary>The trailing column's width as a grid length, for a header's own grid, whose title stops before it.</summary>
-    public static GridLength TrailColumn { get; } = new(TrailWidth);
 
     /// <summary>A trailing count's margin, which ends its digits <see cref="GlyphInkInset"/> before the action edge.</summary>
     public static Thickness GlyphInkMargin { get; } = new(0, 0, GlyphInkInset, 0);
