@@ -207,8 +207,10 @@
   <Style Selector="Ellipse.status.warning">
     <Setter Property="Fill" Value="{DynamicResource StateWarningStrokeBrush}" />
   </Style>
-  <!-- A row keeps the column's width, and its gap to the next row sits under it. -->
+  <!-- A row keeps the column's width, and its gap to the next row sits under it. Its fill takes the pointer, so Copy shows
+       over the row's blank space too. -->
   <Style Selector="Panel.row">
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="MaxWidth" Value="808" />
     <Setter Property="Margin" Value="24,0,24,16" />
   </Style>
