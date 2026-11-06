@@ -68,6 +68,9 @@
     { "key": "IconCopy", "asset": "Copy", "file": "ic_fluent_copy_16_regular.svg" },
     { "key": "IconPanelBottom", "asset": "Layout Row Two", "file": "ic_fluent_layout_row_two_16_regular.svg" },
     { "key": "IconMaximize", "asset": "Arrow Maximize", "file": "ic_fluent_arrow_maximize_16_regular.svg" },
-    { "key": "IconArrowDown", "asset": "Arrow Down", "file": "ic_fluent_arrow_down_16_regular.svg" }
+    { "key": "IconArrowDown", "asset": "Arrow Down", "file": "ic_fluent_arrow_down_16_regular.svg" },
+    { "key": "IconThemeSystem", "asset": "Desktop", "file": "ic_fluent_desktop_16_regular.svg" },
+    { "key": "IconThemeLight", "asset": "Weather Sunny", "file": "ic_fluent_weather_sunny_16_regular.svg" },
+    { "key": "IconThemeDark", "asset": "Weather Moon", "file": "ic_fluent_weather_moon_16_regular.svg" }
   ]
 }
