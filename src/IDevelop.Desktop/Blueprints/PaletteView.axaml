@@ -51,18 +51,10 @@
                             <MenuFlyout Placement="BottomEdgeAlignedRight">
                               <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}"
                                         AutomationProperties.AutomationId="DeriveBlueprint"
-                                        AutomationProperties.Name="{Binding DeriveName}">
-                                <MenuItem.Icon>
-                                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
-                                </MenuItem.Icon>
-                              </MenuItem>
+                                        AutomationProperties.Name="{Binding DeriveName}" theme:MenuGlyph.Data="{StaticResource IconDerive}" />
                               <MenuItem Header="Edit Blueprint…" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}"
                                         AutomationProperties.AutomationId="EditBlueprint"
-                                        AutomationProperties.Name="{Binding EditName}">
-                                <MenuItem.Icon>
-                                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" />
-                                </MenuItem.Icon>
-                              </MenuItem>
+                                        AutomationProperties.Name="{Binding EditName}" theme:MenuGlyph.Data="{StaticResource IconEdit}" />
                             </MenuFlyout>
                           </Button.Flyout>
                         </Button>

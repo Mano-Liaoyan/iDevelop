@@ -155,11 +155,7 @@
                                       <MenuItem Header="Rename" InputGesture="F2"
                                                 Click="OnRenameWorkflow"
                                                 AutomationProperties.AutomationId="WorkflowRename"
-                                                AutomationProperties.Name="Rename">
-                                        <MenuItem.Icon>
-                                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRename}" />
-                                        </MenuItem.Icon>
-                                      </MenuItem>
+                                                AutomationProperties.Name="Rename" theme:MenuGlyph.Data="{StaticResource IconRename}" />
                                     </ContextMenu>
                                   </Button.ContextMenu>
                                   <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">

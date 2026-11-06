@@ -14,52 +14,25 @@
     </ContextMenu.Styles>
     <MenuItem Header="Run" InputGesture="{x:Static canvas:CanvasKeys.Run}"
               Command="{Binding Node.RunCommand, FallbackValue={x:Null}}" IsVisible="{Binding ShowRun}"
-              AutomationProperties.AutomationId="NodeMenuRun">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuRun" theme:MenuGlyph.Data="{StaticResource IconRun}" />
     <MenuItem Header="Choose Agent…"
               Command="{Binding ChooseAgentCommand}" IsVisible="{Binding ShowChooseAgent}"
-              AutomationProperties.AutomationId="NodeMenuChooseAgent">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuChooseAgent" theme:MenuGlyph.Data="{StaticResource IconAgent}" />
     <MenuItem Header="Stop"
               Command="{Binding Node.StopCommand, FallbackValue={x:Null}}" IsVisible="{Binding ShowStop}"
-              AutomationProperties.AutomationId="NodeMenuStop">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuStop" theme:MenuGlyph.Data="{StaticResource IconStop}" />
     <MenuItem Header="Retry"
               Command="{Binding Node.RetryCommand, FallbackValue={x:Null}}" IsVisible="{Binding ShowRetry}"
-              AutomationProperties.AutomationId="NodeMenuRetry">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuRetry" theme:MenuGlyph.Data="{StaticResource IconRefresh}" />
     <Separator IsVisible="{Binding ShowRunGroup}" />
     <MenuItem Header="Rename" InputGesture="{x:Static canvas:CanvasKeys.Rename}"
               Command="{Binding RenameCommand}" IsVisible="{Binding IsSingle}"
-              AutomationProperties.AutomationId="NodeMenuRename">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRename}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuRename" theme:MenuGlyph.Data="{StaticResource IconRename}" />
     <MenuItem Header="Duplicate" InputGesture="{x:Static canvas:CanvasKeys.Duplicate}"
               Command="{Binding DuplicateCommand}"
-              AutomationProperties.AutomationId="NodeMenuDuplicate">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDuplicate}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuDuplicate" theme:MenuGlyph.Data="{StaticResource IconDuplicate}" />
     <MenuItem Header="Replace With" ItemsSource="{Binding ReplaceChoices}" IsVisible="{Binding ShowReplace}"
-              AutomationProperties.AutomationId="NodeMenuReplace">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconReplace}" />
-      </MenuItem.Icon>
+              AutomationProperties.AutomationId="NodeMenuReplace" theme:MenuGlyph.Data="{StaticResource IconReplace}">
       <MenuItem.ItemContainerTheme>
         <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="canvas:ReplaceChoice">
           <Setter Property="Header" Value="{Binding Name}" />
@@ -81,62 +54,30 @@
     </MenuItem>
     <MenuItem Header="Disconnect"
               Command="{Binding DisconnectCommand}" IsVisible="{Binding ShowDisconnect}"
-              AutomationProperties.AutomationId="NodeMenuDisconnect">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDisconnect}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuDisconnect" theme:MenuGlyph.Data="{StaticResource IconDisconnect}" />
     <Separator IsVisible="{Binding IsSingle}" />
     <MenuItem Header="Derive Blueprint…"
               Command="{Binding Node.DeriveCommand, FallbackValue={x:Null}}" IsVisible="{Binding IsSingle}"
-              AutomationProperties.AutomationId="NodeMenuDerive">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuDerive" theme:MenuGlyph.Data="{StaticResource IconDerive}" />
     <MenuItem Header="Save as Blueprint…"
               Command="{Binding Node.SaveAsBlueprintCommand, FallbackValue={x:Null}}" IsVisible="{Binding IsSingle}"
-              AutomationProperties.AutomationId="NodeMenuSaveAs">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuSaveAs" theme:MenuGlyph.Data="{StaticResource IconSaveAs}" />
     <Separator />
     <MenuItem Classes="destructive" Header="Delete" InputGesture="{x:Static canvas:CanvasKeys.Delete}"
               Command="{Binding DeleteCommand}"
-              AutomationProperties.AutomationId="NodeMenuDelete">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDelete}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="NodeMenuDelete" theme:MenuGlyph.Data="{StaticResource IconDelete}" />
   </ContextMenu>
 
   <ContextMenu x:Key="ConnectionMenu" x:DataType="canvas:ConnectionMenuViewModel">
     <MenuItem Header="Dependency" Command="{Binding DependencyCommand}" Classes.current="{Binding IsDependency}"
-              AutomationProperties.AutomationId="ConnectionMenuDependency">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconWireDependency}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="ConnectionMenuDependency" theme:MenuGlyph.Data="{StaticResource IconWireDependency}" />
     <MenuItem Header="Context" Command="{Binding ContextCommand}" Classes.current="{Binding IsContext}"
-              AutomationProperties.AutomationId="ConnectionMenuContext">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconWireContext}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="ConnectionMenuContext" theme:MenuGlyph.Data="{StaticResource IconWireContext}" />
     <Separator />
     <MenuItem Header="Insert Node…" Command="{Binding InsertCommand}"
-              AutomationProperties.AutomationId="ConnectionMenuInsert">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInsert}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="ConnectionMenuInsert" theme:MenuGlyph.Data="{StaticResource IconInsert}" />
     <Separator />
     <MenuItem Classes="destructive" Header="Delete" Command="{Binding Connection.DeleteCommand}"
-              AutomationProperties.AutomationId="ConnectionMenuDelete">
-      <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDelete}" />
-      </MenuItem.Icon>
-    </MenuItem>
+              AutomationProperties.AutomationId="ConnectionMenuDelete" theme:MenuGlyph.Data="{StaticResource IconDelete}" />
   </ContextMenu>
 </ResourceDictionary>
