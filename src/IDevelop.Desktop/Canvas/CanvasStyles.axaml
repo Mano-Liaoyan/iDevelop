@@ -498,9 +498,9 @@
   <Style Selector="Button.zoomValue">
     <Setter Property="Width" Value="44" />
   </Style>
-  <!-- One line inside the canvas's edge, so no panel covers it. -->
+  <!-- One quiet line inside the canvas's edge, so no panel covers it and the selected card's ring stays the strongest mark. -->
   <Style Selector="Border.canvasFocus">
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="Button.zoomValue TextBlock">
@@ -516,19 +516,19 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="TextBlock.barShort">
+  <Style Selector="TextBlock.barShort, TextBlock.barBrief">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).narrowBar TextBlock.barShort">
+  <Style Selector=":is(Control).shortBar TextBlock.barShort, :is(Control).narrowBar TextBlock.barBrief">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).narrowBar TextBlock.barLong">
+  <Style Selector=":is(Control).shortBar TextBlock.barLong, :is(Control).narrowBar TextBlock.barShort">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).narrowBar ItemsControl.barChips">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).narrowBar TextBlock.followLabel">
+  <Style Selector=":is(Control).shortBar TextBlock.followLabel, :is(Control).narrowBar TextBlock.nextLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Button.bar, ToggleButton.bar">
@@ -553,10 +553,18 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
   </Style>
-  <!-- The bands along the canvas's top and bottom edges, as a node editor's header bars are. The bars float in them. -->
-  <Style Selector="Border.canvasBand">
-    <Setter Property="Height" Value="48" />
-    <Setter Property="Background" Value="{DynamicResource AppShellBrush}" />
+  <!-- The bands along the canvas's top and bottom edges and the minimap's dock sit beside the editor, as a node editor's
+       header and status bars do, on the top bar's solid surface. -->
+  <Style Selector="Border.canvasBand.bottom, Border.canvasDock">
+    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <Style Selector="Border.canvasBand.bottom">
+    <Setter Property="Height" Value="44" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+  </Style>
+  <Style Selector="Border.canvasDock">
+    <Setter Property="BorderThickness" Value="1,0,0,0" />
+    <Setter Property="Padding" Value="8" />
   </Style>
 </Styles>

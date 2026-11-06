@@ -78,7 +78,7 @@ public sealed class MainWindowTests : IDisposable
         var status = shell.Bounds(Shell.Around(shell.Find<TextBlock>("Status"), "breadcrumb"));
         Assert.Equal(new Size(900, 600), shell.Window.ClientSize);
         Assert.All(
-            [shell.Bounds(shell.Find<Border>("Breadcrumb")), shell.Bounds(Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), shell.Bounds(Shell.Around(shell.Find<Minimap>("Minimap"), "floating"))],
+            [shell.Bounds(shell.Find<Border>("Breadcrumb")), shell.Bounds(shell.Find<Control>("ZoomPanel"))],
             other => Assert.False(status.Intersects(other), $"The status at {status} covers {other}"));
     }
 

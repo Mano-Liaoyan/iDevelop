@@ -103,19 +103,9 @@ internal sealed partial class Shell
         Render();
     }
 
-    /// <summary>Opens the zoom panel, which shows only Fit until a card leaves the view.</summary>
-    public void OpenZoom()
-    {
-        if (!Find<Button>("ZoomIn").IsEffectivelyVisible)
-        {
-            Click(Find<Avalonia.Controls.Primitives.ToggleButton>("ZoomOpen"));
-        }
-    }
-
-    /// <summary>Shows the minimap, which hides while every card is in the view.</summary>
+    /// <summary>Shows the minimap, which the person opens.</summary>
     public void ShowMinimap()
     {
-        OpenZoom();
         if (!Find<Nodify.Minimap>("Minimap").IsEffectivelyVisible)
         {
             Click(Find<Avalonia.Controls.Primitives.ToggleButton>("ShowMinimap"));

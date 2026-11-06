@@ -187,11 +187,11 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(new Point(600, 300), shell.Editor.ViewportLocation);
         shell.Click(shell.Find<Button>("ZoomIn"));
         var build = (Math.Round(shell.Editor.ViewportZoom, 4), Shell.Rounded(shell.Editor.ViewportLocation));
-        Assert.Equal((1.2599, new Point(670.76, 382.52)), build);
+        Assert.Equal((1.2599, new Point(670.76, 372.93)), build);
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.Equal((1.0, new Point(-108, -271)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        Assert.Equal((1.0, new Point(-108, -231.5)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
         Assert.Null(shell.Window.ViewModel.Canvas!.SelectedNode);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
 

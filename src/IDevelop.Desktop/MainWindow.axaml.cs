@@ -67,7 +67,11 @@ public partial class MainWindow : Window
         };
         Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
         Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
-        CanvasArea.SizeChanged += (_, e) => TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
+        CanvasArea.SizeChanged += (_, e) =>
+        {
+            TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
+            TopBar.Classes.Set("tightTop", CanvasChrome.IsTightTop(e.NewSize));
+        };
         MainArea.SizeChanged += (_, _) => LimitDock();
         DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
     }
@@ -166,10 +170,10 @@ public partial class MainWindow : Window
         {
             dock.Height = new GridLength(MainArea.Bounds.Height >= TallWindow ? TallDockHeight : DockHeight);
             LimitDock();
-            // Once the dock has its height, the canvas above it moves its cards out from under its floating controls, if
-            // the cards in view before would end up under them. Resizing later never moves the person's view.
+            // Once the dock has its height, the canvas above it fits again if a card that showed whole would be cut.
+            // Resizing later never moves the person's view.
             var shown = CanvasView?.CardsInView() ?? [];
-            Dispatcher.UIThread.Post(() => CanvasView?.FitIfCovered(shown), DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(() => CanvasView?.FitIfCut(shown), DispatcherPriority.Background);
         }
     }
 

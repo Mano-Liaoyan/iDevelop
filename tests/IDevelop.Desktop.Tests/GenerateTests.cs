@@ -208,7 +208,7 @@ public sealed class GenerateTests : IDisposable
         var input = WorkflowCanvasViewModel.InputPortCenter;
 
         Assert.Equal(
-            [(origin + output, api + input), (api + output, button + input), (api + output, tests + input)],
+            [(Shell.Rounded(origin + output), Shell.Rounded(api + input)), (Shell.Rounded(api + output), Shell.Rounded(button + input)), (Shell.Rounded(api + output), Shell.Rounded(tests + input))],
             GhostWires(shell));
         Assert.All(GhostWireLines(shell), wire => Assert.Equal([4.0, 3.0], wire.StrokeDashArray!));
 

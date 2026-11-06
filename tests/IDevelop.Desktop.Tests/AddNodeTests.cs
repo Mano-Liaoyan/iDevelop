@@ -330,7 +330,7 @@ public sealed class AddNodeTests : IDisposable
         var list = shell.Find<ItemsControl>("AddNodeList").FindAncestorOfType<ScrollViewer>()!;
         Assert.True(list.Extent.Height > list.Viewport.Height, $"The list shows all of its {list.Extent.Height} px in {list.Viewport.Height} px.");
         var popover = shell.Bounds(shell.AddPopover);
-        Assert.True(shell.Bounds(shell.Editor).Contains(popover), $"{popover} is not inside the canvas");
+        Assert.True(shell.Bounds(shell.Window.CanvasHost).Contains(popover), $"{popover} is not inside the canvas");
         foreach (var action in actions)
         {
             var row = shell.Bounds(Action(shell, action));

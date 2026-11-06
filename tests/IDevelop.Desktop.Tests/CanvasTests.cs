@@ -138,7 +138,6 @@ public sealed class CanvasTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
 
-        shell.OpenZoom();
         shell.Click(shell.Find<Button>("ZoomIn"));
         Assert.Equal(1.26, Math.Round(shell.Editor.ViewportZoom, 2));
 
@@ -147,15 +146,15 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Fit_to_screen_stops_at_a_readable_zoom_and_keeps_the_selected_task_in_view()
+    public void Fit_to_screen_stops_at_the_least_zoom_and_keeps_the_selected_task_in_view()
     {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 24000, 16000)));
         var editor = new Rect(shell.Editor.Bounds.Size);
         Assert.False(editor.Intersects(shell.CardRect("Build")));
 
         shell.Click(shell.Find<Button>("FitToScreen"));
 
-        Assert.Equal(CanvasChrome.ReadableZoom, shell.Editor.ViewportZoom);
+        Assert.Equal(CanvasChrome.LeastFitZoom, shell.Editor.ViewportZoom);
         Assert.True(editor.Contains(shell.CardRect("Design")), $"{shell.CardRect("Design")} is outside {editor}");
         Assert.False(editor.Intersects(shell.CardRect("Build")));
 
@@ -216,11 +215,11 @@ public sealed class CanvasTests : IDisposable
         var shell = Shell.Open(_temp.Create("plan"));
         var canvasOrigin = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
-        shell.RightClick(canvasOrigin + new Vector(300, 405));
+        shell.RightClick(canvasOrigin + new Vector(300, 305));
         shell.Click(shell.AddRow("Implement"));
 
         var node = Assert.Single(shell.Nodes());
-        Assert.Equal(new Point(300 - WorkflowCanvasViewModel.TaskCardWidth / 2, 405 - WorkflowCanvasViewModel.TaskCardHeight / 2), node.Location);
+        Assert.Equal(new Point(300 - WorkflowCanvasViewModel.TaskCardWidth / 2, 305 - WorkflowCanvasViewModel.TaskCardHeight / 2), node.Location);
         Assert.Equal("New task", shell.Find<TextBox>("TaskTitle").Text);
         Assert.Equal("plan* - iDevelop", shell.Window.Title);
     }

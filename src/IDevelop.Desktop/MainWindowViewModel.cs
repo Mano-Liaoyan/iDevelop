@@ -143,7 +143,13 @@ public sealed class MainWindowViewModel : ObservableObject
     public WorkflowCanvasViewModel? Canvas
     {
         get;
-        private set => SetProperty(ref field, value);
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowsCanvasBar));
+            }
+        }
     }
 
     /// <summary>The open conversation, which the main area or the dock shows, or null.</summary>
@@ -182,6 +188,9 @@ public sealed class MainWindowViewModel : ObservableObject
     public ConversationViewModel? DockedConversation => IsConversationDocked ? Conversation : null;
 
     public bool ShowsCanvas => MainConversation is null;
+
+    /// <summary>The canvas shows and has a workflow, so the top band has something to hold.</summary>
+    public bool ShowsCanvasBar => ShowsCanvas && Canvas is not null;
 
     public string ConversationLayoutLabel => IsConversationDocked ? "Expand to the main area" : "Dock under the canvas";
 
@@ -686,6 +695,7 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(MainConversation));
         OnPropertyChanged(nameof(DockedConversation));
         OnPropertyChanged(nameof(ShowsCanvas));
+        OnPropertyChanged(nameof(ShowsCanvasBar));
         OnPropertyChanged(nameof(ConversationLayoutLabel));
     }
 

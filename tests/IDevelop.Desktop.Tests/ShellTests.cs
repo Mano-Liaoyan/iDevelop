@@ -23,7 +23,6 @@ public sealed class ShellTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(new WorkflowEdit.PlaceNode(TestTasks.Design, BuiltInBlueprints.Implement, new CanvasPoint(105, 90))));
         var zoomIn = shell.Find<Button>("ZoomIn");
-        shell.OpenZoom();
         ToolTip.SetTip(zoomIn, string.Join("\n", Enumerable.Repeat("Zoom in (+)", 6)));
         ToolTip.SetShowDelay(zoomIn, 0);
         var zoom = shell.Editor.ViewportZoom;

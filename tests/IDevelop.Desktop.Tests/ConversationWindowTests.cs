@@ -138,7 +138,7 @@ public sealed class ConversationWindowTests : IDisposable
     public void Expanding_or_closing_the_dock_gives_its_height_back_to_the_main_area()
     {
         var shell = Shell.Open(Project());
-        var canvas = shell.Window.CanvasHost.Bounds.Height;
+        var canvas = shell.Window.CanvasArea.Bounds.Height;
         shell.Click(shell.Header(shell.Node("Design")));
         Shell.Invoke(shell.InView<Button>("OpenConversation"));
         shell.Render();
@@ -154,7 +154,7 @@ public sealed class ConversationWindowTests : IDisposable
         Shell.Invoke(shell.Find<Button>("CloseConversation"));
         shell.Render();
 
-        Assert.Equal((800.0, 800.0, 800.0, 800.0), (canvas, expanded, again, shell.Window.CanvasHost.Bounds.Height));
+        Assert.Equal((800.0, 800.0, 800.0, 800.0), (canvas, expanded, again, shell.Window.CanvasArea.Bounds.Height));
     }
 
     [AvaloniaFact]

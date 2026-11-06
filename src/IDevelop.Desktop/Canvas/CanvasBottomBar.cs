@@ -4,10 +4,9 @@ using Avalonia.Controls;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// Lays out what floats along the canvas's bottom edge, which every control there shares: the zoom controls at the left,
-/// the minimap at the right, and the run bars between them. The run bars centre on the canvas and move aside only as far
-/// as they must to keep <see cref="CanvasChrome.Spacing"/> from either corner, and they never get wider than the room
-/// between the corners, so they never leave the bottom edge or cover a corner.
+/// Lays out the band along the canvas's bottom edge: the zoom controls at the left and the run bar after them. The run bar
+/// centres on the canvas and moves aside only as far as it must to keep <see cref="CanvasChrome.Spacing"/> from the zoom
+/// controls, and it never gets wider than the room left, so it never covers them.
 /// </summary>
 public sealed class CanvasBottomBar : Panel
 {

@@ -93,25 +93,40 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>How far the run went: "5 of 9 complete". The chips after it hold the other states.</summary>
     public string BarProgress => $"{Counts.Completed} of {Counts.Total} complete";
 
-    /// <summary>One chip for each group of nodes that the bar names, in the order of what needs the person first.</summary>
+    /// <summary>What the band says with no run: "9 nodes", and how many completed.</summary>
+    public string BarIdle => (Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes") + (Counts.Completed > 0 ? $" · {Counts.Completed} complete" : "");
+
+    /// <summary>
+    /// One chip for each group of nodes that the bar names, in the order of what needs the person first. Nodes that wait for
+    /// the person, for any reason, are one group, as in the inspector's overview, and its tooltip tells the reasons apart.
+    /// </summary>
     public IReadOnlyList<StateChip> BarChips
     {
         get
         {
             var reasons = Nodes.Where(node => node.State == NodeState.InputRequired).Select(node => node.WaitReason).ToList();
             var (approvals, stopped) = (reasons.Count(why => why == WaitReason.Approval), reasons.Count(why => why == WaitReason.Interrupted));
+            var answers = reasons.Count - approvals - stopped;
+            var tip = string.Join("\n", new[]
+            {
+                answers > 0 ? $"{answers} waiting for an answer" : null,
+                approvals > 0 ? $"{approvals} waiting for approval" : null,
+                stopped > 0 ? $"{stopped} interrupted" : null,
+            }.OfType<string>());
+            var why = approvals == reasons.Count ? WaitReason.Approval : stopped == reasons.Count ? WaitReason.Interrupted : WaitReason.Question;
             var counts = Counts;
             return new StateChip?[]
             {
-                StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"),
                 StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed"),
-                StateChip.Of(NodeState.InputRequired, WaitReason.Question, reasons.Count - approvals - stopped, "waiting for an answer"),
-                StateChip.Of(NodeState.InputRequired, WaitReason.Approval, approvals, "waiting for approval"),
-                StateChip.Of(NodeState.InputRequired, WaitReason.Interrupted, stopped, "interrupted"),
+                StateChip.Of(NodeState.InputRequired, why, reasons.Count, "waiting", tip),
+                StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"),
                 StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, "stale"),
             }.OfType<StateChip>().ToList();
         }
     }
+
+    /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
+    public string NextLabel => Nodes.Any(node => node.IsWaiting) ? "Next waiting" : "Next failed";
 
     public StatusTone BarTone => RunningCount > 0 ? StatusTone.Running : HasAttention ? StatusTone.Waiting : StatusTone.Complete;
 
@@ -119,8 +134,16 @@ public sealed partial class WorkflowCanvasViewModel
     public string? BarActivity => RunningCount == 0 ? null
         : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
 
-    /// <summary>The summary on a narrow canvas: "5/9 done".</summary>
+    /// <summary>The progress on a short bar: "5/9 done".</summary>
     public string BarShort => $"{Counts.Completed}/{Counts.Total} done";
+
+    /// <summary>The whole bar on a narrow canvas, without its chips: "5/9 · 3 waiting · 1 failed".</summary>
+    public string BarBrief => string.Join(" · ", new[]
+    {
+        $"{Counts.Completed}/{Counts.Total}",
+        Counts.Failed > 0 ? $"{Counts.Failed} failed" : null,
+        Counts.Waiting > 0 ? $"{Counts.Waiting} waiting" : null,
+    }.OfType<string>());
 
     /// <summary>The bar's tooltip: the whole summary, then the running nodes' titles.</summary>
     public string BarTip => string.Join("\n", new[]
@@ -217,6 +240,9 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(ShowsBar));
         OnPropertyChanged(nameof(BarSummary));
         OnPropertyChanged(nameof(BarProgress));
+        OnPropertyChanged(nameof(BarIdle));
+        OnPropertyChanged(nameof(BarBrief));
+        OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(HasAttention));
         OnPropertyChanged(nameof(BarTone));

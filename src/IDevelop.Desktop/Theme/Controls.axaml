@@ -921,15 +921,21 @@
     </Setter>
   </Style>
 
-  <!-- A compact canvas, below 700 px, marks its chrome compact. A glyph button shows only its glyph there, in a 32 px
+  <!-- The band along the canvas's top edge, solid, as a node editor's header is. The canvas's own styles hold its bottom band. -->
+  <Style Selector="Border.canvasBand.top">
+    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <!-- A compact canvas, below 680 px, marks its chrome compact. A glyph button shows only its glyph there, in a 32 px
        square, and its tooltip's first line names it. A wideOnly part hides there, and a compactOnly part shows only there.
        These come last, so they win over the button styles above. -->
-  <Style Selector=".compact Button.glyph">
+  <Style Selector=".compact Button.glyph, .tightTop Button.glyph">
     <Setter Property="Width" Value="32" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
   </Style>
-  <Style Selector=".compact Button.glyph TextBlock.label, .compact :is(Control).wideOnly, :is(Control).compactOnly">
+  <Style Selector=".compact Button.glyph TextBlock.label, .tightTop Button.glyph TextBlock.label, .compact :is(Control).wideOnly, :is(Control).compactOnly">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=".compact :is(Control).compactOnly">

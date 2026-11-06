@@ -44,7 +44,8 @@
                 PointerPressed="OnTitleBandPressed" />
         <!-- The conversation takes the main area over the canvas by default, or sits in a dock under it. -->
         <Grid x:Name="MainArea" RowDefinitions="*,Auto,Auto">
-        <Panel x:Name="CanvasArea">
+        <Grid x:Name="CanvasArea" RowDefinitions="Auto,*">
+        <Panel Grid.Row="1">
           <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center"
                       IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}">
             <Button Classes="primary" HorizontalAlignment="Center" Click="OnOpenFolder"
@@ -63,14 +64,20 @@
             </ContentControl.ContentTemplate>
           </ContentControl>
 
-          <!-- The band under the top bar. Cards pass behind it, so they meet its edge and never a control. -->
-          <Border Classes="canvasBand" VerticalAlignment="Top" BorderThickness="0,0,0,1" IsHitTestVisible="False" IsVisible="{Binding ShowsCanvas}" />
+          <ContentControl Content="{Binding MainConversation}">
+            <ContentControl.DataTemplates>
+              <DataTemplate DataType="conversation:ConversationViewModel">
+                <conversation:ConversationView />
+              </DataTemplate>
+            </ContentControl.DataTemplates>
+          </ContentControl>
+        </Panel>
 
-          <!-- What floats along the canvas's top edge: the breadcrumb with Undo, Redo, and Save at the left, Add, Generate, and Run
-               Workflow at the right, and the status under the breadcrumb. The bar has no fill, so the canvas takes every input
-               between them. On a compact canvas the code-behind marks the bar compact: the breadcrumb shows only the workflow's
-               name, and Generate only its glyph. -->
-          <canvas:CanvasTopBar x:Name="TopBar" VerticalAlignment="Top" Margin="12,8" IsVisible="{Binding ShowsCanvas}">
+        <!-- The top band docks over the canvas, so no card reaches its controls: the breadcrumb with Undo, Redo, and Save at the
+             left, Add, Generate, and Run Workflow at the right, and the status under the breadcrumb. On a compact canvas the
+             code-behind marks the bar compact: the breadcrumb shows only the workflow's name, and Generate only its glyph. -->
+        <Border Classes="canvasBand top" IsVisible="{Binding ShowsCanvasBar}">
+          <canvas:CanvasTopBar x:Name="TopBar" VerticalAlignment="Top" Margin="12,8">
             <Border Classes="breadcrumb split" canvas:CanvasTopBar.Slot="Leading" HorizontalAlignment="Left"
                     IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
                     AutomationProperties.AutomationId="Breadcrumb">
@@ -187,7 +194,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
                           <TextBlock Classes="wideOnly" Text="Run Workflow" VerticalAlignment="Center" />
-                          <TextBlock Classes="compactOnly" Text="All" VerticalAlignment="Center" />
+                          <TextBlock Classes="compactOnly" Text="Run" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                     </StackPanel>
@@ -206,15 +213,8 @@
                          AutomationProperties.Name="Status" />
             </Border>
           </canvas:CanvasTopBar>
-
-          <ContentControl Content="{Binding MainConversation}">
-            <ContentControl.DataTemplates>
-              <DataTemplate DataType="conversation:ConversationViewModel">
-                <conversation:ConversationView />
-              </DataTemplate>
-            </ContentControl.DataTemplates>
-          </ContentControl>
-        </Panel>
+        </Border>
+        </Grid>
         <GridSplitter x:Name="DockSplitter" Grid.Row="1" Height="8" Margin="0,-3.5" ZIndex="1"
                       IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}"

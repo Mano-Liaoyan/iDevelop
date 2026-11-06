@@ -27,27 +27,27 @@ public sealed class FitZoomTests
     }
 
     [Fact]
-    public void A_large_graph_stops_at_the_readable_zoom_around_its_focus()
+    public void A_huge_graph_stops_at_the_least_zoom_around_its_focus()
     {
-        var extent = new Rect(0, 0, 4000, 2000);
+        var extent = new Rect(0, 0, 40000, 20000);
 
         var zoom = CanvasChrome.FitZoom(extent, Room);
-        var location = CanvasChrome.ViewOn(extent, Room, zoom, new Point(2000, 1000));
+        var location = CanvasChrome.ViewOn(extent, Room, zoom, new Point(20000, 10000));
 
-        Assert.Equal(CanvasChrome.ReadableZoom, zoom);
-        Assert.Equal(new Point(2000, 1000), location + (Vector)Room.Center / zoom);
+        Assert.Equal(CanvasChrome.LeastFitZoom, zoom);
+        Assert.Equal(new Point(20000, 10000), location + (Vector)Room.Center / zoom);
     }
 
     [Fact]
     public void A_focus_near_the_graphs_edge_keeps_the_graph_in_the_room()
     {
-        var extent = new Rect(0, 0, 4000, 2000);
+        var extent = new Rect(0, 0, 40000, 20000);
         var room = new Rect(24, 60, 632, 420);
 
-        var location = CanvasChrome.ViewOn(extent, room, CanvasChrome.ReadableZoom, new Point(100, 30));
+        var location = CanvasChrome.ViewOn(extent, room, CanvasChrome.LeastFitZoom, new Point(100, 30));
 
         // The graph's top left corner meets the room's top left corner, so no card sits under the bars.
-        Assert.Equal(room.TopLeft, (Point)((extent.TopLeft - location) * CanvasChrome.ReadableZoom), new PointComparer());
+        Assert.Equal(room.TopLeft, (Point)((extent.TopLeft - location) * CanvasChrome.LeastFitZoom), new PointComparer());
     }
 
     private sealed class PointComparer : IEqualityComparer<Point>

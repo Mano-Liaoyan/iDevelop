@@ -14,10 +14,9 @@ using static IDevelop.Desktop.Tests.AppTempFolder;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The controls that float over the canvas never cover each other or leave it, at the smallest and a large window and with
-/// the inspector at its least, default, and greatest width. The breadcrumb, Run Workflow, and Generate share the top row's
-/// centre line, and the waiting pill sits between them or under the buttons. The zoom controls, the run bar, and the
-/// minimap share the bottom edge, and the run bar never moves from it. A compact canvas shows the buttons as glyphs and
+/// The bars docked around the canvas never cover each other or a card, at the smallest and a large window and with the
+/// inspector at its least, default, and greatest width. The breadcrumb, Run Workflow, and Generate share the top band's
+/// centre line. The zoom controls and the run bar share the bottom band. A compact canvas shows the buttons as glyphs and
 /// hides the minimap. The canvas keeps 336 px however wide the panels beside it are.
 /// </summary>
 [Collection(ProcessCollection.Name)]
@@ -89,7 +88,7 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_running_workflow_keeps_its_run_bar_on_the_bottom_edge_between_the_zoom_controls_and_the_minimap_at_every_size()
+    public void A_running_workflow_keeps_its_run_bar_in_the_bottom_band_beside_the_zoom_controls_at_every_size()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
@@ -143,28 +142,21 @@ public sealed class CanvasChromeTests : IDisposable
             Assert.True(box.Contains(shell.Bounds(shell.Find<Control>(id))), $"{id} at {shell.Bounds(shell.Find<Control>(id))} leaves the composer's box {box}.");
         }
 
-        // The canvas above keeps its two rows apart and its cards clear of them.
+        // The canvas above keeps its two bands apart, and the editor between them holds its cards.
         AssertTopRow(shell, "the dock", "Breadcrumb", "GenerateWorkflow");
         AssertBottomRow(shell, "the dock");
-        var top = new[] { "Breadcrumb", "GenerateWorkflow" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
-        var controls = new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), shell.Find<Control>("WorkflowRunBar") }.Select(shell.Bounds).ToArray();
-        Assert.True(controls.Min(control => control.Top) - top >= 12, $"The top row ends at {top} and the bottom row starts at {controls.Min(control => control.Top)}.");
-        foreach (var node in shell.Nodes())
-        {
-            var card = shell.Bounds(node).WithWidth(node.Bounds.Width * shell.Editor.ViewportZoom).WithHeight(node.Bounds.Height * shell.Editor.ViewportZoom);
-            Assert.All(controls, control => Assert.False(control.Intersects(card), $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is under {control}."));
-        }
+        Assert.All(Cards(shell), card => Assert.True(shell.Bounds(shell.Editor).Inflate(0.5).Contains(card), $"The card at {card} leaves the editor."));
 
         // A taller window gives the canvas its 280 px before the dock grows to its default.
         Resize(shell, 900, 660);
-        Assert.Equal(MainWindow.CanvasMinHeight, shell.Bounds(shell.Editor).Height, 0.5);
+        Assert.Equal(MainWindow.CanvasMinHeight, shell.Window.CanvasArea.Bounds.Height, 0.5);
         Resize(shell, 1600, 1000);
         Assert.Equal(400, shell.Window.MainArea.RowDefinitions[2].ActualHeight, 0.5);
-        Assert.True(shell.Bounds(shell.Editor).Height >= MainWindow.CanvasMinHeight);
+        Assert.True(shell.Window.CanvasArea.Bounds.Height >= MainWindow.CanvasMinHeight);
     }
 
     [AvaloniaFact]
-    public void Docking_moves_the_cards_and_the_proposals_ghosts_into_view_clear_of_the_floating_controls()
+    public void Docking_fits_a_fitted_view_so_the_cards_and_the_proposals_ghosts_stay_in_the_editor()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
@@ -175,12 +167,9 @@ public sealed class CanvasChromeTests : IDisposable
 
         shell.Click(shell.Find<Button>("ConversationLayout"));
 
-        var controls = new[] { "Breadcrumb", "GenerateWorkflow", "WorkflowRunBar" }.Select(id => shell.Bounds(shell.Find<Control>(id)))
-            .Concat(new[] { Shell.Around(shell.Find<Button>("FitToScreen"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating") }
-                .Where(control => control.IsEffectivelyVisible).Select(shell.Bounds)).ToArray();
         var cards = Cards(shell);
         Assert.Equal(7, cards.Length);
-        Assert.All(cards, card => Assert.All(controls, control => Assert.False(control.Intersects(card), $"The card at {card} is under {control}.")));
+        Assert.All(cards, card => Assert.True(shell.Bounds(shell.Editor).Contains(card), $"The card at {card} leaves the editor."));
     }
 
     [AvaloniaFact]
@@ -250,16 +239,12 @@ public sealed class CanvasChromeTests : IDisposable
         return lines;
     }
 
-    /// <summary>
-    /// A fit keeps the cards and the proposal's ghost cards 24 px clear of both rows of floating controls, also below the
-    /// waiting pill under the buttons of a compact canvas, and on the docked canvas of the smallest window, which has no
-    /// room for those margins, right against them.
-    /// </summary>
+    /// <summary>A fit keeps the cards 24 px inside the editor between the two bands.</summary>
     [AvaloniaTheory]
     [InlineData(1600, 600, 280, false, 24)]
     [InlineData(900, 700, 320, true, 24)]
-    [InlineData(900, 600, 320, true, 0)]
-    public void Fit_to_view_keeps_the_cards_clear_of_the_top_row_and_the_bottom_row(double width, double height, double inspector, bool docked, double margin)
+    [InlineData(900, 600, 320, true, 24)]
+    public void Fit_to_view_keeps_the_cards_inside_the_editor_between_the_bands(double width, double height, double inspector, bool docked, double margin)
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
@@ -276,27 +261,21 @@ public sealed class CanvasChromeTests : IDisposable
         shell.Render();
         shell.Click(shell.Find<Button>("FitToScreen"));
 
-        // A graph that does not fit at a readable zoom stops there, and part of it waits for a pan.
         var (top, bottom) = Rows(shell);
-        if (shell.Editor.ViewportZoom > CanvasChrome.ReadableZoom)
-        {
-            Assert.All(Cards(shell), card => Assert.True(card.Top >= top + margin - 0.5 && card.Bottom <= bottom - margin + 0.5,
-                $"The card at {card} is not {margin} px inside {top} and {bottom}."));
-        }
+        var zoom = shell.Editor.ViewportZoom;
+        Assert.All(shell.Nodes().Select(node => shell.Bounds(node).WithHeight(node.Bounds.Height * zoom)), card => Assert.True(card.Top >= top + margin - 0.5 && card.Bottom <= bottom - margin + 0.5,
+            $"The card at {card} is not {margin} px inside {top} and {bottom}."));
     }
 
-    /// <summary>The lowest edge of the top row's controls and the highest edge of the bottom row's.</summary>
-    private static (double Top, double Bottom) Rows(Shell shell) =>
-        (new[] { "Breadcrumb", "GenerateWorkflow", "RunWorkflow", "Status" }.Where(shell.ShowsAny).Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom),
-         new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating"), shell.Find<Control>("WorkflowRunBar") }
-            .Where(control => control.IsEffectivelyVisible).Min(control => shell.Bounds(control).Top));
+    /// <summary>The editor's top and bottom edges, between the two bands.</summary>
+    private static (double Top, double Bottom) Rows(Shell shell) => (shell.Bounds(shell.Editor).Top, shell.Bounds(shell.Editor).Bottom);
 
     /// <summary>The cards and the proposal's ghost cards as they show, at the editor's zoom.</summary>
     private static Rect[] Cards(Shell shell)
     {
         var zoom = shell.Editor.ViewportZoom;
         return [.. shell.Nodes().Select(node => shell.Bounds(node).WithWidth(node.Bounds.Width * zoom).WithHeight(node.Bounds.Height * zoom))
-            .Concat(Shell.ById<Control>(shell.Window, "GhostCard").Select(ghost => shell.Bounds(ghost)
+            .Concat(Shell.ById<Control>(shell.Window, "GhostCard").Select(ghost => Box(shell, ghost)
                 .WithWidth(WorkflowCanvasViewModel.TaskCardWidth * zoom).WithHeight(WorkflowCanvasViewModel.TaskCardHeight * zoom)))];
     }
 
@@ -364,14 +343,15 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     /// <summary>
-    /// The top row's controls sit inside the canvas's inset, at least 8 px apart, those of the first row on one centre
-    /// line, and none of their text is cut short. A compact canvas shows its buttons as 32 px glyphs that name themselves
+    /// The top band's controls sit inside the canvas's inset, at least 8 px apart, those of the first row on one centre
+    /// line, and none of their text is cut short. A tight canvas shows its buttons as 32 px glyphs that name themselves
     /// in their tooltips.
     /// </summary>
     private static void AssertTopRow(Shell shell, string at, params string[] ids)
     {
-        var canvas = shell.Bounds(shell.Editor);
+        var canvas = shell.Bounds(shell.Window.CanvasArea);
         var compact = canvas.Width < CanvasChrome.CompactWidth;
+        var tight = canvas.Width < CanvasChrome.TightTopWidth;
         var boxes = ids.Select(id => (Id: id, Box: shell.Bounds(shell.Find<Control>(id)))).ToArray();
         AssertInsideAndApart(canvas, boxes, at);
         var line = boxes.Single(box => box.Id == "Breadcrumb").Box.Center.Y;
@@ -386,10 +366,10 @@ public sealed class CanvasChromeTests : IDisposable
             var labels = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
             if (id == "RunWorkflow")
             {
-                // The workflow's primary action keeps a word on a compact canvas.
-                Assert.Equal(compact ? "All" : "Run Workflow", Assert.Single(labels));
+                // The workflow's primary action keeps its verb on a compact canvas.
+                Assert.Equal(compact ? "Run" : "Run Workflow", Assert.Single(labels));
             }
-            else if (compact)
+            else if (tight)
             {
                 Assert.Empty(labels);
                 Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
@@ -408,24 +388,19 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     /// <summary>
-    /// The zoom controls, the workflow's run bar, and the minimap, where it shows, end 12 px above the canvas's bottom edge,
-    /// inside its inset and at least 12 px apart. The minimap shows only on a canvas that is neither compact nor short.
+    /// The zoom controls and the workflow's run bar sit in the bottom band, under the editor and at least 12 px apart, with their
+    /// text whole.
     /// </summary>
     private static void AssertBottomRow(Shell shell, string at)
     {
-        var canvas = shell.Bounds(shell.Editor);
-        var minimap = Shell.Around(shell.Find<Minimap>("Minimap"), "floating");
-        Assert.True(!minimap.IsEffectivelyVisible || canvas is { Width: >= CanvasChrome.CompactWidth, Height: >= CanvasChrome.MinimapMinHeight });
-        var boxes = new[] { ("Zoom", Shell.Around(shell.Find<Button>("FitToScreen"), "floating")), ("Minimap", minimap), ("WorkflowRunBar", shell.Find<Control>("WorkflowRunBar")) }
-            .Where(pair => pair.Item2.IsEffectivelyVisible)
-            .Select(pair => (Id: pair.Item1, Box: shell.Bounds(pair.Item2))).ToArray();
-        Assert.Contains(boxes, box => box.Id == "WorkflowRunBar");
+        var canvas = shell.Bounds(shell.Window.CanvasArea);
+        var boxes = new[] { "ZoomPanel", "WorkflowRunBar" }.Select(id => (Id: id, Box: shell.Bounds(shell.Find<Control>(id)))).ToArray();
         AssertInsideAndApart(canvas, boxes, at, gap: 12);
-        Assert.All(boxes, box => Assert.True(Math.Abs(box.Box.Bottom - (canvas.Bottom - CanvasChrome.Inset)) < 0.6, $"At {at}, {box.Id} ends at {box.Box.Bottom}, off {canvas.Bottom - 12}."));
+        Assert.All(boxes, box => Assert.True(box.Box.Top >= shell.Bounds(shell.Editor).Bottom, $"At {at}, {box.Id} at {box.Box} is not under the editor."));
 
         // The bar holds its status, its chips, and whichever of its buttons show, its text whole.
         var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunChips", "RunStatus", "RunStatusShort", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
+        var inside = new[] { "RunChips", "RunStatus", "RunStatusShort", "RunStatusBrief", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
         Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
         if (shell.ShowsAny("StopWorkflow"))
         {
@@ -439,8 +414,7 @@ public sealed class CanvasChromeTests : IDisposable
 
     private static void AssertInsideAndApart(Rect canvas, (string Id, Rect Box)[] boxes, string at, double gap = 8)
     {
-        // The top row sits 8 px from the top edge, and the rest keeps the inset.
-        var room = canvas.Deflate(new Thickness(CanvasChrome.Inset, 8, CanvasChrome.Inset, CanvasChrome.Inset));
+        var room = canvas.Deflate(8);
         foreach (var (id, box) in boxes)
         {
             Assert.True(room.Inflate(0.5).Contains(box), $"At {at}, {id} at {box} leaves the canvas's inset {room}.");
