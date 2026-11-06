@@ -159,7 +159,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="16,0,16,0" />
+    <Setter Property="Margin" Value="16,0,8,0" />
     <Setter Property="FontSize" Value="26" />
     <Setter Property="LineHeight" Value="30" />
   </Style>

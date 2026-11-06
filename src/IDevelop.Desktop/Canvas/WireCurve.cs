@@ -27,10 +27,10 @@ public readonly record struct WirePiece(Point Start, Point First, Point Second, 
 internal static class WireCurve
 {
     /// <summary>How far apart, in canvas units, wires that share a port lie at <see cref="FanRun"/> from it.</summary>
-    internal const double Fan = 18;
+    internal const double Fan = 26;
 
     /// <summary>The widest fan on one side of a port, so a busy port keeps its wires near its row.</summary>
-    private const double FanLimit = 54;
+    private const double FanLimit = 65;
 
     /// <summary>A fan is an angle: a curve's aim moves by the fan for each this many units along its first run.</summary>
     private const double FanRun = 60;
