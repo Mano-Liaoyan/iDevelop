@@ -143,7 +143,7 @@
     <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="MaxWidth" Value="600" />
     <Setter Property="Padding" Value="14,10" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
   <!-- Copy shows on the row the pointer is over, and for the keyboard when it has focus. -->
@@ -227,7 +227,7 @@
     <Setter Property="MaxWidth" Value="808" />
     <Setter Property="Margin" Value="24,8,24,16" />
     <Setter Property="Padding" Value="10" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
@@ -245,6 +245,12 @@
   <Style Selector="TextBox.composerBox:pointerover /template/ Border#PART_BorderElement, TextBox.composerBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BoxShadow" Value="none" />
+  </Style>
+  <!-- The composer's frame takes the ring that a text box shows on focus. -->
+  <Style Selector="Border.composer:focus-within">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource FocusRing}" />
   </Style>
   <Style Selector="Button.jump">
     <Setter Property="Height" Value="32" />

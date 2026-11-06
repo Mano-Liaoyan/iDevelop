@@ -176,6 +176,8 @@ const themedShadows = [
   ['NodeShadow', [[0, 1, 2, 0, 'black', 8], [0, 2, 6, 0, 'black', 6]], [[0, 1, 2, 0, 'black', 40], [0, 2, 8, 0, 'black', 32]]],
   ['NodeHoverShadow', [[0, 2, 6, 0, 'black', 10], [0, 8, 20, 0, 'black', 10]], [[0, 2, 6, 0, 'black', 45], [0, 10, 24, 0, 'black', 40]]],
   ['PopoverShadow', [[0, 10, 30, 0, 'black', 16], [0, 2, 6, 0, 'black', 8]], [[0, 12, 32, 0, 'black', 45], [0, 2, 6, 0, 'black', 30]]],
+  // A box's keyboard ring: 2 px of the accent outside its 1 px border.
+  ['FocusRing', [[0, 0, 0, 2, 'apple-blue', 100]], [[0, 0, 0, 2, 'apple-blue', 100]]],
 ];
 
 // --radius is 0.625rem, and Tailwind derives each step from it.
@@ -184,7 +186,6 @@ const radii = [
   ['RadiusSm', 0.6],
   ['RadiusMd', 0.8],
   ['RadiusLg', 1],
-  ['RadiusXl', 1.4],
 ];
 
 function parse(value) {

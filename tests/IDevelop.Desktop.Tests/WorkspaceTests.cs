@@ -612,10 +612,10 @@ public sealed class WorkspaceTests : IDisposable
         var expand = shell.WorkflowExpand("beta", "Release");
 
         Assert.Equal(
-            ["New workflow in alpha", "Close alpha", "Show tasks of Release"],
+            ["New workflow in alpha", "Close alpha", "Show nodes of Release"],
             new[] { ProjectButton(shell, "alpha", "NewWorkflow"), ProjectButton(shell, "alpha", "CloseProject"), expand }.Select(control => Peer(control).GetName()));
         shell.Click(expand);
-        Assert.Equal("Hide tasks of Release", Peer(expand).GetName());
+        Assert.Equal("Hide nodes of Release", Peer(expand).GetName());
         Assert.Equal(
             ["", "", "Shown", ""],
             new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }
@@ -863,9 +863,9 @@ public sealed class WorkspaceTests : IDisposable
         var (shell, _, _) = OpenBoth();
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
-        Assert.Equal(["Release", "1 task"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+        Assert.Equal(["Release", "1 node"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
 
         Rename(shell, "alpha", "Release", "Ship it");
-        Assert.Equal(["Ship it", "1 task"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+        Assert.Equal(["Ship it", "1 node"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
     }
 }

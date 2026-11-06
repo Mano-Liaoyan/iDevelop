@@ -155,7 +155,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     }
 
     /// <summary>What the row's disclosure toggle does now, for a screen reader and the tooltip.</summary>
-    public string ExpandLabel => $"{(IsExpanded ? "Hide" : "Show")} tasks of {Name}";
+    public string ExpandLabel => $"{(IsExpanded ? "Hide" : "Show")} nodes of {Name}";
 
     public bool IsSelected
     {
@@ -184,14 +184,14 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public ICommand CommitMovesCommand { get; }
 
-    /// <summary>How many tasks wait for the person.</summary>
+    /// <summary>How many nodes wait for the person.</summary>
     public int WaitingCount => Nodes.Count(node => node.IsWaiting);
 
     public bool HasWaiting => WaitingCount > 0;
 
-    public string WaitingLabel => WaitingCount == 1 ? "1 task waits for you" : $"{WaitingCount} tasks wait for you";
+    public string WaitingLabel => WaitingCount == 1 ? "1 node waits for you" : $"{WaitingCount} nodes wait for you";
 
-    /// <summary>Selects the next task that waits for the person, after the selected one, in the order the sidebar lists them.</summary>
+    /// <summary>Selects the next node that waits for the person, after the selected one, in the order the sidebar lists them.</summary>
     public ICommand NextWaitingCommand { get; }
 
     internal ProjectViewModel Project { get; }

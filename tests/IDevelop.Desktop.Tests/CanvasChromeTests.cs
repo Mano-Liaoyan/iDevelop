@@ -68,7 +68,7 @@ public sealed class CanvasChromeTests : IDisposable
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Generate(shell);
-        Assert.Equal(("1 task waits for you", "Review Proposal"), (shell.Text("WaitingCount"), AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
+        Assert.Equal(("1 node waits for you", "Review Proposal"), (shell.Text("WaitingCount"), AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
         Assert.True(shell.ShowsUnsavedChanges);
         // A refused connection's status sits under the breadcrumb, beside the pill when the pill moves under the buttons.
         // The view moves left first, so "Write docs"'s output is clear of the inspector's splitter.
@@ -90,7 +90,7 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
-        Assert.Equal("2 tasks wait for you", shell.Text("WaitingCount"));
+        Assert.Equal("2 nodes wait for you", shell.Text("WaitingCount"));
 
         foreach (var (width, height, inspector) in Sizes)
         {

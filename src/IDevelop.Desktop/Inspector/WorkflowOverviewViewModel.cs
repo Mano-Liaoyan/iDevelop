@@ -30,7 +30,7 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
 
     public string Name => _canvas.Name;
 
-    public string TaskCount => _canvas.Nodes.Count == 1 ? "1 task" : $"{_canvas.Nodes.Count} tasks";
+    public string TaskCount => _canvas.Nodes.Count == 1 ? "1 node" : $"{_canvas.Nodes.Count} nodes";
 
     /// <summary>Each kind the workflow holds, in the registry's order.</summary>
     public IReadOnlyList<KindCount> Kinds => _kinds;

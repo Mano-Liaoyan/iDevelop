@@ -9,7 +9,7 @@
         x:Class="IDevelop.Desktop.MainWindow"
         x:DataType="local:MainWindowViewModel"
         Title="{Binding Title}" Width="1280" Height="800" MinWidth="900" MinHeight="600"
-        Background="{DynamicResource AppSidebarBrush}"
+        Background="{DynamicResource AppTopbarBrush}"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="44"
         ExtendClientAreaChromeHints="PreferSystemChrome, OSXThickTitleBar">
@@ -343,7 +343,7 @@
 
     <GridSplitter Grid.Column="1" Width="8" Margin="-3.5,0" ZIndex="1" />
 
-    <Border Grid.Column="2" CornerRadius="14,0,0,14" ClipToBounds="True" Background="{DynamicResource AppShellBrush}">
+    <Border Grid.Column="2" ClipToBounds="True" Background="{DynamicResource AppShellBrush}">
       <DockPanel>
         <Border DockPanel.Dock="Top" Height="44"
                 Background="{DynamicResource AppTopbarBrush}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border80Brush}"
@@ -431,7 +431,7 @@
                     Command="{Binding Canvas.NextWaitingCommand, FallbackValue={x:Null}}"
                     IsVisible="{Binding Canvas.HasWaiting, FallbackValue=False}"
                     AutomationProperties.AutomationId="NextWaiting"
-                    AutomationProperties.Name="Show the next task that waits for you">
+                    AutomationProperties.Name="Show the next node that waits for you">
               <Border Classes="pill waiting">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <PathIcon Theme="{StaticResource Glyph}" />

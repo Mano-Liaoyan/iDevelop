@@ -109,6 +109,7 @@
       <BoxShadows x:Key="NodeShadow">0 1 2 0 #14000000, 0 2 6 0 #0F000000</BoxShadows>
       <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #1A000000, 0 8 20 0 #1A000000</BoxShadows>
       <BoxShadows x:Key="PopoverShadow">0 10 30 0 #29000000, 0 2 6 0 #14000000</BoxShadows>
+      <BoxShadows x:Key="FocusRing">0 0 0 2 #0088FF</BoxShadows>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="AppShellBrush" Color="#13110F" />
@@ -217,11 +218,11 @@
       <BoxShadows x:Key="NodeShadow">0 1 2 0 #66000000, 0 2 8 0 #52000000</BoxShadows>
       <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #73000000, 0 10 24 0 #66000000</BoxShadows>
       <BoxShadows x:Key="PopoverShadow">0 12 32 0 #73000000, 0 2 6 0 #4D000000</BoxShadows>
+      <BoxShadows x:Key="FocusRing">0 0 0 2 #0091FF</BoxShadows>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
   <BoxShadows x:Key="SmallShadow">0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
   <CornerRadius x:Key="RadiusSm">6</CornerRadius>
   <CornerRadius x:Key="RadiusMd">8</CornerRadius>
   <CornerRadius x:Key="RadiusLg">10</CornerRadius>
-  <CornerRadius x:Key="RadiusXl">14</CornerRadius>
 </ResourceDictionary>

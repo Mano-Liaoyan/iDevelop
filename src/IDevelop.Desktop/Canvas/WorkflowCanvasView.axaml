@@ -74,8 +74,8 @@
                       AutomationProperties.AutomationId="GhostCard"
                       AutomationProperties.Name="{Binding Title}">
             <Panel Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}">
-              <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
-              <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
+              <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" />
+              <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="10" RadiusY="10" StrokeThickness="1.5" StrokeDashArray="4,3"
                          theme:StyleClass.Kind="{Binding Kind}" />
               <Grid Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
                 <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />

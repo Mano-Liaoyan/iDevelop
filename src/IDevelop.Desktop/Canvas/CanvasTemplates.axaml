@@ -47,7 +47,7 @@
            canvas:CardBehaviors.Peek="{Binding ShowsPeek}"
            AutomationProperties.AutomationId="TaskCard"
            AutomationProperties.Name="{Binding Title}">
-      <Border Classes="card" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
+      <Border Classes="card" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" />
       <Border Classes="stateTint" Margin="10,0" VerticalAlignment="Top" Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
               IsHitTestVisible="False"
               theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
@@ -116,10 +116,10 @@
               AutomationProperties.AutomationId="CardUnderReview">
         <theme:KindTile Kind="Review" TileSize="18" />
       </Border>
-      <Border Classes="stateStroke" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" BorderThickness="1.5" IsHitTestVisible="False"
+      <Border Classes="stateStroke" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" BorderThickness="1.5" IsHitTestVisible="False"
               theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
       <!-- The selection ring lies outside the card, over the card's shadow. -->
-      <Border Classes="ring" Margin="6,-4" CornerRadius="18" BorderThickness="2" IsHitTestVisible="False" />
+      <Border Classes="ring" Margin="6,-4" CornerRadius="14" BorderThickness="2" IsHitTestVisible="False" />
       <!-- The ports sit on the header's middle line, 32 px down, however tall the card is. -->
       <ContentControl Content="{Binding Input}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.PortMargin}">
         <ContentControl.ContentTemplate>

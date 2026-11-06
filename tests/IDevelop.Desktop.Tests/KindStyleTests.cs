@@ -115,7 +115,7 @@ public sealed class KindStyleTests
         var pill = new Border { Classes = { "pill", "waiting" } };
         Show(pill, ThemeVariant.Light);
 
-        Assert.Equal(["#1AFF8D28", "#66FF8D28"], [Hex(pill.Background), Hex(pill.BorderBrush)]);
+        Assert.Equal(["#1AFF8D28", "#FFC55300"], [Hex(pill.Background), Hex(pill.BorderBrush)]);
     }
 
     [AvaloniaFact]

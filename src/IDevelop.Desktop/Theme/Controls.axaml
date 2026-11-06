@@ -1,14 +1,54 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- A sidebar section header in Title Case, as the popover's and the inspector's are. -->
+  <!-- The app's one design language. Type: 11/16 for key hints, 12/16 for second lines and captions, 13/18 for rows, fields,
+       buttons, and menus, 14/22 for conversation text, 14/20 semibold for titles. Spacing sits on a 4 px grid, with 2 px only
+       between rows. Heights: 20 chip, 24 pill and small glyph button, 28 control, 32 toolbar and primary, 40 bar, 44 two-line
+       row. Radii: 4 small tile, RadiusSm for controls, rows, and pills, RadiusMd for floating bars, menus, and popovers,
+       RadiusLg for cards and the composer. Only Send is round. -->
+
+  <!-- One focus ring on every control: 2 px of the accent 1 px outside it, on keyboard focus only. RadiusSm plus 3 px. -->
+  <Style Selector=":is(Control)">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="9" BorderBrush="{DynamicResource AccentBrush}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <!-- A row in a scrolling list would lose an outer ring to the list's clip, so its ring sits 2 px inside its edge. -->
+  <Style Selector="Button.nav, Button.activity, ToggleButton.projectRow, ListBox.tasks ListBoxItem">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="2" BorderThickness="2" CornerRadius="4" BorderBrush="{DynamicResource AccentBrush}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+
+  <!-- All hover and press fills fade in 120 ms, and nothing moves. -->
+  <Style Selector="Button /template/ ContentPresenter#PART_ContentPresenter, ToggleButton /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- A section label in Title Case, as the popover's and the inspector's are. -->
   <Style Selector="TextBlock.section">
     <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="TextBlock.caption">
     <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <!-- A key hint. Nothing else uses this size. -->
+  <Style Selector="TextBlock.keyHint">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="LineHeight" Value="16" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
@@ -34,7 +74,7 @@
   </Style>
   <Style Selector="Border.badge">
     <Setter Property="Height" Value="20" />
-    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Padding" Value="7,0" />
@@ -46,14 +86,15 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
-  <!-- A status marker: the tone's tint, the tone at 40 to 50% as its border, neutral text, and the tone's glyph. -->
+  <!-- A status marker. One mapping for every surface: the state's fill, its stroke, its glyph, and neutral text. State
+       always has a glyph or a word as well as color. -->
   <Style Selector="Border.pill">
     <Setter Property="Height" Value="24" />
     <Setter Property="Padding" Value="8,0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource StateNeutral10Brush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="Border.pill TextBlock">
@@ -67,7 +108,7 @@
     <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
   </Style>
   <Style Selector="Border.pill.running">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateRunningBrush}" />
     <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
@@ -88,8 +129,8 @@
     </Style.Animations>
   </Style>
   <Style Selector="Border.pill.complete">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSuccess45Brush}" />
-    <Setter Property="Background" Value="{DynamicResource StateSuccessSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.complete PathIcon">
@@ -97,8 +138,8 @@
     <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
   </Style>
   <Style Selector="Border.pill.problem">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateFailed50Brush}" />
-    <Setter Property="Background" Value="{DynamicResource StateFailedSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.problem PathIcon">
@@ -106,7 +147,7 @@
     <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
   </Style>
   <Style Selector="Border.pill.waiting">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateWaiting40Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
     <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
@@ -150,26 +191,27 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.icon:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.nav:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.icon:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.ghost:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="Button.nav:disabled, Button.icon:disabled, Button.ghost:disabled">
-    <Setter Property="Opacity" Value="0.5" />
+  <!-- A disabled control keeps its colors at 40%. A kind segment is disabled while it is the chosen one, so it stays whole. -->
+  <Style Selector="Button:disabled:not(.segment)">
+    <Setter Property="Opacity" Value="0.4" />
   </Style>
   <Style Selector="Button.nav:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.icon:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.ghost:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="Button.nav">
     <Setter Property="Height" Value="32" />
     <Setter Property="Padding" Value="8,0" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="Medium" />
   </Style>
   <Style Selector="Button.icon">
@@ -177,6 +219,10 @@
     <Setter Property="Height" Value="28" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.icon.small">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
   </Style>
   <Style Selector="Button.ghost">
     <Setter Property="Padding" Value="8,0" />
@@ -187,12 +233,12 @@
   <Style Selector="Button.action">
     <Setter Property="Height" Value="32" />
     <Setter Property="Padding" Value="12,0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
@@ -203,15 +249,15 @@
   </Style>
   <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
 
   <!-- The one main command of a panel or sheet, filled with the accent under white text. -->
   <Style Selector="Button.primary">
     <Setter Property="Height" Value="32" />
     <Setter Property="Padding" Value="12,0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
@@ -224,21 +270,21 @@
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
   <Style Selector="Button.primary:pointerover">
-    <Setter Property="Opacity" Value="0.9" />
+    <Setter Property="Opacity" Value="0.92" />
   </Style>
   <Style Selector="Button.primary:pressed">
-    <Setter Property="Opacity" Value="0.8" />
+    <Setter Property="Opacity" Value="0.84" />
   </Style>
   <Style Selector="Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
   <!-- A command that removes something: red text on the neutral button, and a red fill under white text on hover. -->
   <Style Selector="Button.destructive">
     <Setter Property="Height" Value="32" />
     <Setter Property="Padding" Value="12,0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
@@ -254,8 +300,8 @@
   </Style>
   <Style Selector="Button.destructive:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
   </Style>
 
   <Style Selector="Button.segment, RadioButton.segment">
@@ -400,7 +446,7 @@
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
@@ -423,8 +469,8 @@
   </Style>
 
   <Style Selector="TextBox">
-    <Setter Property="FontSize" Value="14" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
@@ -441,10 +487,16 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
   </Style>
+  <!-- A text box shows the ring on any focus, because it takes keys however it got the focus. -->
   <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BoxShadow" Value="{DynamicResource FocusRing}" />
+  </Style>
+  <!-- Fluent fades a placeholder to about 1.6:1 on focus. It stays the muted text in every state. -->
+  <Style Selector="TextBox /template/ TextBlock#PART_Watermark, TextBox:pointerover /template/ TextBlock#PART_Watermark, TextBox:focus /template/ TextBlock#PART_Watermark, TextBox /template/ TextBlock#PART_FloatingWatermark, TextBox:pointerover /template/ TextBlock#PART_FloatingWatermark, TextBox:focus /template/ TextBlock#PART_FloatingWatermark">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <!-- A template gives each search box its own glyph, because one control can have only one parent. -->
   <Style Selector="TextBox.search">
@@ -452,7 +504,7 @@
     <Setter Property="InnerLeftContent">
       <Template>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSearch}" Margin="8,0,0,0"
-                  Foreground="{DynamicResource TextFaintBrush}" />
+                  Foreground="{DynamicResource TextMutedBrush}" />
       </Template>
     </Setter>
   </Style>
@@ -460,19 +512,19 @@
   <!-- Fluent's own state styles set the template's colors, so each state is restated here. -->
   <Style Selector="ComboBox">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
-    <Setter Property="FontSize" Value="14" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="PlaceholderForeground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="ComboBox:pointerover /template/ Border#Background, ComboBox:pressed /template/ Border#Background">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
   </Style>
-  <Style Selector="ComboBox:focus-visible /template/ Border#Background, ComboBox:dropdownopen /template/ Border#Background">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+  <Style Selector="ComboBox:dropdownopen /template/ Border#Background">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <!-- Menus and popovers are opaque overlay surfaces with a hairline border. A highlighted row fills with the accent, and
@@ -488,7 +540,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
     <Setter Property="Padding" Value="4" />
     <Setter Property="MinWidth" Value="180" />
   </Style>
@@ -513,8 +565,8 @@
     </Setter>
   </Style>
   <Style Selector="MenuItem /template/ TextBlock#PART_InputGestureText">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="MenuItem.destructive /template/ ContentPresenter#PART_HeaderPresenter, MenuItem.destructive /template/ ContentControl#PART_IconPresenter">
     <Setter Property="TextElement.Foreground" Value="{DynamicResource DestructiveTextBrush}" />
@@ -541,7 +593,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
     <Setter Property="Padding" Value="4" />
   </Style>
   <Style Selector="MenuItem /template/ Path#PART_ChevronPath">
@@ -582,7 +634,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
     <Setter Property="BoxShadow" Value="{DynamicResource PopoverShadow}" />
   </Style>
 

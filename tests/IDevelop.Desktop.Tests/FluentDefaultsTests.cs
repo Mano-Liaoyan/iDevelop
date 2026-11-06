@@ -34,7 +34,7 @@ public sealed class FluentDefaultsTests : IDisposable
 
         var submenu = shell.Window.GetVisualDescendants().OfType<Border>()
             .Single(border => border.TemplatedParent == replace && border.Name != "PART_LayoutRoot");
-        Assert.Equal((Color.Parse(surface), new CornerRadius(10), new Thickness(1)), (Fill(submenu.Background), submenu.CornerRadius, submenu.BorderThickness));
+        Assert.Equal((Color.Parse(surface), new CornerRadius(8), new Thickness(1)), (Fill(submenu.Background), submenu.CornerRadius, submenu.BorderThickness));
         var chevron = replace.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(path => path.Name == "PART_ChevronPath");
         Assert.Equal(Colors.White, Fill(chevron.Fill));
     }
