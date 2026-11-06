@@ -18,7 +18,7 @@ internal static class CanvasChrome
     /// Below this canvas width the canvas is compact: Generate and the run bar's buttons show only their glyphs, Run Workflow says Run,
     /// the breadcrumb shows only the workflow's name, and the minimap hides.
     /// </summary>
-    public const double CompactWidth = 700;
+    public const double CompactWidth = 680;
 
     /// <summary>
     /// The lowest zoom at which Fit keeps a graph whole. A card's title still reads there, in two lines over 10 px on screen. A

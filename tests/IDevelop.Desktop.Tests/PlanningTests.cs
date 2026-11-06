@@ -320,6 +320,7 @@ public sealed class PlanningTests : IDisposable
             ```
             """);
         shell.Window.RequestedThemeVariant = theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        shell.Window.Width = 1400;
         shell.Render();
         var ghost = shell.Window.GetVisualDescendants().OfType<Panel>().Single(panel => AutomationProperties.GetAutomationId(panel) == "GhostCard");
         var surface = ghost.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("ghost"));

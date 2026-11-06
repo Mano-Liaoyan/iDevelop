@@ -105,7 +105,7 @@ public sealed class ShortcutTests : IDisposable
 
         shell.Press(Key.F2);
         shell.Type("Parser");
-        shell.Click(shell.InEditor(700, 500));
+        shell.Click(shell.InEditor(660, 500));
 
         Assert.Equal(["Build", "Parser"], Titles(shell));
     }

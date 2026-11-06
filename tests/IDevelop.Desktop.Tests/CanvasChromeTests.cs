@@ -41,13 +41,14 @@ public sealed class CanvasChromeTests : IDisposable
         shell.SizeInspector(520);
         Resize(shell, 1000, 600);
 
-        Assert.Equal((256, 406, 336), Widths(shell));
+        Assert.Equal((272, 390, 336), Widths(shell));
 
         shell.SizeSidebar(400);
         Assert.Equal((382, 280, 336), Widths(shell));
 
+        // A narrow window closes the inspector, and it gives its width back to the canvas.
         Resize(shell, 900, 600);
-        Assert.Equal((240, 280, 378), Widths(shell));
+        Assert.Equal((240, 0, 658), Widths(shell));
 
         Resize(shell, 1600, 1000);
         Assert.Equal((400, 520, 678), Widths(shell));
@@ -62,7 +63,7 @@ public sealed class CanvasChromeTests : IDisposable
 
         shell.Drag(shell.Center(splitter), shell.Center(splitter) - new Vector(200, 0));
 
-        Assert.Equal((256, 406, 336), Widths(shell));
+        Assert.Equal((272, 390, 336), Widths(shell));
     }
 
     [AvaloniaFact]
@@ -460,7 +461,7 @@ public sealed class CanvasChromeTests : IDisposable
     private static (double Sidebar, double Inspector, double Canvas) Widths(Shell shell)
     {
         var columns = (Grid)shell.Find<Control>("Inspector").Parent!;
-        return (columns.ColumnDefinitions[0].ActualWidth, shell.Find<Control>("Inspector").Bounds.Width, columns.ColumnDefinitions[2].ActualWidth);
+        return (columns.ColumnDefinitions[0].ActualWidth, columns.ColumnDefinitions[4].ActualWidth, columns.ColumnDefinitions[2].ActualWidth);
     }
 
     private static void Resize(Shell shell, double width, double height, double? inspector = null)

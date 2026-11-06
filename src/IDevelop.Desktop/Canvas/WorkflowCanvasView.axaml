@@ -147,6 +147,9 @@
 
     <!-- The zoom controls, the run bar, and the minimap share the canvas's bottom edge, 12 px above it. The code-behind decides
          what shows, from the canvas's size and from whether a card is outside the view. -->
+    <!-- Cards pass behind the band, so they meet its edge and never a control. -->
+    <Border Classes="canvasBand" VerticalAlignment="Bottom" Height="60" BorderThickness="0,1,0,0" IsHitTestVisible="False" IsVisible="{Binding !IsEmpty}" />
+
     <canvas:CanvasBottomBar x:Name="BottomBar" VerticalAlignment="Bottom" Margin="12">
       <Border x:Name="ZoomPanel" Classes="floating" canvas:CanvasBottomBar.Slot="Leading" IsVisible="{Binding !IsEmpty}">
         <Border Padding="1">

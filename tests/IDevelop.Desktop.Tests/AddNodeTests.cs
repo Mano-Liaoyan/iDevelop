@@ -196,7 +196,7 @@ public sealed class AddNodeTests : IDisposable
         var shell = Shell.Open(_temp.Create("plan"));
         shell.RightClick(shell.InEditor(400, 300));
 
-        shell.Click(shell.InEditor(100, 600));
+        shell.Click(shell.InEditor(40, 100));
 
         Assert.False(shell.AddPopoverIsOpen);
         Assert.Empty(shell.Nodes());

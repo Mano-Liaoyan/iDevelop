@@ -553,4 +553,10 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
   </Style>
+  <!-- The bands along the canvas's top and bottom edges, as a node editor's header bars are. The bars float in them. -->
+  <Style Selector="Border.canvasBand">
+    <Setter Property="Height" Value="48" />
+    <Setter Property="Background" Value="{DynamicResource AppShellBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
 </Styles>

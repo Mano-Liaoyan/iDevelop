@@ -107,7 +107,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     }
 
     /// <summary>The tooltip of the run bar's Next, with its shortcut.</summary>
-    public static string NextHelp => $"Next\n{CanvasKeys.Hint(CanvasKeys.NextAttention)}: show the next node that waits for you or failed";
+    public static string NextHelp => $"Next\nShow the next node that waits for you or failed\n{CanvasKeys.Hint(CanvasKeys.NextAttention)}: next that waits. {CanvasKeys.Hint(CanvasKeys.NextFailed)}: next that failed.";
 
     private bool IsFitted => _viewModel?.FittedView is { } fit && fit.Location == Editor.ViewportLocation && fit.Zoom == Editor.ViewportZoom;
 
@@ -171,13 +171,17 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         var zoom = Editor.ViewportZoom;
         var room = new Rect(Editor.Bounds.Size).Deflate(FitInsets().First());
         var clear = new Rect(Editor.ViewportLocation + (Vector)room.Position / zoom, room.Size / zoom);
-        if (!clear.Contains(card))
+        if (!clear.Contains(card) || UnderMinimap(card))
         {
             // Nodify's animated pan moves the editor alone, so the view model, which places new tasks, would keep
             // the old location.
             Editor.ViewportLocation = card.Center - (Vector)room.Center / zoom;
         }
     }
+
+    // Whether the card sits under the minimap, which floats over the bottom row's corner.
+    private bool UnderMinimap(Rect card) => MinimapPanel.IsVisible && MinimapPanel.TranslatePoint(default, Editor) is { } at
+        && new Rect(Editor.ViewportLocation + (Vector)at / Editor.ViewportZoom, MinimapPanel.Bounds.Size / Editor.ViewportZoom).Intersects(card);
 
     void ICanvasView.Reveal(TaskNodeViewModel node) => BringIntoViewIfHidden(node);
 
