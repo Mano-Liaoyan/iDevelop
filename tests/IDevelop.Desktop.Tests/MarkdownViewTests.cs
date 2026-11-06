@@ -126,6 +126,30 @@ public sealed class MarkdownViewTests
     }
 
     [AvaloniaFact]
+    public void A_task_list_shows_a_box_for_each_item_with_no_bullet_and_no_brackets()
+    {
+        var (window, view) = Show("- [ ] Open\n- [x] Done");
+
+        var boxes = view.GetVisualDescendants().OfType<Border>().Where(border => border.Classes.Contains("mdTask")).ToArray();
+        Assert.Equal([false, true], boxes.Select(box => box.Classes.Contains("done")));
+        Assert.Equal(["Open", "Done"], Blocks(view));
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<TextBlock>(), text => text.Classes.Contains("mdMarker"));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void A_long_code_span_wraps_after_its_separators_and_keeps_every_letter_of_each_word()
+    {
+        const string Span = "entry_id,account_id,tenant_id,posted_at,effective_at,currency,amount_minor,direction,source_system,source_reference,reconciliation_batch";
+        var (window, view) = Show($"`{Span}`");
+        var block = view.GetVisualDescendants().OfType<SelectableTextBlock>().Single();
+        Assert.Equal(Span, Shown(block).Replace("\u00AD", ""));
+        Assert.True(block.TextLayout.TextLines.Count > 1);
+        Assert.All(block.TextLayout.TextLines.Skip(1), line => Assert.Equal('\u00AD', Shown(block)[line.FirstTextSourceIndex - 1]));
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void A_message_past_the_cell_link_or_length_limit_shows_as_its_source()
     {
         static string Table(int rows) => "| a | b | c | d | e | f | g | h | i | j |\n|-|-|-|-|-|-|-|-|-|-|\n"

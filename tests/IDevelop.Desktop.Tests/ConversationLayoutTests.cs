@@ -56,6 +56,33 @@ public sealed class ConversationLayoutTests
         }
     }
 
+    [AvaloniaFact]
+    public void A_reply_shows_its_card_over_the_composer_in_the_main_area_and_the_dock_and_Approve_works_from_it()
+    {
+        using var f = FanOut.Fixture();
+        var shell = Opened(f);
+        var window = shell.Window.ViewModel;
+        var model = window.Conversation!;
+
+        foreach (var docked in new[] { false, true })
+        {
+            window.IsConversationDocked = docked;
+            shell.Render();
+            Assert.Equal((AttentionCard.Reply, "The agent replied", true), (model.Card, model.CardTitle, model.IsCompactCard));
+            Assert.Equal("Reply to Antigravity CLI", model.Watermark);
+            var card = shell.Bounds(shell.Find<Control>("ConversationAttention"));
+            var composer = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer"));
+            Assert.Equal(8, composer.Top - card.Bottom, 0.5);
+        }
+
+        Assert.True(model.Items.OfType<MarkerItemViewModel>().Last().IsHeldByCard);
+        Shell.Invoke(shell.Find<Button>("ConversationApprove"));
+
+        shell.WaitForState("Write docs", Canvas.NodeState.Completed);
+        Assert.Equal(AttentionCard.None, model.Card);
+        Assert.DoesNotContain(model.Items.OfType<MarkerItemViewModel>(), marker => marker.IsHeldByCard);
+    }
+
     /// <summary>Runs the fan-out and opens "Write docs"'s conversation, which waits for the person, over the canvas.</summary>
     private static Shell Opened(NodeFixture f)
     {

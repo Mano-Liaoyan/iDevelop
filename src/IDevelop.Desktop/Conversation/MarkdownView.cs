@@ -35,8 +35,10 @@ public sealed class MarkdownView : StackPanel
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseTaskLists().DisableHtml().Build();
 
-    // A long code span breaks after these, at a zero-width space that a copy leaves out, and not at a letter in mid-word.
-    private const char BreakHere = '\u200B';
+    // A long code span breaks after these, at a soft hyphen, and not at a letter in mid-word. The shaper gives a soft hyphen no
+    // width and no ink, and a copy leaves it out. A zero-width space would not do: a mono font without its glyph moves it to a
+    // run of its own, and the line breaker looks for a break only inside a run.
+    private const char BreakHere = '\u00AD';
     private const int LongSpan = 24;
     private static readonly char[] SpanBreaks = ['/', '\\', '_', '.', ',', ':', '=', '-'];
 
@@ -285,6 +287,9 @@ public sealed class MarkdownView : StackPanel
     {
         switch (inline)
         {
+            case LiteralInline { PreviousSibling: TaskList } literal:
+                target.Add(new Run(literal.Content.ToString().TrimStart()));
+                break;
             case LiteralInline literal:
                 target.Add(new Run(literal.Content.ToString()));
                 break;
@@ -337,25 +342,10 @@ public sealed class MarkdownView : StackPanel
         }
     }
 
-    private static string Breakable(string code)
-    {
-        if (code.Length < LongSpan || code.Contains(' '))
-        {
-            return code;
-        }
-
-        var text = new System.Text.StringBuilder(code.Length + 8);
-        foreach (var letter in code)
-        {
-            text.Append(letter);
-            if (SpanBreaks.Contains(letter))
-            {
-                text.Append(BreakHere);
-            }
-        }
-
-        return text.ToString();
-    }
+    // A short span, or one with spaces of its own, wraps as it is.
+    private static string Breakable(string code) => code.Length < LongSpan || code.Contains(' ')
+        ? code
+        : string.Concat(code.Select((letter, at) => SpanBreaks.Contains(letter) && at + 1 < code.Length ? $"{letter}{BreakHere}" : letter.ToString()));
 
     private const double BodyLineHeight = 22;
 

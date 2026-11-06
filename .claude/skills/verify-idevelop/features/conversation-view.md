@@ -33,8 +33,8 @@ Preconditions:
 
 ## Gotchas
 
-- Only Claude Code, in a May ask or Chat node, asks while its turn runs. Its choices show above the composer as `ConversationChoice` toggles and on the card as `CardChoice`, and `ConversationSend` answers with the chosen ones and the draft. Any other client asks as text in its reply, and the person answers with a message.
+- Only Claude Code, in a May ask or Chat node, asks while its turn runs. Its choices show on the attention card over the composer as `ConversationChoice` toggles, which a digit key picks while the composer is empty, and on the card as `CardChoice`, and `ConversationSend` answers with the chosen ones and the draft. Any other client asks as text in its reply, and the person answers with a message.
 - `CardAttention` exists only while a card needs the person, so `Find-ById $s.Window 'CardAttention' 1` returns `$null` otherwise. UI Automation may not reach a button inside a card; `ConversationWindowTests.A_failed_card_opens_its_conversation_from_its_attention_glyph` covers it headlessly.
-- `ConversationStopAndSend`, `ConversationApprove`, `ConversationStop`, `LoadEarlier`, and `JumpToLatest` exist only while shown. Pass a short timeout.
+- `ConversationApprove`, `ConversationRetry`, `ConversationContinue`, `ConversationMarkResolved`, `ConversationStop`, `ConversationSendMenu`, `LoadEarlier`, and `JumpToLatest` show only in the states they serve. `ConversationStopAndSend`, `ConversationTerminal`, and `ClientLimitations` exist only while their menu or flyout is open. Pass a short timeout.
 - Message text is Markdown rendered into several text elements, so read a message's whole source with its `CopyMessage` button and the clipboard, not from one element.
 - A message longer than 20,000 characters, with more than 1,000 table cells or 500 links, or with blocks that weigh more than 1,000, where a code block weighs 10 and any other block 1, shows as its source in one text element, unformatted.

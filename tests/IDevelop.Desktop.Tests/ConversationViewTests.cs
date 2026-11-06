@@ -100,6 +100,105 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Tool_lines_fold_into_one_group_that_takes_the_next_tool_line_and_a_notice_stands_alone()
+    {
+        _conversation.Add(new ConversationLine.Agent("Reading."), new ConversationLine.Activity("Read a.cs\nall of it", IsTool: true), new ConversationLine.Activity("Bash ls", IsTool: true));
+        var model = Open();
+        var group = Assert.IsType<StepGroupItemViewModel>(model.Items[1]);
+        Assert.True(model.Items[0].IsBeforeSteps);
+
+        _conversation.Add(new ConversationLine.Activity("Bash test", IsTool: true), new ConversationLine.Activity("Rate limit reached.", IsTool: false), new ConversationLine.Activity("Bash again", IsTool: true));
+        Render();
+
+        Assert.Same(group, model.Items[1]);
+        Assert.False(group.IsOpen);
+        Assert.Equal(("3 steps", "Bash test"), (group.CountLabel, group.LastLine));
+        Assert.Equal(["Read a.cs", "Bash ls", "Bash test"], group.Steps.Select(step => step.Line));
+        Assert.Equal("Rate limit reached.", Assert.IsType<ActivityItemViewModel>(model.Items[2]).Line);
+        Assert.Equal("1 step", Assert.IsType<StepGroupItemViewModel>(model.Items[3]).CountLabel);
+    }
+
+    [AvaloniaFact]
+    public void Left_and_Right_fold_and_open_a_group_of_steps()
+    {
+        _conversation.Add(new ConversationLine.Activity("Read a.cs", IsTool: true));
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        var group = Assert.IsType<StepGroupItemViewModel>(model.Items[0]);
+        var row = view.GetVisualDescendants().OfType<ToggleButton>().Single(button => button.Classes.Contains("steps"));
+
+        row.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Right, Source = row });
+        Assert.True(group.IsOpen);
+        row.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Left, Source = row });
+        Assert.False(group.IsOpen);
+    }
+
+    [AvaloniaFact]
+    public void An_author_names_only_the_first_agent_line_after_a_person_or_a_marker_and_every_subagent_line()
+    {
+        _conversation.Add(
+            new ConversationLine.Marker(MarkerKind.Fresh, null),
+            new ConversationLine.Agent("One."),
+            new ConversationLine.Activity("Read a.cs", IsTool: true),
+            new ConversationLine.Agent("Two."),
+            new ConversationLine.Agent("Inner.") { Subagent = "explore" },
+            new ConversationLine.Agent("Three."),
+            new ConversationLine.Person("Go on."),
+            new ConversationLine.Agent("Four."));
+        var model = Open();
+
+        Assert.Equal(
+            [("Codex", true), ("Codex", false), ("Subagent: explore", true), ("Codex", true), ("You", false), ("Codex", true)],
+            model.Items.OfType<MessageItemViewModel>().Select(message => (message.AuthorLabel, message.ShowsAuthor)));
+    }
+
+    [AvaloniaFact]
+    public void A_session_start_counts_its_attempt_and_a_wait_leaves_out_what_the_message_above_said()
+    {
+        _conversation.Add(
+            new ConversationLine.Marker(MarkerKind.Fresh, null),
+            new ConversationLine.Agent("Which file?"),
+            new ConversationLine.Marker(MarkerKind.Waiting, "Which file?"),
+            new ConversationLine.Marker(MarkerKind.Fresh, null),
+            new ConversationLine.Marker(MarkerKind.Waiting, NodeState.Reply));
+        var model = Open();
+        var markers = model.Items.OfType<MarkerItemViewModel>().ToArray();
+
+        Assert.Equal(["Attempt 1 · New session", "Waiting for you", "Attempt 2 · New session", "Waiting for you"], markers.Select(marker => marker.Heading));
+        Assert.Equal(["", ""], new[] { markers[1], markers[3] }.Select(marker => marker.Detail));
+    }
+
+    [AvaloniaFact]
+    public void A_node_that_has_not_run_offers_its_Run_until_a_line_arrives()
+    {
+        var model = Open();
+        Assert.True(model.ShowsEmpty);
+
+        _conversation.Add(new ConversationLine.Marker(MarkerKind.Fresh, null));
+        Render();
+
+        Assert.False(model.ShowsEmpty);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(678, 2, 120)]
+    [InlineData(356, 1, 96)]
+    public void The_strip_shows_the_chips_that_fit_and_the_rest_behind_its_more_chip(double width, int shown, double chip)
+    {
+        var other = IDevelop.Workflows.TaskId.New();
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it."),
+            TaskAt(TestTasks.Build, "A", 405, 90), TaskAt(TestTasks.Review, "B", 405, 190), TaskAt(other, "C", 405, 290),
+            NodeFixture.Dependency(TestTasks.Design, TestTasks.Build), NodeFixture.Dependency(TestTasks.Design, TestTasks.Review), NodeFixture.Dependency(TestTasks.Design, other)));
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var model = new ConversationViewModel(new ConversationTarget(canvas, TestTasks.Design), new ConversationState(), _conversation, _ => Task.CompletedTask);
+        model.FitChips(width);
+
+        Assert.Equal(chip, model.ChipWidth);
+        Assert.Equal((shown, 3 - shown, $"+{3 - shown}"), (model.ShownOutputs.Count, model.MoreOutputs.Count, model.MoreOutputsLabel));
+    }
+
+    [AvaloniaFact]
     public void Text_selected_in_a_row_stays_selected_while_new_lines_refresh_the_view()
     {
         _conversation.Add([.. Enumerable.Range(0, 250).Select(Said)]);

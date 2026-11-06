@@ -13,6 +13,9 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
     /// <summary>The report's first paragraph, which the row's tooltip gives whole.</summary>
     public string Summary => CardNow.FirstParagraph(ResultBlock.Prose(result.Report)) ?? "No report.";
 
+    /// <summary>The summary without Markdown's code and strong marks, for a line that shows it as plain text.</summary>
+    public string PlainSummary => Summary.Replace("`", "").Replace("**", "");
+
     public string Report => ResultBlock.Prose(result.Report);
 
     /// <summary>"Commit 1a2b3c4" for a node that edits the project, or null.</summary>

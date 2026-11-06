@@ -31,6 +31,33 @@ public sealed class QuestionTests
     private static string Answered(NodeFixture f) => File.ReadAllText(Path.Combine(f.Evidence, "answer.json"));
 
     [AvaloniaFact]
+    public void A_digit_in_the_empty_composer_picks_its_choice_on_the_attention_card_and_Ctrl_Enter_answers()
+    {
+        using var f = Asking();
+        var shell = f.Open();
+        var node = shell.NodeModel("Paint");
+        node.RunCommand.Execute(null);
+        shell.WaitUntil(() => node.IsAsking, "the agent asks");
+        node.OpenConversationCommand.Execute(null);
+        shell.Render();
+        var model = shell.Window.ViewModel.Conversation!;
+
+        Assert.Equal((Conversation.AttentionCard.Question, "Answer in your own words"), (model.Card, model.Watermark));
+        Assert.True(shell.Find<Control>("ConversationAttention").IsEffectivelyVisible);
+        Assert.Equal(["1", "2"], node.Questions.Single().Choices.Select(choice => choice.Digit));
+        shell.Find<TextBox>("ConversationComposer").Focus();
+        shell.Press(Avalonia.Input.Key.D2);
+        Assert.True(node.Questions.Single().Choices[1].IsChosen);
+        Assert.Equal("", shell.Find<TextBox>("ConversationComposer").Text);
+        Assert.False(model.PickChoice(3));
+
+        shell.Press(Avalonia.Input.Key.Enter, Avalonia.Input.RawInputModifiers.Control);
+
+        shell.WaitForState("Paint", NodeState.Completed);
+        Assert.Contains("\"Which color?\":\"Blue\"", Answered(f));
+    }
+
+    [AvaloniaFact]
     public void The_card_shows_the_question_with_its_choices_and_Send_answers_with_the_chosen_one_while_the_turn_runs()
     {
         using var f = Asking();

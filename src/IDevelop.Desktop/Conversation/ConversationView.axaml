@@ -207,12 +207,13 @@
               AutomationProperties.AutomationId="ConversationAttention" AutomationProperties.Name="{Binding CardTitle}">
         <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,Auto">
           <Border Grid.ColumnSpan="2" Classes="attentionHeader">
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" VerticalAlignment="Center">
               <PathIcon Classes="attentionGlyph" Theme="{StaticResource Glyph}" Width="14" Height="14" />
               <TextBlock Grid.Column="1" Classes="attentionTitle" Text="{Binding CardTitle}" AutomationProperties.AutomationId="ConversationAttentionTitle" />
             </Grid>
           </Border>
-          <ScrollViewer Grid.Row="1" Grid.ColumnSpan="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <ScrollViewer Grid.Row="1" Grid.ColumnSpan="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                        IsVisible="{Binding !IsCompactCard}">
             <StackPanel Classes="attentionBody" Spacing="8">
               <SelectableTextBlock Classes="attentionText" Text="{Binding CardBody}"
                                    IsVisible="{Binding CardBody, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -327,7 +328,7 @@
             </TextBox.KeyBindings>
           </TextBox>
           <Grid Classes="composerBar" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="4">
-            <Button x:Name="ModelChip" Classes="modelChip" ToolTip.Tip="{Binding ModelChip, StringFormat='Agent: {0}'}" ToolTip.Placement="Top"
+            <Button x:Name="ModelChip" Classes="modelChip" ToolTip.Tip="{Binding ModelChip, StringFormat='Agent: {0}'}"
                     AutomationProperties.AutomationId="ConversationModel" AutomationProperties.Name="{Binding ModelChip, StringFormat='Agent: {0}'}">
               <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" Width="12" Height="12" />
@@ -354,7 +355,7 @@
                 </Flyout>
               </Button.Flyout>
             </Button>
-            <Button Grid.Column="1" x:Name="ComposerMore" Classes="icon small" ToolTip.Tip="More" ToolTip.Placement="Top"
+            <Button Grid.Column="1" x:Name="ComposerMore" Classes="icon small" ToolTip.Tip="More"
                     AutomationProperties.AutomationId="ConversationMore" AutomationProperties.Name="More">
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
               <Button.Flyout>
@@ -370,18 +371,18 @@
               <TextBlock Classes="keyHint" Text="Ctrl+Enter" VerticalAlignment="Center" Margin="0,0,4,0" IsVisible="{Binding HasDraft}"
                          AutomationProperties.AutomationId="ComposerKeyHint" />
               <Button Classes="round stop" Command="{Binding Node.StopCommand}" IsVisible="{Binding Node.ShowsStop}"
-                      ToolTip.Tip="Stop" ToolTip.Placement="Top"
+                      ToolTip.Tip="Stop"
                       AutomationProperties.AutomationId="ConversationStop"
                       AutomationProperties.Name="Stop">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
               </Button>
               <Button Classes="round send" Command="{Binding Node.SendCommand}"
-                      ToolTip.Tip="{Binding SendHelp}" ToolTip.Placement="Top" ToolTip.ShowOnDisabled="True"
+                      ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True"
                       AutomationProperties.AutomationId="ConversationSend"
                       AutomationProperties.Name="Send">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
               </Button>
-              <Button x:Name="SendMenu" Classes="icon sendMenu" IsVisible="{Binding Node.CanStopAndSend}" ToolTip.Tip="More ways to send" ToolTip.Placement="Top"
+              <Button x:Name="SendMenu" Classes="icon sendMenu" IsVisible="{Binding Node.CanStopAndSend}" ToolTip.Tip="More ways to send"
                       AutomationProperties.AutomationId="ConversationSendMenu" AutomationProperties.Name="More ways to send">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronUp}" Width="12" Height="12" />
                 <Button.Flyout>
@@ -455,7 +456,7 @@
                             <TextBlock Text="Show in inspector" />
                           </Button>
                         </Grid>
-                        <TextBlock Classes="resultSummary" Text="{Binding Result.Summary, FallbackValue={x:Null}}" />
+                        <TextBlock Classes="resultSummary" Text="{Binding Result.PlainSummary, FallbackValue={x:Null}}" />
                       </StackPanel>
                     </Border>
                   </StackPanel>
