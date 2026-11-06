@@ -88,7 +88,7 @@ public sealed class QuestionTests
 
         var conversation = shell.Window.ViewModel.Conversation!;
         Assert.Equal("Sending answers the agent's question with your choices and your words.", conversation.ComposerHint);
-        Assert.Equal(["Red", "Blue"], conversation.Questions.Single().Choices.Select(choice => choice.Label));
+        Assert.Equal(["Red", "Blue"], conversation.Node.Questions.Single().Choices.Select(choice => choice.Label));
         Assert.True(shell.Find<Control>("ConversationQuestions").IsEffectivelyVisible);
         shell.Find<TextBox>("ConversationComposer").Text = "Green, please.";
         Shell.Invoke(shell.Find<Button>("ConversationSend"));

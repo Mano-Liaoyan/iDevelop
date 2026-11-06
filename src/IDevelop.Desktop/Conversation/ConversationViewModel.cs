@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
 using IDevelop.Desktop.Canvas;
-using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Engine;
 using NodeState = IDevelop.Desktop.Canvas.NodeState;
@@ -23,14 +22,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 {
     internal const int PageSize = 200;
 
-    private static readonly string[] NodeDependents =
-    [
-        nameof(StatusLabel), nameof(Tone), nameof(ShowsStopAndSend), nameof(ShowsApprove), nameof(ShowsStop), nameof(ComposerHint), nameof(Questions), nameof(IsAsking),
-    ];
-
     private readonly IConversation _conversation;
     private readonly Func<string, Task> _copy;
-    private readonly TaskNodeViewModel _node;
     private readonly RelayCommand _loadEarlier;
     private readonly UiBatch _changed;
     private int _start = -1;
@@ -42,12 +35,12 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         State = state;
         _conversation = conversation;
         _copy = copy;
-        _node = target.Canvas.Nodes.First(node => node.Id == target.Task);
+        Node = target.Canvas.Nodes.First(node => node.Id == target.Task);
         _loadEarlier = new RelayCommand(LoadEarlier, () => HasEarlier);
         // The log tells of each line, often several at once and off the UI thread, so the view reads once per batch.
         _changed = new UiBatch(Refresh);
         state.PropertyChanged += OnStateChanged;
-        _node.PropertyChanged += OnNodeChanged;
+        Node.PropertyChanged += OnNodeChanged;
         conversation.Changed += _changed.Request;
         Refresh();
     }
@@ -57,31 +50,23 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The conversation's workflow, whose bar the view repeats while it covers the canvas.</summary>
     public WorkflowCanvasViewModel Canvas => Target.Canvas;
 
-    internal ConversationState State { get; }
+    /// <summary>The node, which the view reads and raises for its state, questions, and commands.</summary>
+    public TaskNodeViewModel Node { get; }
 
-    public string Title => _node.Title;
+    internal ConversationState State { get; }
 
     /// <summary>The project and workflow the node belongs to, as the breadcrumb names them.</summary>
     public string Breadcrumb => $"{Target.Canvas.Project.Name} › {Target.Canvas.Name}";
 
-    public string AgentName => _node.Definition.Execution?.Client is { } client ? ClientCatalog.Name(client) : "The agent";
-
-    public string StatusLabel => _node.StatusLabel;
-
-    public StatusTone Tone => _node.Tone;
+    public string AgentName => Node.Definition.Execution?.Client is { } client ? ClientCatalog.Name(client) : "The agent";
 
     /// <summary>
     /// How the agent asks: Claude Code asks with its choices while its turn runs, and any other client asks in its reply,
     /// which the person answers with a message.
     /// </summary>
-    public string Limitations => _node.Definition.Execution?.Client == ClientId.ClaudeCode
+    public string Limitations => Node.Definition.Execution?.Client == ClientId.ClaudeCode
         ? "Claude Code asks with its choices while its turn runs. Choose, or answer in your own words."
         : "The agent's questions arrive in its reply. Answer them with your message.";
-
-    /// <summary>What the agent asks while its turn runs, each question with its choices, which Send answers.</summary>
-    public IReadOnlyList<QuestionViewModel> Questions => _node.Questions;
-
-    public bool IsAsking => _node.IsAsking;
 
     public ObservableCollection<ConversationItemViewModel> Items { get; } = [];
 
@@ -91,33 +76,16 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         set => State.Draft = value;
     }
 
-    public string ComposerHint => IsAsking ? "Sending answers the agent's question with your choices and your words." : _node.State switch
+    public string ComposerHint => Node.IsAsking ? "Sending answers the agent's question with your choices and your words." : Node.State switch
     {
         NodeState.Running => "Your message waits for this turn to end. Stop and send ends the turn first.",
         NodeState.Idle => "Run the node first. A message continues its session.",
         _ => "Sending continues the node's session.",
     };
 
-    public string Watermark => _node.Definition.Execution?.Client is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
+    public string Watermark => Node.Definition.Execution?.Client is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
 
     public bool HasEarlier => _start > 0;
-
-    public bool ShowsStopAndSend => _node.CanStopAndSend;
-
-    /// <summary>A Chat node's reply, which approving makes its result.</summary>
-    public bool ShowsApprove => _node.ShowsApprove;
-
-    public bool ShowsStop => _node.ShowsStop;
-
-    public ICommand SendCommand => _node.SendCommand;
-
-    public ICommand StopAndSendCommand => _node.StopAndSendCommand;
-
-    public ICommand ApproveCommand => _node.ApproveCommand;
-
-    public ICommand StopCommand => _node.StopCommand;
-
-    public ICommand OpenInTerminalCommand => _node.OpenInTerminalCommand;
 
     public ICommand LoadEarlierCommand => _loadEarlier;
 
@@ -135,7 +103,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _conversation.Changed -= _changed.Request;
         _conversation.Dispose();
         State.PropertyChanged -= OnStateChanged;
-        _node.PropertyChanged -= OnNodeChanged;
+        Node.PropertyChanged -= OnNodeChanged;
     }
 
     internal Task CopyAsync(string text) => _copy(text);
@@ -193,11 +161,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     private void OnNodeChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(TaskNodeViewModel.Title))
-        {
-            OnPropertyChanged(nameof(Title));
-        }
-        else if (e.PropertyName is nameof(TaskNodeViewModel.AgentLabel))
+        if (e.PropertyName is nameof(TaskNodeViewModel.AgentLabel))
         {
             OnPropertyChanged(nameof(AgentName));
             OnPropertyChanged(nameof(Watermark));
@@ -205,10 +169,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         }
         else if (e.PropertyName is nameof(TaskNodeViewModel.EngineState))
         {
-            foreach (var property in NodeDependents)
-            {
-                OnPropertyChanged(property);
-            }
+            OnPropertyChanged(nameof(ComposerHint));
         }
     }
 }
