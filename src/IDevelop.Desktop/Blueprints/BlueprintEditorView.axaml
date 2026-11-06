@@ -144,17 +144,31 @@
                                 IsShown="{Binding HasTemplate}">
       <StackPanel>
         <inspector:InspectorRow Layout="Full">
-          <TextBox Classes="multiline" Text="{Binding Template}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="120"
+          <TextBox Classes="multiline code" Text="{Binding Template}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="120"
                    AutomationProperties.AutomationId="BlueprintTemplate"
                    AutomationProperties.Name="Template" />
         </inspector:InspectorRow>
         <inspector:InspectorRow Label="Fix template" Layout="Stacked" IsShown="{Binding IsReview}">
-          <TextBox Classes="multiline" Text="{Binding FixTemplate}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="80"
+          <TextBox Classes="multiline code" Text="{Binding FixTemplate}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="80"
                    AutomationProperties.AutomationId="BlueprintFixTemplate"
                    AutomationProperties.Name="Fix template" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Layout="Full">
-          <TextBlock Classes="caption" Text="{Binding TemplateHelp}" TextWrapping="Wrap" />
+        <!-- What the agent would read, from the fields' defaults. -->
+        <inspector:InspectorRow Label="Preview" Layout="Stacked" IsShown="{Binding TemplatePreview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <Border Classes="templatePreview">
+            <TextBlock Classes="promptText" Text="{Binding TemplatePreview}"
+                       AutomationProperties.AutomationId="BlueprintPreview" />
+          </Border>
+        </inspector:InspectorRow>
+        <inspector:InspectorRow Layout="Buttons">
+          <Button Classes="textLink" Content="Template help" ToolTip.Tip="What a template can insert"
+                  AutomationProperties.AutomationId="TemplateHelp" AutomationProperties.Name="Template help">
+            <Button.Flyout>
+              <Flyout Placement="LeftEdgeAlignedTop">
+                <SelectableTextBlock Classes="wholeText" Text="{Binding TemplateHelp}" />
+              </Flyout>
+            </Button.Flyout>
+          </Button>
         </inspector:InspectorRow>
       </StackPanel>
     </inspector:InspectorSection>
@@ -174,10 +188,10 @@
           <TextBox Text="{Binding Reasoning}" Watermark="The model's default"
                    AutomationProperties.AutomationId="BlueprintReasoning" AutomationProperties.Name="Reasoning" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Label="Conversation" IsShown="{Binding IsAgent}">
+        <inspector:InspectorRow Label="Mode" IsShown="{Binding IsAgent}">
           <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding Conversation}"
                     AutomationProperties.AutomationId="BlueprintConversation"
-                    AutomationProperties.Name="Conversation" />
+                    AutomationProperties.Name="Mode" />
         </inspector:InspectorRow>
       </StackPanel>
     </inspector:InspectorSection>

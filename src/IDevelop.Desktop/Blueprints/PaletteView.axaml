@@ -21,7 +21,7 @@
             <ItemsControl ItemsSource="{Binding Entries}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="blueprints:BlueprintEntryViewModel">
-                  <inspector:InspectorRow Layout="Title" Classes="entry quietActions" Label="{Binding Name}">
+                  <inspector:InspectorRow Layout="Title" Classes="entry" Label="{Binding Name}">
                     <ToolTip.Tip>
                       <StackPanel Spacing="2" MaxWidth="280">
                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -40,7 +40,7 @@
                                 AutomationProperties.Name="{Binding PlaceName}">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
                         </Button>
-                        <Button Classes="glyph" ToolTip.Tip="More"
+                        <Button Classes="glyph quiet" ToolTip.Tip="More"
                                 AutomationProperties.AutomationId="BlueprintMore"
                                 AutomationProperties.Name="{Binding MoreName}">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />

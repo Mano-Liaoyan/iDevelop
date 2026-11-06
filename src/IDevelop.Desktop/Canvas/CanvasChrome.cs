@@ -26,6 +26,11 @@ internal static class CanvasChrome
     /// <summary>Below this canvas width the run bar's summary shortens to "5/9", and its tooltip keeps the whole text.</summary>
     public const double NarrowBarWidth = 520;
 
+    /// <summary>Below this canvas width the run bar's progress shrinks, so its summary fits whole.</summary>
+    public const double ShortBarWidth = 760;
+
+    public static bool IsShortBar(Size canvas) => canvas.Width < ShortBarWidth;
+
     /// <summary>From this many nodes a fit shows too little of each, so the minimap stays in view.</summary>
     public const int LargeGraph = 24;
 

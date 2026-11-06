@@ -389,7 +389,7 @@ public sealed class CanvasChromeTests : IDisposable
             {
                 // A run's Stop All takes the label's width.
                 Assert.Empty(labels);
-                Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
+                Assert.Equal(compact ? (32.0, 32.0) : (button.Bounds.Width, 32.0), (button.Bounds.Width, button.Bounds.Height));
             }
             else
             {

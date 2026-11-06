@@ -23,7 +23,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
         [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices)],
         [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsAcceptAndFinish), nameof(Actions)],
         [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
-        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentChanges), nameof(CanRevertAgent), nameof(PeekAgent)],
+        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
         [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
         [nameof(Preview)] = [nameof(TaskChanges)],
         [nameof(PermissionNote)] = [nameof(PermissionSummary)],

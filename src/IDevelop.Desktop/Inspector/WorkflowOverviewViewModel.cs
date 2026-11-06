@@ -5,9 +5,6 @@ using IDevelop.Desktop.Mvvm;
 
 namespace IDevelop.Desktop.Inspector;
 
-/// <summary>How many of the workflow's nodes are of one kind.</summary>
-public sealed record KindCount(NodeKind Kind, string Label, int Count);
-
 /// <summary>How many of the workflow's nodes are in one state.</summary>
 public sealed record StateCount(NodeState State, string Label, int Count)
 {
@@ -19,7 +16,6 @@ public sealed record StateCount(NodeState State, string Label, int Count)
 public sealed class WorkflowOverviewViewModel : ObservableObject
 {
     private readonly WorkflowCanvasViewModel _canvas;
-    private ImmutableArray<KindCount> _kinds = [];
     private ImmutableArray<StateCount> _states = [];
 
     internal WorkflowOverviewViewModel(WorkflowCanvasViewModel canvas)
@@ -47,11 +43,6 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
     /// <summary>Each state that holds a node, the states that want the person's eye first.</summary>
     public IReadOnlyList<StateCount> States => _states;
 
-    /// <summary>Each kind the workflow holds, in the registry's order.</summary>
-    public IReadOnlyList<KindCount> Kinds => _kinds;
-
-    public bool HasKinds => !_kinds.IsEmpty;
-
     public bool HasStates => !_states.IsEmpty;
 
     /// <summary>The libraries, which the workflow inspector lists under the overview.</summary>
@@ -59,15 +50,6 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
 
     private void Count()
     {
-        ImmutableArray<KindCount> kinds =
-            [.. _canvas.Nodes.GroupBy(node => node.Kind).OrderBy(group => group.Key).Select(group => new KindCount(group.Key, NodeKinds.Info(group.Key).Label, group.Count()))];
-        if (!kinds.SequenceEqual(_kinds))
-        {
-            _kinds = kinds;
-            OnPropertyChanged(nameof(Kinds));
-            OnPropertyChanged(nameof(HasKinds));
-        }
-
         OnPropertyChanged(nameof(TaskCount));
         CountStates();
     }

@@ -46,7 +46,7 @@ public sealed class InspectorHeaderTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_completed_node_leads_with_its_conversation_and_offers_Run_again()
+    public void A_completed_node_leads_with_its_conversation_and_offers_Run_from_here()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105));
         f.Install(Reply("s-1", "Hello."));
@@ -56,11 +56,11 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.Completed);
         shell.Render();
 
-        Assert.Equal(["*Conversation", "Run again"], Actions(shell));
+        Assert.Equal(["*Conversation", "Run from here"], Actions(shell));
     }
 
     [AvaloniaFact]
-    public void A_node_that_waits_for_a_reply_leads_with_Reply_and_keeps_Retry_and_Approve()
+    public void A_node_that_waits_for_a_reply_leads_with_Reply_and_Approve_and_keeps_Retry_in_the_menu()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105, ConversationMode.Chat));
         f.Install(Reply("s-1", "Which fruit?"));
@@ -70,8 +70,28 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.InputRequired);
         shell.Render();
 
-        Assert.Equal(["*Reply", "Retry", "Approve"], Actions(shell));
-        Assert.False(shell.NodeModel("Say hi").RetryIsInMenu);
+        Assert.Equal(["*Reply", "Approve"], Actions(shell));
+        Assert.True(shell.NodeModel("Say hi").RetryIsInMenu);
+    }
+
+    [AvaloniaFact]
+    public void An_open_conversation_is_the_current_action_and_a_question_stays_in_it()
+    {
+        using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105, ConversationMode.Chat));
+        f.Install(Reply("s-1", "Which fruit?"));
+        var shell = f.Open();
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.RunNode("Say hi");
+        shell.WaitForState("Say hi", NodeState.InputRequired);
+        var node = shell.NodeModel("Say hi");
+        Assert.True(node.ShowsStateDetail);
+
+        node.OpenConversationCommand.Execute(null);
+        shell.Render();
+
+        var action = node.Actions[0];
+        Assert.Equal((false, true), (action.IsPrimary, action.IsCurrent));
+        Assert.False(node.ShowsStateDetail);
     }
 
     [AvaloniaFact]
@@ -176,23 +196,6 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.Press(Key.F2);
 
         Assert.Same(shell.Find<TextBox>("TaskTitle"), shell.Window.FocusManager!.GetFocusedElement());
-    }
-
-    [AvaloniaFact]
-    public void Save_shows_beside_the_filter_only_while_the_workflow_has_changes()
-    {
-        var shell = Linked();
-        shell.Click(shell.Header(shell.Node("Design")));
-        Assert.False(shell.Find<Button>("InspectorSave").IsEffectivelyVisible);
-
-        shell.Find<TextBox>("TaskTitle").Text = "Design it";
-        shell.Render();
-        Assert.True(shell.Find<Button>("InspectorSave").IsEffectivelyVisible);
-
-        shell.Click(shell.Find<Button>("InspectorSave"));
-
-        Assert.False(shell.Find<Button>("InspectorSave").IsEffectivelyVisible);
-        Assert.False(shell.Window.ViewModel.HasUnsavedChanges);
     }
 
     [AvaloniaFact]

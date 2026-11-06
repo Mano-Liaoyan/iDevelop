@@ -141,7 +141,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
                           <Panel IsVisible="{Binding RunsNothing}">
-                            <TextBlock Classes="label" Text="Add Node" VerticalAlignment="Center" />
+                            <TextBlock Classes="label" Text="Node" VerticalAlignment="Center" />
                           </Panel>
                         </StackPanel>
                       </Button>
@@ -177,7 +177,7 @@
                               AutomationProperties.Name="Stop All">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                          <TextBlock Text="Stop All" VerticalAlignment="Center" />
+                          <TextBlock Classes="wideOnly" Text="Stop All" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                       <!-- The workflow's one primary action. An empty workflow's primary action is on the canvas's Generate card. -->
@@ -245,7 +245,7 @@
               IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
               PointerPressed="OnTitleBandPressed" />
       <Panel>
-        <TextBlock Text="Select a node to edit it." HorizontalAlignment="Center" VerticalAlignment="Center"
+        <TextBlock Text="Open a project to inspect its nodes." HorizontalAlignment="Center" VerticalAlignment="Center"
                    FontSize="13" LineHeight="18" Foreground="{DynamicResource TextMutedBrush}"
                    IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}"
                    AutomationProperties.AutomationId="InspectorEmpty" />

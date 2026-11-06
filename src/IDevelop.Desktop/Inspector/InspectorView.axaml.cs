@@ -18,9 +18,7 @@ public partial class InspectorView : UserControl
         InitializeComponent();
         InspectorState.SetCurrent(this, _state);
         InspectorState.SetCurrent(EditorHost, new InspectorState());
-        // Every row of the panel, the blueprint editor's too, puts its value under its label below the default width.
         AddHandler(KeyDownEvent, OnKeyDownInPanel, RoutingStrategies.Bubble);
-        SizeChanged += (_, change) => InspectorGrid.SetIsNarrow(this, change.NewSize.Width < InspectorGrid.NarrowPanelWidth);
         EditorHost.PropertyChanged += (_, change) =>
         {
             if (change.Property == ContentProperty)
@@ -102,15 +100,6 @@ public partial class InspectorView : UserControl
             title.Focus(NavigationMethod.Tab);
             title.SelectAll();
             e.Handled = true;
-        }
-    }
-
-    // The window owns Save, and the canvas's bar far from the edited value offers it too.
-    private void OnSave(object? sender, RoutedEventArgs e)
-    {
-        if (TopLevel.GetTopLevel(this)?.DataContext is MainWindowViewModel window && window.SaveCommand.CanExecute(null))
-        {
-            window.SaveCommand.Execute(null);
         }
     }
 

@@ -483,6 +483,16 @@
   <Style Selector=":is(Control).narrowBar TextBlock.barLong">
     <Setter Property="IsVisible" Value="False" />
   </Style>
+  <!-- The progress gives up width first, so the words it stands beside fit whole. -->
+  <Style Selector="Border.barProgress">
+    <Setter Property="Width" Value="120" />
+  </Style>
+  <Style Selector=":is(Control).shortBar Border.barProgress">
+    <Setter Property="Width" Value="56" />
+  </Style>
+  <Style Selector=":is(Control).narrowBar Border.barProgress">
+    <Setter Property="Width" Value="32" />
+  </Style>
   <Style Selector=":is(Control).narrowBar TextBlock.followLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>

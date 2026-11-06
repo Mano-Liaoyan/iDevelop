@@ -149,6 +149,25 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         set => Set(ref _fixTemplate, value);
     }
 
+    /// <summary>The template with each field's default, or its label where it has none, or null while the template does not parse.</summary>
+    public string? TemplatePreview
+    {
+        get
+        {
+            try
+            {
+                var values = Fields.GroupBy(row => row.Key).ToDictionary(group => group.Key, group => group.First());
+                return PromptTemplate.Parse(_template).Render(name => values.TryGetValue(name, out var row)
+                    ? string.IsNullOrEmpty(row.Default) ? $"[{row.Label}]" : row.Default
+                    : $"[{name}]").Trim();
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+        }
+    }
+
     public string TemplateHelp =>
         "{{title}} inserts the node's title, {{inputs}} what earlier nodes handed on, and {{key}} a field's value. " +
         (IsReview ? "{{ticket}}, {{report}}, and {{change}} insert the reviewed task's ticket, its report, and its change, and {{findings}} the findings that stand. " : "") +
@@ -219,6 +238,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
 
     internal void Validate()
     {
+        OnPropertyChanged(nameof(TemplatePreview));
         Problem = Build(out var problem) is null ? problem : null;
         _save.NotifyCanExecuteChanged();
     }

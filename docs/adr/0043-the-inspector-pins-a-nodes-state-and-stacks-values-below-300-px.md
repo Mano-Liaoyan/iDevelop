@@ -1,5 +1,7 @@
 # The inspector pins a node's state and stacks values below 300 px
 
+Superseded by [ADR 0044](0044-the-inspector-keeps-one-right-edge-and-a-value-beside-its-label-at-every-width.md).
+
 The inspector puts what a node needs now in a pinned header, and it shows a node's model in its sections: Input, Task, Agent, and Output. At the 320 px default, values sit beside their labels. Only the 280 px minimum stacks them. This record supersedes [ADR 0021](0021-the-inspector-keeps-two-right-edges-and-stacks-values-below-440-px.md).
 
 Round 0 of the UI review found that a node's status started 757 px down an 800 px window, that Open conversation took 71 Tab presses, and that the inspector showed no input at all. Each picker row was 56 px high, because the 320 px default stacked every value. The model is in [ADR 0031](0031-a-node-is-an-abstraction-of-an-agent.md): a node is an agent with input, instructions, an agent, and output.

@@ -12,8 +12,7 @@ namespace IDevelop.Desktop.Inspector;
 public enum RowLayout
 {
     /// <summary>
-    /// The label in the label column and the value beside it in the value column, or, in an inspector narrower than
-    /// <see cref="InspectorGrid.NarrowPanelWidth"/>, the value under its label from the glyph column to the value edge.
+    /// The label in the label column and the value beside it in the value column.
     /// </summary>
     Columns,
 
@@ -182,8 +181,7 @@ public sealed class InspectorRow : InspectorPart
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == LayoutProperty || change.Property == InspectorGrid.IsNarrowProperty
-            || change.Property == IconProperty || change.Property == LeadProperty)
+        if (change.Property == LayoutProperty || change.Property == IconProperty || change.Property == LeadProperty)
         {
             UpdateShape();
         }
@@ -219,11 +217,9 @@ public sealed class InspectorRow : InspectorPart
         }
     }
 
-    // A narrow panel stacks every labelled value, so a row beside its label takes a stacked row's shape there.
     private void UpdateShape()
     {
-        var narrow = InspectorGrid.GetIsNarrow(this);
-        PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked || Layout == RowLayout.Columns && narrow);
+        PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked);
         PseudoClasses.Set(":full", Layout == RowLayout.Full);
         PseudoClasses.Set(":buttons", Layout == RowLayout.Buttons);
         PseudoClasses.Set(":title", Layout == RowLayout.Title);

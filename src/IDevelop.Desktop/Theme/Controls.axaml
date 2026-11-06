@@ -614,6 +614,16 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
   </Style>
+  <!-- Keyboard focus shows as the one ring, with no fill of Fluent's that reads as selected. -->
+  <Style Selector="ComboBox:focus-visible /template/ Border#HighlightBackground">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="ComboBox:focus-visible /template/ ContentControl#ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="ComboBox:focus-visible /template/ TextBlock#PlaceholderTextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
   <Style Selector="ComboBox:dropdownopen /template/ Border#Background">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>

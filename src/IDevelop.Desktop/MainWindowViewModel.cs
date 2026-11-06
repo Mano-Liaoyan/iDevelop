@@ -101,8 +101,11 @@ public sealed class MainWindowViewModel : ObservableObject
         get;
         private set
         {
+            var shown = field?.Node;
             if (SetProperty(ref field, value))
             {
+                shown?.IsConversationShown = false;
+                value?.Node.IsConversationShown = true;
                 OnConversationLayoutChanged();
             }
         }

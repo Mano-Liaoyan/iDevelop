@@ -10,7 +10,8 @@ namespace IDevelop.Desktop.Inspector;
 /// <param name="Command">What the button does.</param>
 /// <param name="IsPrimary">The button is the row's filled one.</param>
 /// <param name="Tip">The tooltip, which holds the reason on a button that is off.</param>
-public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip);
+/// <param name="IsCurrent">What the button opens shows now, so the button is no longer the next step.</param>
+public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip, bool IsCurrent = false);
 
 /// <summary>Which actions the pinned header offers a node in each state, in order: the likeliest next step first.</summary>
 internal static class NodeActions
@@ -42,13 +43,13 @@ internal static class NodeActions
 
         if (node.IsAsking || node.IsWaiting)
         {
-            return Row(Conversation(node, "Reply"), node.ShowsRetry ? Retry(node, primary: false) : null,
-                node.ShowsStop ? Stop(node) : null, node.ShowsApprove ? Approve(node, primary: false) : null);
+            // Retry would end what the agent waits on, so it stays in the More menu.
+            return Row(Conversation(node, "Reply"), node.ShowsStop ? Stop(node) : null, node.ShowsApprove ? Approve(node, primary: false) : null);
         }
 
         return node.State switch
         {
-            NodeState.Idle => Row(new NodeAction("RunTask", "Run", "IconRun", node.RunCommand, true, node.RunRefusal), Conversation(node, "Conversation", primary: false)),
+            NodeState.Idle => Row(new NodeAction("RunTask", "Run", "IconRun", node.RunCommand, true, node.RunRefusal ?? "Runs this node, then each node after it"), Conversation(node, "Conversation", primary: false)),
             NodeState.Running => Row(Conversation(node, "Conversation"), Stop(node)),
             NodeState.Failed or NodeState.Stale => Row(Retry(node, primary: true), Conversation(node, "Conversation", primary: false)),
             _ => Row(Conversation(node, "Conversation"), node.ShowsRetry ? Retry(node, primary: !node.HasAgent) : null),
@@ -59,7 +60,8 @@ internal static class NodeActions
 
     // An approval node has no agent to talk to, so it takes no conversation button.
     private static NodeAction? Conversation(TaskNodeViewModel node, string label, bool primary = true) => node.HasAgent
-        ? new NodeAction("OpenConversation", label, "IconChat", node.OpenConversationCommand, primary, node.AttentionLabel ?? "Open the full conversation")
+        ? new NodeAction("OpenConversation", label, "IconChat", node.OpenConversationCommand, primary && !node.IsConversationShown,
+            node.IsConversationShown ? "The conversation is open" : $"{node.AttentionLabel ?? "Open the full conversation"} (Enter)", node.IsConversationShown)
         : null;
 
     private static NodeAction Approve(TaskNodeViewModel node, bool primary) =>
@@ -69,7 +71,8 @@ internal static class NodeActions
         new("SendBack", "Send back", "IconUndo", node.SendBackCommand, false, "Write a note first. It goes to the nodes before this one.");
 
     private static NodeAction Retry(TaskNodeViewModel node, bool primary) =>
-        new("RetryTask", node.State == NodeState.Completed ? "Run again" : "Retry", "IconRefresh", node.RetryCommand, primary, node.RunRefusal ?? "Runs it again in a fresh session");
+        new("RetryTask", node.State == NodeState.Completed ? "Run from here" : "Retry", "IconRefresh", node.RetryCommand, primary,
+            node.RunRefusal ?? "Runs this node again in a fresh session, then each node after it");
 
     private static NodeAction Stop(TaskNodeViewModel node) => new("StopTask", "Stop", "IconStop", node.StopCommand, false, null);
 }

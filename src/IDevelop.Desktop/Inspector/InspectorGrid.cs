@@ -4,18 +4,17 @@ using Avalonia.Controls;
 namespace IDevelop.Desktop.Inspector;
 
 /// <summary>
-/// The inspector's one set of columns, which every row shares: a 14 px glyph or kind tile, a gap, the label, the value,
-/// and a 24 px slot for a revert arrow, a state glyph, or a count, which a row of two buttons widens. The label column
-/// keeps one width, so values start at one place at every width. The panel has two right edges: glyph buttons and rows of
-/// buttons end at the panel's inset, and boxes and paragraphs end before the trailing column. A count ends where the
-/// glyphs' drawing ends, <see cref="GlyphInkInset"/> inside the first.
+/// The inspector's one set of columns, which every row shares: a 14 px glyph, kind tile, or revert arrow, a gap, the label,
+/// the value, and a slot for what a row adds after its value, such as a state glyph, a count, or a blueprint's buttons. The
+/// label column keeps one width, so values start at one place at every width. The panel has one right edge: boxes,
+/// paragraphs, and buttons end at the panel's inset. A count ends where the glyphs' drawing ends, <see cref="GlyphInkInset"/> inside it.
 /// </summary>
 public sealed class InspectorGrid : Grid
 {
     /// <summary>The label column, which holds "Conversation", the longest label beside a value.</summary>
     public const double LabelWidth = 76;
 
-    /// <summary>The trailing column: one 24 px glyph button, such as a revert arrow.</summary>
+    /// <summary>A 24 px glyph button, such as a revert arrow, in the trailing column of a stacked row.</summary>
     public const double TrailWidth = 24;
 
     /// <summary>The first column, a field's glyph or a kind tile.</summary>
@@ -45,30 +44,12 @@ public sealed class InspectorGrid : Grid
     /// <summary>A trailing count's margin, which ends its digits <see cref="GlyphInkInset"/> before the action edge.</summary>
     public static Thickness GlyphInkMargin { get; } = new(0, 0, GlyphInkInset, 0);
 
-    /// <summary>
-    /// The inspector width under which every value moves under its label: only the 280 px minimum. From this width a value
-    /// sits beside its label, and a picker too narrow for a long model name ends it in an ellipsis, with the whole name in
-    /// its tooltip and in its wider list.
-    /// </summary>
-    public const double NarrowPanelWidth = 300;
-
-    /// <summary>
-    /// Whether the inspector is narrower than <see cref="NarrowPanelWidth"/>, so every row puts its value under its label.
-    /// The panel sets it and its rows inherit it, so they switch together, even a row inside a group.
-    /// </summary>
-    public static readonly AttachedProperty<bool> IsNarrowProperty =
-        AvaloniaProperty.RegisterAttached<InspectorGrid, Control, bool>("IsNarrow", inherits: true);
-
     public InspectorGrid() => ColumnDefinitions =
     [
         new ColumnDefinition(GlyphWidth, GridUnitType.Pixel),
         new ColumnDefinition(GlyphGap, GridUnitType.Pixel),
         new ColumnDefinition(LabelWidth, GridUnitType.Pixel),
         new ColumnDefinition(1, GridUnitType.Star),
-        new ColumnDefinition(GridLength.Auto) { MinWidth = TrailWidth },
+        new ColumnDefinition(GridLength.Auto),
     ];
-
-    public static bool GetIsNarrow(Control control) => control.GetValue(IsNarrowProperty);
-
-    public static void SetIsNarrow(Control control, bool value) => control.SetValue(IsNarrowProperty, value);
 }

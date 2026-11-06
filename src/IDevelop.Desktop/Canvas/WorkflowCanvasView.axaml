@@ -213,7 +213,7 @@
           <Border Classes="floating">
             <Border Height="38" Padding="8,0">
               <DockPanel>
-                <Border DockPanel.Dock="Left" Width="120" Height="6" CornerRadius="3" ClipToBounds="True" Margin="0,0,8,0" VerticalAlignment="Center">
+                <Border DockPanel.Dock="Left" Classes="barProgress" Height="6" CornerRadius="3" ClipToBounds="True" Margin="0,0,8,0" VerticalAlignment="Center">
                   <theme:StateBar Counts="{Binding Counts}" AutomationProperties.AutomationId="RunProgress" />
                 </Border>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">

@@ -80,13 +80,21 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <!-- The status, the actions, and the detail sit 8 px apart, and any of them may be gone. -->
-  <Style Selector="Border.headerPill, ItemsControl.headerActions">
+  <Style Selector="WrapPanel.headerState">
     <Setter Property="Margin" Value="0,8,0,0" />
+  </Style>
+  <Style Selector="WrapPanel.headerState > Border.headerPill">
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
   </Style>
   <Style Selector="Border.headerPill">
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="24" />
     <Setter Property="Padding" Value="8,3" />
+  </Style>
+  <!-- The action's view is open now: it stops being the next step and says so. -->
+  <Style Selector="ItemsControl.headerActions Button.current">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
   </Style>
   <Style Selector="Border.headerPill TextBlock">
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -121,8 +129,33 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
+  <Style Selector="TextBlock.promptText">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="MaxLines" Value="3" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBox.code">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Border.templatePreview">
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Border.templatePreview > TextBlock.promptText">
+    <Setter Property="MaxLines" Value="8" />
+  </Style>
+  <Style Selector="SelectableTextBlock.promptWhole">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
   <Style Selector="TextBlock.detail.clamped">
-    <Setter Property="MaxLines" Value="4" />
+    <Setter Property="MaxLines" Value="2" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
   </Style>
   <Style Selector="Button.textLink">
@@ -159,7 +192,7 @@
   </Style>
   <Style Selector="Border.filterBar Button.action">
     <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
-    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Padding" Value="8,0" />
     <Setter Property="FontSize" Value="13" />
   </Style>
 
@@ -302,16 +335,20 @@
                             VerticalAlignment="Top" VerticalContentAlignment="Center" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
           <StackPanel Name="PART_Trail" Grid.Row="0" Grid.Column="4" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Top"
                       Height="{x:Static inspector:InspectorGrid.LineHeight}">
-            <Button Classes="glyph revert"
+            <ContentPresenter Content="{TemplateBinding Actions}" VerticalAlignment="Center"
+                              IsVisible="{TemplateBinding Actions, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+          <!-- The arrow stands in the glyph's place, so a changed value keeps the panel's one right edge. Over a stacked value it
+               ends the label's line. -->
+          <Panel Name="PART_Revert" Height="{x:Static inspector:InspectorGrid.LineHeight}" VerticalAlignment="Top">
+            <Button Classes="glyph revert" Margin="-5,0" HorizontalAlignment="Center"
                     Command="{TemplateBinding RevertCommand}" IsVisible="{TemplateBinding CanRevert}"
                     ToolTip.Tip="Revert to the blueprint's default"
                     AutomationProperties.AutomationId="{TemplateBinding RevertId}"
                     AutomationProperties.Name="Revert">
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRevert}" Width="14" Height="14" />
             </Button>
-            <ContentPresenter Content="{TemplateBinding Actions}" VerticalAlignment="Center"
-                              IsVisible="{TemplateBinding Actions, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          </StackPanel>
+          </Panel>
         </inspector:InspectorGrid>
         </Border>
       </ControlTemplate>
@@ -323,15 +360,25 @@
   <Style Selector="inspector|InspectorRow:full /template/ Border#PART_Row, inspector|InspectorRow:buttons /template/ Border#PART_Row">
     <Setter Property="Background" Value="Transparent" />
   </Style>
+  <Style Selector="inspector|InspectorRow:changed:not(:stacked) /template/ PathIcon#PART_Icon">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_Revert">
+    <Setter Property="Grid.Column" Value="4" />
+    <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_Revert > Button">
+    <Setter Property="Margin" Value="0" />
+  </Style>
   <!-- A value that differs from its default names itself in strong text beside its revert arrow. -->
   <Style Selector="inspector|InspectorRow:changed /template/ TextBlock#PART_Label">
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- A blueprint's Place and More wait for the row's hover or focus, in place, so the row keeps its width. -->
-  <Style Selector="inspector|InspectorRow.quietActions /template/ StackPanel#PART_Trail">
+  <!-- Place stays in view as the way to add a blueprint, and More waits for the row's hover or focus, in place. -->
+  <Style Selector="inspector|InspectorRow Button.quiet">
     <Setter Property="Opacity" Value="0" />
   </Style>
-  <Style Selector="inspector|InspectorRow.quietActions:pointerover /template/ StackPanel#PART_Trail, inspector|InspectorRow.quietActions:focus-within /template/ StackPanel#PART_Trail">
+  <Style Selector="inspector|InspectorRow:pointerover Button.quiet, inspector|InspectorRow:focus-within Button.quiet">
     <Setter Property="Opacity" Value="1" />
   </Style>
   <Style Selector="inspector|InspectorRow /template/ PathIcon#PART_Icon">
@@ -342,8 +389,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <!-- A label over its value: a line of InspectorGrid.StackedLineHeight, as tall as the glyph buttons on it, whose text
-       sits on the line's floor 4 px above the value, and the value under it from the content edge to the value edge. In a
-       narrow panel every labelled row takes this shape, so its value starts where the stacked text boxes start. -->
+       sits on the line's floor 4 px above the value, and the value under it from the content edge to the panel's right edge. -->
   <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_LeadLine, inspector|InspectorRow:stacked /template/ StackPanel#PART_Trail">
     <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
   </Style>
@@ -358,11 +404,10 @@
   <Style Selector="inspector|InspectorRow:stacked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Row" Value="1" />
     <Setter Property="Grid.Column" Value="0" />
-    <Setter Property="Grid.ColumnSpan" Value="4" />
+    <Setter Property="Grid.ColumnSpan" Value="5" />
     <Setter Property="MinHeight" Value="0" />
   </Style>
-  <!-- Content without a label, such as a paragraph or a box, ends at the value edge like any other value. Only a row of
-       buttons takes the trailing column too, since buttons are actions and the actions end at the panel's inset. -->
+  <!-- Content without a label, such as a paragraph or a box, ends at the panel's one right edge like every other value. -->
   <Style Selector="inspector|InspectorRow:full /template/ Panel#PART_LeadLine, inspector|InspectorRow:full /template/ Panel#PART_LabelLine, inspector|InspectorRow:full /template/ StackPanel#PART_Trail,
                    inspector|InspectorRow:buttons /template/ Panel#PART_LeadLine, inspector|InspectorRow:buttons /template/ Panel#PART_LabelLine, inspector|InspectorRow:buttons /template/ StackPanel#PART_Trail">
     <Setter Property="IsVisible" Value="False" />
@@ -375,7 +420,7 @@
   </Style>
   <Style Selector="inspector|InspectorRow:full /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Column" Value="0" />
-    <Setter Property="Grid.ColumnSpan" Value="4" />
+    <Setter Property="Grid.ColumnSpan" Value="5" />
     <Setter Property="MinHeight" Value="0" />
   </Style>
   <Style Selector="inspector|InspectorRow:buttons /template/ ContentPresenter#PART_ContentPresenter">
@@ -551,8 +596,8 @@
   <!-- A long text field rests at four lines and scrolls inside, so it never pushes the agent's rows away. With the focus it
        grows to twelve. -->
   <Style Selector="inspector|InspectorRow TextBox.multiline">
-    <Setter Property="MinHeight" Value="88" />
-    <Setter Property="MaxHeight" Value="88" />
+    <Setter Property="MinHeight" Value="52" />
+    <Setter Property="MaxHeight" Value="124" />
     <Setter Property="LineHeight" Value="18" />
     <Setter Property="Padding" Value="8,6" />
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />

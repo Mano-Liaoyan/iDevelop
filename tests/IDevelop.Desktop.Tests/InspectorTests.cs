@@ -82,7 +82,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal("", shell.Find<TextBox>("InspectorFilter").Text);
         Assert.True(shell.Shows("Agent"));
-        Assert.Equal(["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation"], shell.ShownRows().Take(7));
+        Assert.Equal(["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Mode"], shell.ShownRows().Take(7));
     }
 
     [AvaloniaFact]
@@ -100,12 +100,12 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Folding_the_agent_counts_a_changed_client_and_the_fold_holds_for_the_next_task()
+    public void Folding_the_agent_counts_a_changed_mode_and_the_fold_holds_for_the_next_task()
     {
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)), _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Pick("TaskClient", "Codex");
+        shell.Pick("TaskConversation", "May ask");
 
         shell.Fold("Agent");
 
@@ -245,7 +245,7 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void With_nothing_selected_the_inspector_counts_the_workflows_kinds()
+    public void With_nothing_selected_the_inspector_counts_the_workflows_states()
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
@@ -253,7 +253,7 @@ public sealed class InspectorTests : IDisposable
             new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, new CanvasPoint(105, 330)) { Title = "Plan it" }));
 
         Assert.Equal(["Workflow", "4 nodes"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
-        Assert.Equal(["Overview", "Idle", "4", "Implement", "2", "Plan", "1", "Review", "1"], Shell.Texts(shell.Section("Overview")));
+        Assert.Equal(["Overview", "Idle", "4"], Shell.Texts(shell.Section("Overview")));
         Assert.True(shell.Section("Library").IsEffectivelyVisible);
     }
 

@@ -80,6 +80,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
             Classes.Set("narrowBar", CanvasChrome.IsNarrowBar(e.NewSize));
+            Classes.Set("shortBar", CanvasChrome.IsShortBar(e.NewSize));
             ShowChrome();
             if (IsFitted)
             {

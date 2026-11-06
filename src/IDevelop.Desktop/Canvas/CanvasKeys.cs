@@ -26,6 +26,9 @@ public static class CanvasKeys
     public static KeyGesture NextAttention => new(Key.J, Command);
 
     /// <summary>Puts the focus in the inspector's model picker.</summary>
+    /// <summary>The Model row's tooltip.</summary>
+    public static string ModelHint => $"Model ({Hint(ModelPicker)})";
+
     public static KeyGesture ModelPicker { get; } = new(Key.M, KeyModifiers.Alt);
 
     /// <summary>Puts the focus in the inspector's filter, while the focus is in the inspector.</summary>

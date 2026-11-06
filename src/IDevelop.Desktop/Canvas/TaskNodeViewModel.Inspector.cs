@@ -64,10 +64,48 @@ public sealed partial class TaskNodeViewModel
     /// <summary>How many fields differ from the blueprint's defaults.</summary>
     public int TaskChanges => Fields.Count(entry => entry.CanRevert);
 
-    /// <summary>Whether the agent and the conversation mode each differ from the blueprint's defaults, counted.</summary>
+    /// <summary>How many of the Agent section's rows show a revert arrow.</summary>
     public int AgentChanges =>
-        (_task.Execution != _task.Blueprint.Defaults.Execution ? 1 : 0) +
-        (HasConversation && _task.Conversation != _task.Blueprint.Defaults.Conversation ? 1 : 0);
+        new[] { ClientDiffers, ModelDiffers, ReasoningDiffers, Skills.CanRevert, HasConversation && CanRevertConversation }.Count(row => row);
+
+    /// <summary>The client differs from a default that it can go back to.</summary>
+    public bool ClientDiffers => Default is { } agent && _task.Execution?.Client != agent.Client;
+
+    /// <summary>The model differs from a default that it can go back to.</summary>
+    public bool ModelDiffers => Default is { } agent && _task.Execution?.Model != agent.Model;
+
+    /// <summary>The reasoning level differs from a default that it can go back to.</summary>
+    public bool ReasoningDiffers => Default is { } agent && _task.Execution?.Reasoning != agent.Reasoning;
+
+    private ExecutionSettings? Default => _task.Blueprint.Defaults.Execution;
+
+    /// <summary>The prompt template that the blueprint gives the agent, or null for a node with no agent.</summary>
+    public string? SystemPrompt => _task.Blueprint.Work switch
+    {
+        WorkSpec.Agent agent => agent.Template.Text,
+        WorkSpec.Review review => review.Reviewer.Text,
+        WorkSpec.Merge merge => merge.Template.Text,
+        _ => null,
+    };
+
+    public bool HasSystemPrompt => !string.IsNullOrEmpty(SystemPrompt);
+
+    /// <summary>The conversation shows this node's agent now, so the header does not offer to open it.</summary>
+    public bool IsConversationShown
+    {
+        get;
+        internal set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(Actions));
+                OnPropertyChanged(nameof(ShowsStateDetail));
+            }
+        }
+    }
+
+    /// <summary>The header states what the node needs, unless the open conversation asks it in full. A failure's reason always shows.</summary>
+    public bool ShowsStateDetail => !string.IsNullOrEmpty(StateDetail) && !(IsConversationShown && State == NodeState.InputRequired);
 
     /// <summary>A blueprint without a default agent has nothing to revert to.</summary>
     public bool CanRevertAgent => _task.Blueprint.Defaults.Execution is { } agent && _task.Execution != agent;
