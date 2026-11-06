@@ -387,6 +387,9 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
+  <Style Selector="ListBox.tasks:not(.hidden) ListBoxItem:selected TextBlock.rowName">
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
   <!-- A workflow that is not shown keeps its node selection for when it is shown again, without a selected look. -->
   <Style Selector="ListBox.tasks.hidden ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />

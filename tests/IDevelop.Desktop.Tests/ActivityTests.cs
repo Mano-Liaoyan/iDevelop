@@ -184,13 +184,16 @@ public sealed class ActivityTests : IDisposable
     [AvaloniaFact]
     public void Show_all_expands_a_long_list_in_place()
     {
-        var shell = OpenWaiting(1);
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Run(shell);
         var activity = shell.Window.ViewModel.Activity;
 
-        activity.Limit = 3;
+        activity.Limit = 1;
+        Assert.Equal(("Show all 2", true, 1), (activity.ShowAllLabel, activity.HasMore, activity.Rows.Count));
 
-        Assert.False(activity.HasMore);
-        Assert.Equal(5, new ActivityViewModel(() => [], _ => { }).Limit);
+        activity.ShowAllCommand.Execute(null);
+        Assert.Equal((false, 2), (activity.HasMore, activity.Rows.Count));
     }
 
     [AvaloniaFact]
