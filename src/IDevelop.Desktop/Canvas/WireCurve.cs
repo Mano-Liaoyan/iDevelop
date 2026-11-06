@@ -27,10 +27,10 @@ public readonly record struct WirePiece(Point Start, Point First, Point Second, 
 internal static class WireCurve
 {
     /// <summary>How far apart, in canvas units, wires that share a port lie at <see cref="FanRun"/> from it.</summary>
-    internal const double Fan = 14;
+    internal const double Fan = 18;
 
     /// <summary>The widest fan on one side of a port, so a busy port keeps its wires near its row.</summary>
-    private const double FanLimit = 42;
+    private const double FanLimit = 54;
 
     /// <summary>A fan is an angle: a curve's aim moves by the fan for each this many units along its first run.</summary>
     private const double FanRun = 60;
@@ -150,7 +150,7 @@ internal static class WireCurve
 
     // A fixed offset would vanish on a long curve, so the offset grows with the run and every wire keeps its angle at the port.
     private static double Aim(double fan, Point aim, Point port) =>
-        Math.Clamp(fan * Math.Abs(aim.X - port.X) / FanRun, -AimLimit, AimLimit);
+        Math.Clamp(fan * Math.Max(Math.Abs(aim.X - port.X), FanRun) / FanRun, -AimLimit, AimLimit);
 
     private static int Across(Point from, Point to) => to.X < from.X - Tolerance ? -1 : 1;
 

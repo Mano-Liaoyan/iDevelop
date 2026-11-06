@@ -89,7 +89,7 @@ public sealed class FoldPanel : Decorator
         return child.DesiredSize.WithHeight(Folds && !IsOpen && !_hasFocus ? RestHeight(child) : whole);
     }
 
-    // A stack of blocks, such as a prompt's paragraphs, rests after its last whole block, so no line shows cut in half.
+    // A stack of blocks, such as a prompt's paragraphs, rests on a whole line, so no line shows cut in half.
     private double RestHeight(Control child)
     {
         if (child is not StackPanel stack)
@@ -103,13 +103,14 @@ public sealed class FoldPanel : Decorator
             var next = height + block.DesiredSize.Height + (height > 0 ? stack.Spacing : 0);
             if (next > Rest)
             {
-                break;
+                var lines = block is TextBlock { LineHeight: > 0 } text ? Math.Floor((Rest - height - stack.Spacing) / text.LineHeight) * text.LineHeight : 0;
+                return height + (lines > 0 ? stack.Spacing + lines : 0);
             }
 
             height = next;
         }
 
-        return height > 0 ? height : Rest;
+        return height;
     }
 
     protected override Size ArrangeOverride(Size finalSize)

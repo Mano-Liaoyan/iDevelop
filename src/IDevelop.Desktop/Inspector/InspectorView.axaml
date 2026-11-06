@@ -516,7 +516,7 @@
                       <!-- What the blueprint tells this node's agent, with the node's own values in it. A blueprint edits the template. -->
                       <inspector:InspectorRow Label="System prompt" Icon="{StaticResource IconDescription}" Layout="Stacked" IsShown="{Binding HasSystemPrompt}">
                         <StackPanel>
-                          <inspector:FoldPanel x:Name="PromptFold" Rest="56">
+                          <inspector:FoldPanel x:Name="PromptFold" Rest="94">
                             <conversation:MarkdownView Classes="promptView" Markdown="{Binding SystemPrompt}"
                                                        AutomationProperties.AutomationId="SystemPrompt" />
                           </inspector:FoldPanel>
