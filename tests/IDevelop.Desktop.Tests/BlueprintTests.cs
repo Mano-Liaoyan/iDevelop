@@ -42,7 +42,7 @@ public sealed class BlueprintTests : IDisposable
         var shell = Shell.Open(project);
 
         Press(shell, "Implement", "DeriveBlueprint");
-        Assert.Equal("Derived from Implement, version 1. Saving makes version 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
+        Assert.Equal("A new blueprint from Implement, version 1. Its own versions start at 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
         shell.Find<TextBox>("BlueprintName").Text = "Bug fix";
         shell.Click(shell.InView<Button>("SaveBlueprint"));
 
@@ -110,7 +110,7 @@ public sealed class BlueprintTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90, execution, "Draft it.", ConversationMode.Chat)));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.Click(shell.InView<Button>("SaveAsBlueprint"));
+        shell.ChooseMore("SaveAsBlueprint");
         Assert.Equal("Design", shell.Find<TextBox>("BlueprintName").Text);
         Assert.Equal(["Draft it.", ""], [.. Rows(shell).Select(row => ById<TextBox>(row, "FieldDefault").Text ?? "")]);
         Assert.Equal("Codex", shell.Picked("BlueprintClient"));

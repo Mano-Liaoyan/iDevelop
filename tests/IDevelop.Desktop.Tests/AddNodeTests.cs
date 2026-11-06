@@ -172,7 +172,7 @@ public sealed class AddNodeTests : IDisposable
         shell.Click(shell.Shown<Button>("AddNodeDerive"));
 
         Assert.False(shell.AddPopoverIsOpen);
-        Assert.Equal("Derived from Plan, version 1. Saving makes version 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
+        Assert.Equal("A new blueprint from Plan, version 1. Its own versions start at 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
         Assert.Empty(shell.Nodes());
     }
 

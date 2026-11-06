@@ -74,7 +74,7 @@ public sealed class InspectorTests : IDisposable
         shell.FilterInspector("acc");
 
         Assert.Equal(["Acceptance criteria"], shell.ShownRows());
-        Assert.Equal((true, false, false), (shell.Shows("Task"), shell.Shows("Agent"), shell.Shows("Blueprint")));
+        Assert.Equal((true, false, false), (shell.Shows("Task"), shell.Shows("Agent"), shell.Shows("Output")));
         Assert.False(shell.Find<TextBox>("TaskInstructions").IsEffectivelyVisible);
         Assert.True(shell.Find<TextBox>("TaskAcceptanceCriteria").IsEffectivelyVisible);
 
@@ -109,8 +109,8 @@ public sealed class InspectorTests : IDisposable
 
         shell.Fold("Agent");
 
-        Assert.Equal("(1)", shell.Section("Agent").Badge);
-        Assert.Contains("(1)", Shell.Texts(shell.Section("Agent")));
+        Assert.Equal("1 changed", shell.Section("Agent").Badge);
+        Assert.Contains("1 changed", Shell.Texts(shell.Section("Agent")));
         Assert.False(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
 
         shell.Click(shell.Header(shell.Node("Build")));
@@ -128,7 +128,7 @@ public sealed class InspectorTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.Click(shell.Header(shell.Node("Design")));
-        string[] keys = ["Task", "Agent", "Run", "Conversation", "Blueprint"];
+        string[] keys = ["Input", "Task", "Agent", "Output"];
 
         Choose(shell, "CollapseAllSections");
 
@@ -184,7 +184,7 @@ public sealed class InspectorTests : IDisposable
     [InlineData(ClientId.ClaudeCode, "May ask", "Edits files and runs any command.", "May stop to ask you a question.")]
     [InlineData(ClientId.Pi, "Chat", "Edits files and runs any command.", "Waits for you after every turn.")]
     [InlineData(ClientId.Antigravity, "Autonomous", "Edits files. Runs no commands.", "Works without waiting for you.")]
-    public void Each_agent_note_lives_in_its_info_glyph_and_no_line_under_the_pickers_repeats_it(ClientId client, string conversation, string permission, string mode)
+    public void Each_agent_note_lives_in_its_label_and_no_line_under_the_pickers_repeats_it(ClientId client, string conversation, string permission, string mode)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(client))));
         shell.Click(shell.Header(shell.Node("Design")));
@@ -195,7 +195,7 @@ public sealed class InspectorTests : IDisposable
             var glyph = shell.Find<Control>(id);
             var peer = ControlAutomationPeer.CreatePeerForElement(glyph);
             var full = Info(shell, editor) as string;
-            Assert.Same(InfoGlyph(shell, editor), glyph);
+            Assert.Same(RowLabel(shell, editor), glyph);
             Assert.True(glyph.IsEffectivelyVisible);
             Assert.True(summary.Length < full!.Length, $"{id}'s tooltip \"{full}\" is no longer than \"{summary}\".");
             Assert.Equal((id, summary, full, true), (peer.GetAutomationId(), peer.GetName(), peer.GetHelpText(), peer.IsControlElement()));
@@ -253,7 +253,7 @@ public sealed class InspectorTests : IDisposable
             new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, new CanvasPoint(105, 330)) { Title = "Plan it" }));
 
         Assert.Equal(["Workflow", "4 nodes"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
-        Assert.Equal(["Overview", "Implement", "2", "Plan", "1", "Review", "1"], Shell.Texts(shell.Section("Overview")));
+        Assert.Equal(["Overview", "Idle", "4", "Implement", "2", "Plan", "1", "Review", "1"], Shell.Texts(shell.Section("Overview")));
         Assert.True(shell.Section("Library").IsEffectivelyVisible);
     }
 
@@ -290,7 +290,7 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Completed", "the planner is done");
 
-        Assert.Empty(PrimaryButtons(shell));
+        Assert.Equal(["OpenConversation"], PrimaryButtons(shell));
         Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "RetryTask")));
     }
 
@@ -316,10 +316,11 @@ public sealed class InspectorTests : IDisposable
     {
         var gate = System.IO.Path.Combine(_temp.Create("evidence"), "go");
         var shell = WaitingArchitect(Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(gate).Print(ReplyLines(ClientId.Codex, "Noted.")));
-        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Talk();
+        shell.Click(shell.InView<TextBox>("ConversationComposer"));
         shell.Type("Keep the export small.");
 
-        shell.Click(shell.InView<Button>("SendMessage"));
+        shell.Click(shell.InView<Button>("ConversationSend"));
         shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Running", "the next turn runs");
         shell.Render();
 
@@ -327,7 +328,7 @@ public sealed class InspectorTests : IDisposable
         Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "StopTask")));
         Assert.Equal(["AcceptProposal"], PrimaryButtons(shell));
         Assert.True(shell.Find<Button>("StopTask").IsEffectivelyEnabled);
-        Assert.False(shell.Find<Button>("SendBack").IsEffectivelyVisible);
+        Assert.False(Shows(shell, "SendBack"));
 
         File.WriteAllText(gate, "");
         shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · reply", "the turn ends waiting");
@@ -342,10 +343,11 @@ public sealed class InspectorTests : IDisposable
             .Print(SessionLine(ClientId.Codex, Session))
             .Print("""{"type":"turn.failed","error":{"message":"You've hit your usage limit. Try again later."}}""")
             .Exit(1));
-        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Talk();
+        shell.Click(shell.InView<TextBox>("ConversationComposer"));
         shell.Type("Keep the export small.");
 
-        shell.Click(shell.InView<Button>("SendMessage"));
+        shell.Click(shell.InView<Button>("ConversationSend"));
         shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Failed", "the next turn fails");
 
         Assert.True(shell.Has<StackPanel>("Proposal"));
@@ -427,11 +429,11 @@ public sealed class InspectorTests : IDisposable
         shell.Render();
     }
 
-    /// <summary>The tooltip of the info glyph in the row that holds the editor.</summary>
-    private static object? Info(Shell shell, string editor) => ToolTip.GetTip(InfoGlyph(shell, editor));
+    /// <summary>The tooltip of the label in the row that holds the editor.</summary>
+    private static object? Info(Shell shell, string editor) => ToolTip.GetTip(RowLabel(shell, editor));
 
-    private static Border InfoGlyph(Shell shell, string editor) =>
-        shell.Find<Control>(editor).FindAncestorOfType<InspectorRow>()!.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("infoGlyph"));
+    private static Panel RowLabel(Shell shell, string editor) =>
+        shell.Find<Control>(editor).FindAncestorOfType<InspectorRow>()!.GetVisualDescendants().OfType<Panel>().Single(line => line.Name == "PART_LabelLine");
 
     private static KindTile HeaderTile(Shell shell) => shell.Find<Control>("InspectorHeader").GetVisualDescendants().OfType<KindTile>().Single();
 }

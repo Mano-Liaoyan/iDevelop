@@ -9,7 +9,7 @@ using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>The inspector's composer, used through the real main window, with the fake agent behind on-disk shims.</summary>
+/// <summary>The conversation's composer, opened from the inspector and used through the real main window, with the fake agent behind on-disk shims.</summary>
 [Collection(ProcessCollection.Name)]
 public sealed class ConversationTests
 {
@@ -36,9 +36,10 @@ public sealed class ConversationTests
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.Running);
 
-        shell.InView<TextBox>("Composer").Text = "Also write hi.";
-        Shell.Invoke(shell.InView<Button>("SendMessage"));
-        Assert.Equal("", shell.Find<TextBox>("Composer").Text);
+        shell.Talk();
+        shell.InView<TextBox>("ConversationComposer").Text = "Also write hi.";
+        Shell.Invoke(shell.InView<Button>("ConversationSend"));
+        Assert.Equal("", shell.Find<TextBox>("ConversationComposer").Text);
         f.Release("go");
 
         var resumed = Path.Combine(f.Evidence, "resumed.txt");
@@ -54,10 +55,12 @@ public sealed class ConversationTests
         f.Install(Resumed(f, "Wrote hi."), Reply("s-1", "Hello.", On().Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-1")).WaitForFile(f.Gate("never"))));
         var shell = OpenSayHi(f);
         Shell.Invoke(shell.InView<Button>("RunTask"));
-        shell.WaitUntil(() => shell.NodeModel("Say hi").State == NodeState.Running && shell.InView<Button>("StopAndSend").IsEffectivelyVisible, "the turn runs");
+        shell.WaitForState("Say hi", NodeState.Running);
+        shell.Talk();
+        shell.WaitUntil(() => shell.InView<Button>("ConversationStopAndSend").IsEffectivelyVisible, "the turn runs");
 
-        shell.InView<TextBox>("Composer").Text = "Stop and write hi.";
-        Shell.Invoke(shell.InView<Button>("StopAndSend"));
+        shell.InView<TextBox>("ConversationComposer").Text = "Stop and write hi.";
+        Shell.Invoke(shell.InView<Button>("ConversationStopAndSend"));
 
         var resumed = Path.Combine(f.Evidence, "resumed.txt");
         shell.WaitUntil(() => File.Exists(resumed) && shell.NodeModel("Say hi").State == NodeState.Completed, "the next turn ends");
@@ -72,7 +75,8 @@ public sealed class ConversationTests
         var shell = OpenSayHi(f);
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.Completed);
-        var composer = shell.InView<TextBox>("Composer");
+        shell.Talk();
+        var composer = shell.InView<TextBox>("ConversationComposer");
         composer.Focus();
         shell.Type("one");
         shell.Press(Key.Enter);
@@ -93,11 +97,12 @@ public sealed class ConversationTests
         using var f = new NodeFixture(NodeFixture.Task(SayHi, "Say hi", 105));
         f.Install();
         var shell = OpenSayHi(f);
-        shell.InView<TextBox>("Composer").Text = "Hello?";
+        shell.Talk();
+        shell.InView<TextBox>("ConversationComposer").Text = "Hello?";
 
-        Assert.Equal("Run the node first. A message continues its session.", shell.InView<TextBlock>("SendProblem").Text);
-        Assert.False(shell.InView<Button>("SendMessage").IsEffectivelyEnabled);
-        Assert.False(shell.InView<Button>("OpenInTerminal").IsEffectivelyEnabled);
+        Assert.Equal("Run the node first. A message continues its session.", shell.InView<TextBlock>("ComposerHint").Text);
+        Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyEnabled);
+        Assert.False(shell.InView<Button>("ConversationTerminal").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]
@@ -109,7 +114,8 @@ public sealed class ConversationTests
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.Completed);
 
-        Shell.Invoke(shell.InView<Button>("OpenInTerminal"));
+        shell.Talk();
+        Shell.Invoke(shell.InView<Button>("ConversationTerminal"));
 
         shell.WaitUntil(() => shell.Status.StartsWith("Copied the command", StringComparison.Ordinal), "the command is copied");
         Assert.EndsWith("agy --conversation s-1", shell.Status);

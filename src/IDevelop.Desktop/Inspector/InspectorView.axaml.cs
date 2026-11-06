@@ -1,5 +1,6 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
@@ -18,6 +19,7 @@ public partial class InspectorView : UserControl
         InspectorState.SetCurrent(this, _state);
         InspectorState.SetCurrent(EditorHost, new InspectorState());
         // Every row of the panel, the blueprint editor's too, puts its value under its label below the default width.
+        AddHandler(KeyDownEvent, OnKeyDownInPanel, RoutingStrategies.Bubble);
         SizeChanged += (_, change) => InspectorGrid.SetIsNarrow(this, change.NewSize.Width < InspectorGrid.NarrowPanelWidth);
         EditorHost.PropertyChanged += (_, change) =>
         {
@@ -77,6 +79,38 @@ public partial class InspectorView : UserControl
         {
             Filter.Text = "";
             e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && FirstMatch() is { } match)
+        {
+            match.BringIntoView();
+            match.Focus(NavigationMethod.Tab);
+            e.Handled = true;
+        }
+    }
+
+    // The first editor the filter leaves in view. A section's header folds rather than edits, so it does not count.
+    private Control? FirstMatch() => SectionList.GetVisualDescendants().OfType<InspectorRow>()
+        .Where(row => row.IsEffectivelyVisible)
+        .SelectMany(row => row.GetVisualDescendants().OfType<Control>())
+        .FirstOrDefault(element => element is TextBox or ComboBox or ToggleButton or Button && element is { Focusable: true, IsEffectivelyVisible: true, IsEffectivelyEnabled: true });
+
+    private void OnKeyDownInPanel(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F2 && e.KeyModifiers == KeyModifiers.None
+            && this.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(box => AutomationProperties.GetAutomationId(box) == "TaskTitle") is { } title)
+        {
+            title.Focus(NavigationMethod.Tab);
+            title.SelectAll();
+            e.Handled = true;
+        }
+    }
+
+    // The window owns Save, and the canvas's bar far from the edited value offers it too.
+    private void OnSave(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this)?.DataContext is MainWindowViewModel window && window.SaveCommand.CanExecute(null))
+        {
+            window.SaveCommand.Execute(null);
         }
     }
 

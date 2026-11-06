@@ -180,7 +180,6 @@ public sealed class ConversationWindowTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal("Check edge cases", shell.Find<TextBox>("ConversationComposer").Text);
-        Assert.Equal("Check edge cases", shell.Find<TextBox>("Composer").Text);
         Shell.Invoke(shell.Find<Button>("ConversationLayout"));
         shell.Render();
         Assert.False(shell.Window.ViewModel.IsConversationDocked);

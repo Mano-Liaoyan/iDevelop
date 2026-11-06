@@ -1,6 +1,8 @@
 using System.Windows.Input;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 
@@ -35,8 +37,8 @@ public enum RowLayout
 }
 
 /// <summary>
-/// One property in an inspector section: a glyph or a kind tile, its label, its editor, a revert arrow while the value differs from the
-/// blueprint's default, and an info glyph whose tooltip holds the property's note. While the filter has text, a row shows
+/// One property in an inspector section: a glyph or a kind tile, its label, its editor, and a revert arrow while the value
+/// differs from the blueprint's default. The label's tooltip and help text hold the property's note. While the filter has text, a row shows
 /// when its label or its section's title matches. A row without a label shows only with its section's title.
 /// </summary>
 public sealed class InspectorRow : InspectorPart
@@ -66,6 +68,7 @@ public sealed class InspectorRow : InspectorPart
     public static readonly StyledProperty<string?> RevertIdProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(RevertId));
 
     private InspectorSection? _section;
+    private Panel? _labelLine;
 
     public InspectorRow() => UpdateShape();
 
@@ -83,7 +86,7 @@ public sealed class InspectorRow : InspectorPart
         set => SetValue(LeadProperty, value);
     }
 
-    /// <summary>Buttons in the trailing column after the revert arrow and the info glyph, such as a blueprint's Place and More.</summary>
+    /// <summary>Buttons in the trailing column after the revert arrow, such as a blueprint's Place and More.</summary>
     public object? Actions
     {
         get => GetValue(ActionsProperty);
@@ -109,21 +112,21 @@ public sealed class InspectorRow : InspectorPart
         set => SetValue(LayoutProperty, value);
     }
 
-    /// <summary>The tooltip of the info glyph after the editor. No glyph shows without it.</summary>
+    /// <summary>The note on the property, which the label's tooltip and help text hold.</summary>
     public string? Info
     {
         get => GetValue(InfoProperty);
         set => SetValue(InfoProperty, value);
     }
 
-    /// <summary>The info glyph's name for UI Automation: the note in one short line, whose whole text is <see cref="Info"/>.</summary>
+    /// <summary>The label's name for UI Automation: the note in one short line, whose whole text is <see cref="Info"/>.</summary>
     public string? InfoName
     {
         get => GetValue(InfoNameProperty);
         set => SetValue(InfoNameProperty, value);
     }
 
-    /// <summary>The info glyph's automation id, such as PermissionNote.</summary>
+    /// <summary>The label's automation id while it holds a note, such as PermissionNote.</summary>
     public string? InfoId
     {
         get => GetValue(InfoIdProperty);
@@ -155,6 +158,13 @@ public sealed class InspectorRow : InspectorPart
 
     internal override void Refresh() => IsVisible = IsShown && (!IsFiltering || _section?.TitleMatches == true || LabelMatches);
 
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        _labelLine = e.NameScope.Find<Panel>("PART_LabelLine");
+        ShowNote();
+    }
+
     protected override void OnAttachedToLogicalTree(LogicalTreeAttachmentEventArgs e)
     {
         _section = this.FindLogicalAncestorOfType<InspectorSection>();
@@ -177,6 +187,14 @@ public sealed class InspectorRow : InspectorPart
         {
             UpdateShape();
         }
+        else if (change.Property == InfoProperty || change.Property == InfoNameProperty || change.Property == InfoIdProperty || change.Property == LabelTipProperty)
+        {
+            ShowNote();
+        }
+        else if (change.Property == CanRevertProperty)
+        {
+            PseudoClasses.Set(":changed", CanRevert);
+        }
         else if (change.Property == LabelProperty)
         {
             Refresh();
@@ -185,6 +203,19 @@ public sealed class InspectorRow : InspectorPart
         else if (change.Property == IsShownProperty)
         {
             _section?.Refresh();
+        }
+    }
+
+    private void ShowNote()
+    {
+        // A text block names itself by its text, so the note's automation name goes on the line around it.
+        if (_labelLine is not null)
+        {
+            ToolTip.SetTip(_labelLine, Info ?? LabelTip);
+            AutomationProperties.SetAutomationId(_labelLine, InfoId);
+            AutomationProperties.SetName(_labelLine, InfoName);
+            AutomationProperties.SetHelpText(_labelLine, Info);
+            AutomationProperties.SetAccessibilityView(_labelLine, Info is null ? AccessibilityView.Default : AccessibilityView.Control);
         }
     }
 

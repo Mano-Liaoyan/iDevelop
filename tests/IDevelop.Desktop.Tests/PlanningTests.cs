@@ -147,11 +147,11 @@ public sealed class PlanningTests : IDisposable
             Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "The wire task calls the endpoint.")));
         shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed", "the first run succeeds");
 
-        shell.Click(shell.InView<TextBox>("Composer"));
-        shell.Type("Why the wire task?");
-        shell.Click(shell.InView<Button>("SendMessage"));
+        var planner = shell.Window.ViewModel.Canvas!.SelectedNode!;
+        planner.Draft = "Why the wire task?";
+        planner.SendCommand.Execute(null);
 
-        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed" && shell.Find<TextBox>("LastReply").Text == "The wire task calls the endpoint.", "the continuation succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed" && planner.LastReply == "The wire task calls the endpoint.", "the continuation succeeds");
         Assert.Equal(["New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
     }

@@ -94,6 +94,8 @@ public sealed class ConnectionViewModel : ObservableObject
         {
             _setKind.NotifyCanExecuteChanged();
             ShowFlow();
+            From.OnLinksChanged();
+            To.OnLinksChanged();
         }
     }
 

@@ -226,7 +226,7 @@ public sealed class GenerateTests : IDisposable
     {
         var shell = Generated();
 
-        Assert.Equal("Here is the plan.", shell.InView<TextBox>("LastReply").Text);
+        Assert.Equal("Here is the plan.", shell.Window.ViewModel.Canvas!.SelectedNode!.LastReply);
         Assert.Equal(3, shell.InView<StackPanel>("Proposal").GetVisualDescendants().OfType<CheckBox>().Count(box => box.IsChecked == true && AutomationProperties.GetAutomationId(box) != "ProposalUsePlannerAgent"));
     }
 

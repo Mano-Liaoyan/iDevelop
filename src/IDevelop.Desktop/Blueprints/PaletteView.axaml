@@ -15,16 +15,13 @@
       <ItemsControl.ItemTemplate>
         <DataTemplate DataType="blueprints:PaletteGroup">
           <StackPanel>
-            <inspector:InspectorRow Layout="Full">
+            <inspector:InspectorRow Layout="Full" IsShown="{Binding !IsEmpty}">
               <TextBlock Classes="groupHeading" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
-            </inspector:InspectorRow>
-            <inspector:InspectorRow Layout="Full" IsShown="{Binding IsEmpty}">
-              <TextBlock Classes="note" Text="None yet. Derive a blueprint to add one." TextWrapping="Wrap" MaxLines="0" />
             </inspector:InspectorRow>
             <ItemsControl ItemsSource="{Binding Entries}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="blueprints:BlueprintEntryViewModel">
-                  <inspector:InspectorRow Layout="Title" Classes="entry" Label="{Binding Name}">
+                  <inspector:InspectorRow Layout="Title" Classes="entry quietActions" Label="{Binding Name}">
                     <ToolTip.Tip>
                       <StackPanel Spacing="2" MaxWidth="280">
                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -34,10 +31,10 @@
                       </StackPanel>
                     </ToolTip.Tip>
                     <inspector:InspectorRow.Lead>
-                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="16" />
+                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="14" />
                     </inspector:InspectorRow.Lead>
                     <inspector:InspectorRow.Actions>
-                      <StackPanel Orientation="Horizontal" Spacing="4">
+                      <StackPanel Orientation="Horizontal">
                         <Button Classes="glyph" Command="{Binding PlaceCommand}" ToolTip.Tip="Place in view"
                                 AutomationProperties.AutomationId="PlaceBlueprint"
                                 AutomationProperties.Name="{Binding PlaceName}">
@@ -68,6 +65,11 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+    <!-- One message for every library with nothing in it. -->
+    <inspector:InspectorRow Layout="Full" IsShown="{Binding HasEmptyLibrary}">
+      <TextBlock Classes="note" Text="{Binding EmptyNote}" Margin="0,6,0,0"
+                 AutomationProperties.AutomationId="EmptyLibrary" />
+    </inspector:InspectorRow>
     <inspector:InspectorRow Layout="Full" IsShown="{Binding HasProblems}">
       <ItemsControl ItemsSource="{Binding Problems}"
                     AutomationProperties.AutomationId="BlueprintProblems">

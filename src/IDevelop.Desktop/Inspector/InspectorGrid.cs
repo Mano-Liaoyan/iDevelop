@@ -4,19 +4,25 @@ using Avalonia.Controls;
 namespace IDevelop.Desktop.Inspector;
 
 /// <summary>
-/// The inspector's one set of columns, which the filter, each section header, and every row share: a field's
-/// glyph or a kind tile, a gap, the label, the value, and two 24 px slots for a row's glyph buttons or a count. The label
-/// column keeps one width, so values start at one place at every width and stay beside their labels in a wide panel. The
-/// panel has two right edges: glyph buttons and rows of buttons end at the panel's inset, and boxes and paragraphs end
-/// before the trailing column. A count ends where the glyphs' drawing ends, <see cref="GlyphInkInset"/> inside the first.
+/// The inspector's one set of columns, which every row shares: a 14 px glyph or kind tile, a gap, the label, the value,
+/// and a 24 px slot for a revert arrow, a state glyph, or a count, which a row of two buttons widens. The label column
+/// keeps one width, so values start at one place at every width. The panel has two right edges: glyph buttons and rows of
+/// buttons end at the panel's inset, and boxes and paragraphs end before the trailing column. A count ends where the
+/// glyphs' drawing ends, <see cref="GlyphInkInset"/> inside the first.
 /// </summary>
 public sealed class InspectorGrid : Grid
 {
-    /// <summary>The label column: "Conversation", the longest label beside a value, and an 8 px gap.</summary>
-    public const double LabelWidth = 88;
+    /// <summary>The label column, which holds "Conversation", the longest label beside a value.</summary>
+    public const double LabelWidth = 76;
 
-    /// <summary>The trailing column: two 24 px glyph buttons 4 px apart, such as a revert arrow and an info glyph.</summary>
-    public const double TrailWidth = 52;
+    /// <summary>The trailing column: one 24 px glyph button, such as a revert arrow.</summary>
+    public const double TrailWidth = 24;
+
+    /// <summary>The first column, a field's glyph or a kind tile.</summary>
+    public const double GlyphWidth = 14;
+
+    /// <summary>The gap between the first column and the label.</summary>
+    public const double GlyphGap = 6;
 
     /// <summary>The height of a row's first line, a picker's height. A row's glyph, label, buttons, and a short value centre on it.</summary>
     public const double LineHeight = 28;
@@ -28,7 +34,7 @@ public sealed class InspectorGrid : Grid
     public const double StackedLineHeight = 24;
 
     /// <summary>The height of the line under a header's title, such as "Implement · Built-in, version 1".</summary>
-    public const double SubtitleHeight = 18;
+    public const double SubtitleHeight = 16;
 
     /// <summary>
     /// How far a 16 px glyph's drawing ends before its 24 px button's edge: 4 px of the button and the 2 px its 16 unit frame
@@ -40,11 +46,11 @@ public sealed class InspectorGrid : Grid
     public static Thickness GlyphInkMargin { get; } = new(0, 0, GlyphInkInset, 0);
 
     /// <summary>
-    /// The inspector width under which every value moves under its label, the 320 px default among them. From this width
-    /// the value column holds a picker showing the longest model name a client offers, Pi's "DeepSeek V4.1 Flash
-    /// (deepseek)", about 190 px of text and 44 px of the picker's own, with room to spare for another platform's font.
+    /// The inspector width under which every value moves under its label: only the 280 px minimum. From this width a value
+    /// sits beside its label, and a picker too narrow for a long model name ends it in an ellipsis, with the whole name in
+    /// its tooltip and in its wider list.
     /// </summary>
-    public const double NarrowPanelWidth = 440;
+    public const double NarrowPanelWidth = 300;
 
     /// <summary>
     /// Whether the inspector is narrower than <see cref="NarrowPanelWidth"/>, so every row puts its value under its label.
@@ -53,7 +59,14 @@ public sealed class InspectorGrid : Grid
     public static readonly AttachedProperty<bool> IsNarrowProperty =
         AvaloniaProperty.RegisterAttached<InspectorGrid, Control, bool>("IsNarrow", inherits: true);
 
-    public InspectorGrid() => ColumnDefinitions = new ColumnDefinitions($"16,8,{LabelWidth},*,{TrailWidth}");
+    public InspectorGrid() => ColumnDefinitions =
+    [
+        new ColumnDefinition(GlyphWidth, GridUnitType.Pixel),
+        new ColumnDefinition(GlyphGap, GridUnitType.Pixel),
+        new ColumnDefinition(LabelWidth, GridUnitType.Pixel),
+        new ColumnDefinition(1, GridUnitType.Star),
+        new ColumnDefinition(GridLength.Auto) { MinWidth = TrailWidth },
+    ];
 
     public static bool GetIsNarrow(Control control) => control.GetValue(IsNarrowProperty);
 

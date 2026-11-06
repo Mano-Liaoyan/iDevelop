@@ -10,6 +10,7 @@ public sealed partial class WorkflowCanvasViewModel
         SelectedNodes.CollectionChanged += (_, _) => Emphasize(Connections);
         Connections.CollectionChanged += (_, e) =>
         {
+            OnConnectionsChanged(e);
             if (e.Action == NotifyCollectionChangedAction.Add)
             {
                 Emphasize(e.NewItems!.Cast<ConnectionViewModel>());

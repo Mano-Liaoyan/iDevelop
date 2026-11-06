@@ -8,11 +8,19 @@ namespace IDevelop.Desktop.Inspector;
 /// <summary>How many of the workflow's nodes are of one kind.</summary>
 public sealed record KindCount(NodeKind Kind, string Label, int Count);
 
-/// <summary>The workflow inspector's header and overview while nothing is selected: the workflow, its task count, and its kinds.</summary>
+/// <summary>How many of the workflow's nodes are in one state.</summary>
+public sealed record StateCount(NodeState State, string Label, int Count)
+{
+    /// <summary>The state's glyph spins.</summary>
+    public bool IsRunning => State == NodeState.Running;
+}
+
+/// <summary>The workflow inspector's header and overview while nothing is selected: the workflow, its node count, its states, and its kinds.</summary>
 public sealed class WorkflowOverviewViewModel : ObservableObject
 {
     private readonly WorkflowCanvasViewModel _canvas;
     private ImmutableArray<KindCount> _kinds = [];
+    private ImmutableArray<StateCount> _states = [];
 
     internal WorkflowOverviewViewModel(WorkflowCanvasViewModel canvas)
     {
@@ -24,6 +32,10 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(Name));
             }
+            else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Counts))
+            {
+                CountStates();
+            }
         };
         Count();
     }
@@ -32,10 +44,15 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
 
     public string TaskCount => _canvas.Nodes.Count == 1 ? "1 node" : $"{_canvas.Nodes.Count} nodes";
 
+    /// <summary>Each state that holds a node, the states that want the person's eye first.</summary>
+    public IReadOnlyList<StateCount> States => _states;
+
     /// <summary>Each kind the workflow holds, in the registry's order.</summary>
     public IReadOnlyList<KindCount> Kinds => _kinds;
 
     public bool HasKinds => !_kinds.IsEmpty;
+
+    public bool HasStates => !_states.IsEmpty;
 
     /// <summary>The libraries, which the workflow inspector lists under the overview.</summary>
     public BlueprintsViewModel Blueprints => _canvas.Blueprints;
@@ -52,5 +69,24 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(TaskCount));
+        CountStates();
+    }
+
+    private void CountStates()
+    {
+        var counts = _canvas.Counts;
+        (NodeState State, string Label, int Count)[] all =
+        [
+            (NodeState.InputRequired, "Input required", counts.Waiting), (NodeState.Failed, "Failed", counts.Failed), (NodeState.Running, "Running", counts.Running),
+            (NodeState.Stale, "Stale", counts.Stale), (NodeState.Completed, "Completed", counts.Completed),
+            (NodeState.Idle, "Idle", counts.Total - counts.Waiting - counts.Failed - counts.Running - counts.Stale - counts.Completed),
+        ];
+        ImmutableArray<StateCount> states = [.. all.Where(entry => entry.Count > 0).Select(entry => new StateCount(entry.State, entry.Label, entry.Count))];
+        if (!states.SequenceEqual(_states))
+        {
+            _states = states;
+            OnPropertyChanged(nameof(States));
+            OnPropertyChanged(nameof(HasStates));
+        }
     }
 }

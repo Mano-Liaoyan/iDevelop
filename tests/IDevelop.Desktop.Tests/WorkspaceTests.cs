@@ -182,8 +182,7 @@ public sealed class WorkspaceTests : IDisposable
         var (shell, _, _) = OpenBoth();
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.InView<TextBox>("Composer"));
-        shell.Type("Draft for later");
+        shell.Window.ViewModel.Canvas!.SelectedNode!.Draft = "Draft for later";
         shell.Pan(shell.Editor.TranslatePoint(new Point(680, 400), shell.Window)!.Value, new Vector(-600, -300));
         Assert.Equal(new Point(600, 300), shell.Editor.ViewportLocation);
         shell.Click(shell.Find<Button>("ZoomIn"));
@@ -198,7 +197,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal(build, (Math.Round(shell.Editor.ViewportZoom, 4), Shell.Rounded(shell.Editor.ViewportLocation)));
         Assert.True(shell.Node("Design").IsSelected);
-        Assert.Equal(("Design", "Draft for later"), (shell.Find<TextBox>("TaskTitle").Text, shell.InView<TextBox>("Composer").Text));
+        Assert.Equal(("Design", "Draft for later"), (shell.Find<TextBox>("TaskTitle").Text, shell.Window.ViewModel.Canvas!.SelectedNode!.Draft));
     }
 
     /// <summary>The client waits at the gate until it is stopped or the test opens the gate.</summary>
@@ -534,7 +533,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
         shell.RunNode();
-        Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<Button>("RunTask")];
+        Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<TextBox>("InspectorFilter")];
 
         shell.Window.Close();
         shell.Render();

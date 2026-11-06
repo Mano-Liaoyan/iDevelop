@@ -17,10 +17,11 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(EngineState), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
+        nameof(EngineState), nameof(IsIdle), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
-        nameof(CanStopAndSend), nameof(HasResults), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
-        nameof(Preview), nameof(SendProblem), nameof(Latest), nameof(Questions), nameof(IsAsking),
+        nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
+        nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
+        nameof(Actions), nameof(RetryIsInMenu), nameof(ConversationIsInMenu),
     ];
 
     private EngineState _engineState = new EngineState.Idle();
@@ -62,6 +63,9 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>The node waits for the person.</summary>
     public bool IsWaiting => State == NodeState.InputRequired;
+
+    /// <summary>The node has not run, so its status pill shows no glyph, as Idle has none on any surface.</summary>
+    public bool IsIdle => State == NodeState.Idle;
 
     /// <summary>The node runs now, so a list's state glyph spins.</summary>
     public bool IsRunningNow => State == NodeState.Running;
@@ -164,9 +168,6 @@ public sealed partial class TaskNodeViewModel
     public ICommand OpenInTerminalCommand => _openInTerminal;
 
     public bool CanStopAndSend => HasAgent && State == NodeState.Running;
-
-    /// <summary>Why a message cannot go to the agent now, or null.</summary>
-    public string? SendProblem => !HasAgent ? null : State == NodeState.Idle ? "Run the node first. A message continues its session." : null;
 
     partial void InitializeRun()
     {

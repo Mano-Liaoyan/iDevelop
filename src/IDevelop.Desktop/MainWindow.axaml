@@ -220,21 +220,26 @@
     <GridSplitter Grid.Column="3" Width="8" Margin="-3.5,0" ZIndex="1" />
 
     <DockPanel x:Name="InspectorPanel" Grid.Column="4" Background="{DynamicResource AppPanelBrush}" AutomationProperties.AutomationId="Inspector">
-      <!-- Windows draws the caption buttons over this header's right end, so its title stays on the left. -->
-      <Border DockPanel.Dock="Top" Height="44" Padding="12,0"
+      <!-- Windows draws the caption buttons over this band. Linux ignores the request to draw into the title bar, so the band
+           collapses there, as the left area's does. -->
+      <Border DockPanel.Dock="Top" Height="44"
               Background="{DynamicResource AppTopbarBrush}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border80Brush}"
-              PointerPressed="OnTitleBandPressed">
-        <TextBlock Text="Inspector" VerticalAlignment="Center"
-                   FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
-      </Border>
-      <!-- The inspector scrolls its own sections, so its header and filter stay in place. -->
-      <ContentControl Content="{Binding Canvas}">
-        <ContentControl.DataTemplates>
-          <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
-            <inspector:InspectorView />
-          </DataTemplate>
-        </ContentControl.DataTemplates>
-      </ContentControl>
+              IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
+              PointerPressed="OnTitleBandPressed" />
+      <Panel>
+        <TextBlock Text="Select a node to edit it." HorizontalAlignment="Center" VerticalAlignment="Center"
+                   FontSize="13" LineHeight="18" Foreground="{DynamicResource TextMutedBrush}"
+                   IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}"
+                   AutomationProperties.AutomationId="InspectorEmpty" />
+        <!-- The inspector scrolls its own sections, so its header and filter stay in place. -->
+        <ContentControl Content="{Binding Canvas}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
+              <inspector:InspectorView />
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </Panel>
     </DockPanel>
 
     <!-- A modal sheet covers every column, so the breadcrumb, Save, and the sidebar take no click while it is open.

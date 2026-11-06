@@ -224,7 +224,7 @@ public sealed class CanvasTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
 
         Assert.True(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
-        Assert.Equal("Select a task or connection to edit it.", shell.Find<TextBlock>("InspectorHint").Text);
+        Assert.Equal("Select a node to edit it.", shell.Find<TextBlock>("InspectorHint").Text);
         Assert.False(shell.Has<TextBox>("TaskTitle"));
 
         shell.Click(shell.Header(shell.Node("Design")));

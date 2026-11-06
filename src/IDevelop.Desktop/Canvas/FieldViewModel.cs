@@ -36,6 +36,9 @@ public sealed class FieldViewModel : ObservableObject
 
     public string Label => Spec.Label;
 
+    /// <summary>What an empty box says, such as "Add acceptance criteria".</summary>
+    public string Placeholder => $"Add {Spec.Label.ToLowerInvariant()}";
+
     /// <summary>The label's tooltip, which says when the field is required.</summary>
     public string LabelTip => Spec.Required ? $"{Spec.Label} · Required" : Spec.Label;
 

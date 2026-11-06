@@ -239,7 +239,8 @@ public sealed class NodeMenuTests : IDisposable
     public void Choose_agent_opens_the_client_list_against_the_picker_once_it_is_scrolled_into_view()
     {
         var shell = Shell.Open(DesignThenBuild());
-        shell.Window.Height = shell.Window.MinHeight;
+        shell.Window.MinHeight = 320;
+        shell.Window.Height = 320;
         shell.Click(shell.Header(shell.Node("Build")));
         var viewport = shell.Find<ComboBox>("TaskClient").FindAncestorOfType<ScrollViewer>()!;
         viewport.ScrollToEnd();

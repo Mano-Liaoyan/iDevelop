@@ -30,7 +30,7 @@ public sealed class RunRetryTests
         shell.WaitForState("A", NodeState.Failed);
         shell.Click(shell.Header(shell.Node("A")));
         Assert.Contains("The model is busy.", shell.InView<TextBlock>("RunTaskDetail").Text);
-        Assert.False(shell.InView<Button>("RunTask").IsEffectivelyVisible);
+        Assert.False(shell.ShowsAny("RunTask"));
 
         shell.Click(shell.InView<Button>("RetryTask"));
 

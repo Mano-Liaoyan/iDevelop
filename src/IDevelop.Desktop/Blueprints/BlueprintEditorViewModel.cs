@@ -74,7 +74,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
 
     public string Caption => _editing is { } library
         ? $"Version {_source.Key.Version} in the {LibraryName(library.Kind)} library. Saving makes version {_source.Key.Version + 1}, and nodes placed before keep their version."
-        : $"Derived from {_source.Name}, version {_source.Key.Version}. Saving makes version 1.";
+        : $"A new blueprint from {_source.Name}, version {_source.Key.Version}. Its own versions start at 1.";
 
     public bool IsNew => _editing is null;
 

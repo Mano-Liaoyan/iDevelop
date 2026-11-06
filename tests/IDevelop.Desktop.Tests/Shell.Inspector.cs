@@ -43,6 +43,25 @@ internal sealed partial class Shell
         Render();
     }
 
+    /// <summary>Opens the selected node's conversation from the inspector's header.</summary>
+    public void Talk()
+    {
+        Render();
+        Invoke(InView<Button>("OpenConversation"));
+        Render();
+    }
+
+    /// <summary>Opens the header's More menu and chooses the entry. A headless popup takes no clicks, so the entry raises its own.</summary>
+    public void ChooseMore(string automationId)
+    {
+        var more = Find<Button>("InspectorMore");
+        Click(more);
+        var item = Window.GetVisualDescendants().OfType<Avalonia.Controls.MenuItem>().Single(menu => AutomationProperties.GetAutomationId(menu) == automationId);
+        item.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.MenuItem.ClickEvent));
+        more.Flyout!.Hide();
+        Render();
+    }
+
     public void FilterInspector(string text)
     {
         Click(Find<TextBox>("InspectorFilter"));

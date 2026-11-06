@@ -21,7 +21,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
         [nameof(State)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsNextRunNote)],
         [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(IsUnderReview)],
         [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices)],
-        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsAcceptAndFinish)],
+        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsAcceptAndFinish), nameof(Actions)],
         [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
         [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentChanges), nameof(CanRevertAgent), nameof(PeekAgent)],
         [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
@@ -140,10 +140,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
 
     /// <summary>Only an agent work waits for the person as its conversation mode says.</summary>
     public bool HasConversation => _task.Blueprint.Work is WorkSpec.Agent;
-
-    public string ComposerHint => IsReview
-        ? "The reviewer reads your guidance in its next turn. Ctrl+Enter sends."
-        : "Write to the agent. Ctrl+Enter sends.";
 
     public IReadOnlyList<ConversationChoice> ConversationChoices =>
         [.. Enum.GetValues<ConversationMode>().Select(mode => new ConversationChoice(Id, mode, RunText.ConversationChoice(mode)))];

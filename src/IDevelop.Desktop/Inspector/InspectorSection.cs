@@ -2,14 +2,15 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 
 namespace IDevelop.Desktop.Inspector;
 
 /// <summary>
-/// A foldable group of inspector rows under a Title Case header, such as Agent. The window remembers each key's fold,
-/// whichever node is selected. A folded section counts its changed values in its header, and while the filter has
-/// text a section shows open, or hides its header when neither its title nor any of its rows match. Its content stays
+/// A foldable group of inspector rows under a filled Title Case header, such as Agent. The window remembers each key's
+/// fold, whichever node is selected. A section counts its changed values in its header, Left folds it and Right opens it
+/// from the header, and while the filter has text a section shows open, or hides its header when neither its title nor any of its rows match. Its content stays
 /// in the layout then, because rows from a template exist only once laid out, and each row hides itself.
 /// </summary>
 public sealed class InspectorSection : InspectorPart
@@ -54,7 +55,7 @@ public sealed class InspectorSection : InspectorPart
         set => SetValue(ChangesProperty, value);
     }
 
-    /// <summary>"(2)" while the section is folded with two changed values, otherwise empty.</summary>
+    /// <summary>"2 changed" while two of the section's values differ from their defaults, otherwise empty.</summary>
     public string Badge
     {
         get;
@@ -82,7 +83,7 @@ public sealed class InspectorSection : InspectorPart
     {
         var folded = IsFolded;
         PseudoClasses.Set(":folded", folded);
-        Badge = folded && Changes > 0 ? $"({Changes})" : "";
+        Badge = Changes > 0 ? $"{Changes} changed" : "";
         IsVisible = IsShown;
         PseudoClasses.Set(":unmatched", !TitleMatches && !_rows.Any(row => row is { IsShown: true, LabelMatches: true }));
         foreach (var row in _rows)
@@ -97,12 +98,14 @@ public sealed class InspectorSection : InspectorPart
         if (_header is not null)
         {
             _header.Click -= OnHeaderClick;
+            _header.KeyDown -= OnHeaderKeyDown;
         }
 
         _header = e.NameScope.Find<Button>("PART_Header");
         if (_header is not null)
         {
             _header.Click += OnHeaderClick;
+            _header.KeyDown += OnHeaderKeyDown;
         }
     }
 
@@ -117,6 +120,15 @@ public sealed class InspectorSection : InspectorPart
         else if (change.Property == TitleProperty || change.Property == ChangesProperty)
         {
             Refresh();
+        }
+    }
+
+    private void OnHeaderKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is Avalonia.Input.Key.Left or Avalonia.Input.Key.Right && e.KeyModifiers == KeyModifiers.None && State is { IsFiltering: false } state)
+        {
+            state.Fold([Key], e.Key == Avalonia.Input.Key.Left);
+            e.Handled = true;
         }
     }
 

@@ -90,7 +90,7 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal("iDevelop", shell.Window.Title);
         Assert.False(shell.ShowsAny("AddTask"));
         Assert.Equal([false, true, true], new[] { "Save", "EmptyOpenFolder", "CanvasOpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
-        Assert.Equal(["Inspector"], Shell.Texts(shell.Find<Control>("Inspector")));
+        Assert.Equal(["Select a node to edit it."], Shell.Texts(shell.Find<Control>("Inspector")));
 
         shell.Window.ViewModel.Open(_temp.Create("plan"));
         shell.Render();
@@ -98,10 +98,10 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal([true, true, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.Equal(
             [
-                "Inspector", "Workflow", "0 nodes", "Filter properties", "Library",
+                "Filter properties", "Workflow", "0 nodes", "Library",
                 "Built-in", "Implement", "Plan", "Architect", "Review", "Approval", "Merge",
-                "Project", "None yet. Derive a blueprint to add one.", "Personal", "None yet. Derive a blueprint to add one.",
-                "Reload Libraries", "Select a task or connection to edit it.",
+                "No project or personal blueprints yet. Derive one to add it.",
+                "Reload Libraries", "Select a node to edit it.",
             ],
             Shell.Texts(shell.Find<Control>("Inspector")));
         Assert.Equal("plan", shell.Find<TextBlock>("ProjectName").Text);
