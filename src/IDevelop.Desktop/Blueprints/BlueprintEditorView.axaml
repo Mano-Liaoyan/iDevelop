@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
              xmlns:inspector="using:IDevelop.Desktop.Inspector"
              x:Class="IDevelop.Desktop.Blueprints.BlueprintEditorView"
              x:DataType="blueprints:BlueprintEditorViewModel">
@@ -34,7 +35,7 @@
         </StackPanel>
       </StackPanel>
     </Border>
-    <ScrollViewer>
+    <ScrollViewer theme:EdgeFade.IsEnabled="True">
   <StackPanel Margin="8,8,8,16" AutomationProperties.AutomationId="BlueprintEditor">
     <inspector:InspectorSection Key="BlueprintAbout" Title="Blueprint">
       <StackPanel>

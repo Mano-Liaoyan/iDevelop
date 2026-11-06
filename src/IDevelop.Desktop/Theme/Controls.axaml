@@ -60,6 +60,20 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
   </Style>
+  <!-- A bar of two groups: each group draws the chrome, and the bar none. -->
+  <Style Selector="Border.breadcrumb.split">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BoxShadow" Value="none" />
+  </Style>
+  <Style Selector="Border.crumbPart">
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
+  </Style>
   <!-- A shadow outside a clipped border is cut off, so floating panels clip their content in an inner border. -->
   <Style Selector="Border.floating">
     <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
@@ -515,7 +529,7 @@
     <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
   </Style>
   <!-- The rows fade at the bottom edge while more follow, so the edge never cuts a row in half. -->
-  <Style Selector="ScrollViewer.tree.more /template/ ScrollContentPresenter#PART_ContentPresenter">
+  <Style Selector="ScrollViewer.fadesEnd.more /template/ ScrollContentPresenter#PART_ContentPresenter">
     <Setter Property="OpacityMask">
       <LinearGradientBrush StartPoint="0%,90%" EndPoint="0%,100%">
         <GradientStop Offset="0" Color="Black" />

@@ -236,7 +236,7 @@
       </ContentControl>
       </Border>
 
-      <ScrollViewer Grid.Row="2">
+      <ScrollViewer Grid.Row="2" theme:EdgeFade.IsEnabled="True">
         <StackPanel x:Name="SectionList" Margin="8,0,8,16">
           <!-- Over the sections, and outside the swapped content, so the hint stays in the tree, hidden, while something is selected. -->
           <TextBlock Classes="note" Text="Select a node to edit it." Margin="4,0,4,8"

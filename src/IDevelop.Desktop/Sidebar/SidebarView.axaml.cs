@@ -20,6 +20,9 @@ public partial class SidebarView : UserControl
     // At or below this window height Activity shows fewer rows, and it never takes more than half of the panel.
     private const double SmallHeight = 700;
 
+    // What the pinned project row and the bottom fade cover at the tree's edges.
+    private const double TreeEdgeRoom = 32;
+
     private IInputElement? _beforeFind;
 
     public SidebarView()
@@ -116,13 +119,18 @@ public partial class SidebarView : UserControl
         return true;
     }
 
+    // The room over a row clears the pinned project, and the room under it clears the bottom edge's fade.
+    private static void InView(Control row) => row.BringIntoView(new Rect(row.Bounds.Size).Inflate(new Thickness(0, TreeEdgeRoom)));
+
     private void Reveal(FindResult result)
     {
         object target = (object?)result.Node ?? result.Canvas;
         result.Canvas.Project.IsExpanded = true;
-        Rows.GetVisualDescendants().OfType<Control>()
-            .FirstOrDefault(row => row.DataContext == target && (row is ListBoxItem || (row is Button && row.Classes.Contains("workflow"))))?
-            .BringIntoView();
+        if (Rows.GetVisualDescendants().OfType<Control>()
+            .FirstOrDefault(row => row.DataContext == target && (row is ListBoxItem || (row is Button && row.Classes.Contains("workflow")))) is { } row)
+        {
+            InView(row);
+        }
     }
 
     private IReadOnlyList<Control> KeyRows() => [.. Rows.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible && control switch
@@ -165,7 +173,7 @@ public partial class SidebarView : UserControl
 
         e.Handled = true;
         next.Focus(NavigationMethod.Directional);
-        next.BringIntoView();
+        InView(next);
         // Focus alone selects nothing, and moving through a node list chooses each node, as the list's own keys do.
         if (next is ListBoxItem { DataContext: TaskNodeViewModel node } item && item.FindAncestorOfType<ListBox>() is { } list)
         {
@@ -214,8 +222,7 @@ public partial class SidebarView : UserControl
     private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         TreeRows.Margin = new Thickness(0, 0, Tree.ScrollBarMaximum.Y > 0 ? 16 : 8, 8);
-        // A row that the bottom edge would cut fades out, and only the top row of a project's rows stays pinned.
-        Tree.Classes.Set("more", Tree.Offset.Y < Tree.ScrollBarMaximum.Y - 1);
+        // The project whose rows meet the top edge stays pinned there.
         var top = Tree.Offset.Y;
         var pinned = top < 1 ? null : TreeRows.GetVisualDescendants().OfType<ToggleButton>()
             .Where(row => row.Classes.Contains("projectRow") && row.DataContext is ProjectViewModel)

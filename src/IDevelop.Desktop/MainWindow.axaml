@@ -68,12 +68,13 @@
                between them. On a compact canvas the code-behind marks the bar compact: the breadcrumb shows only the workflow's
                name, and Generate only its glyph. -->
           <canvas:CanvasTopBar x:Name="TopBar" VerticalAlignment="Top" Margin="12,8" IsVisible="{Binding ShowsCanvas}">
-            <Border Classes="breadcrumb" canvas:CanvasTopBar.Slot="Leading" HorizontalAlignment="Left"
+            <Border Classes="breadcrumb split" canvas:CanvasTopBar.Slot="Leading" HorizontalAlignment="Left"
                     IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
                     AutomationProperties.AutomationId="Breadcrumb">
               <!-- The names come first and give up width first, the workflow's before the project's, because the project's is
                    short and says where the person is. Undo, Redo, and Save keep theirs at the end, in that order for the keyboard too. -->
-              <theme:SpillRow Spacing="0">
+              <theme:SpillRow Spacing="4">
+                <Border Classes="crumbPart">
                 <DockPanel Margin="0,0,6,0">
                   <PathIcon DockPanel.Dock="Left" Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" Margin="8,0,6,0"
                             Foreground="{DynamicResource TextMutedBrush}" />
@@ -88,9 +89,11 @@
                              ToolTip.Tip="{Binding WorkflowName}"
                              AutomationProperties.AutomationId="BreadcrumbWorkflow" />
                 </DockPanel>
-                <Border theme:SpillRow.Pinned="True" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
+                </Border>
+                <!-- The graph's edits are their own group, apart from where the person is. -->
+                <Border theme:SpillRow.Pinned="True" Classes="crumbPart">
                   <StackPanel Orientation="Horizontal">
-                    <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"
+                    <Button Classes="ghost" CornerRadius="7,0,0,7" VerticalAlignment="Stretch"
                             Command="{Binding UndoCommand}"
                             ToolTip.Tip="Undo"
                             AutomationProperties.AutomationId="Undo"
@@ -104,10 +107,6 @@
                             AutomationProperties.Name="Redo">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRedo}" />
                     </Button>
-                  </StackPanel>
-                </Border>
-                <Border theme:SpillRow.Pinned="True" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
-                  <StackPanel Orientation="Horizontal">
                     <!-- The dot is the one mark of unsaved work here, so the names keep the width that words would take. -->
                     <Button Classes="ghost" CornerRadius="0,7,7,0" VerticalAlignment="Stretch"
                             Command="{Binding SaveCommand}"

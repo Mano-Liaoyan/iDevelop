@@ -248,4 +248,20 @@ public sealed class ActivityTests : IDisposable
 
         Assert.Equal(["inspector", "left", "canvas", "left"], seen);
     }
+
+    [Fact]
+    public void The_session_keeps_a_folded_Activity_list()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            (WorkspaceSession.Empty with { ActivityFolded = true }).Write(file);
+
+            Assert.True(WorkspaceSession.Read(file).ActivityFolded);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
 }

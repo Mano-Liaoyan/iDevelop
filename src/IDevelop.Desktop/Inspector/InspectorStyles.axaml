@@ -573,8 +573,8 @@
     <Setter Property="Padding" Value="8,5,0,5" />
     <Setter Property="MaxDropDownHeight" Value="320" />
   </Style>
-  <!-- The closed box ends a long name in an ellipsis. Its list opens at 260 px or wider against the panel's right edge, so
-       each name reads whole and wraps, where a filter or a narrow panel would leave the box too short for it. -->
+  <!-- The closed box ends a long name in an ellipsis. Its list opens at the box's own width, over no label, and wraps each name
+       so that it reads whole. -->
   <Style Selector="TextBlock.choice">
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
@@ -585,9 +585,11 @@
   <Style Selector="inspector|InspectorRow ComboBox /template/ Popup#PART_Popup">
     <Setter Property="Placement" Value="BottomEdgeAlignedRight" />
   </Style>
-  <Style Selector="inspector|InspectorRow ComboBox /template/ Border#PopupBorder">
-    <Setter Property="MinWidth" Value="260" />
-    <Setter Property="MaxWidth" Value="360" />
+  <!-- An idle node's row in the overview takes a quiet glyph, so each state's row starts the same way. -->
+  <Style Selector="inspector|InspectorRow PathIcon.stateIcon.state-idle">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
   </Style>
   <!-- A segment of a row keeps to the 28 px line and to its half of the value column. -->
   <Style Selector="inspector|InspectorRow Button.segment, inspector|InspectorRow RadioButton.segment">

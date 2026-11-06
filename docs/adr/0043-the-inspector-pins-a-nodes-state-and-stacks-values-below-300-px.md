@@ -12,7 +12,7 @@ Round 0 of the UI review found that a node's status started 757 px down an 800 p
 - **Sections.** A Proposal section comes first while a proposal is open. Input lists each incoming connection. Output holds the results, the findings, and each outgoing connection. Run, Blueprint, and Talk to the Agent are gone: their status and actions are in the header, the blueprint's facts and commands are in the kind line and More, and the conversation view holds the only composer.
 - **Columns.** The columns are a 14 px glyph, a 6 px gap, a 76 px label, the value, and a 24 px trailing slot. Values start 108 px from the panel's edge at every width from 300 px. Two right edges stay: actions end 12 px from the panel's edge, and boxes and paragraphs end 36 px from it.
 - **Notes.** A row's note is in its label's tooltip and help text, so the trailing slot holds only a revert arrow, a state glyph, a count, or a row's actions.
-- **Long values.** A closed picker ends a long name in an ellipsis. Its tooltip and its list, which opens at 260 px or wider against the panel's right edge, hold the whole name. A long text field rests at 88 px and scrolls inside, and with the focus it grows to 232 px.
+- **Long values.** A closed picker ends a long name in an ellipsis. Its tooltip and its list, which opens at the box's own width and wraps each name, hold the whole name. A long text field rests at 88 px and scrolls inside, and with the focus it grows to 232 px.
 - **Tab order.** The filter comes before the header in the tree, and the actions come first in the header, so the first action is two Tab stops from the filter.
 
 ## Considered options

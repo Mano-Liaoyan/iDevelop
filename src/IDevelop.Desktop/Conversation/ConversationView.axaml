@@ -210,7 +210,7 @@
           </Border>
           <ScrollViewer Grid.Row="1" Grid.ColumnSpan="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
                         IsVisible="{Binding ShowsCardBody}">
-            <StackPanel Classes="attentionBody" Spacing="8">
+            <StackPanel Classes="attentionBody" Classes.compact="{Binding IsCompactCard}" Spacing="8">
               <SelectableTextBlock Classes="attentionText" Text="{Binding CardBody}"
                                    IsVisible="{Binding CardBody, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    AutomationProperties.AutomationId="ConversationAttentionBody" />

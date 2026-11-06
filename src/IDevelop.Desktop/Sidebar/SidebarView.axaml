@@ -187,7 +187,7 @@
            the selected row. A name wraps in full rather than ending in an ellipsis. The scroll bar draws over the content, so
            while the tree overflows the rows end where the bar starts. -->
       <Panel Grid.Row="1">
-      <ScrollViewer x:Name="Tree" Classes="tree" Margin="8,0,0,0" HorizontalScrollBarVisibility="Disabled"
+      <ScrollViewer x:Name="Tree" theme:EdgeFade.IsEnabled="True" Margin="8,0,0,0" HorizontalScrollBarVisibility="Disabled"
                     ScrollChanged="OnTreeScrollChanged">
         <StackPanel x:Name="TreeRows" Margin="0,0,8,8" Spacing="2">
           <ItemsControl ItemsSource="{Binding Projects}"

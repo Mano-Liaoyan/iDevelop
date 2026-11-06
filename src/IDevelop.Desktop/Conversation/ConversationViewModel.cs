@@ -178,7 +178,8 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
     };
 
     /// <summary>How to answer a question that has no choices to press, or null.</summary>
-    public string? CardHint => Card == AttentionCard.Question && Node.Questions.Count == 0 ? "Type your answer below. Ctrl+Enter sends." : null;
+    public string? CardHint => (Card == AttentionCard.Question && Node.Questions.Count == 0) || (Card == AttentionCard.Reply && HasOwnReason)
+        ? "Type your answer below. Ctrl+Enter sends." : null;
 
     /// <summary>Approve's words: an alternative to a reply takes the reply as the result, so it says so.</summary>
     public string ApproveLabel => Card == AttentionCard.Reply ? "Approve reply as result" : "Approve";
