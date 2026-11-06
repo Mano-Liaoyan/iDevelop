@@ -43,6 +43,8 @@ public sealed class FoldPanel : Decorator
         set => SetValue(IsOpenProperty, value);
     }
 
+    private const double BoxBottomPadding = 6;
+
     /// <summary>The text is taller than <see cref="Rest"/>, so the More control shows.</summary>
     public bool Folds
     {
@@ -86,12 +88,20 @@ public sealed class FoldPanel : Decorator
         child.Measure(availableSize.WithHeight(double.PositiveInfinity));
         var whole = child.DesiredSize.Height;
         Folds = whole > Rest + 1;
-        return child.DesiredSize.WithHeight(Folds && !IsOpen && !_hasFocus ? RestHeight(child) : whole);
+        var resting = Folds && !IsOpen && !_hasFocus;
+        Classes.Set("resting", resting);
+        return child.DesiredSize.WithHeight(resting ? RestHeight(child) : whole);
     }
 
     // A stack of blocks, such as a prompt's paragraphs, rests on a whole line, so no line shows cut in half.
     private double RestHeight(Control child)
     {
+        // A resting box gives up its bottom padding, so its last whole line ends on its border and no next line peeks in.
+        if (child is TextBox { Classes: var classes } && classes.Contains("multiline"))
+        {
+            return Rest - BoxBottomPadding;
+        }
+
         if (child is not StackPanel stack)
         {
             return Rest;

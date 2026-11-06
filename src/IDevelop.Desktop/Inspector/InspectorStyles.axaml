@@ -612,6 +612,9 @@
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
   </Style>
   <!-- A button that an action row widens keeps its label in the middle. -->
+  <Style Selector="inspector|FoldPanel.resting TextBox.multiline">
+    <Setter Property="Padding" Value="8,6,8,0" />
+  </Style>
   <Style Selector="inspector|ActionRow > Button">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
