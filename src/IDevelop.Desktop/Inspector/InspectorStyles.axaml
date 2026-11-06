@@ -270,7 +270,7 @@
                          AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
               <!-- The count's drawing ends where the glyphs' drawing ends, whatever its last character keeps clear. -->
               <inspector:InkAlignedText Grid.Column="3" Classes="sectionBadge" Text="{TemplateBinding Badge}"
-                                        Margin="{x:Static inspector:InspectorGrid.GlyphInkMargin}" />
+                                        Margin="{x:Static inspector:InspectorGrid.GlyphInkMargin}" ToolTip.Tip="Values that differ from the blueprint's defaults" />
             </Grid>
           </Button>
           <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -359,10 +359,10 @@
             <ContentPresenter Content="{TemplateBinding Actions}" VerticalAlignment="Center"
                               IsVisible="{TemplateBinding Actions, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </StackPanel>
-          <!-- The arrow ends the label's column, so every value keeps one left and one right edge. Over a stacked value it ends the label's line. -->
-          <Button Name="PART_Revert" Classes="glyph revert" Grid.Row="0" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,0,0"
+          <!-- One column for every row: in a box the arrow stands just before the chevron, and over a stacked value it keeps that place on the label's line. -->
+          <Button Name="PART_Revert" Classes="glyph revert" Grid.Row="0" Grid.Column="3" ZIndex="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,26,0"
                   Command="{TemplateBinding RevertCommand}" IsVisible="{TemplateBinding CanRevert}"
-                  ToolTip.Tip="Go back to the default or the saved value"
+                  ToolTip.Tip="{TemplateBinding RevertTip}"
                   AutomationProperties.AutomationId="{TemplateBinding RevertId}"
                   AutomationProperties.Name="Revert">
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRevert}" Width="14" Height="14" />
@@ -377,8 +377,14 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ Button#PART_Revert">
-    <Setter Property="Grid.Column" Value="4" />
-    <Setter Property="Margin" Value="0" />
+    <Setter Property="Margin" Value="0,0,26,0" />
+  </Style>
+  <!-- A changed value's text ends before the arrow. -->
+  <Style Selector="inspector|InspectorRow:changed ComboBox">
+    <Setter Property="Padding" Value="8,3,24,3" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:changed ToggleButton.picker /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Margin" Value="0,0,24,0" />
   </Style>
   <!-- A value that differs from its default names itself in strong text beside its revert arrow. -->
   <Style Selector="inspector|InspectorRow:changed /template/ TextBlock#PART_Label">
@@ -593,7 +599,7 @@
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:not(.multiline)">
     <Setter Property="Padding" Value="8,3" />
@@ -627,8 +633,9 @@
   <Style Selector="inspector|InspectorRow Button.segment, inspector|InspectorRow RadioButton.segment">
     <Setter Property="Padding" Value="4" />
   </Style>
-  <!-- A long text field reads as text at rest: the box's own text hides under a reading of it in up to five lines, at the
-       box's padding, so it wraps where the box wraps. With the focus the box shows the source, up to 232 px, and scrolls inside. -->
+  <!-- A long text field reads as text at rest: the box's own text hides under a reading of it in up to three lines, at the
+       box's padding, so it wraps where the box wraps. More opens the whole reading. With the focus the box shows the source, up to
+       232 px, and scrolls inside. -->
   <Style Selector="inspector|InspectorRow TextBox.multiline">
     <Setter Property="MinHeight" Value="30" />
     <Setter Property="MaxHeight" Value="232" />
@@ -637,8 +644,11 @@
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
   </Style>
   <Style Selector="Panel.fieldText.multiline:not(:focus-within) > TextBox.multiline">
-    <Setter Property="MaxHeight" Value="102" />
+    <Setter Property="MaxHeight" Value="66" />
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
+  </Style>
+  <Style Selector="Panel.fieldText.multiline.open:not(:focus-within) > TextBox.multiline">
+    <Setter Property="MaxHeight" Value="Infinity" />
   </Style>
   <Style Selector="Panel.fieldText.multiline:not(:focus-within) > TextBox.multiline /template/ TextPresenter#PART_TextPresenter">
     <Setter Property="Opacity" Value="0" />
@@ -647,11 +657,15 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="TextBlock.fieldReading">
+    <Setter Property="MaxLines" Value="3" />
     <Setter Property="Margin" Value="9,7" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="LineHeight" Value="18" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Panel.fieldText.open > TextBlock.fieldReading">
+    <Setter Property="MaxLines" Value="0" />
   </Style>
   <!-- A button that an action row widens keeps its label in the middle. -->
   <Style Selector="inspector|ActionRow > Button">
@@ -698,6 +712,12 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+  </Style>
+  <Style Selector="TextBlock.resultSummary">
+    <Setter Property="MaxLines" Value="3" />
+  </Style>
+  <Style Selector="TextBlock.resultSummary.brief">
+    <Setter Property="MaxLines" Value="1" />
   </Style>
   <Style Selector="Button.resultRow:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.resultRow:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />

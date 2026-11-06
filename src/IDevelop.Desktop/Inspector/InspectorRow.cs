@@ -66,6 +66,8 @@ public sealed class InspectorRow : InspectorPart
 
     public static readonly StyledProperty<string?> RevertIdProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(RevertId));
 
+    public static readonly StyledProperty<string> RevertTipProperty = AvaloniaProperty.Register<InspectorRow, string>(nameof(RevertTip), "Back to the default or the saved value");
+
     private InspectorSection? _section;
     private Panel? _labelLine;
 
@@ -150,6 +152,13 @@ public sealed class InspectorRow : InspectorPart
     {
         get => GetValue(RevertIdProperty);
         set => SetValue(RevertIdProperty, value);
+    }
+
+    /// <summary>The revert arrow's tooltip, which names the value it restores.</summary>
+    public string RevertTip
+    {
+        get => GetValue(RevertTipProperty);
+        set => SetValue(RevertTipProperty, value);
     }
 
     /// <summary>While the filter has text, whether it matches the label.</summary>

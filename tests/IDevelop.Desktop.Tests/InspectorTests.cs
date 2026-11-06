@@ -46,21 +46,51 @@ public sealed class InspectorTests : IDisposable
         Assert.Equal(reading, Execution.ResultViewModel.Reading(source));
 
     [AvaloniaFact]
-    public void A_node_with_a_result_leads_with_its_output_and_a_node_without_one_with_its_setup()
+    public void Every_node_shows_its_sections_in_one_order()
     {
-        var stack = new SectionStack();
-        foreach (var key in new[] { "Proposal", "Task", "Agent", "Input", "Output" })
-        {
-            stack.Children.Add(new InspectorSection { Key = key });
-        }
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        shell.Window.ViewModel.Canvas!.Inspect(shell.Window.ViewModel.Canvas.Nodes.Single());
+        shell.Render();
+        string[] Keys() => [.. shell.Window.GetVisualDescendants().OfType<InspectorSection>().Where(section => section.IsVisible).Select(section => section.Key)];
 
-        string[] Keys() => [.. stack.Children.OfType<InspectorSection>().Select(section => section.Key)];
+        Assert.Equal(["Output", "Input", "Task", "Agent"], Keys());
+    }
 
-        stack.LeadsWithOutput = true;
-        Assert.Equal(["Proposal", "Output", "Input", "Task", "Agent"], Keys());
+    [AvaloniaFact]
+    public void A_long_field_ends_in_More_and_More_opens_the_whole_reading_in_place()
+    {
+        var text = string.Join("\n", Enumerable.Range(1, 12).Select(index => $"Line {index} of the instructions."));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        var node = shell.Window.ViewModel.Canvas!.Nodes.Single();
+        node.Canvas.Inspect(node);
+        node.SetField(node.Fields.First(field => field.IsMultiline).Spec.Key, text);
+        shell.Render();
+        var field = node.Fields.First(item => item.IsMultiline);
+        var reading = shell.Find<Theme.EllipsisText>(field.ReadingId);
+        var more = shell.Find<ToggleButton>(field.ReadingMoreId);
 
-        stack.LeadsWithOutput = false;
-        Assert.Equal(["Proposal", "Task", "Agent", "Input", "Output"], Keys());
+        Assert.True(more.IsEffectivelyVisible);
+        Assert.Equal("More", more.Content);
+        Assert.EndsWith("…", reading.Text);
+        var folded = reading.Bounds.Height;
+
+        shell.Click(more);
+        shell.Render();
+
+        Assert.Equal(("Less", field.Reading), (more.Content, reading.Text));
+        Assert.True(reading.Bounds.Height > folded, "The field does not open in place.");
+    }
+
+    [AvaloniaFact]
+    public void A_short_field_shows_no_More()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        var node = shell.Window.ViewModel.Canvas!.Nodes.Single();
+        node.Canvas.Inspect(node);
+        node.SetField(node.Fields.First(field => field.IsMultiline).Spec.Key, "One line.");
+        shell.Render();
+
+        Assert.False(shell.Find<ToggleButton>(node.Fields.First(item => item.IsMultiline).ReadingMoreId).IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -342,7 +372,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal(["ProposalAcceptFinish"], PrimaryButtons(shell));
         Assert.Equal((false, false, false, false), (Shows(shell, "RunTask"), Shows(shell, "Approve"), Shows(shell, "StopTask"), Shows(shell, "StartProblem")));
-        Assert.Equal("Input required · reply", shell.InView<TextBlock>("RunTaskStatus").Text);
+        Assert.Equal("Input required · Reply", shell.InView<TextBlock>("RunTaskStatus").Text);
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Completed", "the planner is done");
@@ -388,7 +418,7 @@ public sealed class InspectorTests : IDisposable
         Assert.False(Shows(shell, "SendBack"));
 
         File.WriteAllText(gate, "");
-        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · reply", "the turn ends waiting");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · Reply", "the turn ends waiting");
 
         Assert.Equal((false, false), (Shows(shell, "RunTask"), Shows(shell, "StopTask")));
     }
@@ -463,7 +493,7 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design export")));
         shell.RunNode();
         shell.WaitForProposal();
-        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · reply", "the planner waits");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · Reply", "the planner waits");
         return shell;
     }
 

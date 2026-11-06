@@ -3,7 +3,7 @@ using IDevelop.Desktop.Canvas;
 
 namespace IDevelop.Desktop.Inspector;
 
-/// <summary>One button of the pinned header's action row. The first in a row is the node's next step, and only it can be primary.</summary>
+/// <summary>One button of the pinned header's action row. Only the node's next step can be primary.</summary>
 /// <param name="Id">The button's automation id.</param>
 /// <param name="Label">What the button says, which also names it for UI Automation.</param>
 /// <param name="Glyph">The resource key of the button's glyph.</param>
@@ -13,7 +13,7 @@ namespace IDevelop.Desktop.Inspector;
 /// <param name="IsCurrent">What the button opens shows now, so the button is no longer the next step.</param>
 public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip, bool IsCurrent = false);
 
-/// <summary>Which actions the pinned header offers a node in each state, in order: the likeliest next step first.</summary>
+/// <summary>Which actions the pinned header offers a node in each state. Conversation comes first in every state, so it never moves under the pointer.</summary>
 internal static class NodeActions
 {
     /// <summary>While a proposal is open, accepting it is the one primary action, so the row holds none.</summary>
@@ -55,9 +55,9 @@ internal static class NodeActions
 
         return node.State switch
         {
-            NodeState.Idle => Row(new NodeAction("RunTask", "Run", "IconRun", node.RunCommand, true, node.RunRefusal ?? "Runs this node, then each node after it"), Conversation(node, "Conversation", primary: false)),
+            NodeState.Idle => Row(Conversation(node, "Conversation", primary: false), new NodeAction("RunTask", "Run", "IconRun", node.RunCommand, true, node.RunRefusal ?? "Runs this node, then each node after it")),
             NodeState.Running => Row(Conversation(node, "Conversation"), Stop(node)),
-            NodeState.Failed or NodeState.Stale => Row(Retry(node, primary: true), Conversation(node, "Conversation", primary: false)),
+            NodeState.Failed or NodeState.Stale => Row(Conversation(node, "Conversation", primary: false), Retry(node, primary: true)),
             _ => Row(Conversation(node, "Conversation"), node.ShowsRetry ? Retry(node, primary: !node.HasAgent) : null),
         };
     }

@@ -37,12 +37,12 @@ public sealed class InspectorHeaderTests : IDisposable
         new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
 
     [AvaloniaFact]
-    public void An_idle_node_leads_with_Run_and_offers_its_conversation()
+    public void An_idle_node_keeps_Conversation_first_and_makes_Run_primary()
     {
         var shell = Linked();
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["*Run", "Conversation"], Actions(shell));
+        Assert.Equal(["Conversation", "*Run"], Actions(shell));
     }
 
     [AvaloniaFact]
@@ -219,6 +219,6 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.Completed);
         shell.Render();
 
-        Assert.Equal([(NodeState.Completed, "Completed", 1)], shell.Window.ViewModel.Canvas!.Overview.States.Select(state => (state.State, state.Label, state.Count)));
+        Assert.Equal([(NodeState.Completed, "Complete", 1)], shell.Window.ViewModel.Canvas!.Overview.States.Select(state => (state.State, state.Label, state.Count)));
     }
 }

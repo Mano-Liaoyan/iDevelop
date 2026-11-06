@@ -109,6 +109,22 @@ public partial class InspectorView : UserControl
 
     private void OnExpandAll(object? sender, RoutedEventArgs e) => _state.UnfoldAll();
 
+    // A folded section opens, and its heading comes to the top of the list.
+    private void OnGoToSection(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuItem)?.Tag is not string key)
+        {
+            return;
+        }
+
+        _state.Fold([key], folded: false);
+        UpdateLayout();
+        if (SectionList.GetLogicalDescendants().OfType<InspectorSection>().FirstOrDefault(section => section.Key == key) is { IsEffectivelyVisible: true } section)
+        {
+            SectionScroller.Offset = SectionScroller.Offset.WithY(section.TranslatePoint(default, SectionList)?.Y ?? 0);
+        }
+    }
+
     private void OnCollapseAll(object? sender, RoutedEventArgs e) => _state.Fold(Sections(), folded: true);
 
     // The sections the panel shows now. A fold outlives them, so each key keeps its fold for the next node.

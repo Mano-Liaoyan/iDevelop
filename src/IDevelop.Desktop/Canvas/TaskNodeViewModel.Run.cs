@@ -56,7 +56,7 @@ public sealed partial class TaskNodeViewModel
     /// <summary>What the node needs from the person now, which its glyph tells apart.</summary>
     public WaitReason WaitReason => NodeStates.Why(_engineState);
 
-    /// <summary>"Running", "Completed", or what the node needs, such as "Input required · approval".</summary>
+    /// <summary>"Running", "Completed", or what the node needs, such as "Input required · Approval".</summary>
     public string StatusLabel => NodeStates.Label(_engineState, _background);
 
     /// <summary>What the node needs from the person, or why it failed or went stale, or null when its status says enough.</summary>

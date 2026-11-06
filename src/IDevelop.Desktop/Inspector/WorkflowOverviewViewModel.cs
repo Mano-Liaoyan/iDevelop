@@ -6,13 +6,13 @@ using IDevelop.Desktop.Mvvm;
 
 namespace IDevelop.Desktop.Inspector;
 
-/// <summary>How many of the workflow's nodes are in one state.</summary>
-public sealed record StateCount(NodeState State, string Label, int Count)
+/// <summary>How many of the workflow's nodes are in one state, each reason to wait on its own, in the run bar's words.</summary>
+public sealed record StateCount(NodeState State, WaitReason Why, string Label, int Count)
 {
     /// <summary>The state's glyph spins.</summary>
     public bool IsRunning => State == NodeState.Running;
 
-    /// <summary>Selects the first node in the state, in the list's order.</summary>
+    /// <summary>Selects the first node in the state and with the reason, in the list's order.</summary>
     public required ICommand SelectCommand { get; init; }
 
     public string Tip => $"Select the first of the {Label.ToLowerInvariant()} nodes";
@@ -54,9 +54,9 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
     /// <summary>The libraries, which the workflow inspector lists under the overview.</summary>
     public BlueprintsViewModel Blueprints => _canvas.Blueprints;
 
-    private void SelectFirst(NodeState state)
+    private void SelectFirst(NodeState state, WaitReason why)
     {
-        if (_canvas.Outline.FirstOrDefault(node => node.State == state) is { } node)
+        if (_canvas.Outline.FirstOrDefault(node => node.State == state && node.WaitReason == why) is { } node)
         {
             _canvas.Inspect(node);
         }
@@ -71,20 +71,22 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
     private void CountStates()
     {
         var counts = _canvas.Counts;
-        (NodeState State, string Label, int Count)[] all =
+        var waiting = _canvas.Nodes.Where(node => node.State == NodeState.InputRequired).GroupBy(node => node.WaitReason).OrderBy(group => group.Key)
+            .Select(group => (NodeState.InputRequired, group.Key, NodeStates.Need(group.Key), group.Count()));
+        (NodeState State, WaitReason Why, string Label, int Count)[] all =
         [
-            (NodeState.InputRequired, "Waiting", counts.Waiting), (NodeState.Failed, "Failed", counts.Failed), (NodeState.Running, "Running", counts.Running),
-            (NodeState.Stale, "Stale", counts.Stale), (NodeState.Completed, "Completed", counts.Completed),
-            (NodeState.Idle, "Idle", counts.Total - counts.Waiting - counts.Failed - counts.Running - counts.Stale - counts.Completed),
+            (NodeState.Failed, WaitReason.None, "Failed", counts.Failed), .. waiting, (NodeState.Running, WaitReason.None, "Running", counts.Running),
+            (NodeState.Stale, WaitReason.None, "Stale", counts.Stale), (NodeState.Completed, WaitReason.None, "Complete", counts.Completed),
+            (NodeState.Idle, WaitReason.None, "Idle", counts.Total - counts.Waiting - counts.Failed - counts.Running - counts.Stale - counts.Completed),
         ];
         ImmutableArray<StateCount> states =
         [
-            .. all.Where(entry => entry.Count > 0).Select(entry => new StateCount(entry.State, entry.Label, entry.Count)
+            .. all.Where(entry => entry.Count > 0).Select(entry => new StateCount(entry.State, entry.Why, entry.Label, entry.Count)
             {
-                SelectCommand = new RelayCommand(() => SelectFirst(entry.State)),
+                SelectCommand = new RelayCommand(() => SelectFirst(entry.State, entry.Why)),
             }),
         ];
-        if (!states.Select(entry => (entry.State, entry.Count)).SequenceEqual(_states.Select(entry => (entry.State, entry.Count))))
+        if (!states.Select(entry => (entry.State, entry.Why, entry.Count)).SequenceEqual(_states.Select(entry => (entry.State, entry.Why, entry.Count))))
         {
             _states = states;
             OnPropertyChanged(nameof(States));

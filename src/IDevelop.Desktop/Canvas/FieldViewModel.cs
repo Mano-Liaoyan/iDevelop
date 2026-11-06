@@ -48,6 +48,28 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>The id of the reading, such as TaskInstructionsReading.</summary>
     public string ReadingId => $"{AutomationId}Reading";
 
+    /// <summary>The id of the More control under the reading, such as TaskInstructionsMore.</summary>
+    public string ReadingMoreId => $"{AutomationId}More";
+
+    /// <summary>The person opened the whole reading. It stays open while the node keeps the field.</summary>
+    public bool IsReadingOpen
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ReadingToggle));
+                OnPropertyChanged(nameof(ReadingToggleName));
+            }
+        }
+    }
+
+    /// <summary>"More" under a cut reading, and "Less" under a whole one.</summary>
+    public string ReadingToggle => IsReadingOpen ? "Less" : "More";
+
+    public string ReadingToggleName => IsReadingOpen ? "Show less of the text" : "Show the whole text";
+
     /// <summary>The text differs from the blueprint's default for the field.</summary>
     public bool CanRevert => Text != Spec.Default;
 

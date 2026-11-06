@@ -38,11 +38,11 @@ public static class NodeStates
         _ => WaitReason.None,
     };
 
-    /// <summary>The card's status, which names why a node needs the person, such as "Input required · approval".</summary>
+    /// <summary>The card's status, which names why a node needs the person, such as "Input required · Approval".</summary>
     public static string Label(EngineState state) => state switch
     {
         EngineState.Running => "Running",
-        EngineState.InputRequired waiting => $"Input required · {Reason(waiting.Why)}",
+        EngineState.InputRequired => $"Input required · {Need(Why(state))}",
         EngineState.Completed => "Completed",
         EngineState.Failed => "Failed",
         EngineState.Stale => "Stale",
@@ -93,15 +93,5 @@ public static class NodeStates
         NodeState.InputRequired => StatusTone.Waiting,
         NodeState.Stale => StatusTone.Warning,
         _ => StatusTone.Neutral,
-    };
-
-    private static string Reason(string why) => why switch
-    {
-        EngineState.Approval => "approval",
-        EngineState.Reply => "reply",
-        EngineState.Conflict => "conflict",
-        EngineState.Interrupted => "interrupted",
-        EngineState.RoundLimit => "round limit",
-        _ => "question",
     };
 }

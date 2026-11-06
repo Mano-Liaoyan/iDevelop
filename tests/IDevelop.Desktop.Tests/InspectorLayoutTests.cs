@@ -157,7 +157,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var note = shell.Find<TextBlock>("EmptyLibrary");
 
-        Assert.Equal("No project or personal blueprints yet. Derive one.", note.Text);
+        Assert.Equal("No project or personal blueprints yet. Derive one from a blueprint's More menu.", note.Text);
         Assert.DoesNotContain(note.TextLayout.TextLines, line => line.HasCollapsed);
     }
 
