@@ -457,7 +457,7 @@
                               AutomationProperties.Name="{Binding AuthorLabel}">
                         <conversation:MarkdownView Markdown="{Binding Text}" />
                       </Border>
-                      <!-- Copy floats over the message's corner, or sits beside a person's message, while the pointer is on the row. -->
+                      <!-- Copy sits in the gutter beside the message, or beside a person's message, while the pointer is on the row. -->
                       <Button Grid.Column="{Binding IsPerson, Converter={x:Static conversation:ConversationView.CopyColumn}}"
                               Classes="icon small copy" Classes.person="{Binding IsPerson}" Command="{Binding CopyCommand}"
                               ToolTip.Tip="Copy message"

@@ -17,6 +17,7 @@ Round 4 of the review found a conversation title cut at a word's end with no ell
 - **A workflow's row.** It shows one state, the one that most needs the person. The run bar holds every count. This replaces the row's list of counts in ADR 0048.
 - **Composer.** More holds Open in terminal and what the client can do, so the header has no info glyph. While a turn runs and nothing is written, Stop is the only main action. A draft shows Send and a labelled Stop and send.
 - **Attention card.** A wait for words says what to do on one line. On a wait for a reply the action says "Use this reply as the result", stays quiet, and goes away while the person writes. This replaces "Accept as result" in ADR 0048.
+- **Copy.** It sits in the left gutter beside a message.
 - **Task.** The first turn shows also while the inspector is open, and opened, it names the nodes the agent read.
 - **Code.** A long line wraps, so a block never cuts a character. This replaces the scroll bar of ADR 0048. A block with a named language colors keywords, strings, and comments.
 - **Result card.** Up to three changed files show open.

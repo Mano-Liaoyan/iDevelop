@@ -311,15 +311,22 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
   <!-- Copy shows on the row the pointer is over, and for the keyboard when it has focus. -->
-  <!-- Copy hangs under the message's first column, where the eye ends the message, in the gap before the next row. -->
+  <!-- Copy sits in the column's left gutter, beside the message's first line, so it stays near a short message and covers nothing. -->
   <Style Selector="Panel.row Button.copy">
     <Setter Property="Opacity" Value="0" />
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="HorizontalAlignment" Value="Left" />
-    <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="0,0,0,-22" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="-22,1,0,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Grid.narrow Panel.row Button.copy">
+    <Setter Property="Margin" Value="-16,1,0,0" />
+    <Setter Property="Width" Value="16" />
   </Style>
   <Style Selector="Panel.row Button.copy.person">
     <Setter Property="HorizontalAlignment" Value="Right" />

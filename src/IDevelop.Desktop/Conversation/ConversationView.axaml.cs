@@ -22,7 +22,7 @@ public partial class ConversationView : UserControl
     /// <summary>The columns a message spans: a person's message spans one, and other messages span both.</summary>
     public static readonly IValueConverter MessageColumnSpan = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 2);
 
-    /// <summary>The column of Copy: beside a person's message, and at the start under other messages.</summary>
+    /// <summary>The column of Copy, whose styles place it beside each kind of message.</summary>
     public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(_ => 0);
 
     /// <summary>The attention card's row of its actions: under its text, or on its header's line.</summary>
