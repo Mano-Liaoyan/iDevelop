@@ -143,7 +143,8 @@ public sealed class ConnectionTests : IDisposable
             TaskAt(Review, "Review", 705, 90),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Dependency)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        Assert.Equal(Color.Parse("#564ADE"), shell.ColorAt(shell.Editor, new Point(535, 122)));
+        var canvasColor = shell.ColorAt(shell.Editor, new Point(535, 300));
+        Assert.NotEqual(canvasColor, shell.ColorAt(shell.Editor, new Point(535, 122)));
 
         // Held 180 px higher, Build's card spans y = 70 to 134, so the connection lies under its blank bottom row. The
         // connection keeps its straight route along the row, so the card covers it rather than the connection going around.

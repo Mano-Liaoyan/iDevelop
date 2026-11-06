@@ -19,7 +19,7 @@ public sealed partial class TaskNodeViewModel
     [
         nameof(EngineState), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
-        nameof(CanStopAndSend), nameof(HasResults), nameof(LastReply), nameof(ReviewSummary),
+        nameof(CanStopAndSend), nameof(HasResults), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(SendProblem), nameof(Latest), nameof(Questions), nameof(IsAsking),
     ];
 
@@ -116,6 +116,9 @@ public sealed partial class TaskNodeViewModel
     public IReadOnlyList<ResultViewModel> Results => _results;
 
     public bool HasResults => _history.Count > 0;
+
+    /// <summary>The node's latest result, or null.</summary>
+    internal NodeResult? LatestResult => _history.Count > 0 ? _history[^1] : null;
 
     /// <summary>What the agent did last: its latest message, or the tool it started after it, or null.</summary>
     public string? Latest => _latest;

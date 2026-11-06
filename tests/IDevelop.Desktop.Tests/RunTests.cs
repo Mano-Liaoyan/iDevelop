@@ -35,7 +35,7 @@ public sealed class RunTests
         Assert.Equal(NodeState.Idle, shell.NodeModel("C").State);
         Assert.True(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
         Assert.Equal("2 running", shell.Text("RunStatus"));
-        Assert.Equal("\"A\", \"B\"", shell.Text("RunActivity"));
+        Assert.Contains("\"A\", \"B\"", shell.Window.ViewModel.Canvas!.BarTip);
         Assert.False(shell.Find<Button>("MergeIntoBranch").IsEffectivelyVisible);
 
         shell.Click(shell.Find<Button>("StopAll"));
@@ -58,7 +58,7 @@ public sealed class RunTests
 
         f.Release("b");
         shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.CanMergeIntoBranch, "Merge into my branch is offered");
-        Assert.Equal("Every node is complete", shell.Text("RunStatus"));
+        Assert.Equal("2 of 2 complete", shell.Text("RunStatus"));
         Assert.True(shell.Find<Button>("MergeIntoBranch").IsEffectivelyVisible);
 
         shell.Click(shell.Find<Button>("MergeIntoBranch"));

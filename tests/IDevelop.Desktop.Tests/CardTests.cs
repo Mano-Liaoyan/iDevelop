@@ -78,8 +78,8 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Find<RadioButton>(theme));
         string[] titles = ["Implement", "Plan", "Architect", "Review", "Approval", "Researcher"];
 
-        // 3 px in from the tile's left edge, at its middle, lies left of the glyph.
-        Assert.Equal(tiles.Split(' ').Select(Color.Parse), titles.Select(title => shell.ColorAt(shell.CardKind(title), new Point(3, 16))));
+        // 1 px in from the 16 px tile's left edge, at its middle, lies left of the glyph.
+        Assert.Equal(tiles.Split(' ').Select(Color.Parse), titles.Select(title => shell.ColorAt(shell.CardKind(title), new Point(1, 8))));
         Assert.Equal(
             ["Implement", "Plan", "Architect", "Review", "Approval", "Read-only agent"],
             titles.Select(title => AutomationProperties.GetName(shell.CardKind(title))));
@@ -102,7 +102,7 @@ public sealed class CardTests : IDisposable
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
 
-        Assert.Equal(["Design", "Codex", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Idle ·", "Codex", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
         Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
         Assert.Equal(["Design", "Implement · Codex · GPT-5.5 · high", "Instructions", "Draft it."], shell.PeekTexts("Design")!);
     }
@@ -170,12 +170,12 @@ public sealed class CardTests : IDisposable
 
         Assert.Equal(
             [
-                ["Design", "Codex", "GPT-5.5 · high"],
-                ["Build", "Claude Code", "Claude Sonnet 5.5 · xhigh"],
-                ["Review", "Antigravity CLI", "Claude Opus 4.6 (Thinking)"],
-                ["Fourth", "Antigravity CLI", "Gemini 3.8 Flash · medium"],
+                ["Design", "Idle ·", "Codex", "GPT-5.5 · high"],
+                ["Build", "Idle ·", "Claude Code", "Claude Sonnet 5.5 · xhigh"],
+                ["Review", "Idle ·", "Antigravity CLI", "Claude Opus 4.6 (Thinking)"],
+                ["Fourth", "Idle ·", "Antigravity CLI", "Gemini 3.8 Flash · medium"],
                 // Pi names its model's provider, which goes on the client's line, so the model keeps its level.
-                ["Fifth", "Pi · deepseek", "DeepSeek V4.1 Flash · max"],
+                ["Fifth", "Idle ·", "Pi · deepseek", "DeepSeek V4.1 Flash · max"],
             ],
             titles.Select(title => Shell.Texts(shell.Node(title))));
         // Each line sits at the same height on every card, and none is cut short at the default zoom.
@@ -191,14 +191,14 @@ public sealed class CardTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
 
-        Assert.Equal(["Build", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Idle ·", "No agent"], Shell.Texts(shell.Node("Build")));
         Assert.False(shell.CardGlyph("Build").IsEffectivelyVisible);
         var node = shell.NodeModel("Build");
         Assert.Equal(("Instructions is empty.", false), (node.RunRefusal, node.RunCommand.CanExecute(null)));
     }
 
     [AvaloniaFact]
-    public void A_running_card_rings_in_its_kinds_stroke_and_says_so()
+    public void A_running_card_rings_in_the_running_blue_and_says_so()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105));
         f.Install(AgyTurn.Reply("s-1", "Drafted.", On().WaitForFile(f.Gate("go"))));
@@ -212,7 +212,7 @@ public sealed class CardTests : IDisposable
         // The status takes the client's line, and the model and level stay on the line under it.
         Assert.Equal(["Design", "Running", "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-running", ring.Classes);
-        Assert.Equal(shell.Resource("KindImplementStrokeBrush"), ((ISolidColorBrush)ring.BorderBrush!).Color);
+        Assert.Equal(shell.Resource("StateRunningBrush"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         Assert.Same(Application.Current!.FindResource("IconStateRunning"), shell.CardGlyph("Design").Data);
         f.Release("go");
         shell.WaitForCard("Design", "Completed");
@@ -236,7 +236,7 @@ public sealed class CardTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(false, "Completed", "#008932")]
+    [InlineData(false, "Completed", "#E5E5E5")]
     [InlineData(true, "Failed", "#E9152D")]
     public void A_finished_card_shows_its_ending_in_its_ring(bool fails, string label, string ring)
     {
@@ -247,7 +247,7 @@ public sealed class CardTests : IDisposable
 
         shell.RunNode("Design");
         shell.WaitForCard("Design", label);
-        // The ring is the card's 1.5 px border, so the card's top pixel row is the ring alone. The frame that shows it can
+        // The ring is the card's border, so the card's top pixel row is the ring alone. The frame that shows it can
         // come a render tick after the status text, so the test waits for the pixel too.
         shell.WaitUntil(() => shell.ColorAt(shell.Node("Design"), new Point(130, 0)) == Color.Parse(ring), $"the ring turns {ring}");
 
@@ -312,7 +312,7 @@ public sealed class CardTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Selecting_a_node_dims_the_connections_that_do_not_touch_it()
+    public void Selecting_a_node_thickens_its_connections_and_keeps_the_others_readable()
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90),
@@ -322,14 +322,16 @@ public sealed class CardTests : IDisposable
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency)));
         BaseConnection Wire(string to) => shell.Connections().Single(connection => ((ConnectionViewModel)connection.DataContext!).To.Title == to);
         (double, double) Opacities() => (Wire("Build").Opacity, Wire("Review").Opacity);
-        Assert.Equal((1.0, 1.0), Opacities());
+        Assert.Equal((0.8, 0.8), Opacities());
 
+        // A selection shows by weight, so a wire away from it keeps its contrast with the canvas.
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.WaitUntil(() => Opacities() == (1.0, 0.35), "the connection away from Design dims");
-        Assert.Equal((2.5, 2.0), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
+        shell.WaitUntil(() => Wire("Build").StrokeThickness == 2.5, "the connection from Design stands out");
+        Assert.Equal((2.5, 1.5), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
+        Assert.Equal((0.8, 0.8), Opacities());
 
         shell.Click(shell.Editor.TranslatePoint(new Point(400, 500), shell.Window)!.Value);
-        shell.WaitUntil(() => Opacities() == (1.0, 1.0), "nothing is dimmed without a selection");
+        shell.WaitUntil(() => Wire("Build").StrokeThickness == 1.5, "nothing stands out without a selection");
     }
 
     [AvaloniaFact]

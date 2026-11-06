@@ -43,29 +43,25 @@ public sealed class MinimapTests : IDisposable
     private static MinimapItem Item(Shell shell, string title) =>
         Items(shell).Single(item => item.DataContext is TaskNodeViewModel node && node.Title == title);
 
-    private static Border Ring(MinimapItem item) =>
-        item.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("minimapRing"));
+    private static Color Fill(MinimapItem item) =>
+        ((ISolidColorBrush)item.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("minimapItem")).Background!).Color;
 
     [AvaloniaFact]
-    public void A_failed_tasks_item_rings_in_red_while_an_idle_one_shows_its_kind_alone()
+    public void A_failed_tasks_item_fills_in_red_while_an_idle_one_stays_quiet()
     {
         Install(_fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-bad-model.jsonl")));
         var shell = Shell.Open(
             _temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90, Codex, "Draft it."), TaskAt(TestTasks.Build, "Build", 405, 90, Codex, "Build it.")),
             _fakes.DiscoverAsync().Result);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
+        shell.ShowMinimap();
         shell.Click(shell.Header(shell.Node("Design")));
 
         shell.RunNode();
         shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Failed", "the run fails");
 
-        var failed = Ring(Item(shell, "Design"));
-        Assert.True(failed.IsEffectivelyVisible);
-        Assert.Equal(Color.Parse("#E9152D"), ((ISolidColorBrush)failed.BorderBrush!).Color);
-        // The ring is 16 canvas units wide, so 8 units in from the item's left edge is its middle, a pixel or more from
-        // either side at the minimap's scale.
-        shell.WaitUntil(() => shell.ColorAt(Item(shell, "Design"), new Point(8, 32)) == Color.Parse("#E9152D"), "the minimap ring turns red");
-        Assert.False(Ring(Item(shell, "Build")).IsEffectivelyVisible);
+        shell.WaitUntil(() => Fill(Item(shell, "Design")) == shell.Resource("StateFailedBrush"), "the minimap item turns red");
+        Assert.Equal(shell.Resource("SurfaceMutedBrush"), Fill(Item(shell, "Build")));
     }
 
     [AvaloniaFact]
@@ -90,9 +86,10 @@ public sealed class MinimapTests : IDisposable
         shell.Click(shell.Header(shell.Node("Plan export")));
         shell.RunNode();
         shell.WaitForProposal();
+        shell.ShowMinimap();
 
         Assert.Equal(["Plan export", "Ghost Backend API", "Ghost Review the API"], Titles(shell));
-        Assert.Equal(Color.Parse("#1E6EF4"), ((ISolidColorBrush)Ring(Item(shell, "Plan export")).BorderBrush!).Color);
+        Assert.Equal(Color.Parse("#1E6EF4"), Fill(Item(shell, "Plan export")));
         var review = Items(shell).Single(item => item.DataContext is GhostCardViewModel { Title: "Review the API" });
         var dashed = review.GetVisualDescendants().OfType<Rectangle>().Single();
         Assert.Equal((Color.Parse("#008575"), true), (((ISolidColorBrush)dashed.Stroke!).Color, dashed.StrokeDashArray is { Count: > 0 }));

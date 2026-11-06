@@ -142,6 +142,7 @@ public sealed partial class WorkflowCanvasViewModel
         Nodes.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(RunWorkflowTip));
             ShowGenerateProgress();
         };
     }

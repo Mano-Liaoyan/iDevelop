@@ -53,11 +53,11 @@
   </Style>
 
   <Style Selector="Border.breadcrumb">
-    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="MinHeight" Value="32" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceOverlay95Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
   </Style>
   <!-- A shadow outside a clipped border is cut off, so floating panels clip their content in an inner border. -->
@@ -742,7 +742,7 @@
     </Setter>
   </Style>
 
-  <!-- A compact canvas, below 640 px, marks its chrome compact. A glyph button shows only its glyph there, in a 32 px
+  <!-- A compact canvas, below 700 px, marks its chrome compact. A glyph button shows only its glyph there, in a 32 px
        square, and its tooltip's first line names it. A wideOnly part hides there, and a compactOnly part shows only there.
        These come last, so they win over the button styles above. -->
   <Style Selector=".compact Button.glyph">

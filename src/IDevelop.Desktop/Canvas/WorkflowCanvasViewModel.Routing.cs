@@ -9,9 +9,32 @@ public sealed partial class WorkflowCanvasViewModel
 {
     private void Reroute()
     {
+        _spreadHeld = true;
         foreach (var connection in Connections)
         {
             connection.Reroute();
         }
+
+        _spreadHeld = false;
+
+        SpreadWires();
     }
+
+    /// <summary>Gives each wire its lane beside the wires that share a run with it.</summary>
+    internal void SpreadWires()
+    {
+        if (_spreadHeld)
+        {
+            return;
+        }
+
+        var routes = WireLanes.Spread([.. Connections.Select(connection => connection.Lane)], [.. Nodes.Select(node => node.DisplayRect)]);
+        foreach (var (connection, route) in Connections.Zip(routes))
+        {
+            connection.ShowRoute(route);
+        }
+    }
+
+    // While every wire finds its path, each one need not spread them all.
+    private bool _spreadHeld;
 }

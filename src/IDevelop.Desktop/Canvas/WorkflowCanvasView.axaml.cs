@@ -4,6 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Workflows;
 using JetBrains.Annotations;
@@ -13,12 +15,11 @@ namespace IDevelop.Desktop.Canvas;
 
 public partial class WorkflowCanvasView : UserControl, ICanvasView
 {
-    /// <summary>
-    /// The margin a first view keeps around its cards. The breadcrumb, Run Workflow, and Generate float over the canvas's
-    /// top 48 px, so the top margin starts below them. A fitted view also keeps the cards below the waiting pill and above
-    /// the bottom row's controls, as <see cref="FitInsets"/> measures.
-    /// </summary>
-    private static readonly Thickness ViewInset = new(CardMargin, 72, CardMargin, CardMargin);
+    /// <summary>The canvas's top bar ends 40 px down, its 8 px inset and its 32 px controls, when the window has not laid it out.</summary>
+    private const double TopBarBottom = 40;
+
+    /// <summary>The bottom row ends this far from the canvas's edge: its 12 px inset and the 42 px run bar, which may show at any time.</summary>
+    private const double BottomRowTop = 54;
 
     /// <summary>How far a fitted view keeps its cards from the canvas's edges and from what floats over it.</summary>
     private const double CardMargin = 24;
@@ -27,6 +28,9 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private Point? _windowAnchor;
     private bool _showingAdd;
     private bool _addOnRelease;
+    private (Point Location, double Zoom)? _fitted;
+    private IBrush? _dots;
+    private ZoomTier _shownTier;
 
     static WorkflowCanvasView()
     {
@@ -62,29 +66,97 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         // NodifyAvalonia 6.6.0 zooms the minimap by the wheel delta's length, which drops its direction and is
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
         Minimap.AddHandler(PointerWheelChangedEvent, OnMinimapWheel, RoutingStrategies.Tunnel);
-        // A compact canvas shows its run bars' buttons as glyphs, and a compact or short one has no room for the minimap.
+        _dots = Editor.Background;
+        // A compact canvas shows its run bar's buttons as glyphs. A view that Fit made fits again at the new size, so a
+        // resized panel or window never cuts the graph. A view that the person moved stays.
         SizeChanged += (_, e) =>
         {
             Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
-            MinimapPanel.IsVisible = CanvasChrome.ShowsMinimap(e.NewSize);
-            ExpandAllSlot.IsVisible = MinimapPanel.IsVisible;
+            Classes.Set("narrowBar", CanvasChrome.IsNarrowBar(e.NewSize));
+            Classes.Set("shortBar", CanvasChrome.IsShortBar(e.NewSize));
+            ShowChrome();
+            if (_fitted is not null && IsFitted)
+            {
+                Dispatcher.UIThread.Post(FitToView, DispatcherPriority.Background);
+            }
         };
+        Editor.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == NodifyEditor.ViewportLocationProperty || e.Property == NodifyEditor.ViewportZoomProperty || e.Property == NodifyEditor.ViewportSizeProperty)
+            {
+                ShowChrome();
+                PlaceGhosts();
+            }
+        };
+        ZoomOpen.IsCheckedChanged += (_, _) => ShowChrome();
+        MinimapToggle.IsCheckedChanged += (_, _) => ShowChrome();
+    }
+
+    /// <summary>The tooltip of the run bar's Next, with its shortcut.</summary>
+    public static string NextHelp => $"Next\n{CanvasKeys.Hint(CanvasKeys.NextAttention)}: show the next node that waits for you or failed";
+
+    private bool IsFitted => _fitted is { } fit && fit.Location == Editor.ViewportLocation && fit.Zoom == Editor.ViewportZoom;
+
+    // The minimap and the zoom buttons show only while they are of use: while a card is outside the view, or on the person's choice.
+    private void ShowChrome()
+    {
+        var hidden = Cards().Any(card => !new Rect(Editor.ViewportLocation, Editor.ViewportSize).Contains(card));
+        MinimapPanel.IsVisible = CanvasChrome.ShowsMinimap(Bounds.Size) && (hidden || MinimapToggle.IsChecked == true);
+        ZoomMore.IsVisible = hidden || ZoomOpen.IsChecked == true;
+        ExpandAllSlot.IsVisible = CanvasChrome.ShowsMinimap(Bounds.Size);
+    }
+
+    // NodifyAvalonia 6.6.0 moves its decorators by the viewport's location before the zoom, where cards move after it, so at
+    // a zoom other than 100% a ghost would leave the cards it belongs to. Each ghost moves back by the difference, in the
+    // zoomed units of its own layer.
+    private void PlaceGhosts()
+    {
+        var shift = (Vector)Editor.ViewportLocation * (1 - Editor.ViewportZoom) / Editor.ViewportZoom;
+        foreach (var ghost in Editor.GetVisualDescendants().OfType<DecoratorContainer>())
+        {
+            ghost.RenderTransform = new TranslateTransform(shift.X, shift.Y);
+        }
+    }
+
+    // A tier takes one class on the view, so only a threshold changes the cards' layout, and the dots hide below a zoom of 0.5.
+    private void ShowTier()
+    {
+        if (_viewModel is not { Tier: var tier } || tier == _shownTier && Classes.Contains(ZoomTiers.StyleClass(tier) ?? "tier-full"))
+        {
+            return;
+        }
+
+        foreach (var known in Enum.GetValues<ZoomTier>())
+        {
+            Classes.Set(ZoomTiers.StyleClass(known) ?? "tier-full", known == tier);
+        }
+
+        _shownTier = tier;
+        Editor.Background = tier is ZoomTier.Full or ZoomTier.Compact ? _dots : (IBrush?)this.FindResource("CanvasPlainBrush");
     }
 
     /// <inheritdoc />
     public CanvasPoint Pointer => new(Editor.MouseLocation.X, Editor.MouseLocation.Y);
 
-    /// <summary>Centers the canvas on a task chosen in the sidebar when its card, where and as large as it shows, is not wholly in view.</summary>
+    /// <summary>
+    /// Brings a card into the part of the view that no floating control covers, when it is not wholly there, so a card chosen
+    /// in the left area or by a key is never under the top bar or the run bar.
+    /// </summary>
     internal void BringIntoViewIfHidden(TaskNodeViewModel node)
     {
         var card = node.DisplayRect;
-        if (!new Rect(Editor.ViewportLocation, Editor.ViewportSize).Contains(card))
+        var zoom = Editor.ViewportZoom;
+        var room = new Rect(Editor.Bounds.Size).Deflate(FitInsets().First());
+        var clear = new Rect(Editor.ViewportLocation + (Vector)room.Position / zoom, room.Size / zoom);
+        if (!clear.Contains(card))
         {
             // Nodify's animated pan moves the editor alone, so the view model, which places new tasks, would keep
             // the old location.
-            Editor.BringIntoView(card.Center, animated: false);
+            Editor.ViewportLocation = card.Center - (Vector)room.Center / zoom;
         }
     }
+
+    void ICanvasView.Reveal(TaskNodeViewModel node) => BringIntoViewIfHidden(node);
 
     /// <summary>Opens the Add popover for a node in view, with its top left at a point of the window.</summary>
     internal void OpenAddInView(Point anchorInWindow)
@@ -95,14 +167,20 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
     /// <summary>
     /// Zooms and pans so every card, and every ghost card of an open proposal, fits clear of the controls that float along
-    /// the canvas's top and bottom edges, within the editor's zoom limits. See <see cref="FitInsets"/>.
+    /// the canvas's top and bottom edges, within the editor's zoom limits and never above 100%. See <see cref="FitInsets"/>.
     /// </summary>
     public void FitToView()
     {
-        var extent = (_viewModel?.Ghosts.OfType<GhostCardViewModel>() ?? [])
-            .Select(ghost => new Rect(ghost.Location, new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight)))
-            .Aggregate(Editor.ItemsExtent, (union, ghost) => union.Width <= 0 ? ghost : union.Union(ghost));
-        if (extent.Width <= 0 || extent.Height <= 0)
+        var cards = Cards().ToList();
+        if (cards.Count > 0)
+        {
+            Fit(cards.Aggregate((union, card) => union.Union(card)));
+        }
+    }
+
+    private void Fit(Rect extent)
+    {
+        if (extent.Width <= 0 || extent.Height <= 0 || Editor.Bounds.Width <= 0)
         {
             return;
         }
@@ -113,7 +191,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         for (var i = 0; i < insets.Length; i++)
         {
             var room = new Rect(Editor.Bounds.Size).Deflate(insets[i]);
-            var zoom = Math.Min(room.Width / extent.Width, room.Height / extent.Height);
+            var zoom = Math.Min(1, Math.Min(room.Width / extent.Width, room.Height / extent.Height));
             if (i < insets.Length - 1 && (room.Width < MinFitRoom || room.Height < MinFitRoom || i == 0 && zoom < Editor.MinViewportZoom))
             {
                 continue;
@@ -121,23 +199,25 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
             Editor.ViewportZoom = zoom;
             Editor.ViewportLocation = extent.Center - (Vector)room.Center / Editor.ViewportZoom;
+            _fitted = (Editor.ViewportLocation, Editor.ViewportZoom);
             return;
         }
     }
 
     /// <summary>
     /// The margins a fit tries in turn. First <see cref="CardMargin"/> clear of everything that floats along the canvas's
-    /// top edge, which the window lays out over the canvas, and of the zoom controls, the run bars, and the minimap along its
-    /// bottom edge. Where that leaves too little room, as with a long status above the docked conversation, right against
-    /// those controls, and with no room left at all, the whole canvas.
+    /// top edge, which the window lays out over the canvas, and of the bottom row. Where that leaves too little room, as with a
+    /// long status above the docked conversation, right against those controls, and with no room left at all, the whole
+    /// canvas. The minimap does not count, because it hides once every card fits.
     /// </summary>
     private IEnumerable<Thickness> FitInsets()
     {
         var top = TopLevel.GetTopLevel(this) is MainWindow { TopBar: { IsVisible: true } bar } && bar.TranslatePoint(new Point(0, bar.Bounds.Height), this) is { } below
             ? below.Y
-            : ViewInset.Top - CardMargin;
-        var bottom = BottomBar.Bounds.Height > 0 && BottomBar.TranslatePoint(default, this) is { } bars ? Bounds.Height - bars.Y : 0;
-        yield return new Thickness(CardMargin, Math.Max(ViewInset.Top, top + CardMargin), CardMargin, bottom + CardMargin);
+            : TopBarBottom;
+        var bars = RunBars.TranslatePoint(default, this) is { } run && RunBars.Bounds.Height > 0 ? Bounds.Height - run.Y : 0;
+        var bottom = Math.Max(BottomRowTop, bars);
+        yield return new Thickness(CardMargin, top + CardMargin, CardMargin, bottom + CardMargin);
         yield return new Thickness(CardMargin, top, CardMargin, bottom);
         yield return default;
     }
@@ -185,12 +265,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             : canvas.Nodes.Select(node => node.DisplayRect).Concat(canvas.Ghosts.OfType<GhostCardViewModel>().Select(ghost => new Rect(ghost.Location, size)));
     }
 
-    // Centers the nodes in the view at the zoom it has.
+    // Frames the nodes as Fit frames the whole graph.
     private void Frame(IReadOnlyCollection<TaskNodeViewModel> nodes)
     {
         if (nodes.Count > 0)
         {
-            Editor.BringIntoView(nodes.Select(node => node.DisplayRect).Aggregate((union, rect) => union.Union(rect)).Center, animated: false);
+            Fit(nodes.Select(node => node.DisplayRect).Aggregate((union, rect) => union.Union(rect)));
         }
     }
 
@@ -202,6 +282,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         if (_viewModel is { } old)
         {
             old.PropertyChanged -= OnViewModelChanged;
+            old.Nodes.CollectionChanged -= OnNodesChanged;
+            old.Ghosts.CollectionChanged -= OnGhostsChanged;
             old.View = null;
         }
 
@@ -210,8 +292,11 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             canvas.View = this;
             canvas.PropertyChanged += OnViewModelChanged;
-            StartBelowChrome(canvas);
+            canvas.Nodes.CollectionChanged += OnNodesChanged;
+            canvas.Ghosts.CollectionChanged += OnGhostsChanged;
             Editor.LayoutUpdated += RestoreSelection;
+            Editor.LayoutUpdated += PositionOnce;
+            ShowTier();
         }
 
         ShowAdd();
@@ -234,33 +319,39 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
-    // A workflow first shows at the canvas origin. Where its top cards would sit under the floating breadcrumb, it shows
-    // higher, so they start at the view's top inset as they do after Fit. Later it shows where it was left.
-    private static void StartBelowChrome(WorkflowCanvasViewModel canvas)
+    // Opening a workflow fits it. Later it shows where it was left.
+    private void PositionOnce(object? sender, EventArgs e)
     {
-        if (canvas.IsPositioned)
+        if (_viewModel is not { } canvas || canvas.IsPositioned)
         {
+            Editor.LayoutUpdated -= PositionOnce;
+            ShowChrome();
             return;
         }
 
-        canvas.IsPositioned = true;
-        if (canvas.Nodes.Count == 0)
+        if (Editor.Bounds.Width > 0)
         {
-            return;
-        }
-
-        var top = canvas.Nodes.Min(node => node.Location.Y) - ViewInset.Top / canvas.ViewportZoom;
-        if (top < 0)
-        {
-            canvas.ViewportLocation = new Point(0, top);
+            Editor.LayoutUpdated -= PositionOnce;
+            canvas.IsPositioned = true;
+            FitToView();
+            ShowChrome();
         }
     }
+
+    private void OnNodesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => ShowChrome();
+
+    private void OnGhostsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) =>
+        Dispatcher.UIThread.Post(PlaceGhosts, DispatcherPriority.Loaded);
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(WorkflowCanvasViewModel.AddNode))
         {
             ShowAdd();
+        }
+        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Tier))
+        {
+            ShowTier();
         }
     }
 
@@ -337,6 +428,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private void OnZoomOut(object? sender, RoutedEventArgs e) => EditorCommands.ZoomOut.Execute(null, Editor);
 
     private void OnFitToScreen(object? sender, RoutedEventArgs e) => FitToView();
+
+    private void OnZoomActual(object? sender, RoutedEventArgs e) => ZoomToActual();
 
     // One notch is a delta of 1, and the zoom buttons step by 2^(1/3), so a notch zooms one button step.
     private void OnMinimapWheel(object? sender, PointerWheelEventArgs e)
@@ -451,6 +544,19 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
                     canvas.ClearSelection();
                 }
 
+                return true;
+            case Key.Tab when plain || modifiers == KeyModifiers.Shift:
+                return canvas.SelectInOutline(plain ? 1 : -1);
+            case Key.Right when plain:
+                return canvas.SelectConnected(CardStep.Successor);
+            case Key.Left when plain:
+                return canvas.SelectConnected(CardStep.Predecessor);
+            case Key.Up when plain:
+                return canvas.SelectConnected(CardStep.PreviousSibling);
+            case Key.Down when plain:
+                return canvas.SelectConnected(CardStep.NextSibling);
+            case Key.Space when plain && single is not null:
+                single.IsExpanded = !single.IsExpanded;
                 return true;
             case Key.F2 when plain && single is not null:
                 single.BeginRename();

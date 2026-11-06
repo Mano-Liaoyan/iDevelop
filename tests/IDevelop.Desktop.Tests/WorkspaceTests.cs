@@ -192,7 +192,7 @@ public sealed class WorkspaceTests : IDisposable
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.Equal((1.0, new Point(0, 0)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        Assert.Equal((1.0, new Point(-116, -271)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
         Assert.Null(shell.Window.ViewModel.Canvas!.SelectedNode);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
 
@@ -242,7 +242,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
         shell.RunNode();
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
+        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarActivity));
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
@@ -257,7 +257,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Null(shell.Dialog);
         Assert.Equal([("alpha", ["Build", "Release"])], shell.Tree());
         Assert.Equal(("alpha", "Build"), shell.Breadcrumb());
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
+        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarActivity));
 
         shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
         Assert.Equal(["\"Design\" is running. Stop it and close alpha?", "Stop and leave", "Keep running"], shell.DialogTexts());
@@ -711,7 +711,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], shell.Tree());
         Assert.Equal("alpha* - iDevelop: New task, Ship", Shown(shell));
         shell.Click(shell.WorkflowRow("alpha", "Build"));
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
+        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarActivity));
         File.WriteAllText(_gate, "");
         shell.WaitUntil(() => !shell.Window.ViewModel.RunningNodes.Any(), "the run ends before its folder goes");
     }

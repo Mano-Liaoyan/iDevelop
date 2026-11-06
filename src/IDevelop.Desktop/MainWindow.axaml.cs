@@ -209,9 +209,6 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>The tooltip of Run Workflow, with its shortcut.</summary>
-    public static string RunWorkflowHelp => $"Run Workflow\n{CanvasKeys.Hint(CanvasKeys.RunWorkflow)}: run every node that has no current result, along its dependencies";
-
     // The window's key map. A modal sheet covers the window, so no key here acts under it.
     private bool RunKey(KeyEventArgs e)
     {

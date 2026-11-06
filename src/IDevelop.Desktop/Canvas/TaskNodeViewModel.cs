@@ -63,7 +63,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     public TaskId Id => _task.Id;
 
     /// <summary>The canvas the node is on, whose clients and project the node's pickers read.</summary>
-    internal WorkflowCanvasViewModel Canvas => _canvas;
+    public WorkflowCanvasViewModel Canvas => _canvas;
 
     /// <summary>The task as the workflow document holds it now.</summary>
     internal TaskDefinition Definition => _task;

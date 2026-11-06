@@ -18,6 +18,8 @@ public sealed class KindTile : TemplatedControl
 
     public static readonly StyledProperty<bool> IsLibraryProperty = AvaloniaProperty.Register<KindTile, bool>(nameof(IsLibrary));
 
+    public static readonly StyledProperty<bool> KeepsBadgeProperty = AvaloniaProperty.Register<KindTile, bool>(nameof(KeepsBadge));
+
     private const double SmallestBadgedSize = 24;
 
     // The badge reaches past the tile's top right corner.
@@ -31,7 +33,7 @@ public sealed class KindTile : TemplatedControl
         set => SetValue(KindProperty, value);
     }
 
-    /// <summary>The tile's width and height: 32 on cards and the inspector header, 24 in the Add popover, 18 in lists.</summary>
+    /// <summary>The tile's width and height: 16 on a card's band, 32 on the inspector header, 24 in the Add popover, 18 in lists.</summary>
     public double TileSize
     {
         get => GetValue(TileSizeProperty);
@@ -45,6 +47,13 @@ public sealed class KindTile : TemplatedControl
         set => SetValue(IsLibraryProperty, value);
     }
 
+    /// <summary>The tile keeps its badge below the size that lists use, as on a card's band.</summary>
+    public bool KeepsBadge
+    {
+        get => GetValue(KeepsBadgeProperty);
+        set => SetValue(KeepsBadgeProperty, value);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -52,9 +61,9 @@ public sealed class KindTile : TemplatedControl
         {
             AutomationProperties.SetName(this, NodeKinds.Info(Kind).Label);
         }
-        else if (change.Property == TileSizeProperty || change.Property == IsLibraryProperty)
+        else if (change.Property == TileSizeProperty || change.Property == IsLibraryProperty || change.Property == KeepsBadgeProperty)
         {
-            PseudoClasses.Set(":library", IsLibrary && TileSize >= SmallestBadgedSize);
+            PseudoClasses.Set(":library", IsLibrary && (KeepsBadge || TileSize >= SmallestBadgedSize));
         }
     }
 }

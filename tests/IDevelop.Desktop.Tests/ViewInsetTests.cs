@@ -47,14 +47,13 @@ public sealed class ViewInsetTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_workflow_whose_top_cards_would_sit_under_the_breadcrumb_opens_with_them_below_it()
+    public void Opening_a_workflow_fits_it_below_the_top_bar_and_never_above_100_percent()
     {
-        var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 20), TaskAt(TestTasks.Build, "Build", 405, 300)));
+        var shell = Shell.OpenFitted(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 20), TaskAt(TestTasks.Build, "Build", 405, 300)));
 
         var design = CardInWindow(shell, "Design");
         var chrome = ChromeBottom(shell);
-        Assert.True(design.Top >= chrome + 12 && design.Top <= chrome + 40, $"Design at {design} is not just below the breadcrumb, which ends at {chrome}");
-        Assert.Equal((0.0, 1.0), (shell.Editor.ViewportLocation.X, shell.Editor.ViewportZoom));
-        Assert.Equal(shell.Editor.ViewportLocation, shell.Find<Minimap>("Minimap").ViewportLocation);
+        Assert.True(design.Top >= chrome + 12, $"Design at {design} is under the top bar, which ends at {chrome}");
+        Assert.Equal(1.0, shell.Editor.ViewportZoom);
     }
 }

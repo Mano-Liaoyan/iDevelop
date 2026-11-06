@@ -35,24 +35,22 @@ public sealed class RowLayoutTests
     }
 
     [AvaloniaFact]
-    public void The_canvas_top_bar_settles_in_one_layout_pass_with_its_pill_in_the_row_and_under_the_buttons()
+    public void The_canvas_top_bar_settles_in_one_layout_pass_when_its_width_changes()
     {
         var breadcrumb = new CountingText { Text = "reports-service › Release notes" };
-        var pill = new Border { Width = 140, Height = 24 };
         var buttons = new Border { Width = 260, Height = 32 };
         CanvasTopBar.SetSlot(breadcrumb, ChromeSlot.Leading);
-        CanvasTopBar.SetSlot(pill, ChromeSlot.Center);
         CanvasTopBar.SetSlot(buttons, ChromeSlot.Trailing);
-        var bar = new CanvasTopBar { Children = { breadcrumb, pill, buttons } };
+        var bar = new CanvasTopBar { Children = { breadcrumb, buttons } };
         var window = Show(bar, 1000);
 
-        Assert.True(bar is { IsMeasureValid: true, IsArrangeValid: true, IsInRow: true });
+        Assert.True(bar is { IsMeasureValid: true, IsArrangeValid: true });
         Assert.InRange(breadcrumb.Measures, 1, 2);
 
         breadcrumb.Measures = 0;
         window.Width = 500;
         Settle();
-        Assert.True(bar is { IsMeasureValid: true, IsArrangeValid: true, IsInRow: false });
+        Assert.True(bar is { IsMeasureValid: true, IsArrangeValid: true });
         Assert.InRange(breadcrumb.Measures, 1, 2);
     }
 

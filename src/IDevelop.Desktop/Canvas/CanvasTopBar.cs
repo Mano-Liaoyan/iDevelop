@@ -12,13 +12,10 @@ public enum ChromeSlot
     /// <summary>At the right: the workflow's own commands, Run Workflow and Generate, or the minimap.</summary>
     Trailing,
 
-    /// <summary>
-    /// At the centre, moved aside only as far as it must to keep <see cref="CanvasChrome.Spacing"/> from both neighbours.
-    /// When the top row has no room for it, the waiting pill moves under the trailing controls, its right edge on theirs.
-    /// </summary>
+    /// <summary>At the centre of the bottom row, where the run bar is.</summary>
     Center,
 
-    /// <summary>Under the top row's leading control, as the status is, and never under or past the centre control.</summary>
+    /// <summary>Under the top row's leading control, as the status is.</summary>
     Below,
 }
 
@@ -28,8 +25,8 @@ public enum ChromeSlot
 /// </summary>
 public sealed class CanvasTopBar : Panel
 {
-    /// <summary>The first row's line: the breadcrumb's height, on which the 32 px buttons and the 24 px pill centre.</summary>
-    private const double RowHeight = 36;
+    /// <summary>The first row's line, on which the breadcrumb and the buttons centre.</summary>
+    private const double RowHeight = 32;
 
     /// <summary>The room between the first row and what sits under it.</summary>
     private const double LineSpacing = 8;
@@ -42,9 +39,6 @@ public sealed class CanvasTopBar : Panel
 
     public static void SetSlot(Control control, ChromeSlot value) => control.SetValue(SlotProperty, value);
 
-    /// <summary>Whether the centre control sits in the first row, rather than under the trailing controls, at the last layout.</summary>
-    public bool IsInRow { get; private set; }
-
     // What the last measure decided: each shown child's top left, its left edge given back from the right edge where
     // it keeps to that edge.
     private readonly List<(Control Child, double Left, bool FromRight, double Top)> _placements = [];
@@ -54,7 +48,7 @@ public sealed class CanvasTopBar : Panel
         _placements.Clear();
         var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
         Control? In(ChromeSlot slot) => Children.FirstOrDefault(child => child.IsVisible && GetSlot(child) == slot);
-        var (leading, trailing, center, below) = (In(ChromeSlot.Leading), In(ChromeSlot.Trailing), In(ChromeSlot.Center), In(ChromeSlot.Below));
+        var (leading, trailing, below) = (In(ChromeSlot.Leading), In(ChromeSlot.Trailing), In(ChromeSlot.Below));
         var width = availableSize.Width;
         var open = double.IsInfinity(width);
 
@@ -68,30 +62,12 @@ public sealed class CanvasTopBar : Panel
             width = leadingWidth + CanvasChrome.Spacing + trailingWidth;
         }
 
-        // The centre control centres on the canvas, and moves aside only as far as it must to clear its neighbours.
-        center?.Measure(infinite);
-        var centerWidth = center?.DesiredSize.Width ?? 0;
-        var (first, last) = (leading is null ? 0 : leadingWidth + CanvasChrome.Spacing,
-            width - (trailingWidth > 0 ? trailingWidth + CanvasChrome.Spacing : 0) - centerWidth);
-        IsInRow = center is not null && first <= last;
-        var under = center is not null && !IsInRow;
-
-        var rowHeight = new[] { RowHeight, leading?.DesiredSize.Height ?? 0, trailing?.DesiredSize.Height ?? 0, IsInRow ? center!.DesiredSize.Height : 0 }.Max();
-        var belowRoom = Math.Max(0, width - (under ? centerWidth + CanvasChrome.Spacing : 0));
-        below?.Measure(new Size(belowRoom, double.PositiveInfinity));
-        var second = Math.Max(below?.DesiredSize.Height ?? 0, under ? center!.DesiredSize.Height : 0);
+        var rowHeight = new[] { RowHeight, leading?.DesiredSize.Height ?? 0, trailing?.DesiredSize.Height ?? 0 }.Max();
+        below?.Measure(new Size(width, double.PositiveInfinity));
+        var second = below?.DesiredSize.Height ?? 0;
 
         Centered(leading, 0, false, rowHeight);
         Centered(trailing, trailingWidth, true, rowHeight);
-        if (IsInRow)
-        {
-            Centered(center, Math.Clamp((width - centerWidth) / 2, first, Math.Max(first, last)), false, rowHeight);
-        }
-        else if (under)
-        {
-            _placements.Add((center!, centerWidth, true, rowHeight + LineSpacing));
-        }
-
         if (below is not null)
         {
             _placements.Add((below, 0, false, rowHeight + LineSpacing));

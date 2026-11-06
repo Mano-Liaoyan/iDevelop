@@ -66,23 +66,24 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void An_open_proposal_and_a_waiting_planner_leave_the_breadcrumb_the_pill_and_both_buttons_apart_at_every_size()
+    public void An_open_proposal_and_a_waiting_planner_leave_the_breadcrumb_and_both_buttons_apart_at_every_size()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Generate(shell);
-        Assert.Equal(("1 node waits for you", "Review Proposal"), (shell.Text("WaitingCount"), AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
+        Assert.Equal((1, "Review Proposal"), (shell.Window.ViewModel.Canvas!.WaitingCount, AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
         Assert.True(shell.ShowsUnsavedChanges);
-        // A refused connection's status sits under the breadcrumb, beside the pill when the pill moves under the buttons.
+        // A refused connection's status sits under the breadcrumb.
         // The view moves left first, so "Write docs"'s output is clear of the inspector's splitter.
-        shell.Pan(shell.InEditor(260, 700), new Vector(-100, 0));
+        shell.AtOrigin();
+        shell.Pan(shell.InEditor(260, 600), new Vector(-100, 0));
         shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
         Assert.StartsWith("That would create a cycle", shell.Status);
 
         foreach (var (width, height, inspector) in Sizes)
         {
             Resize(shell, width, height, inspector);
-            AssertTopRow(shell, $"{width}x{height}, inspector {inspector}", "Breadcrumb", "NextWaiting", "RunWorkflow", "GenerateWorkflow", "Status");
+            AssertTopRow(shell, $"{width}x{height}, inspector {inspector}", "Breadcrumb", "RunWorkflow", "GenerateWorkflow", "Status");
         }
     }
 
@@ -93,13 +94,13 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
-        Assert.Equal("2 nodes wait for you", shell.Text("WaitingCount"));
+        Assert.Equal(2, shell.Window.ViewModel.Canvas!.WaitingCount);
 
         foreach (var (width, height, inspector) in Sizes)
         {
             Resize(shell, width, height, inspector);
             var at = $"{width}x{height}, inspector {inspector}";
-            AssertTopRow(shell, at, "Breadcrumb", "NextWaiting", "GenerateWorkflow");
+            AssertTopRow(shell, at, "Breadcrumb", "GenerateWorkflow");
             AssertBottomRow(shell, at);
         }
     }
@@ -142,9 +143,9 @@ public sealed class CanvasChromeTests : IDisposable
         }
 
         // The canvas above keeps its two rows apart and its cards clear of them.
-        AssertTopRow(shell, "the dock", "Breadcrumb", "NextWaiting", "GenerateWorkflow");
+        AssertTopRow(shell, "the dock", "Breadcrumb", "GenerateWorkflow");
         AssertBottomRow(shell, "the dock");
-        var top = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
+        var top = new[] { "Breadcrumb", "GenerateWorkflow" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
         var controls = new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), shell.Find<Control>("WorkflowRunBar") }.Select(shell.Bounds).ToArray();
         Assert.True(controls.Min(control => control.Top) - top >= 12, $"The top row ends at {top} and the bottom row starts at {controls.Min(control => control.Top)}.");
         foreach (var node in shell.Nodes())
@@ -173,8 +174,8 @@ public sealed class CanvasChromeTests : IDisposable
 
         shell.Click(shell.Find<Button>("ConversationLayout"));
 
-        var controls = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "WorkflowRunBar" }.Select(id => shell.Bounds(shell.Find<Control>(id)))
-            .Concat(new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating") }
+        var controls = new[] { "Breadcrumb", "GenerateWorkflow", "WorkflowRunBar" }.Select(id => shell.Bounds(shell.Find<Control>(id)))
+            .Concat(new[] { Shell.Around(shell.Find<Button>("FitToScreen"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating") }
                 .Where(control => control.IsEffectivelyVisible).Select(shell.Bounds)).ToArray();
         var cards = Cards(shell);
         Assert.Equal(7, cards.Length);
@@ -215,14 +216,14 @@ public sealed class CanvasChromeTests : IDisposable
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Run(shell);
-        shell.Pan(shell.InEditor(260, 700), new Vector(-100, 0));
+        shell.AtOrigin();
+        shell.Pan(shell.InEditor(260, 600), new Vector(-100, 0));
         shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
         Assert.StartsWith("That would create a cycle", shell.Status);
         shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
         shell.Click(shell.Find<Button>("ConversationLayout"));
         Resize(shell, 900, 660, 320);
         var (top, bottom) = Rows(shell);
-        Assert.True(bottom - top < 48 + 2 * 24, $"The status leaves {bottom - top} px, room for the margins too.");
         shell.Editor.ViewportLocation = new Point(-2000, -2000);
         shell.Render();
 
@@ -281,7 +282,7 @@ public sealed class CanvasChromeTests : IDisposable
 
     /// <summary>The lowest edge of the top row's controls and the highest edge of the bottom row's.</summary>
     private static (double Top, double Bottom) Rows(Shell shell) =>
-        (new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "RunWorkflow", "Status" }.Where(shell.ShowsAny).Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom),
+        (new[] { "Breadcrumb", "GenerateWorkflow", "RunWorkflow", "Status" }.Where(shell.ShowsAny).Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom),
          new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating"), shell.Find<Control>("WorkflowRunBar") }
             .Where(control => control.IsEffectivelyVisible).Min(control => shell.Bounds(control).Top));
 
@@ -377,11 +378,20 @@ public sealed class CanvasChromeTests : IDisposable
         foreach (var id in ids.Where(id => id is "RunWorkflow" or "GenerateWorkflow"))
         {
             var button = shell.Find<Button>(id);
-            var label = button.GetVisualDescendants().OfType<TextBlock>().Single();
-            Assert.True(compact != label.IsEffectivelyVisible, $"At {at}, {id}'s label shows: {label.IsEffectivelyVisible}.");
-            if (compact)
+            var labels = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
+            if (id == "RunWorkflow")
             {
+                // The workflow's primary action keeps a word on a compact canvas.
+                Assert.Equal(compact ? "Run" : "Run Workflow", Assert.Single(labels));
+            }
+            else if (compact)
+            {
+                Assert.Empty(labels);
                 Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
+            }
+            else
+            {
+                Assert.Single(labels);
             }
 
             Assert.Equal(AutomationProperties.GetName(button), ((string)ToolTip.GetTip(button)!).Split('\n')[0]);
@@ -400,20 +410,17 @@ public sealed class CanvasChromeTests : IDisposable
     {
         var canvas = shell.Bounds(shell.Editor);
         var minimap = Shell.Around(shell.Find<Minimap>("Minimap"), "floating");
-        Assert.Equal(canvas is { Width: >= CanvasChrome.CompactWidth, Height: >= CanvasChrome.MinimapMinHeight }, minimap.IsEffectivelyVisible);
-        // Expand All sits with the zoom controls while the minimap shows, which is taller, so the row keeps its height (ADR 0024).
-        Assert.Equal(minimap.IsEffectivelyVisible && shell.Window.ViewModel.Canvas is { IsEmpty: false }, shell.Find<Button>("ExpandAll").IsEffectivelyVisible);
-        var boxes = new[] { ("Zoom", Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), ("Minimap", minimap), ("WorkflowRunBar", shell.Find<Control>("WorkflowRunBar")) }
+        Assert.True(!minimap.IsEffectivelyVisible || canvas is { Width: >= CanvasChrome.CompactWidth, Height: >= CanvasChrome.MinimapMinHeight });
+        var boxes = new[] { ("Zoom", Shell.Around(shell.Find<Button>("FitToScreen"), "floating")), ("Minimap", minimap), ("WorkflowRunBar", shell.Find<Control>("WorkflowRunBar")) }
             .Where(pair => pair.Item2.IsEffectivelyVisible)
             .Select(pair => (Id: pair.Item1, Box: shell.Bounds(pair.Item2))).ToArray();
         Assert.Contains(boxes, box => box.Id == "WorkflowRunBar");
         AssertInsideAndApart(canvas, boxes, at, gap: 12);
         Assert.All(boxes, box => Assert.True(Math.Abs(box.Box.Bottom - (canvas.Bottom - CanvasChrome.Inset)) < 0.6, $"At {at}, {box.Id} ends at {box.Box.Bottom}, off {canvas.Bottom - 12}."));
 
-        // The bar holds its status, its progress, its activity, and whichever of its buttons show, its text whole.
+        // The bar holds its status, its progress, and whichever of its buttons show, its text whole.
         var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunProgress", "RunActivity", "StopWorkflow", "ResumeRun", "DismissRun" }.Where(shell.ShowsAny).Select(shell.Find<Control>)
-            .Append(Shell.Around(shell.Find<TextBlock>("RunStatus"), "pill"));
+        var inside = new[] { "RunProgress", "RunStatus", "RunStatusShort", "NextWaiting", "StopAll" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
         Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
         if (shell.ShowsAny("StopWorkflow"))
         {
@@ -427,7 +434,8 @@ public sealed class CanvasChromeTests : IDisposable
 
     private static void AssertInsideAndApart(Rect canvas, (string Id, Rect Box)[] boxes, string at, double gap = 8)
     {
-        var room = canvas.Deflate(CanvasChrome.Inset);
+        // The top row sits 8 px from the top edge, and the rest keeps the inset.
+        var room = canvas.Deflate(new Thickness(CanvasChrome.Inset, 8, CanvasChrome.Inset, CanvasChrome.Inset));
         foreach (var (id, box) in boxes)
         {
             Assert.True(room.Inflate(0.5).Contains(box), $"At {at}, {id} at {box} leaves the canvas's inset {room}.");

@@ -107,8 +107,8 @@ public sealed class SidebarTests : IDisposable
         WaitForPan(shell);
 
         Assert.True(new Rect(shell.Editor.Bounds.Size).Contains(shell.CardRect("Build")), $"{shell.CardRect("Build")} is outside {shell.Editor.Bounds.Size}");
-        Assert.Equal(new Point(2179, 1232), shell.Editor.ViewportLocation);
-        Assert.Equal(new Point(2179, 1232), shell.Find<Minimap>("Minimap").ViewportLocation);
+        Assert.Equal(new Point(2179, 1239), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(2179, 1239), shell.Find<Minimap>("Minimap").ViewportLocation);
     }
 
     [AvaloniaFact]
@@ -124,7 +124,7 @@ public sealed class SidebarTests : IDisposable
         WaitForPan(shell);
 
         Assert.True(shell.Node("Build").IsSelected);
-        Assert.Equal(new Point(2179, 1232), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(2179, 1239), shell.Editor.ViewportLocation);
     }
 
     private Shell SelectBuildOnTheCanvasAndPanItAway()
@@ -150,7 +150,7 @@ public sealed class SidebarTests : IDisposable
 
         shell.Click(shell.SidebarRow("Build"));
 
-        Assert.Equal(new Point(184, -278), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(184, -271), shell.Editor.ViewportLocation);
     }
 
     [AvaloniaTheory]
@@ -170,7 +170,7 @@ public sealed class SidebarTests : IDisposable
 
         shell.Press(key);
 
-        Assert.Equal(new Point(184, -278), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(184, -271), shell.Editor.ViewportLocation);
     }
 
     [AvaloniaFact]

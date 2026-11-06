@@ -36,6 +36,9 @@ internal interface ICanvasView
 
     void FitToView();
 
+    /// <summary>Brings a card into the part of the view that no floating control covers, when it is not wholly there.</summary>
+    void Reveal(TaskNodeViewModel node);
+
     void ZoomToActual();
 
     /// <summary>Focuses the inspector's client picker for the selected node and opens its list.</summary>

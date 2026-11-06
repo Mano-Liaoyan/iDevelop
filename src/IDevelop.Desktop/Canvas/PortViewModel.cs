@@ -21,6 +21,23 @@ public sealed class PortViewModel(TaskNodeViewModel node, PortSide side) : Obser
         set => SetProperty(ref field, value);
     }
 
+    /// <summary>
+    /// The port's dot is filled: an input whose dependency predecessors are all completed and current, or an output with a
+    /// current latest result.
+    /// </summary>
+    public bool IsLive
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
+
+    /// <summary>The port's name and what passes through it.</summary>
+    public string? Tip
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
+
     // A Nodify connector only keeps its anchor current while it is connected.
     public bool IsConnected
     {

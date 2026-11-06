@@ -21,6 +21,7 @@ public sealed partial class WorkflowCanvasViewModel
     private RelayCommand? _stopAll;
     private RelayCommand? _merge;
     private UiBatch _engineChanged = null!;
+    private HashSet<TaskNodeViewModel> _running = [];
 
     /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
     internal Func<string, Task<bool>> OpenFolder { get; init; } = _ => Task.FromResult(false);
@@ -51,22 +52,65 @@ public sealed partial class WorkflowCanvasViewModel
         private set => SetProperty(ref field, value);
     }
 
-    /// <summary>The bar shows while a node runs or waits for the person, or while Merge into my branch is offered.</summary>
-    public bool ShowsBar => RunningCount > 0 || WaitingCount > 0 || CanMergeIntoBranch;
+    /// <summary>The bar shows while a node runs, waits for the person, or failed, or while Merge into my branch is offered.</summary>
+    public bool ShowsBar => RunningCount > 0 || HasAttention || CanMergeIntoBranch;
 
-    /// <summary>"2 running · 1 waits for you", "Every node is complete", or empty.</summary>
-    public string BarSummary => string.Join(" · ", new[]
+    /// <summary>A node waits for the person or failed, so the bar offers Next.</summary>
+    public bool HasAttention => Nodes.Any(NeedsAttention);
+
+    /// <summary>"5 of 9 complete · 1 running · 3 wait for you · 1 failed", with the parts that are not zero.</summary>
+    public string BarSummary
     {
-        RunningCount > 0 ? $"{RunningCount} running" : null,
-        WaitingCount switch { 0 => null, 1 => "1 waits for you", var count => $"{count} wait for you" },
-        RunningCount == 0 && WaitingCount == 0 && CanMergeIntoBranch ? "Every node is complete" : null,
-    }.OfType<string>());
+        get
+        {
+            var counts = Counts;
+            return string.Join(" · ", new[]
+            {
+                counts.Completed > 0 ? $"{counts.Completed} of {counts.Total} complete" : null,
+                counts.Running > 0 ? $"{counts.Running} running" : null,
+                counts.Waiting switch { 0 => null, 1 => "1 waits for you", var count => $"{count} wait for you" },
+                counts.Failed > 0 ? $"{counts.Failed} failed" : null,
+            }.OfType<string>());
+        }
+    }
 
-    public StatusTone BarTone => RunningCount > 0 ? StatusTone.Running : WaitingCount > 0 ? StatusTone.Waiting : StatusTone.Complete;
+    public StatusTone BarTone => RunningCount > 0 ? StatusTone.Running : HasAttention ? StatusTone.Waiting : StatusTone.Complete;
 
     /// <summary>The running nodes' titles, or null.</summary>
     public string? BarActivity => RunningCount == 0 ? null
         : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
+
+    /// <summary>The summary on a narrow canvas: "5/9".</summary>
+    public string BarShort => $"{Counts.Completed}/{Counts.Total}";
+
+    /// <summary>The bar's tooltip: the whole summary, then the running nodes' titles.</summary>
+    public string BarTip => string.Join("\n", new[]
+    {
+        BarSummary,
+        BarActivity,
+    }.OfType<string>());
+
+    /// <summary>While this is on, the view shows each node that starts to run. The view never moves without this choice.</summary>
+    public bool IsFollowing
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(FollowLabel));
+            }
+        }
+    }
+
+    public string FollowLabel => IsFollowing ? "Stop following running nodes" : "Follow running nodes";
+
+    /// <summary>The tooltip of Run Workflow, which says why an empty workflow cannot run.</summary>
+    public string RunWorkflowTip => Nodes.Count > 0
+        ? $"Run Workflow\n{CanvasKeys.Hint(CanvasKeys.RunWorkflow)}: run every node that has no current result, along its dependencies"
+        : "Run Workflow\nAdd a node first. An empty workflow has nothing to run.";
+
+    private static bool NeedsAttention(TaskNodeViewModel node) => node.IsWaiting || node.State == NodeState.Failed;
 
     private void InitializeEngine(IReadOnlyDictionary<string, string> git)
     {
@@ -110,19 +154,51 @@ public sealed partial class WorkflowCanvasViewModel
             node.ShowReviewer(Nodes.FirstOrDefault(other => other is { IsReview: true, State: NodeState.Running } && Precedes(node.Id, other.Id))?.Title);
         }
 
-        RunningCount = Nodes.Count(node => node.State == NodeState.Running);
+        foreach (var connection in Connections)
+        {
+            connection.ShowFlow();
+        }
+
+        foreach (var node in Nodes)
+        {
+            ShowPorts(node);
+        }
+
+        var running = Nodes.Where(node => node.State == NodeState.Running).ToHashSet();
+        if (IsFollowing && running.Except(_running).FirstOrDefault() is { } started)
+        {
+            View?.Reveal(started);
+        }
+
+        _running = running;
+        RunningCount = running.Count;
         CanMergeIntoBranch = Engine.CanMergeIntoBranch;
         IsRunning = RunningCount > 0;
         OnWaitingChanged();
         OnPropertyChanged(nameof(ShowsBar));
         OnPropertyChanged(nameof(BarSummary));
+        OnPropertyChanged(nameof(HasAttention));
         OnPropertyChanged(nameof(BarTone));
         OnPropertyChanged(nameof(BarActivity));
+        OnPropertyChanged(nameof(BarShort));
+        OnPropertyChanged(nameof(BarTip));
+        OnPropertyChanged(nameof(RunWorkflowTip));
         OnSummaryChanged();
         _runWorkflow?.NotifyCanExecuteChanged();
         _stopAll?.NotifyCanExecuteChanged();
         _merge?.NotifyCanExecuteChanged();
         ShowGhosts();
+    }
+
+    // A filled dot says that an input is ready or that an output holds a current result. Each tooltip names what it says.
+    private void ShowPorts(TaskNodeViewModel node)
+    {
+        var sources = Connections.Where(wire => wire.To == node && wire.Kind == ConnectionKind.Dependency).Select(wire => wire.From).ToList();
+        node.Input.IsLive = sources.Count > 0 && sources.All(source => source.State == NodeState.Completed);
+        node.Input.Tip = sources.Count == 0 ? "Input: no earlier node" : $"Input: {string.Join(", ", sources.Select(source => source.Title))}";
+        node.Output.IsLive = node.HasResults && node.State != NodeState.Stale;
+        node.Output.Tip = node.OutputLine;
+        node.ShowInputCount(sources.Count);
     }
 
     /// <summary>

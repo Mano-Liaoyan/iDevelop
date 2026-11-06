@@ -58,7 +58,15 @@ internal sealed partial class Shell
     /// Opens the folder in a new window. A project is open in one window at a time, so each earlier window of this test
     /// that has it open closes its projects first, as quitting does, and the new window reopens what it saved.
     /// </summary>
-    public static Shell Open(string folder, ClientDirectory? clients = null)
+    public static Shell Open(string folder, ClientDirectory? clients = null) => Open(folder, clients, fitted: false);
+
+    /// <summary>
+    /// Opens the folder as <see cref="Open(string, ClientDirectory?)"/> does, at the view that opening a workflow gives. The
+    /// tests that do not ask for it start at the canvas's origin and 100%, so a test's canvas points are its window's points.
+    /// </summary>
+    public static Shell OpenFitted(string folder, ClientDirectory? clients = null) => Open(folder, clients, fitted: true);
+
+    private static Shell Open(string folder, ClientDirectory? clients, bool fitted)
     {
         foreach (var earlier in Opened.Where(shell => shell.Window.ViewModel.Projects.Any(project =>
             Projects.ProjectFolders.Comparer.Equals(project.Folder, Projects.ProjectFolders.Identity(folder)))).ToList())
@@ -72,7 +80,39 @@ internal sealed partial class Shell
         Opened.Add(shell);
         shell.Window.ViewModel.Open(folder);
         shell.Render();
+        if (!fitted && shell.Window.ViewModel.Canvas is not null)
+        {
+            shell.AtOrigin();
+        }
+
         return shell;
+    }
+
+    /// <summary>Moves the view to the canvas's origin at 100%, as a person's pan and zoom would.</summary>
+    public void AtOrigin()
+    {
+        Editor.ViewportZoom = 1;
+        Editor.ViewportLocation = default;
+        Render();
+    }
+
+    /// <summary>Opens the zoom panel, which shows only Fit until a card leaves the view.</summary>
+    public void OpenZoom()
+    {
+        if (!Find<Button>("ZoomIn").IsEffectivelyVisible)
+        {
+            Click(Find<Avalonia.Controls.Primitives.ToggleButton>("ZoomOpen"));
+        }
+    }
+
+    /// <summary>Shows the minimap, which hides while every card is in the view.</summary>
+    public void ShowMinimap()
+    {
+        OpenZoom();
+        if (!Find<Nodify.Minimap>("Minimap").IsEffectivelyVisible)
+        {
+            Click(Find<Avalonia.Controls.Primitives.ToggleButton>("ShowMinimap"));
+        }
     }
 
     public T Find<T>(string automationId) where T : Control => ById<T>(Window, automationId).Single();

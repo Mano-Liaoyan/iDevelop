@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Windows.Input;
 using Avalonia;
@@ -14,6 +15,7 @@ public sealed class ConnectionViewModel : ObservableObject
     private readonly WorkflowCanvasViewModel _canvas;
     private readonly RelayCommand<ConnectionKind> _setKind;
     private ConnectionKind _kind;
+    private ImmutableArray<Point> _ownRoute = [];
     private IReadOnlyList<Point> _route = [];
 
     internal ConnectionViewModel(WorkflowCanvasViewModel canvas, ConnectionKey key, TaskNodeViewModel from, TaskNodeViewModel to, ConnectionKind kind)
@@ -47,8 +49,37 @@ public sealed class ConnectionViewModel : ObservableObject
     public WireEmphasis Emphasis
     {
         get;
-        internal set => SetProperty(ref field, value);
+        internal set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnStrokeChanged();
+            }
+        }
     }
+
+    /// <summary>What the wire carries now.</summary>
+    public WireFlow Flow
+    {
+        get;
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnStrokeChanged();
+                OnPropertyChanged(nameof(Tip));
+            }
+        }
+    } = WireFlow.Idle;
+
+    /// <summary>The wire's stroke in canvas units. It shows a selection by weight, and it follows the zoom tier.</summary>
+    public double Stroke => (WireFlows.Stroke(Flow) + (Emphasis == WireEmphasis.Highlighted ? 1 : 0)) * ZoomTiers.WireScale(_canvas.Tier);
+
+    /// <summary>The stroke under the pointer and while the wire is selected.</summary>
+    public double HotStroke => Math.Max(Stroke, 3 * ZoomTiers.WireScale(_canvas.Tier));
+
+    /// <summary>What the wire says it carries, as its tooltip.</summary>
+    public string Tip => WireFlows.Tip(Flow, From.Title, To.Title);
 
     /// <summary>The corners the wire turns at, from the end of its source stub to the start of its target stub.</summary>
     public IReadOnlyList<Point> Route => _route;
@@ -62,6 +93,7 @@ public sealed class ConnectionViewModel : ObservableObject
         if (SetProperty(ref _kind, kind, nameof(Kind)))
         {
             _setKind.NotifyCanExecuteChanged();
+            ShowFlow();
         }
     }
 
@@ -77,11 +109,33 @@ public sealed class ConnectionViewModel : ObservableObject
             new(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter, To.CardSize),
         ];
         var route = WireRouting.Route(From.Output.Anchor, To.Input.Anchor, cards);
+        if (!route.SequenceEqual(_ownRoute))
+        {
+            _ownRoute = route;
+            _canvas.SpreadWires();
+        }
+    }
+
+    /// <summary>The route that this wire finds alone, before it takes a lane beside other wires.</summary>
+    internal WireLanes.Wire Lane => new(_ownRoute, From, To, From.Location.Y + From.Location.X / 100000);
+
+    /// <summary>Takes the route with the wire's lane.</summary>
+    internal void ShowRoute(ImmutableArray<Point> route)
+    {
         if (!route.SequenceEqual(_route))
         {
             _route = route;
             OnPropertyChanged(nameof(Route));
         }
+    }
+
+    /// <summary>Reads what the wire carries from the two nodes' states and results.</summary>
+    internal void ShowFlow() => Flow = WireFlows.Of(_kind, From.State, To.State, From.Id, From.LatestResult?.Id, To.LatestResult?.Basis);
+
+    internal void OnStrokeChanged()
+    {
+        OnPropertyChanged(nameof(Stroke));
+        OnPropertyChanged(nameof(HotStroke));
     }
 
     /// <summary>Called once the connection leaves the canvas, so its nodes no longer hold it.</summary>
@@ -105,6 +159,10 @@ public sealed class ConnectionViewModel : ObservableObject
         if (e.PropertyName == nameof(TaskNodeViewModel.Kind))
         {
             OnPropertyChanged(nameof(SourceKind));
+        }
+        else if (e.PropertyName == nameof(TaskNodeViewModel.Title))
+        {
+            OnPropertyChanged(nameof(Tip));
         }
     }
 }

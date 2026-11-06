@@ -81,7 +81,7 @@ public sealed class CanvasTests : IDisposable
         var (existing, added) = (shell.Node(title), shell.Node("New task"));
         Assert.Equal(60 + pan, added.Location.X);
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
-        Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title).TextLayout.TextLines.Single().HasCollapsed);
+        Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title && text.IsEffectivelyVisible).TextLayout.TextLines.Single().HasCollapsed);
         // The peek names the whole title that the card cuts short.
         Assert.Equal(title, shell.PeekTexts(title)![0]);
     }
@@ -106,14 +106,14 @@ public sealed class CanvasTests : IDisposable
     public void A_card_shows_its_title_and_one_subtitle_and_its_tooltip_previews_its_instructions()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        Assert.Equal(["Build", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Idle ·", "No agent"], Shell.Texts(shell.Node("Build")));
         Assert.Equal(["Build", "Implement · No agent", "Instructions", "Nothing written yet.", "Instructions is empty."], shell.PeekTexts("Build")!);
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
-        Assert.Equal(["Build", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Idle ·", "No agent"], Shell.Texts(shell.Node("Build")));
         Assert.Equal(["Build", "Implement · No agent", "Instructions", "Compile", "The node has no agent."], shell.PeekTexts("Build")!);
     }
 
@@ -138,6 +138,7 @@ public sealed class CanvasTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
 
+        shell.OpenZoom();
         shell.Click(shell.Find<Button>("ZoomIn"));
         Assert.Equal(1.26, Math.Round(shell.Editor.ViewportZoom, 2));
 
@@ -162,6 +163,7 @@ public sealed class CanvasTests : IDisposable
     public void Dragging_a_task_moves_its_minimap_item()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
+        shell.ShowMinimap();
         Point Item(string title) => shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
             .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == title).Bounds.Position;
         Assert.Equal((new Point(0, 0), new Point(300, 0)), (Item("Design"), Item("Build")));
@@ -176,6 +178,7 @@ public sealed class CanvasTests : IDisposable
     public void Turning_the_wheel_over_the_minimap_zooms_the_canvas_one_step_per_notch()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
+        shell.ShowMinimap();
         var minimap = shell.Center(shell.Find<Minimap>("Minimap"));
 
         shell.Window.MouseWheel(minimap, new Vector(0, 1));
@@ -190,6 +193,7 @@ public sealed class CanvasTests : IDisposable
     public void Clicking_the_minimap_centers_the_canvas_on_that_point()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
+        shell.ShowMinimap();
         var build = shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
             .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == "Build");
 

@@ -3,7 +3,6 @@
         xmlns:local="using:IDevelop.Desktop"
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:conversation="using:IDevelop.Desktop.Conversation"
-        xmlns:execution="using:IDevelop.Desktop.Execution"
         xmlns:inspector="using:IDevelop.Desktop.Inspector"
         xmlns:sidebar="using:IDevelop.Desktop.Sidebar"
         xmlns:theme="using:IDevelop.Desktop.Theme"
@@ -64,11 +63,11 @@
             </ContentControl.ContentTemplate>
           </ContentControl>
 
-          <!-- What floats along the canvas's top edge: the breadcrumb at the left, the workflow's buttons at the right, the
-               waiting pill between them or under the buttons, and the status under the breadcrumb. The bar has no fill, so
-               the canvas takes every input between them. On a compact canvas the code-behind marks the bar compact: the
-               breadcrumb shows only the workflow's name, and the buttons only their glyphs. -->
-          <canvas:CanvasTopBar x:Name="TopBar" VerticalAlignment="Top" Margin="12" IsVisible="{Binding ShowsCanvas}">
+          <!-- What floats along the canvas's top edge: the breadcrumb with Undo, Redo, Save, and Add at the left, Generate and Run
+               Workflow at the right, and the status under the breadcrumb. The bar has no fill, so the canvas takes every input
+               between them. On a compact canvas the code-behind marks the bar compact: the breadcrumb shows only the workflow's
+               name, and Generate only its glyph. -->
+          <canvas:CanvasTopBar x:Name="TopBar" VerticalAlignment="Top" Margin="12,8" IsVisible="{Binding ShowsCanvas}">
             <Border Classes="breadcrumb" canvas:CanvasTopBar.Slot="Leading" HorizontalAlignment="Left"
                     IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
                     AutomationProperties.AutomationId="Breadcrumb">
@@ -126,21 +125,16 @@
                     </Button>
                   </StackPanel>
                 </Border>
+                <Border theme:SpillRow.Pinned="True" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
+                  <Button Classes="ghost" CornerRadius="0,7,7,0" VerticalAlignment="Stretch" Click="OnAddNode"
+                          ToolTip.Tip="Add a node (N)"
+                          AutomationProperties.AutomationId="AddTask"
+                          AutomationProperties.Name="Add node">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
+                  </Button>
+                </Border>
               </theme:SpillRow>
             </Border>
-
-            <Button Classes="ghost" Padding="0" canvas:CanvasTopBar.Slot="Center"
-                    Command="{Binding Canvas.NextWaitingCommand, FallbackValue={x:Null}}"
-                    IsVisible="{Binding Canvas.HasWaiting, FallbackValue=False}"
-                    AutomationProperties.AutomationId="NextWaiting"
-                    AutomationProperties.Name="Show the next node that waits for you">
-              <Border Classes="pill waiting">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Theme="{StaticResource Glyph}" />
-                  <TextBlock Text="{Binding Canvas.WaitingLabel, FallbackValue=''}" AutomationProperties.AutomationId="WaitingCount" />
-                </StackPanel>
-              </Border>
-            </Button>
 
             <!-- Run Workflow runs every node that has no current result, so it needs no selected node (ADR 0017). -->
             <Panel canvas:CanvasTopBar.Slot="Trailing" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
@@ -148,26 +142,7 @@
                 <ContentControl.ContentTemplate>
                   <DataTemplate x:DataType="canvas:WorkflowCanvasViewModel">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Button Classes="action glyph" Click="OnAddNode"
-                              ToolTip.Tip="Add Node&#10;N on the canvas"
-                              AutomationProperties.AutomationId="AddTask"
-                              AutomationProperties.Name="Add node">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
-                          <TextBlock Classes="label" Text="Add Node" VerticalAlignment="Center" />
-                        </StackPanel>
-                      </Button>
-                      <Button Classes="action glyph" Command="{Binding RunWorkflowCommand}"
-                              ToolTip.Tip="{x:Static local:MainWindow.RunWorkflowHelp}"
-                              AutomationProperties.AutomationId="RunWorkflow"
-                              AutomationProperties.Name="Run Workflow">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-                          <TextBlock Classes="label" Text="Run Workflow" VerticalAlignment="Center" />
-                        </StackPanel>
-                      </Button>
-                      <Button Classes="glyph" Classes.primary="{Binding IsGenerateIdle}" Classes.action="{Binding !IsGenerateIdle}"
-                              Click="OnGenerate"
+                      <Button Classes="action glyph" Click="OnGenerate"
                               ToolTip.Tip="{Binding GenerateLabel, StringFormat='{}{0}&#10;Describe what to build, and a planner proposes the tasks'}"
                               AutomationProperties.AutomationId="GenerateWorkflow"
                               AutomationProperties.Name="{Binding GenerateLabel}">
@@ -189,6 +164,18 @@
                           <TextBlock Classes="label" Text="{Binding GenerateLabel}" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
+                      <!-- The workflow's one primary action. An empty workflow's primary action is on the canvas's Generate card. -->
+                      <Button Classes.primary="{Binding !IsEmpty}" Classes.action="{Binding IsEmpty}" Command="{Binding RunWorkflowCommand}"
+                              ToolTip.ShowOnDisabled="True"
+                              ToolTip.Tip="{Binding RunWorkflowTip}"
+                              AutomationProperties.AutomationId="RunWorkflow"
+                              AutomationProperties.Name="Run Workflow">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
+                          <TextBlock Classes="wideOnly" Text="Run Workflow" VerticalAlignment="Center" />
+                          <TextBlock Classes="compactOnly" Text="Run" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
                     </StackPanel>
                   </DataTemplate>
                 </ContentControl.ContentTemplate>
@@ -197,7 +184,7 @@
 
             <!-- The status sits under the breadcrumb so a long message never covers it. The line limit keeps it above
                  the zoom panel and the minimap at the window's minimum height, and the tooltip holds the whole message. -->
-            <Border Classes="breadcrumb" canvas:CanvasTopBar.Slot="Below" HorizontalAlignment="Left" Padding="12,9" MaxWidth="420"
+            <Border Classes="breadcrumb" canvas:CanvasTopBar.Slot="Below" HorizontalAlignment="Left" Padding="12,7" MaxWidth="420"
                     IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
               <TextBlock Classes="caption" Text="{Binding Status}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="10"
                          ToolTip.Tip="{Binding Status}"

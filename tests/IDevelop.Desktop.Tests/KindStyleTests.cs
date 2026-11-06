@@ -55,7 +55,7 @@ public sealed class KindStyleTests
     }
 
     [AvaloniaFact]
-    public void A_ring_takes_its_kinds_hue_while_running_its_states_hue_after_and_the_accent_while_proposing()
+    public void A_ring_takes_its_states_color_and_only_failed_waiting_and_running_tint_the_card()
     {
         var ring = new Border { Classes = { "stateStroke" } };
         var tint = new Border { Classes = { "stateTint" } };
@@ -75,11 +75,11 @@ public sealed class KindStyleTests
 
         Assert.Equal(
             [
-                "#CCE5E5E5 #00FFFFFF #FF564ADE False",
-                "#FF564ADE #1A6155F5 #FF564ADE True",
+                "#FFE5E5E5  #FF564ADE False",
+                "#FF0088FF #1A0088FF #FF0088FF True",
                 "#FFC55300 #1AFF8D28 #FFC55300 True",
                 "#FFE9152D #1AFF383C #FFE9152D True",
-                "#FF008932 #00FFFFFF #FF008932 True",
+                "#FFE5E5E5  #FF008932 True",
                 "#FF1E6EF4 #1A0088FF #FF1E6EF4 True",
             ],
             [
@@ -103,7 +103,7 @@ public sealed class KindStyleTests
             StyleClass.SetState(element, NodeState.Stale);
         }
 
-        Assert.Equal((Hex(ring.BorderBrush), Hex(tint.Background)), (Hex(pill.BorderBrush), Hex(pill.Background)));
+        Assert.Equal(Hex(ring.BorderBrush), Hex(pill.BorderBrush));
         Assert.Equal(Hex(glyph.Foreground), Hex(pillGlyph.Foreground));
         Assert.Same(Application.Current!.FindResource("IconStateOutOfDate"), glyph.Data);
         Assert.Same(glyph.Data, pillGlyph.Data);

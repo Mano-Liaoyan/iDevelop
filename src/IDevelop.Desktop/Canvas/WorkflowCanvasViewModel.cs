@@ -60,7 +60,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         ConnectCommand = new RelayCommand<(object Source, object? Target)>(drop => Connect(drop.Source, drop.Target));
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
         CommitMovesCommand = new RelayCommand(CommitMoves);
-        NextWaitingCommand = new RelayCommand(SelectNextWaiting);
+        NextWaitingCommand = new RelayCommand(SelectNextAttention);
         InitializeEngine(git ?? new Dictionary<string, string>());
         Document.Changed += (_, _) => Sync();
         Sync();
@@ -131,8 +131,34 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     public double ViewportZoom
     {
         get;
-        set => SetProperty(ref field, value);
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ZoomLabel));
+                Tier = ZoomTiers.Next(Tier, value);
+            }
+        }
     } = 1;
+
+    /// <summary>The zoom as a percent, on the control that resets it.</summary>
+    public string ZoomLabel => $"{Math.Round(ViewportZoom * 100)}%";
+
+    /// <summary>How much a card shows at this zoom.</summary>
+    public ZoomTier Tier
+    {
+        get;
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                foreach (var connection in Connections)
+                {
+                    connection.OnStrokeChanged();
+                }
+            }
+        }
+    }
 
     /// <summary>Whether a view has shown this canvas yet. The first view places the cards below the floating chrome.</summary>
     internal bool IsPositioned { get; set; }
@@ -187,11 +213,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     /// <summary>How many nodes wait for the person.</summary>
     public int WaitingCount => Nodes.Count(node => node.IsWaiting);
 
-    public bool HasWaiting => WaitingCount > 0;
-
-    public string WaitingLabel => WaitingCount == 1 ? "1 node waits for you" : $"{WaitingCount} nodes wait for you";
-
-    /// <summary>Selects the next node that waits for the person, after the selected one, in the order the sidebar lists them.</summary>
+    /// <summary>Selects the next node that waits for the person or failed, after the selected one, in the order the sidebar lists them, and shows it.</summary>
     public ICommand NextWaitingCommand { get; }
 
     internal ProjectViewModel Project { get; }
@@ -327,8 +349,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     private void OnWaitingChanged()
     {
         OnPropertyChanged(nameof(WaitingCount));
-        OnPropertyChanged(nameof(HasWaiting));
-        OnPropertyChanged(nameof(WaitingLabel));
     }
 
     /// <summary>Places a node of the blueprint near the top left of the view, below any card already there, and selects it.</summary>
@@ -376,13 +396,13 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         SelectedNodes.Add(node);
     }
 
-    private void SelectNextWaiting()
+    private void SelectNextAttention()
     {
         var ordered = Outline.ToList();
         var start = SelectedNode is { } selected ? ordered.IndexOf(selected) + 1 : 0;
-        if (Enumerable.Range(0, ordered.Count).Select(step => ordered[(start + step) % ordered.Count]).FirstOrDefault(node => node.IsWaiting) is { } next)
+        if (Enumerable.Range(0, ordered.Count).Select(step => ordered[(start + step) % ordered.Count]).FirstOrDefault(NeedsAttention) is { } next)
         {
-            Select(next);
+            Reveal(next);
         }
     }
 

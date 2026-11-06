@@ -40,6 +40,23 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The first line's texts when it is not the client, of which the card shows the first that fits whole.</summary>
     public IReadOnlyList<string> SubtitleChoices => [Subtitle];
 
+    /// <summary>How many dependency predecessors feed the node, on the expanded card.</summary>
+    public string InputLine => $"Input: {_inputCount}";
+
+    /// <summary>The latest result the node hands on, on the expanded card and the output port's tooltip.</summary>
+    public string OutputLine => _history.Count > 0 ? $"Output: Result {_history.Count}" : "Output: No result yet";
+
+    internal void ShowInputCount(int count)
+    {
+        if (_inputCount != count)
+        {
+            _inputCount = count;
+            OnPropertyChanged(nameof(InputLine));
+        }
+    }
+
+    private int _inputCount;
+
     /// <summary>The kind tile's help text, such as "Implement version 1".</summary>
     public string KindHelp => $"{TypeName} version {_task.Blueprint.Key.Version}";
 
