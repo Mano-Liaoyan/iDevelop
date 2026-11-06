@@ -257,8 +257,8 @@
                         <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
                           <StackPanel Spacing="2">
                             <Panel>
-                              <!-- The name, and at the row's end how far the work went. Under them, in the run bar's chips and words,
-                                   what failed, waits, runs, or is stale. A tag names no action, and the tooltip holds the sum. -->
+                              <!-- The name, and at the row's end how far the work went. Under them, in glyphs and words,
+                                   what failed, waits, runs, or is stale. The tooltip holds the sum. -->
                               <Button Classes="nav workflow" Classes.selected="{Binding IsSelected}" Classes.holdsNode="{Binding ShowsNodeSelection}" HorizontalContentAlignment="Stretch"
                                       IsVisible="{Binding !IsRenamingWorkflow}"
                                       Click="OnWorkflowClick"
@@ -286,7 +286,7 @@
                                            IsVisible="{Binding HasUnsavedChanges}" AutomationProperties.AutomationId="WorkflowUnsaved" />
                                   <TextBlock Grid.Column="2" Classes="caption" Text="{Binding RowProgress}" VerticalAlignment="Top" Margin="0,1,0,0"
                                              AutomationProperties.AutomationId="WorkflowSummary" />
-                                  <ItemsControl Grid.Row="1" Grid.ColumnSpan="3" Margin="0,2,0,0" ItemsSource="{Binding BarChips}" IsVisible="{Binding !!BarChips.Count}"
+                                  <ItemsControl Grid.Row="1" Grid.ColumnSpan="3" Margin="0,2,0,0" ItemsSource="{Binding RowChips}" IsVisible="{Binding HasRowChips}"
                                                 AutomationProperties.AutomationId="WorkflowAlert">
                                     <ItemsControl.ItemsPanel>
                                       <ItemsPanelTemplate>

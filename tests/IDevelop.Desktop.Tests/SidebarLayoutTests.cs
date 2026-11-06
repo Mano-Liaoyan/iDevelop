@@ -226,10 +226,10 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.True(row.Bounds.Height > 28, "The state takes no line of its own.");
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
-        // The progress keeps the row's end in every state, and the words match the run bar's.
+        // The progress keeps the row's end in every state, and the state is in words under the name.
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
-        Assert.Equal(canvas.BarChips.Select(chip => chip.Label), Of<Control>(row.GetVisualParent()!, "WorkflowAlert").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
+        Assert.Equal(canvas.RowChips.Select(chip => chip.Label), Of<Control>(row.GetVisualParent()!, "WorkflowAlert").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
     }
 
     [Theory]

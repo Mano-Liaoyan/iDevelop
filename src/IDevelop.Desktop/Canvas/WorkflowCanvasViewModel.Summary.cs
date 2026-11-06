@@ -17,6 +17,24 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>How far the work went, at the row's end. The chips under the name hold the other states.</summary>
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
 
+    /// <summary>What the row says under the name, in words: what failed, waits, runs, and is stale. Every reason to wait sums to one chip, and the run bar tells them apart.</summary>
+    public IReadOnlyList<StateChip> RowChips
+    {
+        get
+        {
+            var counts = Counts;
+            return new[]
+            {
+                StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed"),
+                StateChip.Of(NodeState.InputRequired, WaitReason.None, counts.Waiting, "waiting"),
+                StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"),
+                StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, "stale"),
+            }.OfType<StateChip>().ToList();
+        }
+    }
+
+    public bool HasRowChips => RowChips.Count > 0;
+
     /// <summary>What the first running node does now, in one line, or null while none runs. The row shows it under the name.</summary>
     public string? RowActivity => Outline.FirstOrDefault(node => node.State == NodeState.Running) is { } node ? ActivityRow.OneLine(node.Latest) : null;
 
@@ -27,6 +45,8 @@ public sealed partial class WorkflowCanvasViewModel
     {
         OnPropertyChanged(nameof(Counts));
         OnPropertyChanged(nameof(RowProgress));
+        OnPropertyChanged(nameof(RowChips));
+        OnPropertyChanged(nameof(HasRowChips));
         OnPropertyChanged(nameof(RowActivity));
         OnPropertyChanged(nameof(Summary));
     }

@@ -250,21 +250,37 @@
         </ContentControl>
     </DockPanel>
 
-    <!-- A tab on each panel's edge hides the panel, and stays at the window's edge to bring it back. It sits wholly on the
+    <!-- A tab on each panel's edge hides the panel, and stays at the window's edge, with the panel's name, to bring it back. It sits wholly on the
          canvas's side of the seam, so a panel's scroll bar never runs under it. With no project the inspector has no tab. -->
-    <Button Grid.Column="1" Classes="panelEdge" ZIndex="1" HorizontalAlignment="Center" Margin="6,0,-6,0"
+    <Button Grid.Column="1" Classes="panelEdge" Classes.closed="{Binding !IsSidebarOpen}" ZIndex="1" HorizontalAlignment="Center" Margin="6,0,-6,0"
             Command="{Binding ToggleSidebarCommand}" ToolTip.Tip="{Binding SidebarToggleLabel, StringFormat='{}{0} (Ctrl+B)'}"
             AutomationProperties.AutomationId="ToggleSidebar" AutomationProperties.Name="{Binding SidebarToggleLabel}">
       <Panel>
         <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" RenderTransform="scale(-1, 1)" IsVisible="{Binding IsSidebarOpen}" />
-        <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" IsVisible="{Binding !IsSidebarOpen}" />
+        <StackPanel Spacing="4" IsVisible="{Binding !IsSidebarOpen}">
+          <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" />
+          <LayoutTransformControl HorizontalAlignment="Center">
+            <LayoutTransformControl.LayoutTransform>
+              <RotateTransform Angle="90" />
+            </LayoutTransformControl.LayoutTransform>
+            <TextBlock Classes="edgeLabel" Text="Projects" />
+          </LayoutTransformControl>
+        </StackPanel>
       </Panel>
     </Button>
-    <Button Grid.Column="3" Classes="panelEdge" ZIndex="1" HorizontalAlignment="Center" Margin="-6,0,6,0" IsVisible="{Binding HasProjects}"
+    <Button Grid.Column="3" Classes="panelEdge" Classes.closed="{Binding !IsInspectorOpen}" ZIndex="1" HorizontalAlignment="Center" Margin="-6,0,6,0" IsVisible="{Binding HasProjects}"
             Command="{Binding ToggleInspectorCommand}" ToolTip.Tip="{Binding InspectorToggleLabel, StringFormat='{}{0} (Ctrl+Alt+B)'}"
             AutomationProperties.AutomationId="ToggleInspector" AutomationProperties.Name="{Binding InspectorToggleLabel}">
       <Panel>
-        <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" RenderTransform="scale(-1, 1)" IsVisible="{Binding !IsInspectorOpen}" />
+        <StackPanel Spacing="4" IsVisible="{Binding !IsInspectorOpen}">
+          <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" RenderTransform="scale(-1, 1)" />
+          <LayoutTransformControl HorizontalAlignment="Center">
+            <LayoutTransformControl.LayoutTransform>
+              <RotateTransform Angle="90" />
+            </LayoutTransformControl.LayoutTransform>
+            <TextBlock Classes="edgeLabel" Text="Inspector" />
+          </LayoutTransformControl>
+        </StackPanel>
         <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" IsVisible="{Binding IsInspectorOpen}" />
       </Panel>
     </Button>
