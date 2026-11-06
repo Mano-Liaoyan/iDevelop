@@ -87,10 +87,10 @@
                   Command="{Binding Canvas.StopAllCommand}" IsVisible="{Binding !!Canvas.RunningCount}"
                   ToolTip.Tip="Stop every running node. Finished results stay."
                   AutomationProperties.AutomationId="ConversationStopAll"
-                  AutomationProperties.Name="Stop All">
+                  AutomationProperties.Name="Stop Workflow">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="12" Height="12" />
-              <TextBlock Text="Stop All" />
+              <TextBlock Text="Stop Workflow" />
             </StackPanel>
           </Button>
         </StackPanel>
@@ -288,11 +288,11 @@
                       AutomationProperties.AutomationId="ConversationMarkResolved" AutomationProperties.Name="Mark resolved">
                 <TextBlock Text="Mark resolved" />
               </Button>
-              <Button Classes.primary="{Binding IsApprovalCard}" Classes.action="{Binding IsPlainApprove}" Classes.ghost="{Binding IsReplyCard}" Height="28"
+              <Button Classes.primary="{Binding IsApprovalCard}" Classes.action="{Binding !IsApprovalCard}" Height="28"
                       Command="{Binding Node.ApproveCommand}" IsVisible="{Binding ShowsCardApprove}"
                       ToolTip.Tip="{Binding ApproveHelp}"
                       AutomationProperties.AutomationId="ConversationApprove"
-                      AutomationProperties.Name="Approve">
+                      AutomationProperties.Name="{Binding ApproveLabel}">
                 <TextBlock Text="{Binding ApproveLabel}" />
               </Button>
             </WrapPanel>
@@ -364,7 +364,7 @@
               </Button.Flyout>
             </Button>
             <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
-              <TextBlock Classes="keyHint" Text="Ctrl+Enter" VerticalAlignment="Center" Margin="0,0,4,0" IsVisible="{Binding HasDraft}"
+              <TextBlock Classes="keyHint" Text="Ctrl+Enter to send" VerticalAlignment="Center" Margin="0,0,4,0"
                          AutomationProperties.AutomationId="ComposerKeyHint" />
               <!-- A draft during a turn waits for the turn's end unless the person ends the turn first. -->
               <Button Classes="ghost" Height="24" Command="{Binding Node.StopAndSendCommand}" IsVisible="{Binding ShowsStopAndSend}"
@@ -457,7 +457,7 @@
                               AutomationProperties.Name="{Binding AuthorLabel}">
                         <conversation:MarkdownView Markdown="{Binding Text}" />
                       </Border>
-                      <!-- Copy sits in the gutter beside the message, or beside a person's message, while the pointer is on the row. -->
+                      <!-- Copy floats on the message's top right edge, or beside a person's message, while the pointer is on the row. -->
                       <Button Grid.Column="{Binding IsPerson, Converter={x:Static conversation:ConversationView.CopyColumn}}"
                               Classes="icon small copy" Classes.person="{Binding IsPerson}" Command="{Binding CopyCommand}"
                               ToolTip.Tip="Copy message"
@@ -491,7 +491,7 @@
                             <TextBlock Text="Show in inspector" />
                           </Button>
                         </Grid>
-                        <ToggleButton Classes="steps" IsChecked="{Binding Result.IsChangesOpen, FallbackValue=False}" IsVisible="{Binding Result.HasChanges, FallbackValue=False}"
+                        <ToggleButton Classes="steps" IsChecked="{Binding Result.IsChangesOpen, FallbackValue=False}" IsVisible="{Binding Result.HasSeveralChanges, FallbackValue=False}"
                                       AutomationProperties.AutomationId="ResultChanges" AutomationProperties.Name="{Binding Result.ChangeLabel, FallbackValue={x:Null}}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <PathIcon Theme="{StaticResource Glyph}" />
@@ -500,7 +500,7 @@
                             <TextBlock Classes="lineCount deleted" Text="{Binding Result.Deleted, FallbackValue={x:Null}}" />
                           </StackPanel>
                         </ToggleButton>
-                        <ItemsControl ItemsSource="{Binding Result.Changes, FallbackValue={x:Null}}" IsVisible="{Binding Result.IsChangesOpen, FallbackValue=False}" Margin="18,2,0,0"
+                        <ItemsControl ItemsSource="{Binding Result.Changes, FallbackValue={x:Null}}" IsVisible="{Binding Result.IsChangesOpen, FallbackValue=False}" Margin="0,2,0,0"
                                       AutomationProperties.AutomationId="ResultFiles">
                           <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="git:FileChange">

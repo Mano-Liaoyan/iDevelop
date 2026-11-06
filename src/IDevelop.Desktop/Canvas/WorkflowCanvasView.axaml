@@ -141,7 +141,6 @@
       </nodify:NodifyEditor.DecoratorContainerStyle>
     </nodify:NodifyEditor>
 
-    <Border Classes="runFrame" IsHitTestVisible="False" IsVisible="{Binding !!RunningCount}" AutomationProperties.AutomationId="CanvasRunFrame" />
 
     <!-- The keyboard's place: the canvas took the focus by a key, so its keys act here. -->
     <Border x:Name="CanvasFocus" Classes="canvasFocus" IsHitTestVisible="False" IsVisible="False"
@@ -240,7 +239,7 @@
 
       <!-- One bar for a run: how far it went, one labelled chip per group of nodes, Next, Follow, and Merge into my branch while
            every node is completed and nothing is stale (ADR 0017). The chips are the canvas's badges with their words, so the bar
-           is also the badges' legend. Stop All sits where Run Workflow was. UI Automation shows no plain border, so a user
+           is also the badges' legend. Stop Workflow sits where Run Workflow was. UI Automation shows no plain border, so a user
            control carries its id. As the canvas narrows, the summary shortens, then the words stand in for the chips, and the
            buttons keep only their glyphs. With no run, the band says how many nodes the workflow has. -->
       <Panel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" MinHeight="28" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
@@ -289,8 +288,9 @@
                 <TextBlock Classes="barText barShort" Text="{Binding BarShort}" ToolTip.Tip="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatusShort" />
                 <TextBlock Classes="barText barBrief" Text="{Binding BarBrief}" AutomationProperties.AutomationId="RunStatusBrief" />
               </Panel>
-              <ItemsControl Classes="barChips" ItemsSource="{Binding BarChips}" VerticalAlignment="Center" AutomationProperties.AutomationId="RunChips">
-                <ItemsControl.ItemsPanel>
+              <Panel VerticalAlignment="Center">
+                <ItemsControl Classes="barChips barReasons" ItemsSource="{Binding BarChips}" AutomationProperties.AutomationId="RunChips">
+                  <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
                     <StackPanel Orientation="Horizontal" Spacing="6" />
                   </ItemsPanelTemplate>
@@ -309,7 +309,29 @@
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
-              </ItemsControl>
+                </ItemsControl>
+                <ItemsControl Classes="barChips barGroups" ItemsSource="{Binding BarGroups}" AutomationProperties.AutomationId="RunGroups">
+                  <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="6" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="canvas:StateChip">
+                    <StackPanel Orientation="Horizontal" Spacing="4" Background="Transparent" ToolTip.Tip="{Binding Tip}"
+                                AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
+                      <Panel Width="16" Height="16" VerticalAlignment="Center">
+                        <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
+                        <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
+                                  theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
+                      </Panel>
+                      <TextBlock Classes="barText chipLong" Text="{Binding Label}" />
+                      <TextBlock Classes="barText chipShort" Text="{Binding Short}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Panel>
             </DockPanel>
           </DockPanel>
         </UserControl>

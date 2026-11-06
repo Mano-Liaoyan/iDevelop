@@ -27,22 +27,12 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    /// <summary>
-    /// One rule for every card: its first line under its title is its client while it is idle and nothing marks it, and
-    /// its status in every other state. The second line is its model and level in every state, so every card has the same
-    /// three lines whatever its names.
-    /// </summary>
-    public bool ShowsAgent => State == NodeState.Idle && Role == NodeRole.None;
-
     /// <summary>Where the part of the title that tells this node from a similar one starts, which a cut title keeps in view.</summary>
     public int TitleKeep
     {
         get;
         internal set => SetProperty(ref field, value);
     }
-
-    /// <summary>The status leaves the model its place on the card's last line. What a node waits for takes the whole line.</summary>
-    public bool ShowsCardModel => State != NodeState.InputRequired;
 
     /// <summary>The model and level without the maker's name, which the client's name says, so they fit a card's line.</summary>
     public string AgentBrief => AgentModel.StartsWith("Claude ", StringComparison.Ordinal) ? AgentModel["Claude ".Length..] : AgentModel;
@@ -54,23 +44,25 @@ public sealed partial class TaskNodeViewModel
     public IReadOnlyList<string> ModelLines => CardText.ModelLines(AgentModel, AgentBrief);
 
     /// <summary>
-    /// The zoomed out card's last line. It says what a node that needs the person needs or why it stopped, because its badge
-    /// alone does not. Every other node shows its model, or its type when it has no agent.
+    /// The zoomed out card's last line: the model in every state, or the type of a node with no agent. State never takes the
+    /// agent's place, and the badge at the line's end shows the state.
     /// </summary>
-    public IReadOnlyList<string> CardLines => Role == NodeRole.Proposing ? [Subtitle]
-        : State == NodeState.InputRequired ? [NodeStates.Need(WaitReason)]
-        : State is NodeState.Failed or NodeState.Stale ? [StatusLabel]
-        : AgentModel.Length == 0 ? [TypeName]
-        : ModelLines.Skip(1).DefaultIfEmpty(AgentModel).ToArray();
+    public IReadOnlyList<string> CardLines => AgentModel.Length == 0 ? [TypeName] : ModelLines.Skip(1).DefaultIfEmpty(AgentModel).ToArray();
 
-    /// <summary>The idle line names the client only when it has no model to name, so every card's line reads the same.</summary>
-    public bool ShowsCardClient => AgentModel.Length == 0;
+    /// <summary>The node names a model, which the card's last line shows after its client.</summary>
+    public bool HasModel => AgentModel.Length > 0;
 
-    /// <summary>The first line when it is not the client: the proposal, else the engine's state.</summary>
-    public string Subtitle => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count) : StatusLabel;
+    /// <summary>The client's name on a card's last line, without the words that every client's name would carry.</summary>
+    public string CardClient => AgentClient.Replace(" CLI", "", StringComparison.Ordinal);
 
-    /// <summary>The first line's texts when it is not the client, of which the card shows the first that fits whole.</summary>
-    public IReadOnlyList<string> SubtitleChoices => [Subtitle];
+    /// <summary>The one letter that names the client on a zoomed out card, whose line has no room for the name.</summary>
+    public string ClientMark => _task.Execution is { } settings ? CardText.ClientMark(settings.Client) : "";
+
+    /// <summary>The state in a word, at the end of the card's last line: what a waiting node needs, or the proposal it holds.</summary>
+    public string CardStatus => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count)
+        : State == NodeState.InputRequired ? NodeStates.Need(WaitReason)
+        : State == NodeState.Running ? "Running"
+        : StatusLabel;
 
     /// <summary>How many dependency predecessors feed the node, on the expanded card.</summary>
     public string InputLine => $"Input: {_inputCount}";

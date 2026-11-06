@@ -108,7 +108,7 @@ public sealed partial class TaskNodeViewModel
         LastReply = Latest,
         Report = _history.Count > 0 ? _history[^1].Report : null,
         Detail = StateDetail,
-        Proposal = Proposal is { HasItems: true } ? Subtitle : null,
+        Proposal = Proposal is { HasItems: true } ? CardStatus : null,
         Review = ReviewSummary,
         FieldLabel = Fields.Count > 0 ? Fields[0].Spec.Label : "Task",
         FieldText = Fields.Count > 0 ? Fields[0].Text : null,

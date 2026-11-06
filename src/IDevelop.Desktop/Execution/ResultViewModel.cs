@@ -40,6 +40,7 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(HasChanges));
+                OnPropertyChanged(nameof(HasSeveralChanges));
                 OnPropertyChanged(nameof(ChangeLabel));
                 OnPropertyChanged(nameof(Added));
                 OnPropertyChanged(nameof(Deleted));
@@ -50,6 +51,9 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
     } = [];
 
     public bool HasChanges => Changes.Length > 0;
+
+    /// <summary>More than one file changed, so a summary line has something to add to the file rows.</summary>
+    public bool HasSeveralChanges => Changes.Length > 1;
 
     /// <summary>"3 files changed".</summary>
     public string ChangeLabel => Changes.Length == 1 ? "1 file changed" : $"{Changes.Length} files changed";

@@ -45,7 +45,7 @@ public sealed class ExecutionLanguageTests
     [Fact]
     public void Feeding_is_the_heaviest_wire_and_a_wire_that_carries_nothing_is_the_lightest()
     {
-        Assert.Equal(4, WireFlows.Stroke(WireFlow.Feeding));
+        Assert.Equal(2, WireFlows.Stroke(WireFlow.Feeding));
         Assert.All(new[] { WireFlow.Delivered, WireFlow.Outdated, WireFlow.Ready, WireFlow.Context, WireFlow.Stopped, WireFlow.Idle }, flow => Assert.Equal(1.5, WireFlows.Stroke(flow)));
     }
 

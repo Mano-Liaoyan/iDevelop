@@ -38,10 +38,11 @@ public static class NodeStates
         _ => WaitReason.None,
     };
 
-    /// <summary>The card's status, which names why a node needs the person, such as "Input required · Approval".</summary>
+    /// <summary>The node's status, which names why it needs the person, such as "Input required · Approval". An interrupted node needs nothing yet, so it says only that.</summary>
     public static string Label(EngineState state) => state switch
     {
         EngineState.Running => "Running",
+        EngineState.InputRequired { Why: EngineState.Interrupted } => "Interrupted",
         EngineState.InputRequired => $"Input required · {Need(Why(state))}",
         EngineState.Completed => "Completed",
         EngineState.Failed => "Failed",

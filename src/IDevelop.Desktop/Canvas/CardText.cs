@@ -1,3 +1,5 @@
+using IDevelop.Workflows;
+
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>The few words a card has room for. The card's tooltip and the inspector give the full sentences.</summary>
@@ -5,6 +7,15 @@ public static class CardText
 {
     /// <summary>"Proposal · 3 tasks", the subtitle of a planner whose proposal is open.</summary>
     public static string Proposal(int tasks) => tasks == 1 ? "Proposal · 1 task" : $"Proposal · {tasks} tasks";
+
+    /// <summary>The letter that stands for a client where its name has no room.</summary>
+    public static string ClientMark(ClientId client) => client switch
+    {
+        ClientId.ClaudeCode => "C",
+        ClientId.Codex => "X",
+        ClientId.Pi => "P",
+        _ => "A",
+    };
 
     /// <summary>A model's card lines, the fullest first, down to the words that name its version.</summary>
     public static IReadOnlyList<string> ModelLines(string full, string brief)

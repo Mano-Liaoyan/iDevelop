@@ -10,7 +10,7 @@ using static IDevelop.TestSupport.FakeRule;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// Run Workflow and the bar at the bottom center (ADR 0017): the bar counts what runs and waits, Stop All stops every
+/// Run Workflow and the bar at the bottom center (ADR 0017): the bar counts what runs and waits, Stop Workflow stops every
 /// running node, and Merge into my branch shows only while every node is completed and nothing is stale.
 /// </summary>
 [Collection(ProcessCollection.Name)]

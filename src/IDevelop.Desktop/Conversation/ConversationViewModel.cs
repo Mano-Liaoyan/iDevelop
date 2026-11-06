@@ -182,16 +182,13 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     public string? CardHint => null;
 
     /// <summary>Approve's words: on a wait for a reply it ends the node with the agent's message, and never the draft, so it says so.</summary>
-    public string ApproveLabel => Card == AttentionCard.Reply ? "Use this reply as the result" : "Approve";
+    public string ApproveLabel => Card == AttentionCard.Reply ? "Accept the agent's message as the result" : "Approve";
 
     /// <summary>The card's action ends the node on the agent's words, so it stays quiet beside the composer.</summary>
     public bool IsReplyCard => Card == AttentionCard.Reply;
 
-    /// <summary>Approve is neither the card's main action nor a reply's quiet way out.</summary>
-    public bool IsPlainApprove => !IsApprovalCard && !IsReplyCard;
-
     /// <summary>A person who writes a reply has chosen to go on, so a reply's way to end the node gives way to Send.</summary>
-    public bool ShowsCardApprove => Node.ShowsApprove && !(IsReplyCard && HasDraft);
+    public bool ShowsCardApprove => Node.ShowsApprove;
 
     /// <summary>Stop is the composer's one action while a turn runs and nothing is written.</summary>
     public bool ShowsComposerStop => Node.ShowsStop && (!HasDraft || Node.IsAsking);
@@ -571,7 +568,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     private static readonly string[] StateProperties =
     [
-        nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(IsReplyCard), nameof(IsPlainApprove), nameof(ShowsCardApprove),
+        nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(IsReplyCard), nameof(ShowsCardApprove),
         nameof(ShowsComposerStop), nameof(ShowsSend), nameof(ShowsStopAndSend), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
         nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
         nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody),

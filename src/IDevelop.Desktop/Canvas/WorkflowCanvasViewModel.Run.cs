@@ -11,7 +11,7 @@ namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
 /// The workflow's engine and the controls that act on it (ADR 0017): Run Workflow beside Generate, and the bar at the
-/// bottom center that counts what runs and waits, with Stop All, and Merge into my branch while the engine offers it.
+/// bottom center that counts what runs and waits, with Stop Workflow, and Merge into my branch while the engine offers it.
 /// The canvas keeps its engine while the project stays open, so switching to another workflow or project stops nothing.
 /// </summary>
 public sealed partial class WorkflowCanvasViewModel
@@ -52,7 +52,7 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
-    /// <summary>No node runs, so Run Workflow is the bar's primary action. While one runs, Stop All takes its place.</summary>
+    /// <summary>No node runs, so Run Workflow is the bar's primary action. While one runs, Stop Workflow takes its place.</summary>
     public bool RunsNothing => RunningCount == 0;
 
     /// <summary>A graph exists and no node runs, so Run Workflow takes the primary look.</summary>
@@ -115,6 +115,25 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
+    /// <summary>
+    /// The chips of a bar with too little room for each reason to wait: what waits for the person in one chip, with the glyph its
+    /// nodes share or a question's. Interrupted stays its own, because an interrupted node waits for nobody's word.
+    /// </summary>
+    public IReadOnlyList<StateChip> BarGroups
+    {
+        get
+        {
+            var chips = BarChips;
+            var waits = chips.Where(chip => chip.State == NodeState.InputRequired && chip.Why != WaitReason.Interrupted).ToList();
+            var tip = string.Join(", ", waits.Select(chip => chip.Label));
+            var sum = StateChip.Of(NodeState.InputRequired, waits is [var only] ? only.Why : WaitReason.Question, waits.Sum(chip => chip.Count), "waiting", tip);
+            var others = chips.Except(waits).ToList();
+            return new[] { others.FirstOrDefault(chip => chip.State == NodeState.Failed), sum }
+                .Concat(others.Where(chip => chip.State != NodeState.Failed))
+                .OfType<StateChip>().ToList();
+        }
+    }
+
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
     public string NextLabel => Nodes.Any(node => node.IsWaiting) ? "Next waiting" : "Next failed";
 
@@ -124,13 +143,13 @@ public sealed partial class WorkflowCanvasViewModel
     public string? BarActivity => RunningCount == 0 ? null
         : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
 
-    /// <summary>The progress on a short bar: "5/9".</summary>
-    public string BarShort => $"{Counts.Completed}/{Counts.Total}";
+    /// <summary>The progress on a short bar: "5/9 done".</summary>
+    public string BarShort => $"{Counts.Completed}/{Counts.Total} done";
 
-    /// <summary>The whole bar on a narrow canvas, without its chips: "5/9 · 3 waiting · 1 failed".</summary>
+    /// <summary>The whole bar on a narrow canvas, without its chips: "5/9 done · 3 waiting · 1 failed".</summary>
     public string BarBrief => string.Join(" · ", new[]
     {
-        $"{Counts.Completed}/{Counts.Total}",
+        BarShort,
         Counts.Failed > 0 ? $"{Counts.Failed} failed" : null,
         Counts.Waiting > 0 ? $"{Counts.Waiting} waiting" : null,
     }.OfType<string>());
@@ -157,9 +176,22 @@ public sealed partial class WorkflowCanvasViewModel
 
     public string FollowLabel => IsFollowing ? "Stop following running nodes" : "Follow running nodes";
 
+    /// <summary>
+    /// How much of the workflow Run Workflow would run, as "3 of 9 nodes", beside its name. Null when it would run every node,
+    /// which its name already says. A node that needs the person keeps its turn, so it does not count.
+    /// </summary>
+    public string? RunScope
+    {
+        get
+        {
+            var runs = Nodes.Count(node => node.State is NodeState.Idle or NodeState.Stale or NodeState.Failed);
+            return runs == Nodes.Count ? null : $"{runs} of {Nodes.Count}";
+        }
+    }
+
     /// <summary>The tooltip of Run Workflow, which says why an empty workflow cannot run.</summary>
     public string RunWorkflowTip => Nodes.Count > 0
-        ? $"Run Workflow\n{CanvasKeys.Hint(CanvasKeys.RunWorkflow)}: run every node that has no current result, along its dependencies"
+        ? $"Run Workflow\n{CanvasKeys.Hint(CanvasKeys.RunWorkflow)}: run every node that has no current result, along its dependencies. Nodes with a current result keep it"
         : "Run Workflow\nAdd a node first. An empty workflow has nothing to run.";
 
     private static bool NeedsAttention(TaskNodeViewModel node) => node.IsWaiting || node.State == NodeState.Failed;
@@ -234,6 +266,8 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarBrief));
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
+        OnPropertyChanged(nameof(BarGroups));
+        OnPropertyChanged(nameof(RunScope));
         OnPropertyChanged(nameof(HasAttention));
         OnPropertyChanged(nameof(BarTone));
         OnPropertyChanged(nameof(BarActivity));

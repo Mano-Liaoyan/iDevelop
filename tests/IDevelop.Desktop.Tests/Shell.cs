@@ -161,9 +161,9 @@ internal sealed partial class Shell
     public string CardText(string title, string automationId) =>
         InCard<Control>(title, automationId) is TextBlock text ? text.Text ?? "" : TextOf(InCard<Control>(title, automationId));
 
-    /// <summary>The agent a card shows on its two lines, the client and then the model and level, joined as one label.</summary>
+    /// <summary>The agent of a node's card, the client and then the model and level, joined as one label. A card's line may shorten them.</summary>
     public string CardAgent(string title) =>
-        string.Join(" · ", new[] { CardText(title, "CardAgent"), CardText(title, "CardModel") }.Where(line => line.Length > 0));
+        string.Join(" · ", new[] { NodeModel(title).AgentClient, NodeModel(title).AgentModel }.Where(line => line.Length > 0));
 
     public ListBoxItem SidebarRow(string title) =>
         Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);

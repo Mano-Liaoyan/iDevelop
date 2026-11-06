@@ -93,7 +93,7 @@ public sealed class InspectorHeaderTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void An_open_conversation_is_the_current_action_and_a_question_stays_in_it()
+    public void An_open_conversation_leaves_the_header_no_action_and_a_question_stays_in_it()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105, ConversationMode.Chat));
         f.Install(Reply("s-1", "Which fruit?"));
@@ -107,8 +107,7 @@ public sealed class InspectorHeaderTests : IDisposable
         node.OpenConversationCommand.Execute(null);
         shell.Render();
 
-        var action = node.Actions[0];
-        Assert.Equal((false, true), (action.IsPrimary, action.IsCurrent));
+        Assert.Empty(node.Actions);
         Assert.False(node.ShowsStateDetail);
     }
 

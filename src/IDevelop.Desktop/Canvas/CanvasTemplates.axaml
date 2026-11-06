@@ -47,9 +47,10 @@
 
        The canvas's zoom tier decides how much a collapsed card shows, so a title never draws under 10 px on screen (ADR 0045).
        Under the full card there is one zoomed out form: a stripe in the kind's hue, the title as large as the tier lets it fit,
-       and a last line with the kind's tile, the model and level, and the state's badge, so the badge never meets the title.
+       and a last line with the client's letter, the model and level, and the state's badge, so the badge never meets the title.
+       The stripe says the kind, so a node with an agent gives the tile's place to its client's letter.
        The form takes more height than the card's 64 px without moving its neighbours or its wires: cardBody draws past the box
-       that the layout sees. Only the last tier gives up the title, for cardBlock's state fill. -->
+       that the layout sees. Only the last tier gives up the text, for cardBlock's state fill. -->
   <DataTemplate x:Key="TaskCardTemplate" DataType="canvas:TaskNodeViewModel">
     <Panel Classes="taskCard" Classes.expanded="{Binding IsExpanded}"
            canvas:CardBehaviors.ReportsSize="True"
@@ -114,23 +115,19 @@
                   </Button>
                 </Panel>
               </Grid>
-              <!-- One line: the node's status, or while it is idle, the client that will run it, and then its model and level.
-                   What a node waits for takes the whole line, because the person acts on it. -->
-              <Grid Grid.Row="1" Margin="10,0,8,0" ColumnDefinitions="Auto,*,12">
-                <DockPanel MaxWidth="124" IsVisible="{Binding ShowsAgent}">
-                  <TextBlock DockPanel.Dock="Left" Classes="cardIdle" Text="Idle ·" />
-                  <TextBlock Classes="cardAgent" Text="{Binding AgentClient}" TextTrimming="CharacterEllipsis"
-                             IsVisible="{Binding ShowsCardClient}"
-                             AutomationProperties.AutomationId="CardAgent" />
-                </DockPanel>
-                <canvas:FittingText Classes="cardStatus" Choices="{Binding SubtitleChoices}" TextTrimming="CharacterEllipsis"
-                                    IsVisible="{Binding !ShowsAgent}" theme:StyleClass.State="{Binding State}"
-                                    AutomationProperties.AutomationId="CardStatus" />
+              <!-- One line that keeps the agent's place in every state: its client and its model and level at the start, and the
+                   node's state in a word at the end, so a card says it is an agent whatever happens to it. -->
+              <Grid Grid.Row="1" Margin="10,0,8,0" ColumnDefinitions="Auto,*,Auto,12">
+                <TextBlock Classes="cardAgent" Text="{Binding CardClient}" TextTrimming="CharacterEllipsis" MaxWidth="96" ToolTip.Tip="{Binding AgentClient}"
+                           AutomationProperties.AutomationId="CardAgent" />
                 <canvas:FittingText Grid.Column="1" Classes="cardModel" Choices="{Binding ModelLines}" TextTrimming="CharacterEllipsis"
-                           IsVisible="{Binding ShowsCardModel}" ToolTip.Tip="{Binding AgentModel}"
-                           AutomationProperties.AutomationId="CardModel" />
+                                    IsVisible="{Binding HasModel}" ToolTip.Tip="{Binding AgentModel}"
+                                    AutomationProperties.AutomationId="CardModel" />
+                <TextBlock Grid.Column="2" Classes="cardStatus" Text="{Binding CardStatus}" Margin="6,0,6,0"
+                           theme:StyleClass.State="{Binding State}"
+                           AutomationProperties.AutomationId="CardStatus" />
                 <!-- The disclosure: a 24 px target drawn in the 12 px column. -->
-                <ToggleButton Grid.Column="2" Classes="cardChevron" Margin="{x:Static canvas:CardBehaviors.ChevronMargin}"
+                <ToggleButton Grid.Column="3" Classes="cardChevron" Margin="{x:Static canvas:CardBehaviors.ChevronMargin}"
                               IsChecked="{Binding IsExpanded}"
                               ToolTip.Tip="{Binding ExpandName}"
                               AutomationProperties.AutomationId="CardExpand"
@@ -157,7 +154,12 @@
         <Border Classes="keyRing" CornerRadius="13" IsHitTestVisible="False" />
         <!-- The zoomed out card's last line, under its title, which leaves the state's badge its place at the end. -->
         <DockPanel Classes="cardFar farLine" VerticalAlignment="Top" IsHitTestVisible="False">
-          <theme:KindTile Classes="farTile" DockPanel.Dock="Left" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" VerticalAlignment="Center" />
+          <theme:KindTile Classes="farTile" DockPanel.Dock="Left" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" VerticalAlignment="Center"
+                          IsVisible="{Binding !HasClient}" />
+          <Border Classes="farClient" DockPanel.Dock="Left" VerticalAlignment="Center" IsVisible="{Binding HasClient}">
+            <TextBlock Text="{Binding ClientMark}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       AutomationProperties.AutomationId="CardClientMark" />
+          </Border>
           <canvas:FittingText Classes="farAgent" Choices="{Binding CardLines}" TextTrimming="CharacterEllipsis" theme:StyleClass.State="{Binding State}"
                               AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
         </DockPanel>

@@ -7,7 +7,8 @@ namespace IDevelop.Desktop.Canvas;
 /// Lays out the band along the canvas's bottom edge: the zoom controls at the left and the run bar after them. The run bar
 /// centres on the canvas and moves aside only as far as it must to keep <see cref="CanvasChrome.Spacing"/> from the zoom
 /// controls, and it never gets wider than the room left, so it never covers them. A run bar that needs more than that room
-/// takes the tightChips class, whose styles leave its chips their counts and its Next its glyph, so no word is cut.
+/// takes the groupChips class, whose styles sum the reasons to wait, and then the tightChips class, whose styles leave its chips
+/// their counts, so no word is cut.
 /// </summary>
 public sealed class CanvasBottomBar : Panel
 {
@@ -19,15 +20,17 @@ public sealed class CanvasBottomBar : Panel
 
     public static void SetSlot(Control control, ChromeSlot value) => control.SetValue(SlotProperty, value);
 
-    private const string TightChips = "tightChips";
+    // Each step gives the run bar less to show. The first step is no class.
+    private static readonly string[] Steps = ["groupChips", "tightChips"];
 
-    // The width the run bar wanted when it last gave up its words, which it takes them back at.
-    private double _wordsWidth;
+    // The steps the run bar has taken, and the width it wanted before each one, which it takes that step back at.
+    private readonly double[] _wanted = new double[Steps.Length];
+    private int _step;
 
-    /// <summary>The run bar's chips changed, so it may fit with its words again.</summary>
+    /// <summary>The run bar's chips changed, so it may fit with more words again.</summary>
     public void RefitChips()
     {
-        _wordsWidth = 0;
+        Array.Clear(_wanted);
         InvalidateMeasure();
     }
 
@@ -52,18 +55,19 @@ public sealed class CanvasBottomBar : Panel
 
     private void Fit(Control center, double room)
     {
-        var tight = center.Classes.Contains(TightChips);
-        if (tight && room >= _wordsWidth)
+        while (_step > 0 && room >= _wanted[_step - 1])
         {
-            center.Classes.Set(TightChips, false);
-            tight = false;
+            _step--;
+            center.Classes.Set(Steps[_step], false);
         }
 
         center.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        if (!tight && center.DesiredSize.Width > room)
+        while (_step < Steps.Length && center.DesiredSize.Width > room)
         {
-            _wordsWidth = center.DesiredSize.Width;
-            center.Classes.Set(TightChips, true);
+            _wanted[_step] = center.DesiredSize.Width;
+            center.Classes.Set(Steps[_step], true);
+            _step++;
+            center.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         }
 
         center.Measure(new Size(room, double.PositiveInfinity));

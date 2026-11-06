@@ -61,7 +61,7 @@
     <Setter Property="Opacity" Value="0.08" />
   </Style>
   <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="Panel.taskCard.expanded Border.stateTint">
     <Setter Property="CornerRadius" Value="10,10,0,0" />
@@ -138,7 +138,7 @@
   <Style Selector=":is(Control).tier-title Border.cardEdge">
     <Setter Property="Width" Value="12" />
   </Style>
-  <!-- The band keeps the kind's tint behind the title at each zoom. The title takes the whole of the smallest card, whose stripe alone says the kind. -->
+  <!-- The band keeps the kind's tint behind the title at each zoom. -->
   <Style Selector="Border.farBand">
     <Setter Property="Height" Value="58" />
   </Style>
@@ -148,11 +148,11 @@
   <Style Selector=":is(Control).tier-label Border.farBand">
     <Setter Property="Height" Value="78" />
   </Style>
+  <Style Selector=":is(Control).tier-title Border.farBand">
+    <Setter Property="Height" Value="112" />
+  </Style>
   <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.farBand.cardFar, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.farBand.cardFar, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.farBand.cardFar">
     <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Border.farBand.cardFar">
-    <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- The title has the card's whole width, and the last line's height comes on top of the card's 64 px. Each tier sets both in
        canvas units, so the text stays at least 10 px on screen. -->
@@ -175,7 +175,7 @@
     <Setter Property="LineHeight" Value="31" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="20,0,12,0" />
+    <Setter Property="Margin" Value="20,4,12,0" />
     <Setter Property="FontSize" Value="44" />
     <Setter Property="LineHeight" Value="52" />
   </Style>
@@ -204,13 +204,13 @@
     <Setter Property="MinHeight" Value="124" />
     <Setter Property="Margin" Value="0,0,0,-60" />
   </Style>
-  <!-- Under a zoom of 0.36 the second line of the title takes the last line's place, and the badge sits on the card's corner. -->
+  <!-- Under a zoom of 0.36 the card keeps its title's two lines and its last line, in the height a saved layout's rows leave. -->
   <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardBody">
-    <Setter Property="MinHeight" Value="124" />
-    <Setter Property="Margin" Value="0,0,0,-60" />
+    <Setter Property="MinHeight" Value="158" />
+    <Setter Property="Margin" Value="0,0,0,-94" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardHead">
-    <Setter Property="Height" Value="124" />
+    <Setter Property="Height" Value="112" />
   </Style>
   <!-- The largest text keeps a text line's room from the card's edges too. -->
   <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardHead">
@@ -229,7 +229,8 @@
     <Setter Property="Margin" Value="18,80,58,0" />
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
-    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Margin" Value="20,114,58,0" />
   </Style>
   <Style Selector="theme|KindTile.farTile">
     <Setter Property="TileSize" Value="20" />
@@ -240,6 +241,37 @@
   </Style>
   <Style Selector=":is(Control).tier-label theme|KindTile.farTile">
     <Setter Property="TileSize" Value="26" />
+  </Style>
+  <!-- The letter of the client that runs the node, in the tile's place. -->
+  <Style Selector="Border.farClient">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Margin" Value="0,0,6,0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="Border.farClient TextBlock">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector=":is(Control).tier-compact Border.farClient">
+    <Setter Property="Width" Value="22" />
+    <Setter Property="Height" Value="22" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Border.farClient">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
+    <Setter Property="FontSize" Value="22" />
+  </Style>
+  <Style Selector=":is(Control).tier-title Border.farClient">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="36" />
+  </Style>
+  <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
+    <Setter Property="FontSize" Value="30" />
   </Style>
   <Style Selector="TextBlock.farAgent">
     <Setter Property="FontSize" Value="17" />
@@ -254,14 +286,16 @@
   <Style Selector=":is(Control).tier-label TextBlock.farAgent">
     <Setter Property="FontSize" Value="28" />
   </Style>
+  <Style Selector=":is(Control).tier-title TextBlock.farAgent">
+    <Setter Property="FontSize" Value="34" />
+  </Style>
   <Style Selector="TextBlock.farAgent.state-running">
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
   </Style>
   <Style Selector="TextBlock.farAgent.state-failed">
     <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
   </Style>
-  <!-- The badge ends the last line in the tiers with one, and sits on the card's corner where the title takes the card's height
-       and on the Block tier's card, which has no text, so it always belongs to its card. -->
+  <!-- The badge ends the last line, inside the card. Only the Block tier's card, which has no text, wears it on its corner. -->
   <Style Selector="Panel.stateBadge">
     <Setter Property="Width" Value="24" />
     <Setter Property="Height" Value="24" />
@@ -278,9 +312,9 @@
     <Setter Property="Margin" Value="0,81,18,0" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
-    <Setter Property="Width" Value="48" />
-    <Setter Property="Height" Value="48" />
-    <Setter Property="Margin" Value="0,-28,-18,0" />
+    <Setter Property="Width" Value="38" />
+    <Setter Property="Height" Value="38" />
+    <Setter Property="Margin" Value="0,115,16,0" />
   </Style>
   <Style Selector=":is(Control).tier-block Panel.stateBadge">
     <Setter Property="Width" Value="80" />
@@ -485,7 +519,7 @@
     </Setter>
   </Style>
   <!-- A wire's color shows what happens on it, never the kinds of its nodes (ADR 0045). It is quiet while it is idle or done,
-       and only the wire into a running node is loud: thick, bright, glowing, and moving. The neutral brushes keep 3:1 with the
+       and only the wire into a running node is loud: bright and moving, at the weight of a wire. The neutral brushes keep 3:1 with the
        canvas in both themes. The stroke comes from the wire's view model, because the flow, the selection, and the zoom tier
        all set it. -->
   <Style Selector="nodify|StepConnection">
@@ -514,10 +548,8 @@
   <Style Selector="nodify|StepConnection.wire.flow-feeding">
     <Setter Property="Stroke" Value="{DynamicResource StateRunningBrush}" />
     <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
-    <Setter Property="OutlineBrush" Value="{DynamicResource StateRunning45Brush}" />
-    <Setter Property="OutlineThickness" Value="4" />
     <Setter Property="Opacity" Value="1" />
-    <Setter Property="ArrowSize" Value="10,10" />
+    <Setter Property="ArrowSize" Value="8,8" />
     <Setter Property="DirectionalArrowsCount" Value="3" />
     <Setter Property="IsAnimatingDirectionalArrows" Value="True" />
     <Setter Property="DirectionalArrowsAnimationDuration" Value="1.2" />
@@ -609,15 +641,15 @@
   <Style Selector="Button.zoomValue">
     <Setter Property="Width" Value="40" />
   </Style>
-  <!-- One quiet line inside the canvas's edge, so no panel covers it and the selected card's ring stays the strongest mark. -->
+  <!-- The focus ring's 2 px inside the canvas's edge, so no panel covers it. It is the canvas's only frame. -->
   <Style Selector="Border.canvasFocus">
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
-  <!-- A node runs, so a frame inside the canvas's edge says the workflow is live, as a node editor's simulation frame does. -->
-  <Style Selector="Border.runFrame">
-    <Setter Property="BorderThickness" Value="2" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
+  <!-- Run Workflow's reach, quieter than its name. -->
+  <Style Selector="TextBlock.runScope">
+    <Setter Property="FontWeight" Value="Regular" />
+    <Setter Property="Opacity" Value="0.85" />
   </Style>
   <Style Selector="Button.zoomValue TextBlock">
     <Setter Property="FontSize" Value="12" />
@@ -642,7 +674,7 @@
   <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightChips TextBlock.chipShort">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightChips TextBlock.chipLong, :is(Control).tightChips TextBlock.nextLabel">
+  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightChips TextBlock.chipLong">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Border.barRule">
@@ -661,10 +693,17 @@
   <Style Selector=":is(Control).shortBar TextBlock.barLong, :is(Control).narrowBar TextBlock.barShort">
     <Setter Property="IsVisible" Value="False" />
   </Style>
+  <!-- A bar with too little room for each reason to wait sums them. A tight bar then keeps only the counts. -->
+  <Style Selector="ItemsControl.barGroups, :is(Control).groupChips ItemsControl.barChips.barReasons">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).groupChips ItemsControl.barGroups">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
   <Style Selector=":is(Control).narrowBar ItemsControl.barChips">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).shortBar TextBlock.followLabel, :is(Control).narrowBar TextBlock.nextLabel">
+  <Style Selector=":is(Control).shortBar TextBlock.followLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Button.bar, ToggleButton.bar">

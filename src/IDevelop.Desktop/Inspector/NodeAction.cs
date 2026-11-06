@@ -10,10 +10,9 @@ namespace IDevelop.Desktop.Inspector;
 /// <param name="Command">What the button does.</param>
 /// <param name="IsPrimary">The button is the row's filled one.</param>
 /// <param name="Tip">The tooltip, which holds the reason on a button that is off.</param>
-/// <param name="IsCurrent">What the button opens shows now, so the button is no longer the next step.</param>
-public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip, bool IsCurrent = false);
+public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip);
 
-/// <summary>Which actions the pinned header offers a node in each state. Conversation comes first in every state, so it never moves under the pointer.</summary>
+/// <summary>Which actions the pinned header offers a node in each state. Conversation comes first in every state, so it never moves under the pointer, and it goes while the conversation is open.</summary>
 internal static class NodeActions
 {
     /// <summary>While a proposal is open, accepting it is the one primary action, so the row holds none.</summary>
@@ -25,7 +24,7 @@ internal static class NodeActions
         // The open conversation holds what the state needs next, and the row must not offer it twice.
         if (node is { IsConversationShown: true, Proposal: null, State: NodeState.Running or NodeState.InputRequired or NodeState.Failed or NodeState.Stale })
         {
-            return Row(Conversation(node, "Conversation"), node.State is NodeState.Failed or NodeState.Stale ? Retry(node, primary: false) : null);
+            return [];
         }
 
         if (node.ShowsSendBack)
@@ -65,9 +64,8 @@ internal static class NodeActions
     private static NodeAction[] Row(params NodeAction?[] actions) => [.. actions.OfType<NodeAction>()];
 
     // An approval node has no agent to talk to, so it takes no conversation button.
-    private static NodeAction? Conversation(TaskNodeViewModel node, string label, bool primary = true) => node.HasAgent
-        ? new NodeAction("OpenConversation", label, "IconChat", node.OpenConversationCommand, primary && !node.IsConversationShown,
-            node.IsConversationShown ? "The conversation is open" : $"{node.AttentionLabel ?? "Open the full conversation"} (Enter)", node.IsConversationShown)
+    private static NodeAction? Conversation(TaskNodeViewModel node, string label, bool primary = true) => node is { HasAgent: true, IsConversationShown: false }
+        ? new NodeAction("OpenConversation", label, "IconChat", node.OpenConversationCommand, primary, $"{node.AttentionLabel ?? "Open the full conversation"} (Enter)")
         : null;
 
     private static NodeAction Approve(TaskNodeViewModel node, bool primary) =>

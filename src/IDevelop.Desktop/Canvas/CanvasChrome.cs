@@ -12,13 +12,10 @@ internal static class CanvasChrome
     public const double Spacing = 12;
 
     /// <summary>
-    /// Below this canvas width the canvas is compact: Generate and the run bar's buttons show only their glyphs, Run Workflow says Run all,
+    /// Below this canvas width the canvas is compact: Run Workflow and Stop Workflow show only their glyphs and the tooltip names them,
     /// and the breadcrumb shows only the workflow's name.
     /// </summary>
     public const double CompactWidth = 680;
-
-    /// <summary>Below this canvas width Add and Generate show only their glyphs.</summary>
-    public const double TightTopWidth = 800;
 
     /// <summary>
     /// The lowest zoom of a fit, the editor's least. A graph that takes less stops here, and the rest is for panning.
@@ -94,7 +91,6 @@ internal static class CanvasChrome
     public static bool IsNarrowBar(Size canvas) => canvas.Width < NarrowBarWidth;
 
     /// <summary>Whether Add and Generate give up their words, so the workflow's name in the breadcrumb keeps its width.</summary>
-    public static bool IsTightTop(Size canvas) => canvas.Width < TightTopWidth;
 
     public static bool IsCompact(Size canvas) => canvas.Width < CompactWidth;
 

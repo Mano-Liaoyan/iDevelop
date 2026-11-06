@@ -111,7 +111,7 @@
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="inspector:NodeAction">
-                      <Button Classes.primary="{Binding IsPrimary}" Classes.action="{Binding !IsPrimary}" Classes.current="{Binding IsCurrent}" Command="{Binding Command}"
+                      <Button Classes.primary="{Binding IsPrimary}" Classes.action="{Binding !IsPrimary}" Command="{Binding Command}"
                               ToolTip.Tip="{Binding Tip}" ToolTip.ShowOnDisabled="True"
                               AutomationProperties.AutomationId="{Binding Id}"
                               AutomationProperties.Name="{Binding Label}">
@@ -124,10 +124,10 @@
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
               </StackPanel>
-              <theme:KindTile Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" />
+              <theme:KindTile Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" IsVisible="{Binding !IsConversationShown}" />
               <!-- Until the box has focus, a text block over it shows the title in up to two lines, so the header reads as a
                    title rather than a field. The box takes the title's whole length once it has focus. -->
-              <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0" ToolTip.Tip="{Binding Title}">
+              <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0" ToolTip.Tip="{Binding Title}" IsVisible="{Binding !IsConversationShown}">
                 <TextBox Classes="headerTitle" Text="{Binding Title}"
                          AutomationProperties.AutomationId="TaskTitle"
                          AutomationProperties.Name="Title" />
@@ -136,7 +136,10 @@
               </Panel>
               <!-- The status and the kind share a line. The status is a plain word with its glyph, so it never reads as a button.
                    Where they do not fit, the kind goes under the status, without the dot. -->
-              <inspector:SeparatedLine Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center"
+              <!-- The open conversation's header holds the tile and the title, so this line takes their place beside it. -->
+              <inspector:SeparatedLine Grid.Row="{Binding IsConversationShown, Converter={x:Static inspector:InspectorConverters.HeaderStateRow}}"
+                                       Grid.Column="{Binding IsConversationShown, Converter={x:Static inspector:InspectorConverters.HeaderStateColumn}}"
+                                       Grid.ColumnSpan="{Binding IsConversationShown, Converter={x:Static inspector:InspectorConverters.HeaderStateSpan}}" VerticalAlignment="Center"
                                        AutomationProperties.AutomationId="InspectorKind">
                 <Border Classes="pill headerPill" HorizontalAlignment="Left"
                         Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
@@ -430,13 +433,13 @@
                   </inspector:InspectorSection>
 
                   <!-- What the node hands on: its results, newest first, a review's findings, and the nodes that read them. -->
-                  <inspector:InspectorSection Key="Output" Title="Output">
+                  <inspector:InspectorSection Key="Output" Title="Output" IsShown="{Binding ShowsOutputSection}">
                     <StackPanel>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasNoOutput}">
                         <TextBlock Classes="note" Text="No result yet."
                                    AutomationProperties.AutomationId="NoResult" />
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Buttons" Label="Results" IsShown="{Binding HasResults}">
+                      <inspector:InspectorRow Layout="Buttons" Label="Results" IsShown="{Binding ShowsResults}">
                         <ItemsControl ItemsSource="{Binding Results}" AutomationProperties.AutomationId="Results">
                           <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -455,10 +458,8 @@
                                     <TextBlock Grid.Column="1" Classes="location" Text="{Binding Commit}"
                                                IsVisible="{Binding Commit, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                   </Grid>
-                                  <!-- The row always holds the summary. The open conversation holds the result's card, so the summary keeps to one line then. -->
                                   <StackPanel Spacing="2">
                                     <inspector:ClampedText x:Name="ResultText" Classes="detail resultSummary" Text="{Binding PlainSummary}" TextTrimming="CharacterEllipsis"
-                                                           Classes.brief="{Binding $parent[inspector:InspectorSection].((canvas:TaskNodeViewModel)DataContext).IsConversationShown, FallbackValue=False}"
                                                            AutomationProperties.AutomationId="ResultSummary" />
                                     <TextBlock Classes="linkWord" Text="More" IsVisible="{Binding #ResultText.IsClamped}"
                                                AutomationProperties.AutomationId="ResultMore" />
@@ -549,9 +550,9 @@
                                             AutomationProperties.Name="{Binding Node.StatusLabel}" />
                                 </inspector:InspectorGrid>
                               </Button>
-                              <!-- The result this node reads from it, folded to three lines. -->
+                              <!-- The result this node reads from it, folded to two lines. -->
                               <StackPanel Margin="20,0,0,4" IsVisible="{Binding Node.HandsOn, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                <inspector:FoldPanel x:Name="InputFold" Rest="48">
+                                <inspector:FoldPanel x:Name="InputFold" Rest="32">
                                   <TextBlock Classes="inputResult" Text="{Binding Node.HandsOn}"
                                              AutomationProperties.AutomationId="InputResult" />
                                 </inspector:FoldPanel>
@@ -566,7 +567,8 @@
                     </StackPanel>
                   </inspector:InspectorSection>
 
-                  <inspector:InspectorSection Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}">
+                  <!-- The open conversation holds the task, so this section rests folded beside it, and a click opens it to edit. -->
+                  <inspector:InspectorSection Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
                     <ItemsControl ItemsSource="{Binding Fields}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="canvas:FieldViewModel">
@@ -574,7 +576,7 @@
                                                   Layout="{Binding IsMultiline, Converter={x:Static inspector:InspectorConverters.StackedWhen}}"
                                                   RevertCommand="{Binding RevertCommand}" CanRevert="{Binding CanRevert}" RevertId="{Binding RevertId}" RevertTip="Back to the blueprint's default">
                             <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box.
-                                 Until the box has focus, long text reads as text over it, in up to three lines with an ellipsis, and More opens the
+                                 Until the box has focus, long text reads as text over it, in up to two lines with an ellipsis, and More opens the
                                  rest in place. A click on the text edits the source. -->
                             <StackPanel>
                             <Panel Classes="fieldText" Classes.multiline="{Binding IsMultiline}" Classes.open="{Binding IsReadingOpen}">

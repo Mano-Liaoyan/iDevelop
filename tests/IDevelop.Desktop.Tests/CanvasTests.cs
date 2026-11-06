@@ -106,14 +106,14 @@ public sealed class CanvasTests : IDisposable
     public void A_card_shows_its_title_and_one_subtitle_and_its_tooltip_previews_its_instructions()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        Assert.Equal(["Build", "Idle ·", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "No agent", "Idle"], Shell.Texts(shell.Node("Build")));
         Assert.Equal(["Build", "Implement · No agent", "Instructions", "Nothing written yet.", "Instructions is empty."], shell.PeekTexts("Build")!);
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
-        Assert.Equal(["Build", "Idle ·", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "No agent", "Idle"], Shell.Texts(shell.Node("Build")));
         Assert.Equal(["Build", "Implement · No agent", "Instructions", "Compile", "The node has no agent."], shell.PeekTexts("Build")!);
     }
 

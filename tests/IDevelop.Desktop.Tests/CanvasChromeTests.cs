@@ -438,14 +438,12 @@ public sealed class CanvasChromeTests : IDisposable
 
     /// <summary>
     /// The top band's controls sit inside the canvas's inset, at least 8 px apart, those of the first row on one centre
-    /// line, and none of their text is cut short. A tight canvas shows its buttons as 32 px glyphs that name themselves
-    /// in their tooltips.
+    /// line, and none of their text is cut short. Add and Generate are 32 px glyphs that name themselves in their tooltips.
     /// </summary>
     private static void AssertTopRow(Shell shell, string at, params string[] ids)
     {
         var canvas = shell.Bounds(shell.Window.CanvasArea);
         var compact = canvas.Width < CanvasChrome.CompactWidth;
-        var tight = canvas.Width < CanvasChrome.TightTopWidth;
         var boxes = ids.Select(id => (Id: id, Box: shell.Bounds(shell.Find<Control>(id)))).ToArray();
         AssertInsideAndApart(canvas, boxes, at);
         var line = boxes.Single(box => box.Id == "Breadcrumb").Box.Center.Y;
@@ -460,17 +458,13 @@ public sealed class CanvasChromeTests : IDisposable
             var labels = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
             if (id == "RunWorkflow")
             {
-                // The workflow's primary action keeps its verb on a compact canvas.
-                Assert.Equal(compact ? "Run all" : "Run Workflow", Assert.Single(labels));
-            }
-            else if (tight)
-            {
-                Assert.Empty(labels);
-                Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
+                // The workflow's primary action has one name, which a compact canvas leaves to its tooltip.
+                Assert.Equal(!compact, labels.Contains("Run Workflow"));
             }
             else
             {
-                Assert.Single(labels);
+                Assert.Empty(labels);
+                Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
             }
 
             Assert.Equal(AutomationProperties.GetName(button), ((string)ToolTip.GetTip(button)!).Split('\n')[0]);

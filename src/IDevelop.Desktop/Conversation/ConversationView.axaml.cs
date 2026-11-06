@@ -23,7 +23,7 @@ public partial class ConversationView : UserControl
     public static readonly IValueConverter MessageColumnSpan = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 2);
 
     /// <summary>The column of Copy, whose styles place it beside each kind of message.</summary>
-    public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(_ => 0);
+    public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 0 : 1);
 
     /// <summary>The attention card's row of its actions: under its text, or on its header's line.</summary>
     public static readonly IValueConverter ActionsRow = new FuncValueConverter<bool, int>(compact => compact ? 0 : 2);

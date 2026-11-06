@@ -102,7 +102,7 @@ public sealed class CardTests : IDisposable
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
 
-        Assert.Equal(["Design", "Idle ·", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Codex", "GPT-5.5 · high", "Idle"], Shell.Texts(shell.Node("Design")));
         Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
         Assert.Equal(["Design", "Implement · Codex · GPT-5.5 · high", "Instructions", "Draft it."], shell.PeekTexts("Design")!);
     }
@@ -170,12 +170,12 @@ public sealed class CardTests : IDisposable
 
         Assert.Equal(
             [
-                ["Design", "Idle ·", "GPT-5.5 · high"],
-                ["Build", "Idle ·", "Claude Sonnet 5.5 · xhigh"],
-                ["Review", "Idle ·", "Claude Opus 4.6 (Thinking)"],
-                ["Fourth", "Idle ·", "Gemini 3.8 Flash · medium"],
-                // Pi names its model's provider, which goes on the client's line, so the model keeps its level.
-                ["Fifth", "Idle ·", "DeepSeek V4.1 Flash · max"],
+                ["Design", "Codex", "GPT-5.5 · high", "Idle"],
+                ["Build", "Claude Code", "Sonnet 5.5 · xhigh", "Idle"],
+                ["Review", "Antigravity", "Opus 4.6 (Thinking)", "Idle"],
+                ["Fourth", "Antigravity", "Gemini 3.8 Flash", "Idle"],
+                // Pi names its model's provider, which goes on the client's line.
+                ["Fifth", "Pi · deepseek", "DeepSeek V4.1", "Idle"],
             ],
             titles.Select(title => Shell.Texts(shell.Node(title))));
         // Each line sits at the same height on every card, and only the model gives way, whose tooltip holds it whole.
@@ -191,7 +191,7 @@ public sealed class CardTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
 
-        Assert.Equal(["Build", "Idle ·", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "No agent", "Idle"], Shell.Texts(shell.Node("Build")));
         Assert.False(shell.CardGlyph("Build").IsEffectivelyVisible);
         var node = shell.NodeModel("Build");
         Assert.Equal(("Instructions is empty.", false), (node.RunRefusal, node.RunCommand.CanExecute(null)));
@@ -210,7 +210,7 @@ public sealed class CardTests : IDisposable
 
         var ring = shell.CardLayer("Design", "stateStroke");
         // The status takes the client's line, and the model and level stay on the line under it.
-        Assert.Equal(["Design", "Running", "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Antigravity", "Gemini 3.8", "Running"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-running", ring.Classes);
         Assert.Equal(shell.Resource("StateRunningBrush"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         Assert.Same(Application.Current!.FindResource("IconStateRunning"), shell.CardGlyph("Design").Data);
@@ -227,10 +227,10 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
         shell.RunNode("Design");
-        shell.WaitForCard("Design", "Input required · Reply");
+        shell.WaitForCard("Design", "Reply");
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Input required · Reply"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Antigravity", "Gemini 3.8 Flash", "Reply"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-inputrequired", ring.Classes);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
     }
@@ -251,7 +251,7 @@ public sealed class CardTests : IDisposable
         // come a render tick after the status text, so the test waits for the pixel too.
         shell.WaitUntil(() => shell.ColorAt(shell.Node("Design"), new Point(130, 0)) == Color.Parse(ring), $"the ring turns {ring}");
 
-        Assert.Equal(["Design", label, "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Antigravity", label == "Failed" ? "Gemini 3.8 Flash" : "Gemini 3.8", label], Shell.Texts(shell.Node("Design")));
     }
 
     [AvaloniaFact]
@@ -297,7 +297,7 @@ public sealed class CardTests : IDisposable
         shell.WaitForProposal();
 
         var ring = shell.CardLayer("Plan export", "stateStroke");
-        Assert.Equal(["Plan export", "Proposal · 2 tasks"], Shell.Texts(shell.Node("Plan export")));
+        Assert.Equal(["Plan export", "Antigravity", "Gemini 3.8", "Proposal · 2 tasks"], Shell.Texts(shell.Node("Plan export")));
         Assert.Same(Application.Current!.FindResource("IconSparkle"), shell.CardGlyph("Plan export").Data);
         Assert.Contains("role-proposing", ring.Classes);
         Assert.Equal(Color.Parse("#1E6EF4"), ((ISolidColorBrush)ring.BorderBrush!).Color);

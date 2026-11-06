@@ -70,7 +70,6 @@ public partial class MainWindow : Window
         CanvasArea.SizeChanged += (_, e) =>
         {
             TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
-            TopBar.Classes.Set("tightTop", CanvasChrome.IsTightTop(e.NewSize));
         };
         MainArea.SizeChanged += (_, _) => LimitDock();
         DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());

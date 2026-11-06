@@ -137,22 +137,22 @@
               </theme:SpillRow>
             </Border>
 
-            <!-- Run Workflow runs every node that has no current result, so it needs no selected node (ADR 0017). -->
+            <!-- Run Workflow runs every node that has no current result, so it needs no selected node (ADR 0017). Add and Generate
+                 show their glyphs at every width, and their tooltips name them. -->
             <Panel canvas:CanvasTopBar.Slot="Trailing" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
               <ContentControl Content="{Binding Canvas}">
                 <ContentControl.ContentTemplate>
                   <DataTemplate x:DataType="canvas:WorkflowCanvasViewModel">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Button Classes="action glyph" Click="OnAddNode"
+                      <Button Classes="action iconOnly" Click="OnAddNode"
                               ToolTip.Tip="Add a node (N)"
                               AutomationProperties.AutomationId="AddTask"
                               AutomationProperties.Name="Add node">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
-                          <TextBlock Classes="label" Text="Node" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
-                      <Button Classes="action glyph" Click="OnGenerate" IsVisible="{Binding ShowsGenerate}"
+                      <Button Classes="action iconOnly" Click="OnGenerate" IsVisible="{Binding ShowsGenerate}"
                               ToolTip.Tip="{Binding GenerateLabel, StringFormat='{}{0}&#10;Describe what to build, and a planner proposes the tasks'}"
                               AutomationProperties.AutomationId="GenerateWorkflow"
                               AutomationProperties.Name="{Binding GenerateLabel}">
@@ -171,30 +171,34 @@
                                        Fill="{DynamicResource AccentBrush}" />
                             </Panel>
                           </Panel>
-                          <TextBlock Classes="label" Text="{Binding GenerateLabel}" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                       <!-- While a node runs, the way out takes the place of the button that started the run. -->
                       <Button Classes="destructive" Command="{Binding StopAllCommand}" IsVisible="{Binding !RunsNothing}"
-                              ToolTip.Tip="Stop All&#10;Stop every running node. Finished results stay."
+                              ToolTip.Placement="BottomEdgeAlignedRight"
+                              ToolTip.Tip="Stop Workflow&#10;Stop every running node. Finished results stay."
                               AutomationProperties.AutomationId="StopAll"
-                              AutomationProperties.Name="Stop All">
+                              AutomationProperties.Name="Stop Workflow">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                          <TextBlock Classes="wideOnly" Text="Stop All" VerticalAlignment="Center" />
+                          <TextBlock Classes="wideOnly" Text="Stop Workflow" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                       <!-- The workflow's one primary action. An empty workflow's primary action is on the canvas's Generate card. -->
                       <Button Classes.primary="{Binding CanStartRun}" Classes.action="{Binding !CanStartRun}" Command="{Binding RunWorkflowCommand}"
                               IsVisible="{Binding RunsNothing}"
                               ToolTip.ShowOnDisabled="True"
+                              ToolTip.Placement="BottomEdgeAlignedRight"
                               ToolTip.Tip="{Binding RunWorkflowTip}"
                               AutomationProperties.AutomationId="RunWorkflow"
                               AutomationProperties.Name="Run Workflow">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
                           <TextBlock Classes="wideOnly" Text="Run Workflow" VerticalAlignment="Center" />
-                          <TextBlock Classes="compactOnly" Text="Run all" VerticalAlignment="Center" />
+                          <!-- What the run takes when some nodes keep their current results. It stays when the name hides. -->
+                          <TextBlock Classes="runScope" Text="{Binding RunScope}" VerticalAlignment="Center"
+                                     IsVisible="{Binding RunScope, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                     AutomationProperties.AutomationId="RunScope" />
                         </StackPanel>
                       </Button>
                     </StackPanel>

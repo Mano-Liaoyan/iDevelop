@@ -95,8 +95,20 @@ public sealed class EllipsisText : TextBlock
         }
 
         var kept = whole[KeepFrom..];
-        var head = Longest(KeepFrom, length => Joined(whole, length, kept), width);
+        var head = WholeWords(whole, Longest(KeepFrom, length => Joined(whole, length, kept), width));
         return head > 0 ? Joined(whole, head, kept) : Cut(whole, end);
+    }
+
+    // A start that keeps its words reads as the same start on every similar title. A first word that is cut stays as it is.
+    private static int WholeWords(string whole, int length)
+    {
+        if (length >= whole.Length || whole[length] == ' ' || length > 0 && whole[length - 1] == ' ')
+        {
+            return length;
+        }
+
+        var space = whole.LastIndexOf(' ', length - 1);
+        return space > 0 ? space : length;
     }
 
     private static string Joined(string whole, int length, string kept) => whole[..length].TrimEnd() + Ellipsis + " " + kept;

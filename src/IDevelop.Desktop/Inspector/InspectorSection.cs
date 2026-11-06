@@ -25,11 +25,15 @@ public sealed class InspectorSection : InspectorPart
     /// <summary>How many of the section's values differ from the blueprint's defaults.</summary>
     public static readonly StyledProperty<int> ChangesProperty = AvaloniaProperty.Register<InspectorSection, int>(nameof(Changes));
 
+    /// <summary>The section rests folded for now, whatever the person chose for its key, until the person opens it here.</summary>
+    public static readonly StyledProperty<bool> RestsFoldedProperty = AvaloniaProperty.Register<InspectorSection, bool>(nameof(RestsFolded));
+
     public static readonly DirectProperty<InspectorSection, string> BadgeProperty =
         AvaloniaProperty.RegisterDirect<InspectorSection, string>(nameof(Badge), section => section.Badge);
 
     private readonly HashSet<InspectorRow> _rows = [];
     private Button? _header;
+    private bool _openedAtRest;
 
     public string Key
     {
@@ -49,6 +53,12 @@ public sealed class InspectorSection : InspectorPart
         set => SetValue(TitleIdProperty, value);
     }
 
+    public bool RestsFolded
+    {
+        get => GetValue(RestsFoldedProperty);
+        set => SetValue(RestsFoldedProperty, value);
+    }
+
     public int Changes
     {
         get => GetValue(ChangesProperty);
@@ -62,7 +72,7 @@ public sealed class InspectorSection : InspectorPart
         private set => SetAndRaise(BadgeProperty, ref field, value);
     } = "";
 
-    public bool IsFolded => !IsFiltering && State?.IsFolded(Key) == true;
+    public bool IsFolded => !IsFiltering && (RestsFolded ? !_openedAtRest : State?.IsFolded(Key) == true);
 
     /// <summary>While the filter has text, whether it matches the title, which shows every row of the section.</summary>
     internal bool TitleMatches => !IsFiltering || InspectorFilter.Matches(State!.Query, Title);
@@ -121,22 +131,40 @@ public sealed class InspectorSection : InspectorPart
         {
             Refresh();
         }
+        else if (change.Property == RestsFoldedProperty)
+        {
+            _openedAtRest = false;
+            Refresh();
+        }
     }
 
     private void OnHeaderKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key is Avalonia.Input.Key.Left or Avalonia.Input.Key.Right && e.KeyModifiers == KeyModifiers.None && State is { IsFiltering: false } state)
+        if (e.Key is Avalonia.Input.Key.Left or Avalonia.Input.Key.Right && e.KeyModifiers == KeyModifiers.None && State is { IsFiltering: false })
         {
-            state.Fold([Key], e.Key == Avalonia.Input.Key.Left);
+            Fold(e.Key == Avalonia.Input.Key.Left);
             e.Handled = true;
         }
     }
 
     private void OnHeaderClick(object? sender, RoutedEventArgs e)
     {
-        if (State is { IsFiltering: false } state)
+        if (State is { IsFiltering: false })
         {
-            state.Fold([Key], !state.IsFolded(Key));
+            Fold(!IsFolded);
+        }
+    }
+
+    private void Fold(bool folded)
+    {
+        if (RestsFolded)
+        {
+            _openedAtRest = !folded;
+            Refresh();
+        }
+        else
+        {
+            State?.Fold([Key], folded);
         }
     }
 }

@@ -35,7 +35,7 @@ public sealed class RunBarTests
         Assert.Equal("0 of 1 complete", shell.Text("RunStatus"));
         Assert.Equal("1 failed", shell.Window.ViewModel.Canvas!.BarSummary);
         Assert.Equal("1 failed", Assert.Single(shell.Window.ViewModel.Canvas!.BarChips).Label);
-        Assert.Equal("0/1", shell.Window.ViewModel.Canvas!.BarShort);
+        Assert.Equal("0/1 done", shell.Window.ViewModel.Canvas!.BarShort);
         Assert.True(shell.Find<Button>("NextWaiting").IsEffectivelyVisible);
     }
 
@@ -151,7 +151,7 @@ public sealed class RunBarTests
 
         Assert.Equal("2 nodes", canvas.BarIdle);
         Assert.Equal("Next failed", canvas.NextLabel);
-        Assert.Equal("0/2", canvas.BarBrief);
+        Assert.Equal("0/2 done", canvas.BarBrief);
     }
 
 }

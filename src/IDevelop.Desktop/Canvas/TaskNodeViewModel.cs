@@ -18,12 +18,12 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     // each list in this order.
     private static readonly Dictionary<string, string[]> Dependents = new()
     {
-        [nameof(State)] = [nameof(ShowsCardModel), nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLines), nameof(ShowsNextRunNote)],
-        [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLines), nameof(IsUnderReview)],
-        [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLines)],
-        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLines), nameof(ShowsAcceptAndFinish), nameof(Actions)],
+        [nameof(State)] = [nameof(CardStatus), nameof(ShowsNextRunNote)],
+        [nameof(Role)] = [nameof(CardStatus), nameof(IsUnderReview)],
+        [nameof(StatusLabel)] = [nameof(CardStatus)],
+        [nameof(Proposal)] = [nameof(CardStatus), nameof(ShowsAcceptAndFinish), nameof(Actions)],
         [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
-        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentBrief), nameof(ModelLines), nameof(ShowsCardClient), nameof(CardLines), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
+        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(CardClient), nameof(AgentModel), nameof(AgentBrief), nameof(ModelLines), nameof(HasModel), nameof(CardLines), nameof(ClientMark), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
         [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
         [nameof(Preview)] = [nameof(TaskChanges), nameof(SystemPrompt), nameof(HasSystemPrompt)],
         [nameof(Title)] = [nameof(SystemPrompt)],

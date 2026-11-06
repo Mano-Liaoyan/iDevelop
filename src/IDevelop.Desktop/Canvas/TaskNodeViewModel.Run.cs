@@ -19,7 +19,7 @@ public sealed partial class TaskNodeViewModel
     [
         nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StateDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
-        nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
+        nameof(CanStopAndSend), nameof(HasResults), nameof(ShowsResults), nameof(ShowsOutputSection), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
         nameof(Actions), nameof(RetryIsInMenu), nameof(ConversationIsInMenu),
     ];
