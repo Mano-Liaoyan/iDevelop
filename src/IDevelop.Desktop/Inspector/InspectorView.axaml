@@ -108,7 +108,7 @@
                             AutomationProperties.AutomationId="{Binding Id}"
                             AutomationProperties.Name="{Binding Label}">
                       <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{Binding IconKey, Converter={x:Static inspector:InspectorConverters.Icon}}" Width="14" Height="14" />
+                        <PathIcon Theme="{StaticResource Glyph}" Data="{Binding Glyph, Converter={x:Static inspector:InspectorConverters.Icon}}" Width="14" Height="14" />
                         <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
                       </StackPanel>
                     </Button>
@@ -164,8 +164,8 @@
                 Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
                 Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
                 Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding StatusLabel}">
-                  <PathIcon Theme="{StaticResource Glyph}" IsVisible="{Binding !IsIdle}" />
+                <Grid ColumnDefinitions="Auto,*" ToolTip.Tip="{Binding StatusLabel}">
+                  <PathIcon Theme="{StaticResource Glyph}" Margin="0,0,6,0" IsVisible="{Binding !IsIdle}" />
                   <TextBlock Grid.Column="1" Text="{Binding StatusLabel}"
                              AutomationProperties.AutomationId="RunTaskStatus" />
                 </Grid>

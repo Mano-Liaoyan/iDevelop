@@ -6,11 +6,11 @@ namespace IDevelop.Desktop.Inspector;
 /// <summary>One button of the pinned header's action row. The first in a row is the node's next step, and only it can be primary.</summary>
 /// <param name="Id">The button's automation id.</param>
 /// <param name="Label">What the button says, which also names it for UI Automation.</param>
-/// <param name="IconKey">The resource key of the button's glyph.</param>
+/// <param name="Glyph">The resource key of the button's glyph.</param>
 /// <param name="Command">What the button does.</param>
 /// <param name="IsPrimary">The button is the row's filled one.</param>
 /// <param name="Tip">The tooltip, which holds the reason on a button that is off.</param>
-public sealed record NodeAction(string Id, string Label, string IconKey, ICommand Command, bool IsPrimary, string? Tip);
+public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip);
 
 /// <summary>Which actions the pinned header offers a node in each state, in order: the likeliest next step first.</summary>
 internal static class NodeActions

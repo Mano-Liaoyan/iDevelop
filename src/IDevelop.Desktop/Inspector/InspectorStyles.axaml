@@ -554,10 +554,16 @@
     <Setter Property="MinHeight" Value="88" />
     <Setter Property="MaxHeight" Value="88" />
     <Setter Property="LineHeight" Value="18" />
-    <Setter Property="Padding" Value="8,6,14,6" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
   </Style>
+  <!-- The bar shows only while the person edits, and the text keeps clear of it. -->
   <Style Selector="inspector|InspectorRow TextBox.multiline:focus">
     <Setter Property="MaxHeight" Value="232" />
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+  </Style>
+  <Style Selector="inspector|InspectorRow TextBox.multiline /template/ TextPresenter#PART_TextPresenter">
+    <Setter Property="Margin" Value="0,0,10,0" />
   </Style>
   <!-- A button that an action row widens keeps its label in the middle. -->
   <Style Selector="inspector|ActionRow > Button">
