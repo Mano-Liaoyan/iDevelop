@@ -130,7 +130,6 @@
     <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
-  <!-- A glyph that can stop spinning brings its own RotateTransform, or the animation's last angle stays on it. -->
   <Style Selector="Border.pill.running PathIcon, PathIcon.spin">
     <Style.Animations>
       <Animation Duration="0:0:1" IterationCount="Infinite">

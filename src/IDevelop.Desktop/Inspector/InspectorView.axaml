@@ -510,9 +510,7 @@
                                 <PathIcon Grid.Column="4" Classes="stateIcon" Classes.spin="{Binding Node.IsRunningNow}" Theme="{StaticResource Glyph}" Width="14" Height="14"
                                           HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0"
                                           theme:StyleClass.State="{Binding Node.State}"
-                                          AutomationProperties.Name="{Binding Node.StatusLabel}">
-                                  <PathIcon.RenderTransform><RotateTransform /></PathIcon.RenderTransform>
-                                </PathIcon>
+                                          AutomationProperties.Name="{Binding Node.StatusLabel}" />
                               </inspector:InspectorGrid>
                             </Button>
                           </inspector:InspectorRow>
@@ -548,9 +546,7 @@
                                   <PathIcon Grid.Column="4" Classes="stateIcon" Classes.spin="{Binding Node.IsRunningNow}" Theme="{StaticResource Glyph}" Width="14" Height="14"
                                             HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0"
                                             theme:StyleClass.State="{Binding Node.State}"
-                                            AutomationProperties.Name="{Binding Node.StatusLabel}">
-                                    <PathIcon.RenderTransform><RotateTransform /></PathIcon.RenderTransform>
-                                  </PathIcon>
+                                            AutomationProperties.Name="{Binding Node.StatusLabel}" />
                                 </inspector:InspectorGrid>
                               </Button>
                               <!-- The result this node reads from it, folded to three lines. -->
@@ -791,9 +787,7 @@
                                     AutomationProperties.AutomationId="StateRow"
                                     AutomationProperties.Name="{Binding Label}">
                               <inspector:InspectorGrid>
-                                <PathIcon Classes="stateIcon" Classes.spin="{Binding IsRunning}" Theme="{StaticResource Glyph}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}">
-                                  <PathIcon.RenderTransform><RotateTransform /></PathIcon.RenderTransform>
-                                </PathIcon>
+                                <PathIcon Classes="stateIcon" Classes.spin="{Binding IsRunning}" Theme="{StaticResource Glyph}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
                                 <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="linkTitle" Text="{Binding Label}" />
                                 <inspector:InkAlignedText Grid.Column="4" Classes="count" Text="{Binding Count}" AutomationProperties.AutomationId="StateCount" />
                               </inspector:InspectorGrid>

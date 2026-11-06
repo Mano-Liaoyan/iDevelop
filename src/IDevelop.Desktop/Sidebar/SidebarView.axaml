@@ -104,9 +104,7 @@
                         AutomationProperties.HelpText="{Binding Detail}">
                   <Grid ColumnDefinitions="16,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
                     <PathIcon Classes="stateIcon" Classes.spin="{Binding Node.IsRunningNow}" Theme="{StaticResource Glyph}" Margin="0,1,0,0" VerticalAlignment="Top"
-                              theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Why="{Binding Node.WaitReason}">
-                      <PathIcon.RenderTransform><RotateTransform /></PathIcon.RenderTransform>
-                    </PathIcon>
+                              theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Why="{Binding Node.WaitReason}" />
                     <TextBlock Grid.Column="1" Classes="rowName strong" Text="{Binding Node.Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" />
                     <!-- One line: the reason in its state's color, a dot, and the workflow in the rest, cut at its end. The tooltip holds the project too. -->
                     <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="4"
@@ -347,9 +345,7 @@
                                                 theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding WaitReason}"
                                                 ToolTip.Tip="{Binding StatusLabel}"
                                                 AutomationProperties.AutomationId="NodeRowState"
-                                                AutomationProperties.Name="{Binding StatusLabel}">
-                                        <PathIcon.RenderTransform><RotateTransform /></PathIcon.RenderTransform>
-                                      </PathIcon>
+                                                AutomationProperties.Name="{Binding StatusLabel}" />
                                     </Grid>
                                   </DataTemplate>
                                 </ListBox.ItemTemplate>

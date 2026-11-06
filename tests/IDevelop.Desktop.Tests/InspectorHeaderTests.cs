@@ -46,6 +46,24 @@ public sealed class InspectorHeaderTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_node_that_stops_running_says_so_to_its_spinning_glyph()
+    {
+        using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105));
+        f.Install(Reply("s-1", "Hello."));
+        var shell = f.Open();
+        var node = shell.Window.ViewModel.Canvas!.Nodes.Single();
+        var raised = 0;
+        node.PropertyChanged += (_, e) => raised += e.PropertyName == nameof(node.IsRunningNow) ? 1 : 0;
+
+        shell.RunNode("Say hi");
+        shell.WaitForState("Say hi", NodeState.Completed);
+        shell.Render();
+
+        Assert.False(node.IsRunningNow);
+        Assert.True(raised > 0, "The glyph is never told that the node stopped.");
+    }
+
+    [AvaloniaFact]
     public void A_completed_node_leads_with_its_conversation_and_offers_Run_from_here()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105));
