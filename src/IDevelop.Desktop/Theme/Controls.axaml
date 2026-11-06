@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:theme="using:IDevelop.Desktop.Theme">
 
   <!-- The app's one design language. Type: 11/16 for key hints, 12/16 for second lines and captions, 13/18 for rows, fields,
        buttons, and menus, 14/22 for conversation text, 14/20 semibold for titles. Spacing sits on a 4 px grid, with 2 px only
@@ -530,12 +531,7 @@
   </Style>
   <!-- The rows fade at the bottom edge while more follow, so the edge never cuts a row in half. -->
   <Style Selector="ScrollViewer.fadesEnd.more /template/ ScrollContentPresenter#PART_ContentPresenter">
-    <Setter Property="OpacityMask">
-      <LinearGradientBrush StartPoint="0%,90%" EndPoint="0%,100%">
-        <GradientStop Offset="0" Color="Black" />
-        <GradientStop Offset="1" Color="Transparent" />
-      </LinearGradientBrush>
-    </Setter>
+    <Setter Property="OpacityMask" Value="{x:Static theme:EdgeFade.EndFade}" />
   </Style>
   <!-- A section heading that folds its list. -->
   <Style Selector="ToggleButton.sectionFold">

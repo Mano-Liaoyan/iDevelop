@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:conversation="using:IDevelop.Desktop.Conversation">
+        xmlns:conversation="using:IDevelop.Desktop.Conversation"
+        xmlns:theme="using:IDevelop.Desktop.Theme">
 
   <!-- Markdown blocks. Text stays neutral; only links take the accent's text color. -->
   <!-- No fixed line height, because a line that holds a link control would clip its own text. -->
@@ -263,12 +264,7 @@
   </Style>
   <!-- A line that scrolls up fades out before the strip's edge, so no line ends cut in half under it. -->
   <Style Selector="ScrollViewer.transcript.scrolled /template/ ScrollContentPresenter#PART_ContentPresenter">
-    <Setter Property="OpacityMask">
-      <LinearGradientBrush StartPoint="0,0" EndPoint="0,36">
-        <GradientStop Offset="0.2" Color="Transparent" />
-        <GradientStop Offset="1" Color="Black" />
-      </LinearGradientBrush>
-    </Setter>
+    <Setter Property="OpacityMask" Value="{x:Static theme:EdgeFade.TopFade}" />
   </Style>
   <Style Selector="Border.message.subagent">
     <Setter Property="Margin" Value="0,0,0,0" />
