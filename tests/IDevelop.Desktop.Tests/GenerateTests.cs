@@ -558,8 +558,8 @@ public sealed class GenerateTests : IDisposable
         var shell = GeneratedChoosing();
 
         Install(_fakes, ClientId.Pi);
-        shell.Click(shell.Find<Button>("RefreshAgents"));
-        shell.WaitUntil(() => shell.Find<Button>("RefreshAgents").IsEffectivelyEnabled, "the check ends");
+        shell.RefreshAgents();
+        shell.WaitUntil(() => shell.AgentsChecked, "the check ends");
         shell.Render();
 
         Assert.Equal("Pi · deepseek · DeepSeek V4.1 Flash · low Export tests", Ghosts(shell)[2]);

@@ -94,8 +94,8 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("beta", "Build"), shell.Breadcrumb());
         Assert.Equal("beta - iDevelop", shell.Window.Title);
         Assert.Equal(
-            ["2", "1", "2", "1"],
-            new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }.Select(row => shell.WorkflowText(row.Item1, row.Item2, "TaskCount")));
+            ["2 nodes", "1 node", "2 nodes", "1 node"],
+            new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }.Select(row => shell.WorkflowText(row.Item1, row.Item2, "WorkflowSummary")));
         Assert.DoesNotContain(new[] { "alpha", "beta" }.SelectMany(project => new[] { "Build", "Release" }.Select(workflow => (project, workflow))),
             row => shell.WorkflowTasks(row.project, row.workflow).IsEffectivelyVisible);
 
@@ -136,10 +136,10 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("beta", "Build"));
 
         Assert.True(shell.TaskRow("alpha", "Build", "Implement").IsSelected);
-        Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), selected);
-        Assert.Equal(shell.Resource("SurfaceMuted60Brush"), RowFill());
+        Assert.Equal(shell.Resource("SurfaceMutedBrush"), selected);
+        Assert.Equal(Colors.Transparent.A, RowFill()?.A ?? 0);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
-        Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), RowFill());
+        Assert.Equal(shell.Resource("SurfaceMutedBrush"), RowFill());
     }
 
     [AvaloniaFact]
@@ -161,7 +161,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal("alpha* - iDevelop: Design, Implement, New task", Shown(shell));
         Assert.Equal([true, true, false, false], new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }
-            .Select(row => shell.WorkflowShows(row.Item1, row.Item2, "WorkflowUnsaved")));
+            .Select(row => shell.WorkflowText(row.Item1, row.Item2, "WorkflowSummary").Contains("Unsaved")));
         shell.Click(shell.Find<Button>("Undo"));
         Assert.Equal("alpha - iDevelop: Design, Implement", Shown(shell));
         shell.Click(shell.Find<Button>("Redo"));
@@ -169,7 +169,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal(["Design", "Implement", "New task"], SavedTitles(alpha, "Build"));
         Assert.Equal(release, File.ReadAllBytes(WorkflowFile(alpha, "Release")));
-        Assert.Equal([false, true], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowShows("alpha", workflow, "WorkflowUnsaved")));
+        Assert.Equal([false, true], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowText("alpha", workflow, "WorkflowSummary").Contains("Unsaved")));
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         Assert.Equal("alpha* - iDevelop: New task, Ship", Shown(shell));
         shell.Click(shell.Find<Button>("Undo"));
@@ -184,11 +184,11 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Click(shell.InView<TextBox>("Composer"));
         shell.Type("Draft for later");
-        shell.Pan(shell.Editor.TranslatePoint(new Point(700, 400), shell.Window)!.Value, new Vector(-600, -300));
+        shell.Pan(shell.Editor.TranslatePoint(new Point(680, 400), shell.Window)!.Value, new Vector(-600, -300));
         Assert.Equal(new Point(600, 300), shell.Editor.ViewportLocation);
         shell.Click(shell.Find<Button>("ZoomIn"));
         var build = (Math.Round(shell.Editor.ViewportZoom, 4), Shell.Rounded(shell.Editor.ViewportLocation));
-        Assert.Equal((1.2599, new Point(674.06, 382.52)), build);
+        Assert.Equal((1.2599, new Point(672.41, 382.52)), build);
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
@@ -247,8 +247,8 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
         Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal([true, false], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowShows("alpha", workflow, "WorkflowRunning")));
-        Assert.Equal([true, false], new[] { "alpha", "beta" }.Select(project => Shell.ById<Control>(shell.ProjectItem(project), "ProjectRunning").Single().IsEffectivelyVisible));
+        Assert.Equal([true, false], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowText("alpha", workflow, "WorkflowSummary").Contains("running")));
+        Assert.Equal([true, false], shell.Window.ViewModel.Projects.Select(project => project.IsRunning));
         shell.Click(shell.WorkflowRow("beta", "Build"));
         Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
 
@@ -468,7 +468,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(
             "iDevelop converted this workflow from format 2. Its 3 tasks became Implement nodes, and its review connection became a dependency. Save to keep it in format 3.",
             shell.Status);
-        Assert.Equal(["1", "3"], new[] { "seed", "legacy" }.Select(project => shell.WorkflowText(project, "Workflow", "TaskCount")));
+        Assert.Equal(["1 node", "3 nodes · Unsaved"], new[] { "seed", "legacy" }.Select(project => shell.WorkflowText(project, "Workflow", "WorkflowSummary")));
         Assert.Equal("legacy* - iDevelop", shell.Window.Title);
     }
 
@@ -752,7 +752,7 @@ public sealed class WorkspaceTests : IDisposable
     private Shell Crowded()
     {
         var alpha = Project("alpha");
-        foreach (var name in new[] { "Docs", "Tests", "Deploy" })
+        foreach (var name in new[] { "Docs", "Tests", "Deploy", "Lint", "Package", "Publish" })
         {
             Save(alpha, name, TaskAt(TaskId.New(), "One", 105, 90), TaskAt(TaskId.New(), "Two", 405, 90), TaskAt(TaskId.New(), "Three", 705, 90));
         }

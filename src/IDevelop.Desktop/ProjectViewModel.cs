@@ -44,11 +44,41 @@ public sealed class ProjectViewModel : ObservableObject
     /// <summary>One canvas per workflow, kept until the project closes, in the order the project lists them.</summary>
     public ObservableCollection<WorkflowCanvasViewModel> Workflows { get; } = [];
 
+    /// <summary>Whether the left area lists the project's workflows. The window remembers it.</summary>
+    public bool IsExpanded
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ExpandLabel));
+            }
+        }
+    } = true;
+
+    /// <summary>What the row's toggle does now, for a screen reader.</summary>
+    public string ExpandLabel => $"{(IsExpanded ? "Fold" : "Unfold")} {Name}";
+
     /// <summary>A node of the project runs.</summary>
     public bool IsRunning => Workflows.Any(canvas => canvas.IsRunning);
 
-    /// <summary>A task of the project waits for the person: a reply, a question, or an approval.</summary>
-    public bool IsWaiting => Workflows.Any(canvas => canvas.HasWaiting);
+    /// <summary>A node of the project waits for the person: a reply, a question, or an approval.</summary>
+    public bool IsWaiting => WaitingCount > 0;
+
+    /// <summary>How many of the project's nodes wait for the person.</summary>
+    public int WaitingCount => Workflows.Sum(canvas => canvas.WaitingCount);
+
+    /// <summary>How many of the project's nodes failed.</summary>
+    public int FailedCount => Workflows.Sum(canvas => canvas.Counts.Failed);
+
+    public bool HasFailed => FailedCount > 0;
+
+    public string WaitingLabel => WaitingCount == 1 ? "1 node waits for you" : $"{WaitingCount} nodes wait for you";
+
+    public string FailedLabel => FailedCount == 1 ? "1 node failed" : $"{FailedCount} nodes failed";
+
+    public bool HasNoWorkflows => Workflows.Count == 0;
 
     /// <summary>The nodes that run now in every workflow of the project.</summary>
     internal IEnumerable<TaskNodeViewModel> RunningNodes => Workflows.SelectMany(canvas => canvas.Nodes).Where(node => node.State == NodeState.Running);
@@ -82,12 +112,18 @@ public sealed class ProjectViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(IsRunning));
             }
-            else if (e.PropertyName == nameof(WorkflowCanvasViewModel.HasWaiting))
+            else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Summary))
             {
                 OnPropertyChanged(nameof(IsWaiting));
+                OnPropertyChanged(nameof(WaitingCount));
+                OnPropertyChanged(nameof(FailedCount));
+                OnPropertyChanged(nameof(HasFailed));
+                OnPropertyChanged(nameof(WaitingLabel));
+                OnPropertyChanged(nameof(FailedLabel));
             }
         };
         Workflows.Add(canvas);
+        OnPropertyChanged(nameof(HasNoWorkflows));
         return canvas;
     }
 

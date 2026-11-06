@@ -18,13 +18,16 @@ internal readonly record struct WorkflowCards(WorkflowRef Workflow, ImmutableArr
 /// <summary>
 /// The projects a window had open, which it opens again at the next start, in the per-user session file beside the theme
 /// preference: <c>{"projects":[folder...],"selected":{"folder":...,"workflow":...},"expanded":[{"folder":...,"workflow":...}],
-/// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}]}</c>. Expanded cards live here, on this machine, and never in
+/// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}],"folded":[folder...]}</c>. Expanded cards live here, on this machine, and never in
 /// the workflow's file (ADR 0024).
 /// </summary>
 internal sealed record WorkspaceSession(ImmutableArray<string> Projects, WorkflowRef? Selected, ImmutableArray<WorkflowRef> Expanded)
 {
     /// <summary>Each open workflow's expanded cards, for the workflows that have any.</summary>
     public ImmutableArray<WorkflowCards> Cards { get; init; } = [];
+
+    /// <summary>The folders of the projects whose rows the left area folds.</summary>
+    public ImmutableArray<string> Folded { get; init; } = [];
 
     public static readonly WorkspaceSession Empty = new([], null, []);
 
@@ -53,6 +56,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
             [.. Items(session["expanded"]).Select(Ref).OfType<WorkflowRef>()])
         {
             Cards = [.. Items(session["cards"]).Select(CardsOf).OfType<WorkflowCards>()],
+            Folded = [.. Items(session["folded"]).Select(Text).OfType<string>()],
         };
     }
 
@@ -69,6 +73,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
                 node["tasks"] = new JsonArray([.. cards.Tasks.Select(task => JsonValue.Create(task.Value.ToString()))]);
                 return (JsonNode)node;
             })]),
+            ["folded"] = new JsonArray([.. Folded.Select(folder => JsonValue.Create(folder))]),
         };
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
         AtomicFile.Replace(file, JsonSerializer.SerializeToUtf8Bytes(session));

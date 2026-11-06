@@ -9,9 +9,12 @@ internal static class PanelWidths
 {
     /// <summary>
     /// The canvas's least width: enough for the breadcrumb with the workflow's name, Run Workflow and Generate as glyphs, the
-    /// zoom controls, and a run bar. At the 900 px minimum window it keeps both panels at their default widths.
+    /// zoom controls, and a run bar.
     /// </summary>
     public const double CanvasMinWidth = 336;
+
+    /// <summary>Below this window width both panels take their minimum widths, 240 and 280, so the canvas keeps the room.</summary>
+    public const double NarrowWindow = 1000;
 
     /// <summary>The largest width each panel may show now, as limits for its column, which the splitters also keep to.</summary>
     /// <param name="room">The window's width less the splitters and <see cref="CanvasMinWidth"/>.</param>

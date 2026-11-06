@@ -185,6 +185,15 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             : canvas.Nodes.Select(node => node.DisplayRect).Concat(canvas.Ghosts.OfType<GhostCardViewModel>().Select(ghost => new Rect(ghost.Location, size)));
     }
 
+    // Centers the nodes in the view at the zoom it has.
+    private void Frame(IReadOnlyCollection<TaskNodeViewModel> nodes)
+    {
+        if (nodes.Count > 0)
+        {
+            Editor.BringIntoView(nodes.Select(node => node.DisplayRect).Aggregate((union, rect) => union.Union(rect)).Center, animated: false);
+        }
+    }
+
     public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -455,6 +464,16 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
                 return true;
             case Key.F when plain:
                 FitToView();
+                return true;
+            // The window's Enter: an agent's conversation, with the focus in its composer. An approval's request is in the inspector.
+            case Key.Enter when plain && single is { HasAgent: true }:
+                single.OpenConversationCommand.Execute(null);
+                return true;
+            case Key.OemPeriod when plain && canvas.SelectedNodes.Count > 0:
+                Frame(canvas.SelectedNodes);
+                return true;
+            case Key.OemPeriod when modifiers == KeyModifiers.Shift:
+                Frame([.. canvas.Nodes.Where(node => node.State == NodeState.Running)]);
                 return true;
             case Key.OemPlus or Key.Add when (modifiers & ~KeyModifiers.Shift) == KeyModifiers.None:
                 EditorCommands.ZoomIn.Execute(null, Editor);

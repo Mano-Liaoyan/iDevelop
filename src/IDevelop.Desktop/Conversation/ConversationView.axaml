@@ -173,6 +173,8 @@
           <TextBox.KeyBindings>
             <KeyBinding Gesture="Ctrl+Enter" Command="{Binding Node.SendCommand}" />
             <KeyBinding Gesture="Meta+Enter" Command="{Binding Node.SendCommand}" />
+            <KeyBinding Gesture="Ctrl+Shift+Enter" Command="{Binding Node.StopAndSendCommand}" />
+            <KeyBinding Gesture="Meta+Shift+Enter" Command="{Binding Node.StopAndSendCommand}" />
           </TextBox.KeyBindings>
         </TextBox>
         <!-- The hint keeps 200 px beside the buttons, and otherwise takes its own line above them. The buttons end where the

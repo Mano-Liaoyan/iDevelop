@@ -52,6 +52,13 @@ internal sealed partial class Shell
     /// <summary>A point of the editor, given relative to its top left.</summary>
     public Point InEditor(double x, double y) => Editor.TranslatePoint(new Point(x, y), Window)!.Value;
 
+    /// <summary>Moves the pointer over a point of the window.</summary>
+    public void Hover(Point point)
+    {
+        Window.MouseMove(point);
+        Render();
+    }
+
     public void DoubleClick(Point point)
     {
         Window.MouseMove(point);

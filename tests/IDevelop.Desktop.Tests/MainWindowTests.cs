@@ -88,7 +88,8 @@ public sealed class MainWindowTests : IDisposable
         var shell = Shell.Show();
 
         Assert.Equal("iDevelop", shell.Window.Title);
-        Assert.Equal([false, false, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
+        Assert.False(shell.Has<Button>("AddTask"));
+        Assert.Equal([false, true, true], new[] { "Save", "EmptyOpenFolder", "CanvasOpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.Equal(["Inspector"], Shell.Texts(shell.Find<Control>("Inspector")));
 
         shell.Window.ViewModel.Open(_temp.Create("plan"));

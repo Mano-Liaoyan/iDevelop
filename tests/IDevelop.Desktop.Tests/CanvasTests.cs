@@ -75,7 +75,7 @@ public sealed class CanvasTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 60, 60)));
         var canvasOrigin = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
-        shell.Pan(canvasOrigin + new Vector(700, 400), new Vector(-pan, 0));
+        shell.Pan(canvasOrigin + new Vector(680, 400), new Vector(-pan, 0));
         shell.AddNode();
 
         var (existing, added) = (shell.Node(title), shell.Node("New task"));
@@ -99,7 +99,7 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal(Color.Parse("#0B0E10"), Ring());
 
         shell.Click(shell.Find<RadioButton>("ThemeDark"));
-        Assert.Equal(Color.Parse("#0091FF"), Ring());
+        Assert.Equal(Color.Parse("#F2F2EF"), Ring());
     }
 
     [AvaloniaFact]

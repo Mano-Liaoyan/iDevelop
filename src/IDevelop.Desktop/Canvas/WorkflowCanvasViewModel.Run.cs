@@ -118,6 +118,7 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarSummary));
         OnPropertyChanged(nameof(BarTone));
         OnPropertyChanged(nameof(BarActivity));
+        OnSummaryChanged();
         _runWorkflow?.NotifyCanExecuteChanged();
         _stopAll?.NotifyCanExecuteChanged();
         _merge?.NotifyCanExecuteChanged();

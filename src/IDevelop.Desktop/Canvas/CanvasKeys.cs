@@ -16,6 +16,21 @@ public static class CanvasKeys
 
     public static KeyGesture Run => new(Key.Enter, Command);
 
+    /// <summary>Runs the shown workflow, or Stop and send in a composer.</summary>
+    public static KeyGesture RunWorkflow => new(Key.Enter, Command | KeyModifiers.Shift);
+
+    /// <summary>Puts the focus in the left area's Find box.</summary>
+    public static KeyGesture Find => new(Key.K, Command);
+
+    /// <summary>Selects the next node that waits for the person or failed.</summary>
+    public static KeyGesture NextAttention => new(Key.J, Command);
+
+    /// <summary>Puts the focus in the inspector's model picker.</summary>
+    public static KeyGesture ModelPicker { get; } = new(Key.M, KeyModifiers.Alt);
+
+    /// <summary>Puts the focus in the inspector's filter, while the focus is in the inspector.</summary>
+    public static KeyGesture FilterInspector => new(Key.F, Command);
+
     public static KeyGesture Rename { get; } = new(Key.F2);
 
     public static KeyGesture Duplicate => new(Key.D, Command);
@@ -25,6 +40,10 @@ public static class CanvasKeys
     public static KeyGesture Delete { get; } = new(Key.Delete);
 
     public static KeyGesture Fit { get; } = new(Key.F);
+
+    public static KeyGesture FrameSelection { get; } = new(Key.OemPeriod);
+
+    public static KeyGesture FrameRunning { get; } = new(Key.OemPeriod, KeyModifiers.Shift);
 
     public static KeyGesture ZoomToActual { get; } = new(Key.D0);
 

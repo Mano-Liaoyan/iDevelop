@@ -472,6 +472,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasUnsavedChanges));
+        OnSummaryChanged();
 
         // An edit of a node or of the connections into it can make a result stale or change why a node cannot run.
         if (tasksChanged || connectionsChanged)

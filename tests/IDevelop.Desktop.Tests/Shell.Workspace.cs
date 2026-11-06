@@ -43,6 +43,26 @@ internal sealed partial class Shell
         Render();
     }
 
+    /// <summary>Opens the footer's flyout, once, and returns what it shows.</summary>
+    public Control AgentsPanel()
+    {
+        var status = Find<Button>("AgentsStatus");
+        var flyout = (Flyout)status.Flyout!;
+        if (!flyout.IsOpen)
+        {
+            flyout.ShowAt(status);
+            Render();
+        }
+
+        return (Control)flyout.Content!;
+    }
+
+    /// <summary>Runs Check Agents Again, the footer flyout's command, with the flyout closed.</summary>
+    public void RefreshAgents() => Window.ViewModel.RefreshAgentsCommand.Execute(null);
+
+    /// <summary>No check of the agents runs now.</summary>
+    public bool AgentsChecked => Window.ViewModel.RefreshAgentsCommand.CanExecute(null);
+
     /// <summary>The project's name in its row.</summary>
     public TextBlock ProjectName(string project) => ById<TextBlock>(ProjectItem(project), "ProjectName").Single();
 
@@ -62,6 +82,6 @@ internal sealed partial class Shell
     private (Control Item, Button Row) WorkflowItem(string project, string workflow)
     {
         var row = ById<Button>(ProjectItem(project), "WorkflowRow").Single(row => Texts(row)[0] == workflow);
-        return (row.FindAncestorOfType<ContentPresenter>()!, row);
+        return (row.FindAncestorOfType<StackPanel>()!, row);
     }
 }

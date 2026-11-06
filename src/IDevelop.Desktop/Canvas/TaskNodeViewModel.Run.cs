@@ -63,6 +63,9 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The node waits for the person.</summary>
     public bool IsWaiting => State == NodeState.InputRequired;
 
+    /// <summary>The node runs now, so a list's state glyph spins.</summary>
+    public bool IsRunningNow => State == NodeState.Running;
+
     /// <summary>Why the engine would not start the node now, which keeps Run and Retry off and is their tooltip, or null.</summary>
     public string? RunRefusal => State == NodeState.Running || IsAsking ? null : _runRefusal;
 

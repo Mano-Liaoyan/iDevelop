@@ -9,6 +9,7 @@ using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Desktop.Sidebar;
 using IDevelop.Engine;
 using IDevelop.Projects;
 
@@ -50,6 +51,10 @@ public sealed class MainWindowViewModel : ObservableObject
         _refreshAgents = new RelayCommand(() => UiWork.Start(RefreshAgents, text => Status = text), () => !_refreshingAgents);
         CloseConversationCommand = new RelayCommand(CloseConversation);
         ToggleConversationLayoutCommand = new RelayCommand(() => IsConversationDocked = !IsConversationDocked);
+        Activity = new ActivityViewModel(() => Projects, Attend);
+        Find = new FindViewModel(() => Projects, Choose);
+        Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProjects));
+        Unopened.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProjects));
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
 
@@ -63,6 +68,25 @@ public sealed class MainWindowViewModel : ObservableObject
     /// until the person forgets it.
     /// </summary>
     public ObservableCollection<UnopenedProject> Unopened { get; } = [];
+
+    /// <summary>Whether the left area has a project to list, open or not. Without one it shows only Open Folder.</summary>
+    public bool HasProjects => Projects.Count > 0 || Unopened.Count > 0;
+
+    /// <summary>The left area's list of nodes that wait, failed, or run, in every open project.</summary>
+    public ActivityViewModel Activity { get; }
+
+    /// <summary>The left area's Find box.</summary>
+    public FindViewModel Find { get; }
+
+    /// <summary>Lays the window out, so a canvas view that a switch brought in holds its selection before a node is selected
+    /// in it. The window sets it.</summary>
+    internal Action LayOut { get; set; } = () => { };
+
+    /// <summary>A node was shown from outside its canvas, so the window brings its card into view.</summary>
+    internal event Action<TaskNodeViewModel>? NodeShown;
+
+    /// <summary>The person asked for a conversation, so the window puts the focus in its composer.</summary>
+    internal event Action? ComposerRequested;
 
     /// <summary>The workflow the window shows, or null when no project is open.</summary>
     public WorkflowCanvasViewModel? Canvas
@@ -138,6 +162,14 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public IReadOnlyList<AgentRow> Agents => [.. ClientCatalog.All.Select(id => new AgentRow(id, _clients.Current[id]))];
 
+    /// <summary>"4 ready", "1 needs setup", or "Checking…".</summary>
+    public string AgentsSummary => RunText.AgentsSummary([.. Agents.Select(agent => agent.Status)]);
+
+    /// <summary>The clients with a problem, which show over the left area's footer until the problem clears.</summary>
+    public IReadOnlyList<AgentRow> AgentsNeedingSetup => [.. Agents.Where(agent => agent.Tone == StatusTone.Problem)];
+
+    public bool HasAgentsNeedingSetup => AgentsNeedingSetup.Count > 0;
+
     /// <summary>Probes every client again. Each row keeps its last status until its new answer arrives.</summary>
     public ICommand RefreshAgentsCommand => _refreshAgents;
 
@@ -174,6 +206,56 @@ public sealed class MainWindowViewModel : ObservableObject
 
         Show(canvas);
         Persist();
+    }
+
+    /// <summary>Shows the node's workflow and selects the node, as a choice from outside its canvas.</summary>
+    internal void ShowNode(TaskNodeViewModel node)
+    {
+        if (node.Canvas != Canvas)
+        {
+            Select(node.Canvas);
+            LayOut();
+        }
+
+        node.Canvas.Inspect(node);
+        NodeShown?.Invoke(node);
+    }
+
+    /// <summary>Shows the node and what it needs: an agent's conversation, or for an approval, the request in the inspector.</summary>
+    internal void Attend(TaskNodeViewModel node)
+    {
+        ShowNode(node);
+        if (node.HasAgent)
+        {
+            node.OpenConversationCommand.Execute(null);
+        }
+    }
+
+    /// <summary>Selects the next node that waits or failed, after the selected one, in the Activity list's order.</summary>
+    internal TaskNodeViewModel? ShowNextAttention()
+    {
+        var nodes = Activity.Attention.ToList();
+        if (nodes.Count == 0)
+        {
+            return null;
+        }
+
+        var after = Canvas?.SelectedNode is { } selected ? nodes.IndexOf(selected) : -1;
+        var next = nodes[(after + 1) % nodes.Count];
+        ShowNode(next);
+        return next;
+    }
+
+    private void Choose(FindResult result)
+    {
+        if (result.Node is { } node)
+        {
+            ShowNode(node);
+        }
+        else
+        {
+            Select(result.Canvas);
+        }
     }
 
     /// <summary>Adds an unsaved, empty workflow to the project, named "Workflow N", shows it, and returns it.</summary>
@@ -248,6 +330,7 @@ public sealed class MainWindowViewModel : ObservableObject
             Show(Projects.Count == 0 ? null : Projects[Math.Min(index, Projects.Count - 1)].Workflows[0]);
         }
 
+        Activity.Refresh();
         Persist();
         await project.CloseAsync();
     }
@@ -303,6 +386,11 @@ public sealed class MainWindowViewModel : ObservableObject
                 canvas.IsExpanded = session.Expanded.Any(saved => saved.Is(canvas.Project.Folder, canvas.Workflow.Id));
                 canvas.RestoreExpandedCards(session.Cards.Where(saved => saved.Workflow.Is(canvas.Project.Folder, canvas.Workflow.Id))
                     .SelectMany(saved => saved.Tasks));
+            }
+
+            foreach (var project in Projects)
+            {
+                project.IsExpanded = !session.Folded.Contains(project.Folder, ProjectFolders.Comparer);
             }
 
             var selected = session.Selected is { } choice
@@ -400,8 +488,20 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var project = new ProjectViewModel(identity, windowLock, documents, NewCanvas);
-        project.ConversationRequested += OpenConversation;
+        project.ConversationRequested += target =>
+        {
+            OpenConversation(target);
+            ComposerRequested?.Invoke();
+        };
+        project.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ProjectViewModel.IsExpanded))
+            {
+                Persist();
+            }
+        };
         Projects.Add(project);
+        Activity.Refresh();
         foreach (var unopened in Unopened.Where(unopened => ProjectFolders.Comparer.Equals(unopened.Folder, identity)).ToList())
         {
             Unopened.Remove(unopened);
@@ -437,11 +537,19 @@ public sealed class MainWindowViewModel : ObservableObject
             case nameof(WorkflowCanvasViewModel.IsExpanded) or nameof(WorkflowCanvasViewModel.ExpandedCards):
                 Persist();
                 break;
+            case nameof(WorkflowCanvasViewModel.Summary):
+                Activity.Refresh();
+                break;
             case nameof(WorkflowCanvasViewModel.Sheet) when canvas == Canvas:
                 OnEditableChanged();
                 break;
-            case nameof(WorkflowCanvasViewModel.Name) when canvas == Canvas:
-                OnPropertyChanged(nameof(WorkflowName));
+            case nameof(WorkflowCanvasViewModel.Name):
+                Activity.Refresh();
+                if (canvas == Canvas)
+                {
+                    OnPropertyChanged(nameof(WorkflowName));
+                }
+
                 break;
             // An open conversation follows the task the person selects, so the sidebar's task list switches it.
             case nameof(WorkflowCanvasViewModel.SelectedNode) when canvas == Canvas && Conversation is { } open
@@ -498,6 +606,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             Cards = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.AnyCardExpanded)
                 .Select(canvas => new WorkflowCards(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ExpandedCards))],
+            Folded = [.. Projects.Where(project => !project.IsExpanded).Select(project => project.Folder)],
         };
         try
         {
@@ -515,6 +624,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private void OnClientsChanged()
     {
         OnPropertyChanged(nameof(Agents));
+        OnPropertyChanged(nameof(AgentsSummary));
+        OnPropertyChanged(nameof(AgentsNeedingSetup));
+        OnPropertyChanged(nameof(HasAgentsNeedingSetup));
         foreach (var project in Projects)
         {
             foreach (var canvas in project.Workflows)

@@ -177,7 +177,7 @@ public sealed class SkillPickerTests : IDisposable
         Skill(_personal, "probeplug-probe-alpha", "A plugin's alpha.", name: "probeplug:probe-alpha");
         var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["verify-idevelop"] })));
         Skill(Path.Combine(shell.Window.ViewModel.Canvas!.Document.ProjectFolder, ".claude", "skills"), "probe-alpha", "Alpha.");
-        shell.Click(shell.Find<Button>("RefreshAgents"));
+        shell.RefreshAgents();
 
         OpenList(shell);
         shell.WaitUntil(() => Ticks(shell).Any(tick => tick.Item1 == "probe-alpha"), "probe-alpha listed");
@@ -302,7 +302,7 @@ public sealed class SkillPickerTests : IDisposable
         Assert.Equal("1 skill", Summary(shell));
 
         _fakes.Install("claude", ClaudeSignedIn, ClaudeSkills(_personal));
-        shell.Click(shell.Find<Button>("RefreshAgents"));
+        shell.RefreshAgents();
         shell.WaitUntil(() => Ticks(shell).Length > 0, "the skills listed once more");
 
         Assert.Equal([("find-skills", false), ("simplify", false), ("verify-idevelop", true)], Ticks(shell));

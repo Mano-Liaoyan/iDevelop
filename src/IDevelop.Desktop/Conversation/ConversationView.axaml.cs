@@ -106,6 +106,9 @@ public partial class ConversationView : UserControl
         }
     }
 
+    /// <summary>Puts the keys in the composer.</summary>
+    internal void FocusComposer() => Composer.Focus();
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);

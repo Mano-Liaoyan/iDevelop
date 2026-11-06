@@ -40,6 +40,9 @@ public partial class MainWindow : Window
         AddHandler(GotFocusEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Bubble, handledEventsToo: true);
         ConversationLinkRouter.SetRouter(this, new ConversationLinkRouter(uri => Launcher.LaunchUriAsync(uri), text => Copy(text)));
         ViewModel.OpenFolder = folder => Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folder));
+        ViewModel.LayOut = UpdateLayout;
+        ViewModel.NodeShown += BringIntoViewIfHidden;
+        ViewModel.ComposerRequested += FocusComposer;
         ViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainWindowViewModel.DockedConversation) && (ViewModel.DockedConversation is not null) != _docked)
@@ -80,7 +83,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var (sidebarMax, inspectorMax) = PanelWidths.Limits(room,
+        var (sidebarMax, inspectorMax) = Columns.Bounds.Width < PanelWidths.NarrowWindow ? (sidebar.MinWidth, inspector.MinWidth) : PanelWidths.Limits(room,
             new(sidebar.Width.Value, sidebar.MinWidth, _sidebarMax), new(inspector.Width.Value, inspector.MinWidth, _inspectorMax));
         sidebar.MaxWidth = sidebarMax;
         inspector.MaxWidth = inspectorMax;
@@ -200,9 +203,127 @@ public partial class MainWindow : Window
             command.Execute(null);
             e.Handled = true;
         }
+        else if (!e.Handled)
+        {
+            e.Handled = RunKey(e);
+        }
     }
 
-    private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e)
+    /// <summary>The tooltip of Run Workflow, with its shortcut.</summary>
+    public static string RunWorkflowHelp => $"Run Workflow\n{CanvasKeys.Hint(CanvasKeys.RunWorkflow)}: run every node that has no current result, along its dependencies";
+
+    // The window's key map. A modal sheet covers the window, so no key here acts under it.
+    private bool RunKey(KeyEventArgs e)
+    {
+        if (ViewModel.Canvas?.Sheet is not null)
+        {
+            return false;
+        }
+
+        if (e is { Key: Key.F6 } && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift)
+        {
+            MoveRegion(e.KeyModifiers == KeyModifiers.Shift ? -1 : 1);
+            return true;
+        }
+
+        if (CanvasKeys.Find.Matches(e))
+        {
+            Sidebar.FocusFind();
+            return true;
+        }
+
+        if (CanvasKeys.NextAttention.Matches(e))
+        {
+            if (ViewModel.ShowNextAttention() is not null)
+            {
+                FocusNode();
+            }
+
+            return true;
+        }
+
+        if (CanvasKeys.RunWorkflow.Matches(e))
+        {
+            if (ViewModel.Canvas?.RunWorkflowCommand is { } run && run.CanExecute(null))
+            {
+                run.Execute(null);
+            }
+
+            return true;
+        }
+
+        if (CanvasKeys.ModelPicker.Matches(e))
+        {
+            return FocusModelPicker();
+        }
+
+        if (CanvasKeys.FilterInspector.Matches(e) && InspectorPanel.IsKeyboardFocusWithin)
+        {
+            return InspectorFilter()?.Focus() == true;
+        }
+
+        return false;
+    }
+
+    // Enter on the canvas opens the node's conversation. An open conversation has followed the selection, so its composer
+    // takes the keys instead.
+    private void FocusNode()
+    {
+        if (ViewModel.Conversation is not null)
+        {
+            FocusComposer();
+        }
+        else
+        {
+            CanvasFocusTarget?.Focus();
+        }
+    }
+
+    private ConversationView? ShownConversation => this.GetVisualDescendants().OfType<ConversationView>().FirstOrDefault(view => view.IsEffectivelyVisible);
+
+    private void FocusComposer() => Dispatcher.UIThread.Post(() => ShownConversation?.FocusComposer(), DispatcherPriority.Background);
+
+    private TextBox? InspectorFilter() => InspectorPanel.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(box =>
+        box.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(box) == "InspectorFilter");
+
+    private bool FocusModelPicker()
+    {
+        var picker = InspectorPanel.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(box =>
+            box.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(box) == "TaskModel");
+        picker?.BringIntoView();
+        return picker?.Focus(NavigationMethod.Tab) == true;
+    }
+
+    // F6 moves through the regions a person can see: the left area, the canvas, the conversation, and the inspector.
+    private void MoveRegion(int step)
+    {
+        var conversation = ShownConversation;
+        IEnumerable<(Control Region, Action Enter)> Regions()
+        {
+            yield return (Sidebar, Sidebar.FocusFirst);
+            if (ViewModel.ShowsCanvas && CanvasView is { } canvas)
+            {
+                yield return (canvas, () => canvas.Editor.Focus(NavigationMethod.Directional));
+            }
+
+            if (conversation is not null)
+            {
+                yield return (conversation, conversation.FocusComposer);
+            }
+
+            yield return (InspectorPanel, () => InspectorFilter()?.Focus(NavigationMethod.Directional));
+        }
+
+        var regions = Regions().ToList();
+        var focused = FocusManager?.GetFocusedElement() as Visual;
+        var at = regions.FindIndex(region => focused is not null && (region.Region == focused || region.Region.IsVisualAncestorOf(focused)));
+        regions[((at < 0 ? (step > 0 ? -1 : 0) : at) + step + regions.Count) % regions.Count].Enter();
+    }
+
+    private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e) => TitleBandPressed(e);
+
+    /// <summary>A press on a band that stands in for the title bar moves the window, and a double press maximizes it.</summary>
+    internal void TitleBandPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -219,15 +340,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // A click, a key, and UI Automation each check a segment their own way, so the checked segment is the choice.
-    private void OnThemeChecked(object? sender, RoutedEventArgs e)
-    {
-        if (sender is RadioButton { IsChecked: true, Tag: ThemeVariant variant })
-        {
-            ((App)Application.Current!).Choose(variant);
-        }
-    }
-
     private WorkflowCanvasView? CanvasView => CanvasHost.Presenter?.Child as WorkflowCanvasView;
 
     private void OnGenerate(object? sender, RoutedEventArgs e)
@@ -238,17 +350,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnAddNode(object? sender, RoutedEventArgs e) =>
-        CanvasView?.OpenAddInView(AddNode.TranslatePoint(new Point(0, AddNode.Bounds.Height + 4), this) ?? default);
-
-    // The list also follows its canvas's selection, so only a change made while the list has focus is a choice in it.
-    private void OnSidebarSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    private void OnAddNode(object? sender, RoutedEventArgs e)
     {
-        if (sender is ListBox { IsKeyboardFocusWithin: true, SelectedItem: TaskNodeViewModel task })
+        if (sender is Button button)
         {
-            CanvasView?.BringIntoViewIfHidden(task);
+            CanvasView?.OpenAddInView(button.TranslatePoint(new Point(0, button.Bounds.Height + 4), this) ?? default);
         }
     }
+
+    /// <summary>Brings a node's card into view on the canvas, if the canvas does not show it whole.</summary>
+    internal void BringIntoViewIfHidden(TaskNodeViewModel node) => CanvasView?.BringIntoViewIfHidden(node);
+
+    /// <summary>The control that takes the canvas's keys, or the inspector's filter while a conversation covers the canvas.</summary>
+    internal IInputElement? CanvasFocusTarget => ViewModel.ShowsCanvas ? CanvasView?.Editor : InspectorFilter();
 
     private void ShowWorkflowOf(object? source)
     {
@@ -261,61 +375,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnWorkflowClick(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
-        {
-            ViewModel.Select(canvas);
-        }
-    }
-
-    private void OnWorkflowKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e is { Key: Key.F2, KeyModifiers: KeyModifiers.None } && (sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
-        {
-            RenameWorkflow(canvas);
-            e.Handled = true;
-        }
-    }
-
-    private void OnRenameWorkflow(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
-        {
-            RenameWorkflow(canvas);
-        }
-    }
-
-    // The renamed workflow is shown, so Undo takes the rename back.
-    private void RenameWorkflow(WorkflowCanvasViewModel canvas)
-    {
-        ViewModel.Select(canvas);
-        canvas.BeginRenameWorkflow();
-    }
-
-    private void OnNewWorkflow(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is ProjectViewModel project && ViewModel.NewWorkflow(project) is { } canvas)
-        {
-            UpdateLayout();
-            this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();
-        }
-    }
-
-    private void OnForgetProject(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is UnopenedProject project)
-        {
-            ViewModel.Forget(project);
-        }
-    }
-
     // Both questions come before either answer acts, and the project's runs stop only once it closes.
-    private void OnCloseProject(object? sender, RoutedEventArgs e) => UiWork.Start(() => CloseProject(sender), ShowFailure);
+    internal void CloseProject(ProjectViewModel project) => UiWork.Start(() => CloseAsked(project), ShowFailure);
 
-    private async Task CloseProject(object? sender)
+    private async Task CloseAsked(ProjectViewModel project)
     {
-        if (_waitingForUser || (sender as Control)?.DataContext is not ProjectViewModel project)
+        if (_waitingForUser)
         {
             return;
         }
@@ -330,34 +395,12 @@ public partial class MainWindow : Window
         _waitingForUser = false;
     }
 
-    // Choosing the task that is already selected changes no selection, so a tap on a row and Space or Enter on the
-    // focused row also count as choices.
-    private void OnSidebarTapped(object? sender, TappedEventArgs e) => BringRowIntoView(e.Source);
-
-    private void OnSidebarKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key is Key.Space or Key.Enter)
-        {
-            BringRowIntoView(e.Source);
-        }
-    }
-
-    // A tap between rows also reaches the list, and it chooses no task.
-    private void BringRowIntoView(object? source)
-    {
-        if ((source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: TaskNodeViewModel task })
-        {
-            CanvasView?.BringIntoViewIfHidden(task);
-        }
-    }
-
-    private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e) =>
-        TreeRows.Margin = new Thickness(0, 0, Tree.ScrollBarMaximum.Y > 0 ? 16 : 8, 0);
-
     // A question, the folder picker, or a project that is still closing holds a second open or close until it ends.
-    private void OnOpenFolder(object? sender, RoutedEventArgs e) => UiWork.Start(OpenFolder, ShowFailure);
+    private void OnOpenFolder(object? sender, RoutedEventArgs e) => OpenFolder();
 
-    private async Task OpenFolder()
+    internal void OpenFolder() => UiWork.Start(AskForFolder, ShowFailure);
+
+    private async Task AskForFolder()
     {
         if (_waitingForUser)
         {

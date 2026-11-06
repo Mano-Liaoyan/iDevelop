@@ -39,12 +39,15 @@ public sealed class CanvasChromeTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
         shell.SizeInspector(520);
-        Resize(shell, 900, 600);
+        Resize(shell, 1000, 600);
 
-        Assert.Equal((240, 322, 336), Widths(shell));
+        Assert.Equal((256, 406, 336), Widths(shell));
 
         shell.SizeSidebar(400);
-        Assert.Equal((282, 280, 336), Widths(shell));
+        Assert.Equal((382, 280, 336), Widths(shell));
+
+        Resize(shell, 900, 600);
+        Assert.Equal((240, 280, 378), Widths(shell));
 
         Resize(shell, 1600, 1000);
         Assert.Equal((400, 520, 678), Widths(shell));
@@ -54,12 +57,12 @@ public sealed class CanvasChromeTests : IDisposable
     public void The_inspectors_splitter_stops_where_the_canvas_would_get_narrower_than_336_px()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
-        Resize(shell, 900, 600);
+        Resize(shell, 1000, 600);
         var splitter = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 3);
 
         shell.Drag(shell.Center(splitter), shell.Center(splitter) - new Vector(200, 0));
 
-        Assert.Equal((240, 322, 336), Widths(shell));
+        Assert.Equal((256, 406, 336), Widths(shell));
     }
 
     [AvaloniaFact]
