@@ -43,6 +43,7 @@
     { "key": "IconHelp", "asset": "Question Circle", "file": "ic_fluent_question_circle_16_regular.svg" },
     { "key": "IconChevronRight", "asset": "Chevron Right", "file": "ic_fluent_chevron_right_16_regular.svg" },
     { "key": "IconChevronDown", "asset": "Chevron Down", "file": "ic_fluent_chevron_down_16_regular.svg" },
+    { "key": "IconChevronUpDown", "asset": "Chevron Up Down", "file": "ic_fluent_chevron_up_down_16_regular.svg" },
     { "key": "IconChevronUp", "asset": "Chevron Up", "file": "ic_fluent_chevron_up_16_regular.svg" },
     { "key": "IconFollow", "asset": "Target", "file": "ic_fluent_target_16_regular.svg" },
     { "key": "IconMinimap", "asset": "Map", "file": "ic_fluent_map_16_regular.svg" },
