@@ -7,11 +7,11 @@
        row. Radii: 4 small tile, RadiusSm for controls, rows, and pills, RadiusMd for floating bars, menus, and popovers,
        RadiusLg for cards and the composer. Only Send is round. -->
 
-  <!-- One focus ring on every control: 2 px of the accent 1 px outside it, on keyboard focus only. RadiusSm plus 3 px. -->
+  <!-- One focus ring on every control: 2 px of the accent over the control's own edge, on keyboard focus only. RadiusSm plus 1 px. -->
   <Style Selector="AdornerLayer">
     <Setter Property="DefaultFocusAdorner">
       <FocusAdornerTemplate>
-        <Border Margin="-3" BorderThickness="2" CornerRadius="9" BorderBrush="{DynamicResource AccentBrush}" AdornerLayer.IsClipEnabled="False" />
+        <Border Margin="-1" BorderThickness="2" CornerRadius="7" BorderBrush="{DynamicResource AccentBrush}" AdornerLayer.IsClipEnabled="False" />
       </FocusAdornerTemplate>
     </Setter>
   </Style>
@@ -410,6 +410,13 @@
   <Style Selector="ListBox.tasks:not(.hidden) ListBoxItem:selected TextBlock.rowName">
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
+  <Style Selector="TextBlock.nodeName">
+    <Setter Property="MaxLines" Value="2" />
+  </Style>
+  <!-- The selected node shows its whole name. -->
+  <Style Selector="ListBox.tasks:not(.hidden) ListBoxItem:selected TextBlock.nodeName">
+    <Setter Property="MaxLines" Value="0" />
+  </Style>
   <!-- A workflow that is not shown keeps its node selection for when it is shown again, without a selected look. -->
   <Style Selector="ListBox.tasks.hidden ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
@@ -419,16 +426,10 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- Find's list floats from under its box, over the tree and the canvas. -->
+  <!-- Find's list takes the panel under its box, so it cuts through no row. -->
   <Style Selector="Border.findPalette">
-    <Setter Property="Width" Value="440" />
-    <Setter Property="MaxHeight" Value="420" />
     <Setter Property="Padding" Value="4" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource FloatingShadow}" />
+    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
   </Style>
   <!-- Find's rows have two lines. The one in the box's choice takes the row selection fill. -->
   <Style Selector="ListBox.results ListBoxItem">
@@ -461,15 +462,6 @@
   <Style Selector="TextBlock.rowName.workflowName.shown">
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-  </Style>
-  <!-- A node's step in the dependency order: a quiet number on the name's first line. -->
-  <Style Selector="TextBlock.rowStep">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
-    <Setter Property="HorizontalAlignment" Value="Right" />
-    <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="TextBlock.rowName.strong">
     <Setter Property="FontWeight" Value="Medium" />
@@ -580,6 +572,13 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
+  <!-- A tree's scroll bar stays under the rows' text until the pointer reaches it. -->
+  <Style Selector="ScrollViewer.quietBar /template/ ScrollBar">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+  <Style Selector="ScrollViewer.quietBar /template/ ScrollBar:pointerover">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
   <Style Selector="Border.treeHead">
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />
@@ -674,9 +673,9 @@
     <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
   </Style>
 
-  <!-- The selected node's row holds the fill, and its workflow keeps the edge bar. -->
+  <!-- The selected node's row holds the selected fill, and its workflow keeps a quiet one. -->
   <Style Selector="Button.nav.workflow.selected.holdsNode /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
 
   <!-- UI Automation reads which workflow the window shows from its row's status. -->
@@ -757,15 +756,19 @@
   </Style>
   <!-- A text box's edge takes the accent on any focus, because it takes keys however it got the focus. Keyboard focus adds the
        one ring, which Fluent's text box and picker themes turn off. -->
+  <!-- A box shows the focus ring's 2 px on its own edge, however the focus came, and needs no ring over it. -->
   <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="2" />
   </Style>
-  <Style Selector="TextBox, ComboBox">
+  <Style Selector="TextBox">
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+  <Style Selector="ComboBox">
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
-        <Border Margin="-3" BorderThickness="2" CornerRadius="9" BorderBrush="{DynamicResource AccentBrush}" AdornerLayer.IsClipEnabled="False" />
+        <Border Margin="-1" BorderThickness="2" CornerRadius="7" BorderBrush="{DynamicResource AccentBrush}" AdornerLayer.IsClipEnabled="False" />
       </FocusAdornerTemplate>
     </Setter>
   </Style>

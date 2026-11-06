@@ -269,7 +269,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal("iDevelop", shell.Window.Title);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
-        Assert.Equal("Input required · interrupted", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Input required · Interrupted", shell.CardText("Design", "CardStatus"));
     }
 
     [AvaloniaFact]
@@ -517,7 +517,7 @@ public sealed class WorkspaceTests : IDisposable
         WaitUntilLetGo(shell, alpha);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
-        Assert.Equal("Input required · interrupted", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Input required · Interrupted", shell.CardText("Design", "CardStatus"));
     }
 
     [AvaloniaFact]

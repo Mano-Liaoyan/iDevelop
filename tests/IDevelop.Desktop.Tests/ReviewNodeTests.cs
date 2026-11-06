@@ -53,7 +53,7 @@ public sealed class ReviewNodeTests
         shell.WaitUntil(() => shell.NodeModel("Check").EngineState is Engine.NodeState.InputRequired { Why: Engine.NodeState.RoundLimit },
             "the review reaches its round limit", () => shell.NodeModel("Check").StatusLabel);
         Assert.Contains("The line says A.", File.ReadAllText(Path.Combine(f.Evidence, "fix.txt")));
-        Assert.Equal("Input required · round limit", shell.CardText("Check", "CardStatus"));
+        Assert.Equal("Input required · Round limit", shell.CardText("Check", "CardStatus"));
         shell.Click(shell.Header(shell.Node("Check")));
         Assert.Equal("1 open finding", shell.InView<TextBlock>("ReviewSummary").Text);
         var finding = Assert.Single(shell.NodeModel("Check").Findings);

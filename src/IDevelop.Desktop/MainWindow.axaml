@@ -50,10 +50,10 @@
                       IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}">
             <Button Classes="primary" HorizontalAlignment="Center" Click="OnOpenFolder"
                     AutomationProperties.AutomationId="CanvasOpenFolder"
-                    AutomationProperties.Name="Open Folder">
+                    AutomationProperties.Name="Open folder">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" />
-                <TextBlock Text="Open Folder" VerticalAlignment="Center" />
+                <TextBlock Text="Open folder" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
             <TextBlock Classes="caption" Text="Open a project folder to start." HorizontalAlignment="Center" />

@@ -17,12 +17,14 @@ namespace IDevelop.Desktop.Sidebar;
 /// </summary>
 public partial class SidebarView : UserControl
 {
-    // What the pinned project and workflow cover at the tree's top edge, and the room at the bottom, so a row never sits on an edge.
-    private const double TreeTopRoom = 60;
-
+    // The room a revealed row keeps from the tree's bottom edge.
     private const double TreeBottomRoom = 32;
 
+    // Below this panel height Activity starts folded, so the tree keeps the room.
+    private const double ActivityFoldHeight = 700;
+
     private IInputElement? _beforeFind;
+    private MainWindowViewModel? _revealing;
 
     public SidebarView()
     {
@@ -31,9 +33,28 @@ public partial class SidebarView : UserControl
         // A click anywhere else leaves Find, as it leaves any floating list. A result takes no focus, so a click on one stays here.
         FindBox.LostFocus += (_, _) => ViewModel.Find.Clear();
         AddHandler(KeyDownEvent, OnRowKeyDown, RoutingStrategies.Tunnel);
-        // Activity never takes more than half of the panel.
-        Rows.SizeChanged += (_, e) => ActivityScroller.MaxHeight = e.NewSize.Height / 2;
+        // Activity never takes more than half of the panel, and a short panel folds it to its heading.
+        Rows.SizeChanged += (_, e) =>
+        {
+            ActivityScroller.MaxHeight = e.NewSize.Height / 2;
+            if (DataContext is MainWindowViewModel view)
+            {
+                view.Activity.IsCompact = e.NewSize.Height < ActivityFoldHeight;
+            }
+        };
+        DataContextChanged += (_, _) => WatchReveals();
     }
+
+    // The tree follows the window: what the person opens anywhere, it opens to and shows.
+    private void WatchReveals()
+    {
+        _revealing?.TreeReveal -= OnTreeReveal;
+        _revealing = DataContext as MainWindowViewModel;
+        _revealing?.TreeReveal += OnTreeReveal;
+    }
+
+    private void OnTreeReveal(WorkflowCanvasViewModel canvas, TaskNodeViewModel? node) =>
+        Dispatcher.UIThread.Post(() => Reveal(canvas, node), DispatcherPriority.Background);
 
     private MainWindow? Window => TopLevel.GetTopLevel(this) as MainWindow;
 
@@ -97,36 +118,60 @@ public partial class SidebarView : UserControl
         }
     }
 
-    // The chosen node's card takes the keys next, so Enter goes on to its conversation. The tree shows the row again after the
-    // next layout, and the canvas of another workflow only takes the keys then too.
+    // The chosen node's card takes the keys next, so Enter goes on to its conversation. The canvas of another workflow only takes
+    // the keys after the next layout.
     private bool Choose()
     {
-        if (ViewModel.Find.Choose() is not { } result)
+        if (ViewModel.Find.Choose() is null)
         {
             return false;
         }
 
         Window?.CanvasFocusTarget?.Focus(NavigationMethod.Tab);
         _beforeFind = null;
-        Dispatcher.UIThread.Post(() =>
-        {
-            Reveal(result);
-            Window?.CanvasFocusTarget?.Focus(NavigationMethod.Tab);
-        }, DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() => Window?.CanvasFocusTarget?.Focus(NavigationMethod.Tab), DispatcherPriority.Background);
         return true;
     }
 
-    // The room over a row clears the pinned rows.
-    private static void InView(Control row) => row.BringIntoView(new Rect(row.Bounds.Size).Inflate(new Thickness(0, TreeTopRoom, 0, TreeBottomRoom)));
-
-    private void Reveal(FindResult result)
+    // A row in the tree clears the pinned rows, and a row of the Activity list only scrolls its own list.
+    private void InView(Control row)
     {
-        object target = (object?)result.Node ?? result.Canvas;
-        result.Canvas.Project.IsExpanded = true;
-        if (Rows.GetVisualDescendants().OfType<Control>()
-            .FirstOrDefault(row => row.DataContext == target && (row is ListBoxItem || (row is Button && row.Classes.Contains("workflow")))) is { } row)
+        if (!TreeRows.IsVisualAncestorOf(row))
         {
-            InView(row);
+            row.BringIntoView();
+            return;
+        }
+
+        var head = row is ListBoxItem ? 2 * PinnedRowHeight + 1 : PinnedRowHeight + 1;
+        ScrollInto(TopOf(row), TopOf(row) + row.Bounds.Height, head);
+    }
+
+    // The tree moves only when the block is not in view, so a click on a row in view never moves that row. A block taller than
+    // the view starts at the top edge.
+    private void ScrollInto(double top, double bottom, double head)
+    {
+        var (from, height) = (Tree.Offset.Y, Tree.Viewport.Height);
+        if (top < from + head || bottom - top + head >= height)
+        {
+            Tree.Offset = Tree.Offset.WithY(top - head);
+        }
+        else if (bottom > from + height)
+        {
+            Tree.Offset = Tree.Offset.WithY(bottom + TreeBottomRoom - height);
+        }
+    }
+
+    // A workflow shows from its row to the end of its list, and a node shows its own row.
+    private void Reveal(WorkflowCanvasViewModel canvas, TaskNodeViewModel? node)
+    {
+        Window?.UpdateLayout();
+        if (node is not null && TreeRows.GetVisualDescendants().OfType<ListBoxItem>().FirstOrDefault(row => row.DataContext == node) is { IsEffectivelyVisible: true } item)
+        {
+            InView(item);
+        }
+        else if (WorkflowRows().FirstOrDefault(row => row.DataContext == canvas) is { } row)
+        {
+            ScrollInto(TopOf(row), ListBottom(row), PinnedRowHeight + 1);
         }
     }
 
@@ -248,23 +293,15 @@ public partial class SidebarView : UserControl
     private double ListBottom(Button row) =>
         row.FindAncestorOfType<StackPanel>() is { } block ? TopOf(block) + block.Bounds.Height : 0;
 
-    // A row that an edge of the tree would cut hides under a cover until it comes in whole.
+    // A row that the tree's bottom edge would cut hides under a cover until it comes in whole.
     private void CoverCutRows()
     {
-        var head = (StickyProject.IsVisible ? PinnedRowHeight : 0) + (StickyWorkflow.IsVisible ? PinnedRowHeight : 0);
         var rows = TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow).Select(row => (Top: TopOf(row) - Tree.Offset.Y, row.Bounds.Height)).ToList();
         var height = Tree.Viewport.Height;
-        var cutAbove = rows.Where(row => row.Top < head - 0.5 && row.Top + row.Height > head + 0.5).Select(row => row.Top + row.Height - head).DefaultIfEmpty(0).Max();
-        var cutBelow = rows.Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5).Select(row => height - row.Top).DefaultIfEmpty(0).Max();
-        Cover(TreeTopCover, cutAbove, new Thickness(0, head, 8, 0));
-        Cover(TreeFootCover, cutBelow, new Thickness(0, 0, 8, 0));
-    }
-
-    private static void Cover(Border cover, double height, Thickness margin)
-    {
-        cover.Height = height;
-        cover.Margin = margin;
-        cover.IsVisible = height > 0;
+        var cut = rows.Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5).Select(row => height - row.Top).DefaultIfEmpty(0).Max();
+        TreeFootCover.Height = cut;
+        TreeFootCover.Margin = new Thickness(0, 0, 8, 0);
+        TreeFootCover.IsVisible = cut > 0;
     }
 
     private static bool IsTreeRow(Control control) => control.IsEffectivelyVisible && control switch

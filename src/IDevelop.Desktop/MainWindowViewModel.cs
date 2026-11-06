@@ -77,7 +77,7 @@ public sealed class MainWindowViewModel : ObservableObject
     /// </summary>
     public ObservableCollection<UnopenedProject> Unopened { get; } = [];
 
-    /// <summary>Whether the left area has a project to list, open or not. Without one it shows only Open Folder.</summary>
+    /// <summary>Whether the left area has a project to list, open or not. Without one it shows the recent folders.</summary>
     public bool HasProjects => Projects.Count > 0 || Unopened.Count > 0;
 
     /// <summary>The folders the person closed, newest first, which the empty left area offers again.</summary>
@@ -113,10 +113,6 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>The inspector is open: as the person last chose, or else while the window has room for it. With no project it has nothing to show.</summary>
-    private const int ShownListLimit = 12;
-
-    private WorkflowCanvasViewModel? _openedForShow;
-
     public bool IsInspectorOpen => HasProjects && (_inspectorChoice ?? !IsNarrow);
 
     public string SidebarToggleLabel => IsSidebarOpen ? "Hide the left panel" : "Show the left panel";
@@ -139,6 +135,9 @@ public sealed class MainWindowViewModel : ObservableObject
 
     /// <summary>A node was shown from outside its canvas, so the window brings its card into view.</summary>
     internal event Action<TaskNodeViewModel>? NodeShown;
+
+    /// <summary>A workflow was shown or a node was chosen, so the left tree opens to its row and shows it.</summary>
+    internal event Action<WorkflowCanvasViewModel, TaskNodeViewModel?>? TreeReveal;
 
     /// <summary>The person asked for the conversation of a node that waits for their words, so the window puts the focus in its composer.</summary>
     internal event Action? ComposerRequested;
@@ -232,6 +231,10 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>"4 ready", "1 needs setup", or "Checking…".</summary>
     public string AgentsSummary => RunText.AgentsSummary([.. Agents.Select(agent => agent.Status)]);
 
+    /// <summary>The worst of the agents' tones, which the footer's one dot shows.</summary>
+    public StatusTone AgentsTone => new[] { StatusTone.Problem, StatusTone.Waiting, StatusTone.Running, StatusTone.Complete }
+        .FirstOrDefault(tone => Agents.Any(agent => agent.Tone == tone), StatusTone.Neutral);
+
     /// <summary>The clients with a problem, which show over the left area's footer until the problem clears.</summary>
     public IReadOnlyList<AgentRow> AgentsNeedingSetup => [.. Agents.Where(agent => agent.Tone == StatusTone.Problem)];
 
@@ -276,17 +279,17 @@ public sealed class MainWindowViewModel : ObservableObject
         Persist();
     }
 
-    // The shown workflow lists its nodes, unless a long list would push the other projects out of view. The list that opened
-    // this way closes again when another workflow takes its place.
+    // Only the shown workflow lists its nodes, so one row reads as current, and the tree opens to it and shows it.
     private void OpenShownNodes(WorkflowCanvasViewModel canvas)
     {
-        if (_openedForShow is { } opened && opened != canvas)
+        foreach (var other in Projects.SelectMany(project => project.Workflows).Where(other => other != canvas))
         {
-            opened.IsExpanded = false;
+            other.IsExpanded = false;
         }
 
-        _openedForShow = !canvas.IsExpanded && canvas.Nodes.Count is > 0 and <= ShownListLimit ? canvas : null;
-        canvas.IsExpanded |= _openedForShow is not null;
+        canvas.Project.IsExpanded = true;
+        canvas.IsExpanded = canvas.Nodes.Count > 0;
+        TreeReveal?.Invoke(canvas, null);
     }
 
     /// <summary>Shows the node's workflow and selects the node, as a choice from outside its canvas.</summary>
@@ -298,8 +301,11 @@ public sealed class MainWindowViewModel : ObservableObject
             LayOut();
         }
 
+        node.Canvas.Project.IsExpanded = true;
+        node.Canvas.IsExpanded = true;
         node.Canvas.Inspect(node);
         NodeShown?.Invoke(node);
+        TreeReveal?.Invoke(node.Canvas, node);
     }
 
     /// <summary>Shows the node and what it needs: an agent's conversation, or for an approval, the request in the inspector.</summary>
@@ -367,7 +373,6 @@ public sealed class MainWindowViewModel : ObservableObject
         if (result.Node is { } node)
         {
             ShowNode(node);
-            node.Canvas.IsExpanded = true;
             node.Canvas.ShowFound(node);
         }
         else
@@ -661,6 +666,11 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void OnCanvasChanged(WorkflowCanvasViewModel canvas, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(WorkflowCanvasViewModel.SelectedNode) && canvas == Canvas && canvas.SelectedNode is { } selected)
+        {
+            TreeReveal?.Invoke(canvas, selected);
+        }
+
         switch (e.PropertyName)
         {
             case nameof(WorkflowCanvasViewModel.IsExpanded) or nameof(WorkflowCanvasViewModel.ExpandedCards):
@@ -759,6 +769,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Agents));
         OnPropertyChanged(nameof(AgentsSummary));
+        OnPropertyChanged(nameof(AgentsTone));
         OnPropertyChanged(nameof(AgentsNeedingSetup));
         OnPropertyChanged(nameof(HasAgentsNeedingSetup));
         foreach (var project in Projects)

@@ -62,13 +62,6 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The header's help glyph: the blueprint's version, then what it is for.</summary>
     public string KindTip => string.Join("\n", new[] { TypeVersion, Description }.Where(line => !string.IsNullOrEmpty(line)));
 
-    /// <summary>The node's step in the dependency order, which its row in the left area shows.</summary>
-    public int Step
-    {
-        get;
-        internal set => SetProperty(ref field, value);
-    }
-
     public bool HasFields => Fields.Count > 0;
 
     /// <summary>How many fields differ from the blueprint's defaults.</summary>

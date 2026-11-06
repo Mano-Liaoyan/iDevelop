@@ -209,7 +209,7 @@ public sealed class SidebarLayoutTests : IDisposable
     [AvaloniaTheory]
     [InlineData(240)]
     [InlineData(400)]
-    public void Rows_keep_one_height_while_their_names_fit_and_state_never_moves_a_row(double width)
+    public void Rows_keep_one_height_while_their_names_fit_and_state_shows_in_words_under_the_name(double width)
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var shell = OpenBoth(_fakes.DiscoverAsync().Result);
@@ -223,11 +223,13 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.AddNode();
         shell.Render();
 
-        Assert.Equal(28, row.Bounds.Height);
+        Assert.True(row.Bounds.Height > 28, "The state takes no line of its own.");
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
-        // What needs the person takes the row's end, in place of the progress.
-        Assert.False(Of<Control>(row.GetVisualParent()!, "WorkflowProgress").IsEffectivelyVisible);
+        // The progress keeps the row's end in every state, and the words match the run bar's.
+        Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
+        var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
+        Assert.Equal(canvas.BarChips.Select(chip => chip.Label), Of<Control>(row.GetVisualParent()!, "WorkflowAlert").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
     }
 
     [Theory]
@@ -236,13 +238,78 @@ public sealed class SidebarLayoutTests : IDisposable
     public void A_hyphenated_token_stays_on_one_line(string name, string shown) => Assert.Equal(shown, Theme.NameBreaks.Keep(name));
 
     [AvaloniaFact]
-    public void A_long_workflow_stays_closed_when_it_is_shown_so_the_other_projects_stay_in_view()
+    public void The_shown_workflow_lists_its_nodes_however_long_the_list_is()
     {
         var reports = _temp.Create(Reports);
-        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 13).Select(index => $"Node {index}")]);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 50).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
 
-        Assert.False(shell.WorkflowExpand(Reports, ReleaseNotes).IsChecked);
+        Assert.True(shell.WorkflowExpand(Reports, ReleaseNotes).IsChecked);
+    }
+
+    [AvaloniaFact]
+    public void A_shown_workflow_folds_the_others_and_the_tree_shows_it_from_its_row_down()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 30).Select(index => $"Node {index}")]);
+        Save(reports, "Second", [.. Enumerable.Range(1, 3).Select(index => $"Step {index}")]);
+        var shell = Shell.Open(reports);
+        var view = shell.Window.ViewModel;
+        view.Select(view.Projects[0].Workflows.Single(canvas => canvas.Name == ReleaseNotes));
+        shell.Render();
+        var second = view.Projects[0].Workflows.Single(canvas => canvas.Name == "Second");
+
+        view.Select(second);
+        shell.Render();
+
+        Assert.Equal([second], view.Projects[0].Workflows.Where(canvas => canvas.IsExpanded));
+        var tree = shell.Window.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Tree");
+        var top = shell.WorkflowRow(Reports, "Second").TranslatePoint(default, tree)!.Value.Y;
+        Assert.InRange(top, 0, tree.Viewport.Height - 28);
+    }
+
+    [AvaloniaFact]
+    public void Showing_a_node_opens_its_folded_workflow_and_brings_its_row_into_the_tree()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.Window.Height = 600;
+        var view = shell.Window.ViewModel;
+        view.Canvas!.IsExpanded = false;
+        shell.Render();
+
+        view.ShowNode(view.Canvas.Outline[^1]);
+        shell.Render();
+
+        Assert.True(view.Canvas.IsExpanded);
+        var tree = shell.Window.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Tree");
+        var row = shell.TaskRow(Reports, ReleaseNotes, "Node 40");
+        var top = row.TranslatePoint(default, tree)!.Value.Y;
+        Assert.InRange(top, 0, tree.Viewport.Height - row.Bounds.Height);
+    }
+
+    [AvaloniaFact]
+    public void A_node_s_name_takes_two_lines_with_a_tooltip_until_it_is_selected()
+    {
+        const string Long = "Backfill the ledger partition for every tenant that opened an account before the migration began and keep it online";
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, Long, "Short");
+        var shell = Shell.Open(reports);
+        shell.Render();
+        var row = shell.TaskRow(Reports, ReleaseNotes, Long);
+        var name = row.GetVisualDescendants().OfType<Theme.EllipsisText>().Single();
+        var view = shell.Window.ViewModel;
+        var node = view.Canvas!.Outline.Single(item => item.Title == Long);
+
+        Assert.EndsWith("…", name.Text);
+        Assert.Equal(2, name.TextLayout.TextLines.Count);
+        Assert.Equal(Long, ToolTip.GetTip(name.GetVisualParent<Grid>()!));
+
+        view.Canvas.Inspect(node);
+        shell.Render();
+
+        Assert.DoesNotContain("…", name.Text);
     }
 
     [AvaloniaFact]
@@ -260,7 +327,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void No_row_shows_cut_at_either_edge_of_the_tree_and_the_rows_workflow_stays_pinned()
+    public void No_row_shows_cut_at_the_tree_s_bottom_edge_and_the_rows_workflow_stays_pinned()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
@@ -271,20 +338,18 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.Render();
         T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
         var tree = Named<ScrollViewer>("Tree");
-        var (top, foot, pinned) = (Named<Border>("TreeTopCover"), Named<Border>("TreeFootCover"), Named<Panel>("StickyWorkflow"));
+        var (foot, pinned) = (Named<Border>("TreeFootCover"), Named<Panel>("StickyWorkflow"));
 
         foreach (var offset in new[] { 0.0, 53, 171, 299, 433 })
         {
             tree.Offset = tree.Offset.WithY(offset);
             shell.Render();
             var height = tree.Viewport.Height;
-            var head = pinned.IsVisible ? 56 : Named<Panel>("StickyProject").IsVisible ? 28 : 0;
             foreach (var row in tree.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible))
             {
                 var at = row.TranslatePoint(default, tree)!.Value.Y;
                 var bottom = at + row.Bounds.Height;
                 Assert.True(!(at < height - 0.5 && bottom > height + 0.5) || (foot.IsVisible && height - foot.Height <= at + 0.5), $"The row at {at} is cut at {height}.");
-                Assert.True(!(at < head - 0.5 && bottom > head + 0.5) || (top.IsVisible && head + top.Height >= bottom - 0.5), $"The row at {at} is cut at {head}.");
             }
         }
 

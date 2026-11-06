@@ -285,13 +285,15 @@
     <Setter Property="Data" Value="{StaticResource IconChat}" />
   </Style>
   <Style Selector="PathIcon.stateIcon.state-inputrequired.why-approval">
-    <Setter Property="Data" Value="{StaticResource IconKindApproval}" />
+    <Setter Property="Data" Value="{StaticResource IconBadgeApproval}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateApprovalStrokeBrush}" />
   </Style>
   <Style Selector="PathIcon.stateIcon.state-inputrequired.why-conflict">
     <Setter Property="Data" Value="{StaticResource IconDisconnect}" />
   </Style>
   <Style Selector="PathIcon.stateIcon.state-inputrequired.why-interrupted">
-    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
+    <Setter Property="Data" Value="{StaticResource IconBadgePause}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateNeutralStrokeBrush}" />
   </Style>
   <Style Selector="PathIcon.stateIcon.state-inputrequired.why-roundlimit">
     <Setter Property="Data" Value="{StaticResource IconStateNeedsSetup}" />

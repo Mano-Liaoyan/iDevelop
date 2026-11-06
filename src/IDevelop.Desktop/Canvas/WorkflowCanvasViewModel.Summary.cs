@@ -11,57 +11,24 @@ public sealed partial class WorkflowCanvasViewModel
         Nodes.Count(node => node.State == NodeState.Completed), Nodes.Count(node => node.State == NodeState.Running), WaitingCount,
         Nodes.Count(node => node.State == NodeState.Failed), Nodes.Count(node => node.State == NodeState.Stale), Nodes.Count);
 
-    /// <summary>A node of the workflow has run, so its row shows a progress ring.</summary>
-    public bool HasRun => Counts.HasRun;
-
     /// <summary>"5 of 9 · 1 running · 3 waiting", "9 nodes" before anything runs, or "No nodes yet", then "Unsaved" while it applies.</summary>
     public string Summary => string.Join(" · ", new[] { Counts.Summary(), HasUnsavedChanges ? "Unsaved" : null }.OfType<string>());
 
-    /// <summary>The row's second line: how far the work went, with the state counts as glyphs after it.</summary>
+    /// <summary>How far the work went, at the row's end. The chips under the name hold the other states.</summary>
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
-
-    /// <summary>
-    /// What a row says at its end: the state that most needs the person, with its count. The run bar holds every count. Without
-    /// any of these the row shows its progress.
-    /// </summary>
-    public IReadOnlyList<RowFact> RowFacts
-    {
-        get
-        {
-            var counts = Counts;
-            RowFact?[] facts =
-            [
-                counts.Failed > 0 ? new(NodeState.Failed, counts.Failed) : null,
-                counts.Waiting > 0 ? new(NodeState.InputRequired, counts.Waiting) : null,
-                counts.Running > 0 ? new(NodeState.Running, counts.Running) : null,
-                counts.Stale > 0 ? new(NodeState.Stale, counts.Stale) : null,
-            ];
-            return [.. facts.OfType<RowFact>().Take(1)];
-        }
-    }
-
-    public bool HasRowFacts => RowFacts.Count > 0;
 
     /// <summary>What the first running node does now, in one line, or null while none runs. The row shows it under the name.</summary>
     public string? RowActivity => Outline.FirstOrDefault(node => node.State == NodeState.Running) is { } node ? ActivityRow.OneLine(node.Latest) : null;
 
-    /// <summary>The list shows a node of this workflow as selected, so the workflow's row keeps only its edge bar.</summary>
+    /// <summary>The list shows a node of this workflow as selected, so the workflow's row keeps a quiet fill.</summary>
     public bool ShowsNodeSelection => IsExpanded && SelectedNode is not null;
 
     private void OnSummaryChanged()
     {
         OnPropertyChanged(nameof(Counts));
-        OnPropertyChanged(nameof(HasRun));
         OnPropertyChanged(nameof(RowProgress));
-        OnPropertyChanged(nameof(RowFacts));
-        OnPropertyChanged(nameof(HasRowFacts));
         OnPropertyChanged(nameof(RowActivity));
         OnPropertyChanged(nameof(Summary));
     }
 }
 
-/// <summary>A state that a workflow's row names, and how many of its nodes are in it.</summary>
-public sealed record RowFact(NodeState State, int Count)
-{
-    public bool IsRunning => State == NodeState.Running;
-}

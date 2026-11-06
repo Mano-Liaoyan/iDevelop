@@ -19,6 +19,7 @@ public sealed class ActivityViewModel : ObservableObject
     private readonly Action<TaskNodeViewModel> _open;
     private readonly Dictionary<TaskNodeViewModel, ActivityRow> _rows = [];
     private List<ActivityRow> _ordered = [];
+    private bool _isOpenWhileCompact;
 
     /// <param name="projects">The open projects, in their order.</param>
     /// <param name="open">Shows a node and what it needs from the person.</param>
@@ -43,9 +44,14 @@ public sealed class ActivityViewModel : ObservableObject
     /// <summary>How many rows failed.</summary>
     public int FailedCount => _ordered.Count(row => row.Node.State == NodeState.Failed);
 
+    /// <summary>How many rows run. The three counts add up to <see cref="Count"/>.</summary>
+    public int RunningCount => _ordered.Count(row => row.Node.State == NodeState.Running);
+
     public bool HasWaiting => WaitingCount > 0;
 
     public bool HasFailed => FailedCount > 0;
+
+    public bool HasRunning => RunningCount > 0;
 
     /// <summary>How many rows the list shows before Show all.</summary>
     internal int Limit
@@ -78,20 +84,48 @@ public sealed class ActivityViewModel : ObservableObject
         {
             if (SetProperty(ref field, value))
             {
-                OnPropertyChanged(nameof(IsOpen));
-                OnPropertyChanged(nameof(FoldLabel));
+                RaiseFold();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The panel is short, so the list starts folded down to its heading, whatever the person chose for a taller panel. The
+    /// heading's toggle still opens it, and that choice lasts until the panel grows.
+    /// </summary>
+    internal bool IsCompact
+    {
+        get;
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                _isOpenWhileCompact = false;
+                RaiseFold();
             }
         }
     }
 
     public bool IsOpen
     {
-        get => !IsFolded;
-        set => IsFolded = !value;
+        get => IsCompact ? _isOpenWhileCompact : !IsFolded;
+        set
+        {
+            if (IsCompact)
+            {
+                _isOpenWhileCompact = value;
+                RaiseFold();
+            }
+            else
+            {
+                IsFolded = !value;
+            }
+        }
     }
 
     /// <summary>What the heading's toggle does now, for a screen reader and the tooltip.</summary>
-    public string FoldLabel => IsFolded ? "Show Activity" : "Hide Activity";
+    public string FoldLabel => IsOpen ? "Hide Activity" : "Show Activity";
 
     public bool HasMore => !IsShowingAll && _ordered.Count > Limit;
 
@@ -139,8 +173,16 @@ public sealed class ActivityViewModel : ObservableObject
         OnPropertyChanged(nameof(FailedCount));
         OnPropertyChanged(nameof(HasWaiting));
         OnPropertyChanged(nameof(HasFailed));
+        OnPropertyChanged(nameof(RunningCount));
+        OnPropertyChanged(nameof(HasRunning));
         OnPropertyChanged(nameof(HasMore));
         OnPropertyChanged(nameof(ShowAllLabel));
+    }
+
+    private void RaiseFold()
+    {
+        OnPropertyChanged(nameof(IsOpen));
+        OnPropertyChanged(nameof(FoldLabel));
     }
 
     private static int? GroupOf(TaskNodeViewModel node) => node.State switch
@@ -246,11 +288,11 @@ public sealed class ActivityRow : ObservableObject
         Place = showsProject ? $"{Node.Canvas.Project.Name} › {Node.Canvas.Name}" : Node.Canvas.Name;
     }
 
-    // "Input required · question" names the reason after the state, which the glyph already shows.
+    // "Input required · Question" names the reason after the state, which the glyph already shows.
     private static string ReasonOf(TaskNodeViewModel node) => node.State switch
     {
         NodeState.Running => OneLine(node.Latest) ?? node.StatusLabel,
-        NodeState.InputRequired when node.StatusLabel.Split(" · ") is [_, var why] => char.ToUpperInvariant(why[0]) + why[1..],
+        NodeState.InputRequired when node.StatusLabel.Split(" · ") is [_, var why] => why,
         _ => node.StatusLabel,
     };
 

@@ -227,10 +227,10 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
         shell.RunNode("Design");
-        shell.WaitForCard("Design", "Input required · reply");
+        shell.WaitForCard("Design", "Input required · Reply");
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Input required · reply"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Input required · Reply"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-inputrequired", ring.Classes);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
     }

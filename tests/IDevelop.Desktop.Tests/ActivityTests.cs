@@ -78,7 +78,7 @@ public sealed class ActivityTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Keyboard_focus_shows_one_accent_ring_outside_the_control_and_a_placeholder_stays_readable()
+    public void Keyboard_focus_shows_one_accent_ring_on_the_control_s_edge_and_a_placeholder_stays_readable()
     {
         var shell = OpenWaiting(1);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
@@ -87,8 +87,8 @@ public sealed class ActivityTests : IDisposable
         open.Focus(NavigationMethod.Tab);
         shell.Render();
 
-        // The ring is 2 px wide, 1 px outside the button.
-        Assert.Equal(Avalonia.Media.Color.Parse("#0088FF"), shell.ColorAt(open, new Avalonia.Point(open.Bounds.Width / 2, -2)));
+        // The ring is 2 px wide, over the button's edge.
+        Assert.Equal(Avalonia.Media.Color.Parse("#0088FF"), shell.ColorAt(open, new Avalonia.Point(open.Bounds.Width / 2, -1)));
         var watermark = shell.Find<TextBox>("FindBox").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Watermark");
         Assert.Equal(1, watermark.Opacity);
     }
@@ -194,6 +194,38 @@ public sealed class ActivityTests : IDisposable
 
         Assert.Equal("Write docs", view.Conversation?.Node.Title);
         shell.WaitUntil(() => shell.Window.FocusManager!.GetFocusedElement() is TextBox { Name: "Composer" }, "the composer takes the focus");
+    }
+
+    [AvaloniaFact]
+    public void A_short_panel_folds_Activity_to_its_heading_and_the_heading_opens_it()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Run(shell);
+        var activity = shell.Window.ViewModel.Activity;
+
+        shell.Window.Height = 600;
+        shell.Render();
+        Assert.Equal((false, "Show Activity", false), (activity.IsOpen, activity.FoldLabel, activity.IsFolded));
+
+        activity.IsOpen = true;
+        Assert.Equal((true, false), (activity.IsOpen, activity.IsFolded));
+
+        activity.IsOpen = false;
+        shell.Window.Height = 900;
+        shell.Render();
+        Assert.True(activity.IsOpen, "A tall panel does not take back the person's own choice.");
+    }
+
+    [AvaloniaFact]
+    public void The_heading_s_counts_add_up_to_the_list()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Run(shell);
+        var activity = shell.Window.ViewModel.Activity;
+
+        Assert.Equal(activity.Count, activity.WaitingCount + activity.FailedCount + activity.RunningCount);
     }
 
     [AvaloniaFact]

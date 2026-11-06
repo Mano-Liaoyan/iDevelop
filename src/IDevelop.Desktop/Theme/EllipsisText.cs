@@ -21,6 +21,9 @@ public sealed class EllipsisText : TextBlock
 
     public static readonly StyledProperty<int> KeepFromProperty = AvaloniaProperty.Register<EllipsisText, int>(nameof(KeepFrom));
 
+    public static readonly DirectProperty<EllipsisText, bool> IsCutProperty =
+        AvaloniaProperty.RegisterDirect<EllipsisText, bool>(nameof(IsCut), text => text.IsCut);
+
     static EllipsisText() => AffectsMeasure<EllipsisText>(WholeProperty, KeepFromProperty);
 
     /// <summary>The whole text. <see cref="TextBlock.Text"/> holds what shows.</summary>
@@ -35,6 +38,13 @@ public sealed class EllipsisText : TextBlock
     {
         get => GetValue(KeepFromProperty);
         set => SetValue(KeepFromProperty, value);
+    }
+
+    /// <summary>The text that shows is shorter than <see cref="Whole"/>, so a More control can show only then.</summary>
+    public bool IsCut
+    {
+        get;
+        private set => SetAndRaise(IsCutProperty, ref field, value);
     }
 
     protected override Type StyleKeyOverride => typeof(TextBlock);
@@ -60,7 +70,14 @@ public sealed class EllipsisText : TextBlock
             }
         }
 
-        return base.MeasureOverride(availableSize);
+        else if (MaxLines == 0 && Text != Whole)
+        {
+            SetCurrentValue(TextProperty, Whole);
+        }
+
+        var size = base.MeasureOverride(availableSize);
+        IsCut = Text != Whole && !string.IsNullOrEmpty(Whole);
+        return size;
     }
 
     private string Clamp(string whole, double width)

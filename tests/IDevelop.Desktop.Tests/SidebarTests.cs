@@ -37,18 +37,6 @@ public sealed class SidebarTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_node_s_step_is_one_after_the_last_node_it_depends_on()
-    {
-        var shell = Shell.Open(_temp.Seed(
-            TaskAt(Design, "Design", 105, 90),
-            TaskAt(Build, "Build", 405, 90),
-            TaskAt(Review, "Review", 705, 90),
-            new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-
-        Assert.Equal([1, 2, 1], new[] { "Design", "Build", "Review" }.Select(title => shell.Window.ViewModel.Canvas!.Outline.Single(node => node.Title == title).Step));
-    }
-
-    [AvaloniaFact]
     public void The_sidebar_lists_the_open_project_with_its_workflow_and_task_count_and_its_tasks_once_expanded()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90), TaskAt(Review, "Review", 405, 300)));

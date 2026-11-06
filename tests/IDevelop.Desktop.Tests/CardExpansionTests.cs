@@ -377,7 +377,7 @@ public sealed class CardExpansionTests : IDisposable
         shell.Click(shell.Find<Button>("RunWorkflow"));
         shell.WaitForState("Approve", NodeState.InputRequired);
 
-        Assert.Equal("Input required · approval", shell.CardText("Approve", "CardStatus"));
+        Assert.Equal("Input required · Approval", shell.CardText("Approve", "CardStatus"));
         Assert.Equal("Approval", shell.CardText("Approve", "CardNowHeading"));
         Assert.True(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
         Assert.True(shell.InCard<Button>("Approve", "CardSendBack").IsEffectivelyVisible);
