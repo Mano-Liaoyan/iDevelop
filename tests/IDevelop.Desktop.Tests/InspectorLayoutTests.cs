@@ -226,7 +226,7 @@ public sealed class InspectorLayoutTests : IDisposable
         var edge = shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset;
 
         var counts = Shell.ById<TextBlock>(shell.Window, "StateCount").Where(count => count.IsEffectivelyVisible).ToArray();
-        var more = Shell.ById<Button>(shell.Window, "BlueprintMore").Where(button => button.IsEffectivelyVisible).ToArray();
+        var more = Shell.ById<Button>(shell.Window, "PlaceBlueprint").Where(button => button.IsEffectivelyVisible).ToArray();
 
         Assert.NotEmpty(counts);
         Assert.Equal(6, more.Length);

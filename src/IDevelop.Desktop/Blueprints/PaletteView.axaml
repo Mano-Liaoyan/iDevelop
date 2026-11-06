@@ -35,11 +35,6 @@
                     </inspector:InspectorRow.Lead>
                     <inspector:InspectorRow.Actions>
                       <StackPanel Orientation="Horizontal">
-                        <Button Classes="glyph" Command="{Binding PlaceCommand}" ToolTip.Tip="Place in view"
-                                AutomationProperties.AutomationId="PlaceBlueprint"
-                                AutomationProperties.Name="{Binding PlaceName}">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
-                        </Button>
                         <Button Classes="glyph quiet" ToolTip.Tip="More"
                                 AutomationProperties.AutomationId="BlueprintMore"
                                 AutomationProperties.Name="{Binding MoreName}">
@@ -54,6 +49,11 @@
                                         AutomationProperties.Name="{Binding EditName}" theme:MenuGlyph.Data="{StaticResource IconEdit}" />
                             </MenuFlyout>
                           </Button.Flyout>
+                        </Button>
+                        <Button Classes="glyph" Command="{Binding PlaceCommand}" ToolTip.Tip="Place in view"
+                                AutomationProperties.AutomationId="PlaceBlueprint"
+                                AutomationProperties.Name="{Binding PlaceName}">
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
                         </Button>
                       </StackPanel>
                     </inspector:InspectorRow.Actions>

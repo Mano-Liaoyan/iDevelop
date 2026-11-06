@@ -826,8 +826,8 @@
     <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
     <Setter Property="OpacityMask">
       <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-        <GradientStop Offset="0" Color="#00000000" />
-        <GradientStop Offset="1" Color="#FF000000" />
+        <GradientStop Offset="0" Color="Transparent" />
+        <GradientStop Offset="1" Color="{DynamicResource CanvasGrid.BackgroundColor}" />
       </LinearGradientBrush>
     </Setter>
   </Style>
