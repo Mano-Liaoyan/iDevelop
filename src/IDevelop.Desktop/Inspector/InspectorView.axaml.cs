@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -12,6 +13,9 @@ namespace IDevelop.Desktop.Inspector;
 public partial class InspectorView : UserControl
 {
     private readonly InspectorState _state = new();
+
+    /// <summary>The tallest row that the list's bottom edge covers rather than cuts. A taller one, such as a box, may show in part.</summary>
+    private const double ShortRow = 40;
 
     public InspectorView()
     {
@@ -110,4 +114,18 @@ public partial class InspectorView : UserControl
     // The sections the panel shows now. A fold outlives them, so each key keeps its fold for the next node.
     private IEnumerable<string> Sections() =>
         this.GetLogicalDescendants().OfType<InspectorSection>().Where(section => !EditorHost.IsLogicalAncestorOf(section)).Select(section => section.Key);
+
+    // A short row that the bottom edge would cut hides under a cover until it comes in whole.
+    private void OnSectionsScrolled(object? sender, ScrollChangedEventArgs e)
+    {
+        var height = SectionScroller.Viewport.Height;
+        var cut = SectionList.GetVisualDescendants().OfType<Control>()
+            .Where(control => control is InspectorRow || control.Classes.Contains("sectionHeader"))
+            .Where(control => control.IsEffectivelyVisible && control.Bounds.Height <= ShortRow)
+            .Select(control => (Top: control.TranslatePoint(default, SectionScroller)?.Y ?? 0, control.Bounds.Height))
+            .Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5)
+            .Select(row => height - row.Top).DefaultIfEmpty(0).Max();
+        SectionsFoot.Height = cut;
+        SectionsFoot.IsVisible = cut > 0;
+    }
 }

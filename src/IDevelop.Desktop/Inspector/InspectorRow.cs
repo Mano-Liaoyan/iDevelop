@@ -36,8 +36,8 @@ public enum RowLayout
 }
 
 /// <summary>
-/// One property in an inspector section: a glyph or a kind tile, its label, its editor, and a revert arrow while the value
-/// differs from the blueprint's default. The label's tooltip and help text hold the property's note. While the filter has text, a row shows
+/// One property in an inspector section: its label, a glyph or a kind tile where the row names a thing, its editor, and a revert arrow while
+/// the value differs from the default or the saved value. The label's tooltip and help text hold the property's note. While the filter has text, a row shows
 /// when its label or its section's title matches. A row without a label shows only with its section's title.
 /// </summary>
 public sealed class InspectorRow : InspectorPart
@@ -65,8 +65,6 @@ public sealed class InspectorRow : InspectorPart
     public static readonly StyledProperty<bool> CanRevertProperty = AvaloniaProperty.Register<InspectorRow, bool>(nameof(CanRevert));
 
     public static readonly StyledProperty<string?> RevertIdProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(RevertId));
-
-    public static readonly StyledProperty<bool> IsEditedProperty = AvaloniaProperty.Register<InspectorRow, bool>(nameof(IsEdited));
 
     private InspectorSection? _section;
     private Panel? _labelLine;
@@ -147,13 +145,6 @@ public sealed class InspectorRow : InspectorPart
         set => SetValue(CanRevertProperty, value);
     }
 
-    /// <summary>The value differs from the saved workflow's, so the row marks it even with no default to go back to.</summary>
-    public bool IsEdited
-    {
-        get => GetValue(IsEditedProperty);
-        set => SetValue(IsEditedProperty, value);
-    }
-
     /// <summary>The revert arrow's automation id, such as RevertInstructions.</summary>
     public string? RevertId
     {
@@ -198,9 +189,9 @@ public sealed class InspectorRow : InspectorPart
         {
             ShowNote();
         }
-        else if (change.Property == CanRevertProperty || change.Property == IsEditedProperty)
+        else if (change.Property == CanRevertProperty)
         {
-            PseudoClasses.Set(":changed", CanRevert || IsEdited);
+            PseudoClasses.Set(":changed", CanRevert);
         }
         else if (change.Property == LabelProperty)
         {

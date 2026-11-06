@@ -38,6 +38,62 @@ public sealed class InspectorTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [Theory]
+    [InlineData("Add `POST /v1` **now**.", "Add POST /v1 now.")]
+    [InlineData("- One\n- `Two`\n\n* Three", "• One\n• Two\n• Three")]
+    [InlineData("First.\n\nSecond.", "First.\nSecond.")]
+    [InlineData("-5 stays", "-5 stays")]
+    public void A_fields_reading_drops_its_marks_and_keeps_its_lines(string source, string reading) =>
+        Assert.Equal(reading, Execution.ResultViewModel.Reading(source));
+
+    [AvaloniaFact]
+    public void A_node_with_a_result_leads_with_its_output_and_a_node_without_one_with_its_setup()
+    {
+        var stack = new SectionStack();
+        foreach (var key in new[] { "Proposal", "Task", "Agent", "Input", "Output" })
+        {
+            stack.Children.Add(new InspectorSection { Key = key });
+        }
+
+        string[] Keys() => [.. stack.Children.OfType<InspectorSection>().Select(section => section.Key)];
+
+        stack.LeadsWithOutput = true;
+        Assert.Equal(["Proposal", "Output", "Input", "Task", "Agent"], Keys());
+
+        stack.LeadsWithOutput = false;
+        Assert.Equal(["Proposal", "Task", "Agent", "Input", "Output"], Keys());
+    }
+
+    [AvaloniaFact]
+    public void A_changed_model_shows_an_arrow_that_counts_and_goes_back_to_the_saved_model()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        var node = shell.Window.ViewModel.Canvas!.Nodes.Single();
+        var (changes, model) = (node.AgentChanges, node.AgentModel);
+        Assert.False(node.ModelDiffers);
+
+        node.SetSkills(Codex with { Model = "gpt-5.4" });
+
+        Assert.True(node.ModelChanged);
+        Assert.Equal(changes + 1, node.AgentChanges);
+
+        node.RevertAgentCommand.Execute(null);
+
+        Assert.False(node.ModelChanged);
+        Assert.Equal((changes, model), (node.AgentChanges, node.AgentModel));
+    }
+
+    [AvaloniaFact]
+    public void An_overview_row_selects_the_first_node_in_its_state()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)));
+        var canvas = shell.Window.ViewModel.Canvas!;
+
+        canvas.Overview.States.Single(state => state.State == NodeState.Idle).SelectCommand.Execute(null);
+
+        Assert.Equal(canvas.Outline[0], canvas.SelectedNode);
+    }
+
+    [Theory]
     [InlineData("acc", "Acceptance criteria", true)]
     [InlineData("rsn", "Reasoning", true)]
     [InlineData("RSN", "reasoning", true)]
@@ -56,7 +112,8 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["Implement", "Built-in, version 1"], new[] { "TaskType", "TaskTypeVersion" }.Select(id => shell.Find<TextBlock>(id).Text));
+        Assert.Equal("Implement", shell.Find<TextBlock>("TaskType").Text);
+        Assert.StartsWith("Built-in, version 1", shell.Window.ViewModel.Canvas!.SelectedNode!.KindTip);
         Assert.Equal(Color.Parse("#564ADE"), shell.ColorAt(HeaderTile(shell), new Point(3, 16)));
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
 

@@ -52,7 +52,7 @@ public sealed class BlueprintTests : IDisposable
         Assert.Equal(1, key.Version);
 
         Press(shell, "Bug fix", "PlaceBlueprint");
-        Assert.Equal(["Bug fix", "Version 1"], [shell.Find<TextBlock>("TaskType").Text ?? "", shell.Find<TextBlock>("TaskTypeVersion").Text ?? ""]);
+        Assert.Equal(["Bug fix", "Version 1"], [shell.Find<TextBlock>("TaskType").Text ?? "", shell.Window.ViewModel.Canvas!.SelectedNode!.KindTip.Split((char)10)[0] ?? ""]);
         shell.Find<TextBox>("TaskTitle").Text = "First";
         ClearSelection(shell);
 
@@ -65,15 +65,15 @@ public sealed class BlueprintTests : IDisposable
 
         Assert.Equal("Saved Bug fix, version 2, to the project library.", shell.Status);
         Press(shell, "Bug fix", "PlaceBlueprint");
-        Assert.Equal("Version 2", shell.Find<TextBlock>("TaskTypeVersion").Text);
+        Assert.Equal("Version 2", shell.Window.ViewModel.Canvas!.SelectedNode!.KindTip.Split((char)10)[0]);
         shell.Find<TextBox>("TaskTitle").Text = "Second";
         shell.Press(Key.S, RawInputModifiers.Control);
 
         var reopened = Shell.Open(project);
         reopened.Click(reopened.Header(reopened.Node("First")));
-        Assert.Equal(["Bug fix", "Version 1"], [reopened.Find<TextBlock>("TaskType").Text ?? "", reopened.Find<TextBlock>("TaskTypeVersion").Text ?? ""]);
+        Assert.Equal(["Bug fix", "Version 1"], [reopened.Find<TextBlock>("TaskType").Text ?? "", reopened.Window.ViewModel.Canvas!.SelectedNode!.KindTip.Split((char)10)[0]]);
         reopened.Click(reopened.Header(reopened.Node("Second")));
-        Assert.Equal("Version 2", reopened.Find<TextBlock>("TaskTypeVersion").Text);
+        Assert.Equal("Version 2", reopened.Window.ViewModel.Canvas!.SelectedNode!.KindTip.Split((char)10)[0]);
         var workflow = WorkflowDocument.OpenProject(project).Single().Current;
         Assert.Equal([key, key with { Version = 2 }], workflow.Blueprints.Keys);
     }
@@ -156,8 +156,6 @@ public sealed class BlueprintTests : IDisposable
 
         Press(shell, "Implement copy", "PlaceBlueprint");
         Assert.Equal("Bug", shell.Find<TextBox>("TaskBug").GetValue(AutomationProperties.NameProperty));
-        var icons = new[] { "TaskInstructions", "TaskBug" }.Select(id => shell.Find<TextBox>(id).FindAncestorOfType<InspectorRow>()!.Icon);
-        Assert.Equal([Resource("IconEdit"), Resource("IconField")], icons);
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(["acceptanceCriteria", "bug", "instructions"], WorkflowDocument.OpenProject(project).Single().Current.Blueprints.Values.Single().Fields.Select(field => field.Key).Order());
     }

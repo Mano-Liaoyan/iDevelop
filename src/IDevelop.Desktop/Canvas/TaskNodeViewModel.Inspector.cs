@@ -59,6 +59,16 @@ public sealed partial class TaskNodeViewModel
     /// <summary>What the blueprint is for, and what it was derived from, which the header's help glyph shows.</summary>
     public string Description => string.Join("\n", new[] { _task.Blueprint.Description, DerivedFrom is { } source ? $"Derived from {source}." : null }.Where(line => !string.IsNullOrEmpty(line)));
 
+    /// <summary>The header's help glyph: the blueprint's version, then what it is for.</summary>
+    public string KindTip => string.Join("\n", new[] { TypeVersion, Description }.Where(line => !string.IsNullOrEmpty(line)));
+
+    /// <summary>The node's step in the dependency order, which its row in the left area shows.</summary>
+    public int Step
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
+
     public bool HasFields => Fields.Count > 0;
 
     /// <summary>How many fields differ from the blueprint's defaults.</summary>
@@ -66,25 +76,34 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>How many of the Agent section's rows show a revert arrow.</summary>
     public int AgentChanges =>
-        new[] { ClientDiffers || ClientEdited, ModelDiffers || ModelEdited, ReasoningDiffers || ReasoningEdited, Skills.CanRevert, HasConversation && CanRevertConversation }.Count(row => row);
+        new[] { ClientChanged, ModelChanged, ReasoningChanged, Skills.CanRevert, HasConversation && CanRevertConversation }.Count(row => row);
+
+    /// <summary>The client differs from the default or the saved workflow, so its row shows an arrow.</summary>
+    public bool ClientChanged => ClientDiffers || ClientEdited;
+
+    /// <summary>The model differs from the default or the saved workflow, so its row shows an arrow.</summary>
+    public bool ModelChanged => ModelDiffers || ModelEdited;
+
+    /// <summary>The reasoning level differs from the default or the saved workflow, so its row shows an arrow.</summary>
+    public bool ReasoningChanged => ReasoningDiffers || ReasoningEdited;
 
     /// <summary>The client differs from the saved workflow's, so its row says so where it has no default to go back to.</summary>
-    public bool ClientEdited => SavedAgent is { } saved && saved.Client != _task.Execution?.Client;
+    private bool ClientEdited => SavedAgent is { } saved && saved.Client != _task.Execution?.Client;
 
     /// <summary>The model differs from the saved workflow's.</summary>
-    public bool ModelEdited => SavedAgent is { } saved && saved.Model != _task.Execution?.Model;
+    private bool ModelEdited => SavedAgent is { } saved && saved.Model != _task.Execution?.Model;
 
     /// <summary>The reasoning level differs from the saved workflow's.</summary>
-    public bool ReasoningEdited => SavedAgent is { } saved && saved.Reasoning != _task.Execution?.Reasoning;
+    private bool ReasoningEdited => SavedAgent is { } saved && saved.Reasoning != _task.Execution?.Reasoning;
 
     private ExecutionSettings? SavedAgent => _canvas.Document.Saved?.Tasks.GetValueOrDefault(Id)?.Execution;
 
     /// <summary>A save or an edit moved what the rows compare with.</summary>
     internal void ShowAgentEdits()
     {
-        OnPropertyChanged(nameof(ClientEdited));
-        OnPropertyChanged(nameof(ModelEdited));
-        OnPropertyChanged(nameof(ReasoningEdited));
+        OnPropertyChanged(nameof(ClientChanged));
+        OnPropertyChanged(nameof(ModelChanged));
+        OnPropertyChanged(nameof(ReasoningChanged));
         OnPropertyChanged(nameof(AgentChanges));
     }
 
@@ -135,6 +154,7 @@ public sealed partial class TaskNodeViewModel
     /// <summary>A blueprint without a default agent has nothing to revert to.</summary>
     public bool CanRevertAgent => _task.Blueprint.Defaults.Execution is { } agent && _task.Execution != agent;
 
+    /// <summary>Puts the blueprint's agent back, or the saved workflow's where the agent already matches the blueprint or the blueprint has none.</summary>
     public ICommand RevertAgentCommand { get; private set; } = null!;
 
     public bool CanRevertConversation => _task.Conversation != _task.Blueprint.Defaults.Conversation;
@@ -160,7 +180,7 @@ public sealed partial class TaskNodeViewModel
 
     partial void InitializeInspector()
     {
-        RevertAgentCommand = new RelayCommand(() => SetExecution(_task.Blueprint.Defaults.Execution));
+        RevertAgentCommand = new RelayCommand(() => SetExecution(Default is { } agent && _task.Execution != agent ? agent : SavedAgent));
         RevertConversationCommand = new RelayCommand(() => _canvas.Edit(new WorkflowEdit.SetConversation(Id, _task.Blueprint.Defaults.Conversation)));
         SelectCommand = new RelayCommand(() => _canvas.Inspect(this));
         _acceptAndFinish = new RelayCommand(

@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Workflows;
 
@@ -10,21 +11,6 @@ namespace IDevelop.Desktop.Canvas;
 /// </summary>
 public sealed class FieldViewModel : ObservableObject
 {
-    /// <summary>
-    /// The icon of each built-in field key, which a derived blueprint keeps with its meaning. Any other key is a field a
-    /// person defined, whose meaning the app cannot know, so it shows the neutral field icon.
-    /// </summary>
-    private static readonly IReadOnlyDictionary<string, string> Icons = new Dictionary<string, string>
-    {
-        ["instructions"] = "IconEdit",
-        ["acceptanceCriteria"] = "IconCheckmark",
-        ["goal"] = "IconGoal",
-        ["constraints"] = "IconConstraints",
-        ["brief"] = "IconBrief",
-        ["focus"] = "IconChecklist",
-        ["checklist"] = "IconChecklist",
-    };
-
     private readonly TaskNodeViewModel _node;
 
     internal FieldViewModel(TaskNodeViewModel node, FieldSpec spec)
@@ -42,8 +28,6 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>The label's tooltip, which says when the field is required.</summary>
     public string LabelTip => Spec.Required ? $"{Spec.Label} · Required" : Spec.Label;
 
-    public string IconKey => Icons.GetValueOrDefault(Spec.Key, "IconField");
-
     public bool IsMultiline => Spec.Shape == FieldShape.Text;
 
     /// <summary>"Task" and the key with its first letter raised, such as TaskInstructions, the ids the inspector's boxes always had.</summary>
@@ -58,6 +42,12 @@ public sealed class FieldViewModel : ObservableObject
         set => _node.SetField(Spec.Key, value);
     }
 
+    /// <summary>The text as it reads at rest: its Markdown marks gone, list items as bullets, and no blank lines. The box edits the source.</summary>
+    public string Reading => ResultViewModel.Reading(Text);
+
+    /// <summary>The id of the reading, such as TaskInstructionsReading.</summary>
+    public string ReadingId => $"{AutomationId}Reading";
+
     /// <summary>The text differs from the blueprint's default for the field.</summary>
     public bool CanRevert => Text != Spec.Default;
 
@@ -71,6 +61,7 @@ public sealed class FieldViewModel : ObservableObject
     internal void Refresh()
     {
         OnPropertyChanged(nameof(Text));
+        OnPropertyChanged(nameof(Reading));
         OnPropertyChanged(nameof(CanRevert));
     }
 }

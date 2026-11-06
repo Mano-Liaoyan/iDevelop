@@ -146,7 +146,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         Assert.Equal("actions at 12, values at 12", Edges(shell));
         AssertNothingCutShort(shell);
-        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue")));
+        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue").FindAncestorOfType<Border>()!));
     }
 
     [AvaloniaFact]
@@ -157,7 +157,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var note = shell.Find<TextBlock>("EmptyLibrary");
 
-        Assert.Equal("No project or personal blueprints yet. Derive one to add it.", note.Text);
+        Assert.Equal("No project or personal blueprints yet. Derive one.", note.Text);
         Assert.DoesNotContain(note.TextLayout.TextLines, line => line.HasCollapsed);
     }
 
@@ -180,7 +180,7 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Every_labelled_row_of_a_task_leads_with_a_glyph_or_a_tile()
+    public void A_labelled_row_of_a_task_leads_with_its_label_and_no_glyph()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.Click(shell.Header(shell.Node("Design")));
@@ -191,10 +191,7 @@ public sealed class InspectorLayoutTests : IDisposable
         Assert.Equal(
             ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"],
             rows.Select(row => row.Label));
-        Assert.All(rows, row => Assert.True(row.Icon is not null || row.Lead is not null, $"{row.Label} has no glyph."));
-        Assert.Equal(
-            ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", "IconDescription"],
-            rows.Select(row => IconKey(row.Icon)));
+        Assert.All(rows, row => Assert.True(row.Icon is null && row.Lead is null, $"{row.Label} leads with a glyph."));
     }
 
     [AvaloniaFact]
@@ -210,7 +207,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var strong = ((ISolidColorBrush)Application.Current!.FindResource(ThemeVariant.Light, "TextStrongBrush")!).Color;
         Assert.Equal(
-            [("Idle", strong), ("Implement", strong), ("Plan", strong), ("Architect", strong), ("Review", strong), ("Approval", strong), ("Merge", strong)],
+            [("Implement", strong), ("Plan", strong), ("Architect", strong), ("Review", strong), ("Approval", strong), ("Merge", strong)],
             labels);
     }
 
@@ -299,7 +296,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var entries = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
             .Where(row => row.IsEffectivelyVisible && row.Classes.Contains("entry")).ToArray();
-        Assert.Equal(7, entries.Length);
+        Assert.Equal(6, entries.Length);
         Assert.All(entries, row => Assert.Equal(InspectorGrid.LineHeight, row.Bounds.Height, 0.5));
         var margins = entries.Select(row => row.Margin).ToList();
 
@@ -323,7 +320,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal("labels at 32, values at 108", Columns(shell));
+        Assert.Equal("labels at 12, values at 108", Columns(shell));
 
         shell.Click(shell.ConnectionInto("Build"));
 
@@ -387,7 +384,8 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Render();
 
         var inspector = shell.Bounds(shell.Find<Control>("Inspector"));
-        Assert.Equal(inspector.Left + Inset, shell.Bounds(shell.Find<Control>("RunTaskStatus").FindAncestorOfType<Border>()!).Left, 0.5);
+        // The status starts the line under the title, after the tile.
+        Assert.Equal(inspector.Left + Inset + InspectorHeader.TileSize + InspectorHeader.RowGap, shell.Bounds(shell.Find<Control>("RunTaskStatus").FindAncestorOfType<Border>()!).Left, 0.5);
         var results = shell.Bounds(shell.Find<Control>("Results"));
         Assert.Equal((inspector.Left + Inset, inspector.Right - Inset), (Math.Round(results.Left, 1), Math.Round(results.Right, 1)));
     }
@@ -399,7 +397,7 @@ public sealed class InspectorLayoutTests : IDisposable
         PathIcon icon when icon.FindAncestorOfType<KindTile>() is null && icon.FindAncestorOfType<ComboBox>() is null
             && icon.FindAncestorOfType<ToggleButton>() is null => "glyph",
         ComboBox => "value",
-        ToggleButton picker when picker.Classes.Contains("picker") => "value",
+        ToggleButton picker when picker.Classes.Contains("picker") || picker.Classes.Contains("rowDisclosure") => "value",
         TextBlock text when text.Classes.Contains("value") => "value",
         _ => null,
     };
@@ -611,7 +609,7 @@ public sealed class InspectorLayoutTests : IDisposable
     /// <summary>
     /// The distinct right insets, in px from the inspector's edge, of the actions and of the values it shows now. A row's
     /// actions are its trailing glyphs, such as a revert arrow, Place and More, or a kind's count, whose
-    /// trailing column ends with them. A revert arrow follows its value, so that row's arrow keeps the edge in the value's place.
+    /// trailing column ends with them. A value never moves for its arrow, which ends the label's column.
     /// </summary>
     private static string Edges(Shell shell)
     {
@@ -622,8 +620,7 @@ public sealed class InspectorLayoutTests : IDisposable
         string? Id(Control control) => AutomationProperties.GetAutomationId(control);
 
         var actions = shown.Where(control => Id(control) is "InspectorMore" or "InspectorTools" or "RemoveField" || control.Name == "PART_Trail");
-        bool Reverts(Control control) => control.FindAncestorOfType<InspectorRow>() is { CanRevert: true, Layout: RowLayout.Columns };
-        var values = shown.Where(control => !Reverts(control)).Where(control =>
+        var values = shown.Where(control =>
             control is ComboBox
             || control is TextBox && InRow(control)
             || control is Button { Classes: var classes } && classes.Contains("rowLink")

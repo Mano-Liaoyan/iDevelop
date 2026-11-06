@@ -213,12 +213,12 @@ public sealed class InspectorHeaderTests : IDisposable
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105));
         f.Install(Reply("s-1", "Hello."));
         var shell = f.Open();
-        Assert.Equal([new StateCount(NodeState.Idle, "Idle", 1)], shell.Window.ViewModel.Canvas!.Overview.States);
+        Assert.Equal([(NodeState.Idle, "Idle", 1)], shell.Window.ViewModel.Canvas!.Overview.States.Select(state => (state.State, state.Label, state.Count)));
 
         shell.RunNode("Say hi");
         shell.WaitForState("Say hi", NodeState.Completed);
         shell.Render();
 
-        Assert.Equal([new StateCount(NodeState.Completed, "Completed", 1)], shell.Window.ViewModel.Canvas!.Overview.States);
+        Assert.Equal([(NodeState.Completed, "Completed", 1)], shell.Window.ViewModel.Canvas!.Overview.States.Select(state => (state.State, state.Label, state.Count)));
     }
 }
