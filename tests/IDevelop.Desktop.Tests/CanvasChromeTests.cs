@@ -131,13 +131,13 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.True(lines <= 2, $"The docked header has {lines} lines.");
         // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit behind a glyph.
         Assert.False(shell.Find<Control>("ConversationBreadcrumb").IsEffectivelyVisible);
-        Assert.False(shell.Find<Control>("ClientLimitations").IsEffectivelyVisible);
+        Assert.False(shell.Has<Control>("ClientLimitations"));
         var info = shell.Find<Control>("ClientLimitationsInfo");
         Assert.True(info.IsEffectivelyVisible);
         var limitations = shell.Window.ViewModel.DockedConversation!.Limitations;
         Assert.Equal((limitations, limitations), (AutomationProperties.GetName(info), ToolTip.GetTip(info)));
         var box = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer")).Deflate(1);
-        foreach (var id in new[] { "ConversationComposer", "ComposerHint", "ConversationApprove", "ConversationSend" })
+        foreach (var id in new[] { "ConversationComposer", "ConversationModel", "ConversationSend" })
         {
             Assert.True(box.Contains(shell.Bounds(shell.Find<Control>(id))), $"{id} at {shell.Bounds(shell.Find<Control>(id))} leaves the composer's box {box}.");
         }

@@ -57,10 +57,10 @@ public sealed class ConversationTests
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.Running);
         shell.Talk();
-        shell.WaitUntil(() => shell.InView<Button>("ConversationStopAndSend").IsEffectivelyVisible, "the turn runs");
+        shell.WaitUntil(() => shell.InView<Button>("ConversationSendMenu").IsEffectivelyVisible, "the turn runs");
 
         shell.InView<TextBox>("ConversationComposer").Text = "Stop and write hi.";
-        Shell.Invoke(shell.InView<Button>("ConversationStopAndSend"));
+        shell.ChooseMenu("ConversationSendMenu", "ConversationStopAndSend");
 
         var resumed = Path.Combine(f.Evidence, "resumed.txt");
         shell.WaitUntil(() => File.Exists(resumed) && shell.NodeModel("Say hi").State == NodeState.Completed, "the next turn ends");
@@ -100,9 +100,10 @@ public sealed class ConversationTests
         shell.Talk();
         shell.InView<TextBox>("ConversationComposer").Text = "Hello?";
 
-        Assert.Equal("Run the node first. A message continues its session.", shell.InView<TextBlock>("ComposerHint").Text);
+        Assert.Equal("Run the node first. A message continues its session.", shell.InView<TextBlock>("ConversationEmpty").Text);
+        Assert.True(shell.Find<Button>("ConversationRunNode").IsEffectivelyEnabled);
         Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyEnabled);
-        Assert.False(shell.InView<Button>("ConversationTerminal").IsEffectivelyEnabled);
+        Assert.False(shell.NodeModel("Say hi").OpenInTerminalCommand.CanExecute(null));
     }
 
     [AvaloniaFact]
@@ -115,7 +116,7 @@ public sealed class ConversationTests
         shell.WaitForState("Say hi", NodeState.Completed);
 
         shell.Talk();
-        Shell.Invoke(shell.InView<Button>("ConversationTerminal"));
+        shell.ChooseMenu("ConversationMore", "ConversationTerminal");
 
         shell.WaitUntil(() => shell.Status.StartsWith("Copied the command", StringComparison.Ordinal), "the command is copied");
         Assert.EndsWith("agy --conversation s-1", shell.Status);

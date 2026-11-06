@@ -62,6 +62,17 @@ internal sealed partial class Shell
         Render();
     }
 
+    /// <summary>Opens the button's menu and chooses the entry, as <see cref="ChooseMore"/> does for the header's.</summary>
+    public void ChooseMenu(string menu, string automationId)
+    {
+        var button = InView<Button>(menu);
+        Click(button);
+        var item = Window.GetVisualDescendants().OfType<Avalonia.Controls.MenuItem>().Single(entry => AutomationProperties.GetAutomationId(entry) == automationId);
+        item.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.MenuItem.ClickEvent));
+        button.Flyout!.Hide();
+        Render();
+    }
+
     public void FilterInspector(string text)
     {
         Click(Find<TextBox>("InspectorFilter"));

@@ -201,7 +201,7 @@ public sealed partial class TaskNodeViewModel
         if (asked?.Key != _asked?.Key)
         {
             _asked = asked;
-            _questions = asked is null ? [] : [.. asked.Questions.Select(question => new QuestionViewModel(question, _send.NotifyCanExecuteChanged))];
+            _questions = asked is null ? [] : Asked(asked);
         }
 
         _runRefusal = engine.CanRun(Id);
@@ -352,6 +352,20 @@ public sealed partial class TaskNodeViewModel
         {
             SendBackNote = "";
         }
+    }
+
+    // The digits run on across the questions, so one key picks one choice.
+    private List<QuestionViewModel> Asked(AgentQuestion asked)
+    {
+        var digit = 1;
+        List<QuestionViewModel> questions = [];
+        foreach (var question in asked.Questions)
+        {
+            questions.Add(new QuestionViewModel(question, _send.NotifyCanExecuteChanged, digit, asked.Questions.Length > 1));
+            digit += question.Options.Length;
+        }
+
+        return questions;
     }
 
     private void Send(bool interrupt)

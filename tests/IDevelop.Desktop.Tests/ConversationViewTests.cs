@@ -93,7 +93,7 @@ public sealed class ConversationViewTests : IDisposable
         var agent = Assert.IsType<MessageItemViewModel>(model.Items[1]);
         Assert.Equal(("Codex", "Which file?", "Asks: Which file?"), (agent.AuthorLabel, agent.Text, agent.ResultNote));
         Assert.Equal("You", Assert.IsType<MessageItemViewModel>(model.Items[2]).AuthorLabel);
-        Assert.Equal("read src/a.cs", Assert.IsType<ActivityItemViewModel>(model.Items[3]).Line);
+        Assert.Equal("read src/a.cs", Assert.IsType<StepGroupItemViewModel>(model.Items[3]).LastLine);
         var failed = Assert.IsType<MarkerItemViewModel>(model.Items[4]);
         Assert.Equal(("New session", "Failed", "The model is not available.", true),
             (Assert.IsType<MarkerItemViewModel>(model.Items[0]).Title, failed.Title, failed.Detail, failed.IsProblem));

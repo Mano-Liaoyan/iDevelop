@@ -1,4 +1,6 @@
+using System.Collections.ObjectModel;
 using System.Windows.Input;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Engine;
 using IDevelop.Nodes;
@@ -8,17 +10,15 @@ namespace IDevelop.Desktop.Conversation;
 /// <summary>One transcript row. A row keeps its line's place in the log, so a refresh keeps it and its control stays.</summary>
 public abstract class ConversationItemViewModel(int id) : ObservableObject
 {
-    /// <summary>The line's place in the node's conversation, oldest first.</summary>
+    /// <summary>The line's place in the node's conversation, oldest first. A group of steps takes its first line's place.</summary>
     public int Id { get; } = id;
 
-    internal static ConversationItemViewModel Create(int id, ConversationLine line, ConversationViewModel owner) => line switch
+    /// <summary>A group of steps follows the row, so the row keeps close to it.</summary>
+    public bool IsBeforeSteps
     {
-        ConversationLine.Person person => new MessageItemViewModel(id, person.Text, null, owner),
-        ConversationLine.Agent agent => new MessageItemViewModel(id, agent.Text, agent, owner),
-        ConversationLine.Activity activity => new ActivityItemViewModel(id, activity),
-        ConversationLine.Marker marker => new MarkerItemViewModel(id, marker),
-        _ => throw new InvalidOperationException("Unknown conversation line."),
-    };
+        get;
+        set => SetProperty(ref field, value);
+    }
 }
 
 public sealed class MessageItemViewModel : ConversationItemViewModel
@@ -26,6 +26,8 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     private readonly string _text;
     private readonly ConversationLine.Agent? _agent;
     private readonly ConversationViewModel _owner;
+    private bool _showsAuthor;
+    private ResultViewModel? _result;
 
     /// <param name="id">The line's place in the conversation.</param>
     /// <param name="text">The whole message source, result block included.</param>
@@ -41,10 +43,30 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 
     public bool IsPerson => _agent is null;
 
-    private bool IsAgent => _agent is not null;
+    internal bool IsAgent => _agent is not null;
 
     /// <summary>A subagent of the node's agent wrote it, so it shows as the subagent's own.</summary>
-    private bool IsSubagent => _agent?.Subagent is not null;
+    public bool IsSubagent => _agent?.Subagent is not null;
+
+    /// <summary>The first agent line after a person's message or a marker names its author, and a subagent's line always does.</summary>
+    public bool ShowsAuthor
+    {
+        get => _showsAuthor;
+        internal set => SetProperty(ref _showsAuthor, value);
+    }
+
+    /// <summary>The node's result that this message reported, which shows as a card under it, or null.</summary>
+    public ResultViewModel? Result
+    {
+        get => _result;
+        internal set
+        {
+            if (SetProperty(ref _result, value))
+            {
+                OnPropertyChanged(nameof(ResultNote));
+            }
+        }
+    }
 
     public string AuthorLabel => _agent switch
     {
@@ -60,7 +82,8 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     public string? ResultNote => !IsAgent || IsSubagent ? null : ResultBlock.Read(_text) switch
     {
         ResultBlock.Readable { Status: "asking" } asking => asking.Text("question") is { } question ? $"Asks: {question}" : "Asks a question.",
-        ResultBlock.Readable readable => readable.Status is { } status ? $"Reported {status}. The inspector shows the result." : "Reported a result. The inspector shows it.",
+        ResultBlock.Readable when Result is not null => null,
+        ResultBlock.Readable readable => readable.Status is { } status ? $"Reported {status}." : "Reported a result.",
         ResultBlock.Unreadable unreadable => $"iDevelop could not read the result block. {unreadable.Problem}",
         _ => null,
     };
@@ -69,6 +92,7 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     public ICommand CopyCommand { get; }
 }
 
+/// <summary>A notice from the client, which stands alone, or one step of a group.</summary>
 public sealed class ActivityItemViewModel(int id, ConversationLine.Activity activity) : ConversationItemViewModel(id)
 {
     public string Text => activity.Text;
@@ -77,7 +101,44 @@ public sealed class ActivityItemViewModel(int id, ConversationLine.Activity acti
     public string Line => activity.Text.Split('\n', 2)[0];
 }
 
-public sealed class MarkerItemViewModel(int id, ConversationLine.Marker marker) : ConversationItemViewModel(id)
+/// <summary>A run of tool lines as one quiet row. Whether it is open is the view's state, and it starts closed.</summary>
+public sealed class StepGroupItemViewModel : ConversationItemViewModel
+{
+    public StepGroupItemViewModel(ActivityItemViewModel first) : base(first.Id)
+    {
+        Steps.Add(first);
+    }
+
+    public ObservableCollection<ActivityItemViewModel> Steps { get; } = [];
+
+    public bool IsOpen
+    {
+        get;
+        set => SetProperty(ref field, value);
+    }
+
+    public string CountLabel => Steps.Count == 1 ? "1 step" : $"{Steps.Count} steps";
+
+    /// <summary>The last step's first line, which shows while the group is closed.</summary>
+    public string LastLine => Steps[^1].Line;
+
+    /// <summary>The row's name for a screen reader.</summary>
+    public string Summary => $"{CountLabel}. Last: {LastLine}";
+
+    internal void Add(ActivityItemViewModel step)
+    {
+        Steps.Add(step);
+        OnPropertyChanged(nameof(CountLabel));
+        OnPropertyChanged(nameof(LastLine));
+        OnPropertyChanged(nameof(Summary));
+    }
+}
+
+/// <param name="id">The line's place in the conversation.</param>
+/// <param name="marker">The boundary or event.</param>
+/// <param name="attempt">How many fresh sessions began up to this line.</param>
+/// <param name="above">The prose of the agent's message before the line, or null.</param>
+public sealed class MarkerItemViewModel(int id, ConversationLine.Marker marker, int attempt, string? above) : ConversationItemViewModel(id)
 {
     /// <summary>A short heading for the boundary or event, such as "New session" or "Failed".</summary>
     public string Title => marker.Kind switch
@@ -92,12 +153,39 @@ public sealed class MarkerItemViewModel(int id, ConversationLine.Marker marker) 
         MarkerKind.Feedback => "Sent back",
     };
 
-    /// <summary>Why it waits, why it failed, the message a stop dropped, the conflict, the feedback, or what waits for approval.</summary>
+    /// <summary>What the row says: a session's start names its attempt.</summary>
+    public string Heading => marker.Kind == MarkerKind.Fresh ? $"Attempt {attempt} · New session" : Title;
+
+    /// <summary>A session's start is a rule across the column. Every other marker is a line at its left.</summary>
+    public bool IsSessionStart => marker.Kind == MarkerKind.Fresh;
+
+    /// <summary>
+    /// Why it failed, the message a stop dropped, the conflict, the feedback, or what waits for approval. A wait leaves out what the
+    /// agent's message above it said and what the state's own sentence says, which the attention card shows.
+    /// </summary>
     public string Detail => string.Join("\n\n", new[] { marker.Kind == MarkerKind.Waiting ? WaitingDetail(marker.Detail) : marker.Detail, marker.Text }
-        .Where(text => !string.IsNullOrWhiteSpace(text)));
+        .Where(text => !string.IsNullOrWhiteSpace(text) && !(marker.Kind == MarkerKind.Waiting && text!.Trim() == above?.Trim())));
+
+    public bool HasDetail => Detail.Length > 0;
 
     public bool IsProblem => marker.Kind is MarkerKind.Failed or MarkerKind.Dropped;
 
-    private static string? WaitingDetail(string? why) =>
-        why is null ? null : Canvas.NodeStates.Detail(new NodeState.InputRequired(why));
+    public bool IsCompleted => marker.Kind == MarkerKind.Completed;
+
+    public bool IsWaiting => marker.Kind is MarkerKind.Waiting or MarkerKind.Conflict;
+
+    /// <summary>The last line of a node that waits or failed: the attention card says the same, so the row hides.</summary>
+    public bool IsHeldByCard
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
+
+    internal MarkerKind Kind => marker.Kind;
+
+    /// <summary>What the marker offers for approval, or null.</summary>
+    internal string? Offered => marker.Text;
+
+    // A state's fixed sentence belongs to its card. A reason of the agent's own stays.
+    private static string? WaitingDetail(string? why) => why is null or NodeState.Approval or NodeState.Reply or NodeState.Conflict or NodeState.Interrupted or NodeState.RoundLimit ? null : why;
 }

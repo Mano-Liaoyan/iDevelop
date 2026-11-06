@@ -3,8 +3,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data.Converters;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using IDevelop.Desktop.Canvas;
 
 namespace IDevelop.Desktop.Conversation;
 
@@ -20,6 +22,19 @@ public partial class ConversationView : UserControl
     /// <summary>The columns a message spans: a person's message spans one, and other messages span both.</summary>
     public static readonly IValueConverter MessageColumnSpan = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 2);
 
+    /// <summary>The column of Copy: beside a person's message, and over the end of other messages.</summary>
+    public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 0 : 1);
+
+    /// <summary>The attention card's row of its actions: under its text, or on its header's line.</summary>
+    public static readonly IValueConverter ActionsRow = new FuncValueConverter<bool, int>(compact => compact ? 0 : 2);
+
+    public static readonly IValueConverter ActionsColumn = new FuncValueConverter<bool, int>(compact => compact ? 1 : 0);
+
+    public static readonly IValueConverter ActionsSpan = new FuncValueConverter<bool, int>(compact => compact ? 1 : 2);
+
+    // Under this width the transcript's and the composer's side padding shrinks.
+    private const double NarrowWidth = 600;
+
     // Within this many pixels of the end, the view counts as at the end and follows new output.
     private const double EndSlack = 24;
 
@@ -27,6 +42,7 @@ public partial class ConversationView : UserControl
     private bool _follow = true;
     private bool _restoring;
     private bool _userInput;
+    private bool _settleQueued;
     private double? _scrolledTo;
     private (int Entry, double Offset)? _anchor;
 
@@ -49,6 +65,14 @@ public partial class ConversationView : UserControl
             RoutingStrategies.Tunnel, handledEventsToo: true);
         Scroller.AddHandler(KeyDownEvent, (_, _) => _userInput = true, RoutingStrategies.Tunnel, handledEventsToo: true);
         Transcript.LayoutUpdated += OnTranscriptLaidOut;
+        Transcript.AddHandler(KeyDownEvent, OnStepKey, RoutingStrategies.Bubble);
+        Composer.AddHandler(KeyDownEvent, OnComposerDigit, RoutingStrategies.Tunnel);
+        Strip.SizeChanged += (_, e) => _model?.FitChips(e.NewSize.Width - Strip.Padding.Left - Strip.Padding.Right);
+        SizeChanged += (_, e) =>
+        {
+            Rows.Classes.Set("narrow", e.NewSize.Width < NarrowWidth);
+            LimitCard();
+        };
     }
 
     // The row of Rows that holds the transcript.
@@ -57,13 +81,19 @@ public partial class ConversationView : UserControl
     /// <summary>The least transcript a docked conversation keeps: a few lines of messages.</summary>
     internal const double MinTranscriptHeight = 96;
 
+    // What the view keeps for the attention card in a short dock, and its largest share of the view.
+    private const double MinCardHeight = 96;
+    private const double CardShare = 0.45;
+
+    private double _aroundCard;
+
     /// <summary>Raised, after a layout, when <see cref="RequiredHeight"/> changed.</summary>
     public static readonly RoutedEvent<RoutedEventArgs> RequiredHeightChangedEvent =
         RoutedEvent.Register<ConversationView, RoutedEventArgs>("RequiredHeightChanged", RoutingStrategies.Bubble);
 
     /// <summary>
-    /// The height the view needs: its header, the bar's strip, the limitations, and the composer as tall as they lay out
-    /// at its width, and <see cref="MinTranscriptHeight"/> of transcript.
+    /// The height the view needs: its header, the two strips, the status line, and the composer as tall as they lay out at
+    /// its width, what the attention card keeps while its own content scrolls, and <see cref="MinTranscriptHeight"/> of transcript.
     /// </summary>
     internal double RequiredHeight { get; private set; }
 
@@ -72,7 +102,9 @@ public partial class ConversationView : UserControl
     protected override Size ArrangeOverride(Size finalSize)
     {
         var size = base.ArrangeOverride(finalSize);
-        var required = Rows.RowDefinitions.Where((_, index) => index != TranscriptRow).Sum(row => row.ActualHeight) + MinTranscriptHeight;
+        var card = AttentionCard.IsVisible ? AttentionCard.Bounds.Height + AttentionCard.Margin.Top + AttentionCard.Margin.Bottom : 0;
+        _aroundCard = Rows.RowDefinitions.Where((_, index) => index != TranscriptRow).Sum(row => row.ActualHeight) - card;
+        var required = _aroundCard + Math.Min(card, MinCardHeight) + MinTranscriptHeight;
         if (Math.Abs(required - RequiredHeight) >= 0.5)
         {
             RequiredHeight = required;
@@ -81,6 +113,9 @@ public partial class ConversationView : UserControl
 
         return size;
     }
+
+    // The attention card takes at most 45% of the view and always leaves the transcript its least height. Its own content scrolls.
+    private void LimitCard() => AttentionCard.MaxHeight = Math.Max(MinCardHeight, Math.Min(Bounds.Height * CardShare, Bounds.Height - _aroundCard - MinTranscriptHeight));
 
     /// <summary>The entry at the top of the view and how far it scrolled into it, or null at the end.</summary>
     internal (int Entry, double Offset)? Anchor => _follow ? null : _anchor;
@@ -115,7 +150,20 @@ public partial class ConversationView : UserControl
         Dispatcher.UIThread.Post(() => Composer.Focus(), DispatcherPriority.Background);
     }
 
-    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e) => Settle();
+    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        Settle();
+        // A page of rows of many heights can move the anchored row in the last layout pass, after the pass's own settling.
+        if (!_settleQueued)
+        {
+            _settleQueued = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _settleQueued = false;
+                Settle();
+            }, DispatcherPriority.Background);
+        }
+    }
 
     private void OnTranscriptLaidOut(object? sender, EventArgs e) => Settle();
 
@@ -228,4 +276,48 @@ public partial class ConversationView : UserControl
     }
 
     private void OnJumpToLatest(object? sender, RoutedEventArgs e) => Follow();
+
+    // A digit picks a choice while the composer is empty. The tunnel comes before the box, which would type the digit.
+    private void OnComposerDigit(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyModifiers == KeyModifiers.None && e.Key is >= Key.D1 and <= Key.D9 or >= Key.NumPad1 and <= Key.NumPad9
+            && _model?.PickChoice(e.Key >= Key.NumPad1 ? e.Key - Key.NumPad0 : e.Key - Key.D0) == true)
+        {
+            e.Handled = true;
+        }
+    }
+
+    // Left and Right fold and open a group of steps, as they do a tree's row.
+    private static void OnStepKey(object? sender, KeyEventArgs e)
+    {
+        if (e is { Key: Key.Left or Key.Right, KeyModifiers: KeyModifiers.None, Source: ToggleButton { DataContext: StepGroupItemViewModel group } })
+        {
+            group.IsOpen = e.Key == Key.Right;
+            e.Handled = true;
+        }
+    }
+
+    private void OnOpenSendBack(object? sender, RoutedEventArgs e)
+    {
+        if (_model is { } model)
+        {
+            model.IsSendBackOpen = !model.IsSendBackOpen;
+            if (model.IsSendBackOpen)
+            {
+                Dispatcher.UIThread.Post(() => SendBackNote.Focus(), DispatcherPriority.Background);
+            }
+        }
+    }
+
+    private void OnChangeModel(object? sender, RoutedEventArgs e) => ModelChip.Flyout?.ShowAt(ModelChip);
+
+    private void OnAgentChosen(object? sender, SelectionChangedEventArgs e) => AgentPicker.OnChosen(sender);
+
+    private void OnShowResult(object? sender, RoutedEventArgs e)
+    {
+        if (_model?.Node.SelectCommand is { } select && select.CanExecute(null))
+        {
+            select.Execute(null);
+        }
+    }
 }

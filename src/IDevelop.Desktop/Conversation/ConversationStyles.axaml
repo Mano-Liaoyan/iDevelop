@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conversation="using:IDevelop.Desktop.Conversation">
 
   <!-- Markdown blocks. Text stays neutral; only links take the accent's text color. -->
   <!-- No fixed line height, because a line that holds a link control would clip its own text. -->
@@ -10,27 +11,37 @@
     <Setter Property="SelectionBrush" Value="{DynamicResource StateSelected40Brush}" />
   </Style>
   <Style Selector="SelectableTextBlock.md.h1">
-    <Setter Property="FontSize" Value="20" />
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="LineHeight" Value="24" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="SelectableTextBlock.md.h2">
-    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="LineHeight" Value="22" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="SelectableTextBlock.md.h3, SelectableTextBlock.md.h4">
-    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <!-- With the blocks' 8 px apart, a heading has 16 px above it and 4 px below it. -->
+  <Style Selector="SelectableTextBlock.md.h1, SelectableTextBlock.md.h2, SelectableTextBlock.md.h3, SelectableTextBlock.md.h4">
+    <Setter Property="Margin" Value="0,8,0,-4" />
+  </Style>
+  <Style Selector="SelectableTextBlock.md.first">
+    <Setter Property="Margin" Value="0,0,0,-4" />
   </Style>
   <Style Selector="SelectableTextBlock.md.th">
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
   <Style Selector="SelectableTextBlock.mdMono">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
-    <Setter Property="FontSize" Value="13" />
-    <Setter Property="LineHeight" Value="19" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="18" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="SelectionBrush" Value="{DynamicResource StateSelected40Brush}" />
   </Style>
@@ -65,15 +76,15 @@
   </Style>
   <!-- Code sits in its own surface, with its language and Copy in a header row so a long line never runs under Copy. -->
   <Style Selector="Border.mdCode">
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
   <Style Selector="Grid.mdCodeHeader">
-    <Setter Property="Height" Value="32" />
-    <Setter Property="Margin" Value="12,0,4,0" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Margin" Value="12,4,8,0" />
   </Style>
   <Style Selector="TextBlock.mdCodeLanguage">
     <Setter Property="FontSize" Value="12" />
@@ -81,7 +92,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="SelectableTextBlock.mdCodeText">
-    <Setter Property="Margin" Value="12,0,12,12" />
+    <Setter Property="Margin" Value="12,0,12,8" />
     <Setter Property="TextWrapping" Value="NoWrap" />
   </Style>
   <Style Selector="Button.mdLink">
@@ -103,68 +114,239 @@
     <Setter Property="TextDecorations" Value="Underline" />
   </Style>
 
-  <!-- The conversation view. -->
+  <!-- A task list's item: a small box in place of the bullet, filled while it is done. -->
+  <Style Selector="Border.mdTask">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Margin" Value="2,4,8,0" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Border.mdTask.done">
+    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentFillBrush}" />
+  </Style>
+  <Style Selector="Border.mdTask PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+  </Style>
+
+  <!-- The conversation view. Its columns are 760 wide at most, with 24 px at the sides, or 16 under 600. -->
   <Style Selector="Border.conversationHeader">
-    <Setter Property="Padding" Value="16,8,12,8" />
-    <Setter Property="MinHeight" Value="56" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="MinHeight" Value="48" />
     <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
+  <Style Selector="Grid.docked Border.conversationHeader">
+    <Setter Property="MinHeight" Value="40" />
+  </Style>
   <Style Selector="TextBlock.conversationTitle">
-    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MaxLines" Value="2" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The client's limitations behind a glyph in the docked header, as large as the header's buttons. -->
-  <Style Selector="Border.limitsGlyph">
-    <Setter Property="Width" Value="28" />
-    <Setter Property="Height" Value="28" />
-    <Setter Property="Background" Value="Transparent" />
+  <Style Selector="TextBlock.limitsText">
+    <Setter Property="MaxWidth" Value="280" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="Border.limitsGlyph > PathIcon">
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector="Border.limitations">
-    <Setter Property="Padding" Value="16,6" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  <Style Selector="Border.workflowStrip">
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="12,2" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
   </Style>
+  <Style Selector="Border.ioStrip">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
+  </Style>
+  <Style Selector="TextBlock.stripLabel">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Button.chip">
+    <Setter Property="Height" Value="20" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MaxWidth" Value="{Binding $parent[UserControl].((conversation:ConversationViewModel)DataContext).ChipWidth, FallbackValue=120}" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.chip:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Button.chip.more, Button.chip.result">
+    <Setter Property="MaxWidth" Value="160" />
+  </Style>
+  <Style Selector="Button.chip.result TextBlock">
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="Ellipse.status.warning">
+    <Setter Property="Fill" Value="{DynamicResource StateWarningStrokeBrush}" />
+  </Style>
+  <!-- A row keeps the column's width, and its gap to the next row sits under it. -->
   <Style Selector="Panel.row">
     <Setter Property="MaxWidth" Value="808" />
-    <Setter Property="Margin" Value="24,6" />
+    <Setter Property="Margin" Value="24,0,24,16" />
+  </Style>
+  <Style Selector="Panel.row.tight">
+    <Setter Property="Margin" Value="24,0,24,4" />
+  </Style>
+  <Style Selector="Grid.narrow Panel.row">
+    <Setter Property="MaxWidth" Value="792" />
+    <Setter Property="Margin" Value="16,0,16,16" />
+  </Style>
+  <Style Selector="Grid.narrow Panel.row.tight">
+    <Setter Property="Margin" Value="16,0,16,4" />
+  </Style>
+  <!-- A row that the attention card speaks for keeps one pixel, because the virtualizing list cannot settle on a row of no height. -->
+  <Style Selector="Panel.row.held, Grid.narrow Panel.row.held">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="0" />
+  </Style>
+  <Style Selector="Panel.row.held > StackPanel">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Border.message">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
   </Style>
+  <Style Selector="Border.message.subagent">
+    <Setter Property="Margin" Value="0,0,0,0" />
+    <Setter Property="Padding" Value="12,0,0,0" />
+    <Setter Property="BorderThickness" Value="2,0,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+  </Style>
   <Style Selector="Border.message.person">
     <Setter Property="HorizontalAlignment" Value="Right" />
-    <Setter Property="MaxWidth" Value="600" />
-    <Setter Property="Padding" Value="14,10" />
+    <Setter Property="Padding" Value="12,8" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
   <!-- Copy shows on the row the pointer is over, and for the keyboard when it has focus. -->
   <Style Selector="Panel.row Button.copy">
     <Setter Property="Opacity" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+  </Style>
+  <Style Selector="Panel.row Button.copy.person">
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
   </Style>
   <Style Selector="Panel.row:pointerover Button.copy, Panel.row Button.copy:focus-visible">
     <Setter Property="Opacity" Value="1" />
   </Style>
   <Style Selector="TextBlock.author">
     <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Border.resultNote">
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Border.resultCard">
+    <Setter Property="Margin" Value="0,4,0,0" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.resultHeading">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="Border.resultNote">
-    <Setter Property="Padding" Value="10,6" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  <Style Selector="TextBlock.resultCommit">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.resultSummary">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MaxLines" Value="3" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <!-- A group of steps: one quiet row with a real chevron, which opens onto a list with a guide at its left. -->
+  <Style Selector="ToggleButton.steps">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="4,0" />
+    <Setter Property="Margin" Value="-4,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.steps /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.steps:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.steps:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.steps:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.steps:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.steps PathIcon">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
+  </Style>
+  <Style Selector="ToggleButton.steps:checked PathIcon">
+    <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+  </Style>
+  <Style Selector="TextBlock.stepLast">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <Style Selector="Border.stepGuide">
+    <Setter Property="Margin" Value="5,2,0,0" />
+    <Setter Property="Padding" Value="13,0,0,0" />
+    <Setter Property="BorderThickness" Value="1,0,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
   </Style>
   <!-- A prompt's artifact instructions: one muted line with a chevron that turns down while the text shows under it. -->
   <Style Selector="ToggleButton.instructions">
@@ -205,42 +387,198 @@
   <Style Selector="SelectableTextBlock.activity">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
     <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="MinHeight" Value="20" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <!-- A turn's end is one line at the column's left. A session's start stays a rule, which divides what it read from what came before. -->
+  <Style Selector="TextBlock.sessionTitle">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="TextBlock.markerTitle">
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="16" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="HorizontalAlignment" Value="Center" />
   </Style>
   <Style Selector="TextBlock.markerTitle.problem">
-    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
   </Style>
-  <Style Selector="SelectableTextBlock.markerDetail">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="TextAlignment" Value="Center" />
+  <Style Selector="PathIcon.markerGlyph">
+    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="Border.composer">
+  <Style Selector="PathIcon.markerGlyph.completed">
+    <Setter Property="Data" Value="{StaticResource IconStateSucceeded}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
+  </Style>
+  <Style Selector="PathIcon.markerGlyph.problem">
+    <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
+  </Style>
+  <Style Selector="PathIcon.markerGlyph.waiting">
+    <Setter Property="Data" Value="{StaticResource IconStateWaiting}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
+  </Style>
+  <Style Selector="SelectableTextBlock.markerDetail">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Margin" Value="18,0,0,0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource StateSelected40Brush}" />
+  </Style>
+  <Style Selector="TextBlock.emptyText">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+
+  <!-- The status line, the attention card, and the composer. -->
+  <Style Selector="StackPanel.bottomColumn">
     <Setter Property="MaxWidth" Value="808" />
-    <Setter Property="Margin" Value="24,8,24,16" />
-    <Setter Property="Padding" Value="10" />
+    <Setter Property="Margin" Value="24,4,24,16" />
+    <Setter Property="Spacing" Value="8" />
+  </Style>
+  <Style Selector="Grid.docked StackPanel.bottomColumn">
+    <Setter Property="Margin" Value="24,4,24,12" />
+  </Style>
+  <Style Selector="Grid.narrow StackPanel.bottomColumn">
+    <Setter Property="MaxWidth" Value="792" />
+    <Setter Property="Margin" Value="16,4,16,16" />
+  </Style>
+  <Style Selector="Grid.narrow.docked StackPanel.bottomColumn">
+    <Setter Property="Margin" Value="16,4,16,12" />
+  </Style>
+  <Style Selector="Border.workingLine">
+    <Setter Property="Height" Value="24" />
+  </Style>
+  <Style Selector="Border.attentionCard">
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.attentionCard.problem">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.attentionCard.warning">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateWarningStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.attentionHeader">
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+  </Style>
+  <Style Selector="Border.attentionCard.problem Border.attentionHeader">
+    <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
+  </Style>
+  <Style Selector="Border.attentionCard.warning Border.attentionHeader">
+    <Setter Property="Background" Value="{DynamicResource StateWarning10Brush}" />
+  </Style>
+  <Style Selector="PathIcon.attentionGlyph">
+    <Setter Property="Data" Value="{StaticResource IconStateWaiting}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.attentionCard.problem PathIcon.attentionGlyph">
+    <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
+  </Style>
+  <Style Selector="Border.attentionCard.warning PathIcon.attentionGlyph">
+    <Setter Property="Data" Value="{StaticResource IconStateOutOfDate}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.attentionTitle">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="StackPanel.attentionBody">
+    <Setter Property="Margin" Value="12,8,12,0" />
+  </Style>
+  <Style Selector="Border.attentionHeader">
+    <Setter Property="MinHeight" Value="36" />
+  </Style>
+  <Style Selector="StackPanel.attentionActions">
+    <Setter Property="Margin" Value="12,8,12,12" />
+  </Style>
+  <Style Selector="StackPanel.attentionActions.compact">
+    <Setter Property="Margin" Value="8,4,6,4" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="SelectableTextBlock.attentionText, TextBlock.attentionText">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="SelectableTextBlock.attentionText">
+    <Setter Property="SelectionBrush" Value="{DynamicResource StateSelected40Brush}" />
+  </Style>
+  <Style Selector="ToggleButton.choice">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.choice /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice:unchecked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.choice:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.choice:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.choiceDigit">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="PathIcon.choiceCheck">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.choice:checked PathIcon.choiceCheck">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Border.composer">
     <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource NodeShadow}" />
   </Style>
-  <!-- The composer's box draws no frame of its own inside the composer's frame. -->
+  <!-- The composer's box draws no frame of its own inside the composer's frame. One line at rest, and six at most. -->
   <Style Selector="TextBox.composerBox">
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="FontSize" Value="14" />
-    <Setter Property="MinHeight" Value="48" />
-    <Setter Property="MaxHeight" Value="220" />
-    <Setter Property="Padding" Value="4,4" />
+    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="MaxHeight" Value="136" />
+    <Setter Property="Padding" Value="12,8,12,4" />
   </Style>
   <Style Selector="TextBox.composerBox:pointerover /template/ Border#PART_BorderElement, TextBox.composerBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="BorderThickness" Value="0" />
@@ -252,10 +590,72 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BoxShadow" Value="{DynamicResource FocusRing}" />
   </Style>
-  <Style Selector="Button.jump">
+  <Style Selector="Grid.composerBar">
     <Setter Property="Height" Value="32" />
+    <Setter Property="Margin" Value="8,0,8,4" />
+  </Style>
+  <Style Selector="Button.modelChip">
+    <Setter Property="Height" Value="24" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MaxWidth" Value="280" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Button.modelChip:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.modelChip:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="StackPanel.modelFlyout">
+    <Setter Property="Width" Value="240" />
+  </Style>
+  <!-- Round is for Send and its Stop only. -->
+  <Style Selector="Button.round">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.send">
+    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+  <Style Selector="Button.send:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.send:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+  <!-- Send with nothing to send rests in the quiet fill at full opacity, so it stays in view. -->
+  <Style Selector="Button.send:disabled">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.send:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Button.stop">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Button.stop:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.stop:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Button.sendMenu">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="28" />
+  </Style>
+  <Style Selector="Button.jump">
+    <Setter Property="Height" Value="28" />
     <Setter Property="Padding" Value="12,0" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />

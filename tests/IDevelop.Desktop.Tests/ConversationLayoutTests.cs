@@ -36,25 +36,23 @@ public sealed class ConversationLayoutTests
             var view = shell.Bounds(shell.Find<Control>("ConversationView"));
 
             var header = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationTitle"), "conversationHeader"));
-            AssertWholeAndApart(shell, at, header.Intersect(view), 12,
+            AssertWholeAndApart(shell, at, header.Intersect(view), 12, 4,
                 ("Title", shell.Find<Control>("ConversationTitle")), ("Status", Shell.Around(shell.Find<TextBlock>("ConversationStatus"), "pill")),
                 ("Layout", shell.Find<Control>("ConversationLayout")), ("Close", shell.Find<Control>("CloseConversation")));
             Assert.Equal(header.Right - 12, shell.Bounds(shell.Find<Control>("CloseConversation")).Right, 0.5);
 
-            var strip = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationRunStatus"), "limitations"));
-            // The status and its activity wrap as one group, its lines 4 px apart.
-            AssertWholeAndApart(shell, at, strip.Intersect(view), 16, 4,
-                ("Run status", Shell.Around(shell.Find<TextBlock>("ConversationRunStatus"), "pill")), ("Activity", shell.Find<Control>("ConversationRunActivity")));
-            AssertWholeAndApart(shell, at, strip.Intersect(view), 16,
-                ("Run", (Control)shell.Find<Control>("ConversationRunActivity").GetVisualParent()!), ("Stop", shell.Find<Control>("ConversationStopAll")));
+            var strip = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationRunStatus"), "workflowStrip"));
+            AssertWholeAndApart(shell, at, strip.Intersect(view), 12, 4,
+                ("Next", shell.Find<Control>("ConversationNext")), ("Stop", shell.Find<Control>("ConversationStopAll")));
 
             var composer = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer"));
             Assert.True(view.Contains(composer), $"At {at}, the composer at {composer} leaves the view at {view}.");
-            AssertWholeAndApart(shell, at, composer, 10,
-                ("Hint", shell.Find<Control>("ComposerHint")), ("Terminal", shell.Find<Control>("ConversationTerminal")),
-                ("Approve", shell.Find<Control>("ConversationApprove")), ("Send", shell.Find<Control>("ConversationSend")));
-            // Send ends where the composer's box ends.
-            Assert.Equal(shell.Bounds(shell.Find<Control>("ConversationComposer")).Right, shell.Bounds(shell.Find<Control>("ConversationSend")).Right, 0.5);
+            AssertWholeAndApart(shell, at, composer, 8, 4,
+                ("Model", shell.Find<Control>("ConversationModel")), ("More", shell.Find<Control>("ConversationMore")), ("Send", shell.Find<Control>("ConversationSend")));
+            // The composer's row ends at its own padding, and the card over it holds what the person can do.
+            var card = shell.Bounds(shell.Find<Control>("ConversationAttention"));
+            Assert.True(view.Contains(card) && card.Bottom <= composer.Top, $"At {at}, the card at {card} leaves the view, or meets the composer at {composer}.");
+            Assert.True(card.Contains(shell.Bounds(shell.Find<Control>("ConversationApprove"))), $"At {at}, Approve leaves the card.");
         }
     }
 

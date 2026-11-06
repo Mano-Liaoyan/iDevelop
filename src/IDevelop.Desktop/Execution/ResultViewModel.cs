@@ -17,4 +17,7 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
 
     /// <summary>"Commit 1a2b3c4" for a node that edits the project, or null.</summary>
     public string? Commit => result.Commit is { Length: >= 7 } commit ? $"Commit {commit[..7]}" : null;
+
+    /// <summary>The conversation's output chip: "Result 2", and the commit's short id when there is one.</summary>
+    public string ChipLabel => result.Commit is { Length: >= 7 } commit ? $"Result {number} · {commit[..7]}" : $"Result {number}";
 }

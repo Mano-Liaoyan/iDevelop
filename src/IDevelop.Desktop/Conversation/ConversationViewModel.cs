@@ -2,8 +2,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Engine;
+using IDevelop.Nodes;
+using EngineState = IDevelop.Engine.NodeState;
 using NodeState = IDevelop.Desktop.Canvas.NodeState;
 using IDevelop.Clients;
 using IDevelop.Workflows;
@@ -12,6 +15,9 @@ namespace IDevelop.Desktop.Conversation;
 
 /// <summary>A conversation to open: the node in its workflow.</summary>
 public sealed record ConversationTarget(WorkflowCanvasViewModel Canvas, TaskId Task);
+
+/// <summary>What the attention card over the composer asks of the person, from the node's state.</summary>
+public enum AttentionCard { None, Question, Reply, Approval, Conflict, Interrupted, Failed, Stale }
 
 /// <summary>
 /// One node's conversation as the view shows it: its log's lines, the latest page first, and the composer. It reads
@@ -22,11 +28,23 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 {
     internal const int PageSize = 200;
 
+    private const double MaxChipWidth = 120;
+
+    // On one side of the strip: its label, and the +3 chip.
+    private const double StripLabelWidth = 44;
+    private const double MoreChipWidth = 32;
+    private const double ChipGap = 4;
+
     private readonly IConversation _conversation;
     private readonly Func<string, Task> _copy;
     private readonly RelayCommand _loadEarlier;
     private readonly UiBatch _changed;
+
+    // The lines from _start up to _shownEnd show as rows.
     private int _start = -1;
+    private int _shownStart;
+    private int _shownEnd;
+    private int _chipRoom = 2;
     private bool _disposed;
 
     internal ConversationViewModel(ConversationTarget target, ConversationState state, IConversation conversation, Func<string, Task> copy)
@@ -61,8 +79,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     public string AgentName => Node.Definition.Execution?.Client is { } client ? ClientCatalog.Name(client) : "The agent";
 
     /// <summary>
-    /// How the agent asks: Claude Code asks with its choices while its turn runs, and any other client asks in its reply,
-    /// which the person answers with a message.
+    /// How the agent asks, which the header's info glyph holds: Claude Code asks with its choices while its turn runs, and any
+    /// other client asks in its reply, which the person answers with a message.
     /// </summary>
     public string Limitations => Node.Definition.Execution?.Client == ClientId.ClaudeCode
         ? "Claude Code asks with its choices while its turn runs. Choose, or answer in your own words."
@@ -76,14 +94,135 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         set => State.Draft = value;
     }
 
-    public string ComposerHint => Node.IsAsking ? "Sending answers the agent's question with your choices and your words." : Node.State switch
+    public bool HasDraft => !string.IsNullOrWhiteSpace(State.Draft);
+
+    /// <summary>What Send does now, while that is not plain, or null.</summary>
+    public string? ComposerHint => Node.IsAsking ? "Sending answers the agent's question with your choices and your words."
+        : Node.State == NodeState.Running ? "Your message waits for this turn to end. Stop and send ends the turn first."
+        : null;
+
+    /// <summary>Send's tooltip.</summary>
+    public string SendHelp => ComposerHint is { } hint ? $"Send (Ctrl+Enter)\n{hint}" : "Send (Ctrl+Enter)";
+
+    /// <summary>The composer's placeholder, which says what a message does now.</summary>
+    public string Watermark => Node.IsAsking ? "Answer in your own words"
+        : Card == AttentionCard.Reply ? $"Reply to {AgentName}"
+        : Node.Definition.Execution?.Client is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
+
+    /// <summary>The composer's model chip: the model and level, or the agent's name while it has no model.</summary>
+    public string ModelChip => Node.AgentModel is { Length: > 0 } model ? model : Node.AgentClient;
+
+    /// <summary>A node that has run no turn has nothing to read yet, so the transcript offers its Run.</summary>
+    public bool ShowsEmpty => Node.State == NodeState.Idle && Items.Count == 0;
+
+    /// <summary>The line over the composer shows while a turn runs.</summary>
+    public bool ShowsWorking => Node.State == NodeState.Running;
+
+    public string WorkingLabel => Node.IsAsking ? "Waiting for your answer" : Node.State == NodeState.Running && Node.StatusLabel != "Running" ? Node.StatusLabel : "Working";
+
+    /// <summary>The first line of what the agent did last.</summary>
+    public string? WorkingLine => Node.Latest?.Split('\n', 2)[0];
+
+    public AttentionCard Card => Node.IsAsking ? AttentionCard.Question : Node.EngineState switch
     {
-        NodeState.Running => "Your message waits for this turn to end. Stop and send ends the turn first.",
-        NodeState.Idle => "Run the node first. A message continues its session.",
-        _ => "Sending continues the node's session.",
+        EngineState.InputRequired { Why: EngineState.Approval or EngineState.RoundLimit } => AttentionCard.Approval,
+        EngineState.InputRequired { Why: EngineState.Conflict } => AttentionCard.Conflict,
+        EngineState.InputRequired { Why: EngineState.Interrupted } => AttentionCard.Interrupted,
+        EngineState.InputRequired => AttentionCard.Reply,
+        EngineState.Failed => AttentionCard.Failed,
+        EngineState.Stale => AttentionCard.Stale,
+        _ => AttentionCard.None,
     };
 
-    public string Watermark => Node.Definition.Execution?.Client is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
+    public bool ShowsCard => Card != AttentionCard.None;
+
+    public bool IsQuestionCard => Card == AttentionCard.Question;
+
+    public bool IsProblemCard => Card == AttentionCard.Failed;
+
+    public bool IsWarningCard => Card == AttentionCard.Stale;
+
+    /// <summary>Approve is the card's main action on an approval, and only an alternative to a reply.</summary>
+    public bool IsApprovalCard => Card == AttentionCard.Approval;
+
+    public bool ShowsCardRetry => Card is AttentionCard.Failed or AttentionCard.Stale or AttentionCard.Interrupted;
+
+    public bool IsRetryPrimary => Card is AttentionCard.Failed or AttentionCard.Stale;
+
+    public bool ShowsChangeModel => Card == AttentionCard.Failed && Node.HasAgent;
+
+    public string CardTitle => Card switch
+    {
+        AttentionCard.Question => Node.Questions is [var only] ? only.Header : "The agent asks",
+        AttentionCard.Reply => HasOwnReason ? "The agent asks" : "The agent replied",
+        AttentionCard.Approval => "Waits for your approval",
+        AttentionCard.Conflict => "Conflict",
+        AttentionCard.Interrupted => "Interrupted",
+        AttentionCard.Failed => "Failed",
+        AttentionCard.Stale => "Stale",
+        _ => "",
+    };
+
+    /// <summary>What the card explains, or null. A reply needs no words, and a question's rows say it.</summary>
+    public string? CardBody => Card switch
+    {
+        AttentionCard.None => null,
+        AttentionCard.Question => null,
+        AttentionCard.Reply => HasOwnReason && Node.StateDetail?.Trim() != Node.LastReply?.Trim() ? Node.StateDetail : null,
+        _ => Node.StateDetail,
+    };
+
+    /// <summary>What an approval offers, which the last wait's marker holds, or null.</summary>
+    public string? CardOffered => Card == AttentionCard.Approval
+        ? Items.OfType<MarkerItemViewModel>().LastOrDefault(marker => marker.Kind == MarkerKind.Waiting)?.Offered
+        : null;
+
+    /// <summary>The card has nothing to read, so its actions share the header's line.</summary>
+    public bool IsCompactCard => Card == AttentionCard.Reply && CardBody is null;
+
+    /// <summary>The person opened the note box of Send back.</summary>
+    public bool IsSendBackOpen
+    {
+        get;
+        set => SetProperty(ref field, value);
+    }
+
+    /// <summary>The input strip's chips in view.</summary>
+    public IReadOnlyList<NodeLink> ShownInputs => [.. Node.Inputs.Take(ShownCount(Node.Inputs.Count, _chipRoom))];
+
+    public IReadOnlyList<NodeLink> MoreInputs => [.. Node.Inputs.Skip(ShownCount(Node.Inputs.Count, _chipRoom))];
+
+    public IReadOnlyList<NodeLink> ShownOutputs => [.. Node.Outputs.Take(ShownCount(Node.Outputs.Count, OutputRoom))];
+
+    public IReadOnlyList<NodeLink> MoreOutputs => [.. Node.Outputs.Skip(ShownCount(Node.Outputs.Count, OutputRoom))];
+
+    public bool HasInputs => Node.Inputs.Count > 0;
+
+    public bool HasOutputs => Node.Outputs.Count > 0 || Result is not null;
+
+    public bool HasMoreInputs => MoreInputs.Count > 0;
+
+    public bool HasMoreOutputs => MoreOutputs.Count > 0;
+
+    public string MoreInputsLabel => $"+{MoreInputs.Count}";
+
+    public string MoreOutputsLabel => $"+{MoreOutputs.Count}";
+
+    public bool ShowsStrip => HasInputs || HasOutputs;
+
+    /// <summary>The node's newest result, on the strip's output side, or null.</summary>
+    public ResultViewModel? Result => Node.Results.FirstOrDefault();
+
+    /// <summary>A chip's largest width: 120, or what a narrow strip leaves.</summary>
+    public double ChipWidth
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    } = MaxChipWidth;
+
+    private bool HasOwnReason => Node.EngineState is EngineState.InputRequired { Why: not EngineState.Reply };
+
+    private int OutputRoom => Math.Max(Result is null ? 1 : 0, _chipRoom - (Result is null ? 0 : 1));
 
     public bool HasEarlier => _start > 0;
 
@@ -108,9 +247,41 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     internal Task CopyAsync(string text) => _copy(text);
 
+    /// <summary>Fits the strip's chips to its width. Each side shows what fits in whole chips, and the rest goes behind its +3 chip.</summary>
+    internal void FitChips(double width)
+    {
+        var room = (width - 12) / 2 - StripLabelWidth - MoreChipWidth;
+        ChipWidth = Math.Clamp(room, 48, MaxChipWidth);
+        var chips = Math.Max(1, (int)((room + ChipGap) / (ChipWidth + ChipGap)));
+        if (chips != _chipRoom)
+        {
+            _chipRoom = chips;
+            RaiseStrip();
+        }
+    }
+
+    /// <summary>The digit key picks its choice. It works only while the composer is empty, where a digit is no message.</summary>
+    internal bool PickChoice(int digit)
+    {
+        if (!Node.IsAsking || State.Draft.Length > 0)
+        {
+            return false;
+        }
+
+        if (Node.Questions.SelectMany(question => question.Choices).FirstOrDefault(choice => choice.Number == digit) is not { } choice)
+        {
+            return false;
+        }
+
+        choice.IsChosen = !choice.IsChosen;
+        return true;
+    }
+
+    private static int ShownCount(int count, int room) => count <= room ? count : room;
+
     /// <summary>
     /// Shows the log's lines from the first one shown to the end. The log only grows, so the rows already shown stay, and new
-    /// lines join at the end.
+    /// lines join at the end. A row of steps takes each new tool line that follows it.
     /// </summary>
     private void Refresh()
     {
@@ -124,21 +295,158 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         {
             // A conversation opened again starts at the line the person last read, or at the latest page.
             _start = Math.Max(0, Math.Min(lines.Count - PageSize, State.Anchor?.Entry ?? int.MaxValue));
+            _shownStart = _shownEnd = _start;
         }
 
-        var first = Items.Count > 0 ? Items[0].Id : lines.Count;
-        for (var id = first - 1; id >= _start; id--)
+        if (_start < _shownStart)
         {
-            Items.Insert(0, ConversationItemViewModel.Create(id, lines[id], this));
+            List<ConversationItemViewModel> earlier = [];
+            StepGroupItemViewModel? group = null;
+            for (var id = _start; id < _shownStart; id++)
+            {
+                if (Row(lines, id, ref group) is { } row)
+                {
+                    earlier.Add(row);
+                }
+            }
+
+            // The nearest row goes in first, as a person scrolling up would meet it.
+            foreach (var row in Enumerable.Reverse(earlier))
+            {
+                Items.Insert(0, row);
+            }
+
+            _shownStart = _start;
         }
 
-        for (var id = Items.Count > 0 ? Items[^1].Id + 1 : _start; id < lines.Count; id++)
+        var last = Items.LastOrDefault() as StepGroupItemViewModel;
+        for (; _shownEnd < lines.Count; _shownEnd++)
         {
-            Items.Add(ConversationItemViewModel.Create(id, lines[id], this));
+            if (Row(lines, _shownEnd, ref last) is { } row)
+            {
+                Items.Add(row);
+            }
         }
 
+        Relate();
         OnPropertyChanged(nameof(HasEarlier));
+        OnPropertyChanged(nameof(ShowsEmpty));
+        OnPropertyChanged(nameof(CardOffered));
         _loadEarlier.NotifyCanExecuteChanged();
+    }
+
+    // The row for a line, or null when the line joined the group before it.
+    private ConversationItemViewModel? Row(IReadOnlyList<ConversationLine> lines, int id, ref StepGroupItemViewModel? group)
+    {
+        if (lines[id] is ConversationLine.Activity { IsTool: true } tool)
+        {
+            var step = new ActivityItemViewModel(id, tool);
+            if (group is not null)
+            {
+                group.Add(step);
+                return null;
+            }
+
+            return group = new StepGroupItemViewModel(step);
+        }
+
+        group = null;
+        return lines[id] switch
+        {
+            ConversationLine.Person person => new MessageItemViewModel(id, person.Text, null, this),
+            ConversationLine.Agent agent => new MessageItemViewModel(id, agent.Text, agent, this),
+            ConversationLine.Activity notice => new ActivityItemViewModel(id, notice),
+            ConversationLine.Marker marker => new MarkerItemViewModel(id, marker, Attempt(lines, id), AgentAbove(lines, id)),
+            _ => throw new InvalidOperationException("Unknown conversation line."),
+        };
+    }
+
+    private static int Attempt(IReadOnlyList<ConversationLine> lines, int id) =>
+        lines.Take(id + 1).Count(line => line is ConversationLine.Marker { Kind: MarkerKind.Fresh });
+
+    private static string? AgentAbove(IReadOnlyList<ConversationLine> lines, int id)
+    {
+        for (var at = id - 1; at >= 0; at--)
+        {
+            if (lines[at] is ConversationLine.Agent agent)
+            {
+                return ResultBlock.Prose(agent.Text);
+            }
+
+            if (lines[at] is not ConversationLine.Activity)
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    // What each row owes the row before it: the author label, the tight gap over steps, and the card that holds the last marker.
+    private void Relate()
+    {
+        var label = true;
+        ConversationItemViewModel? before = null;
+        foreach (var item in Items)
+        {
+            switch (item)
+            {
+                case MessageItemViewModel { IsAgent: true } agent:
+                    agent.ShowsAuthor = label || agent.IsSubagent;
+                    label = agent.IsSubagent;
+                    break;
+                case MessageItemViewModel or MarkerItemViewModel:
+                    label = true;
+                    break;
+            }
+
+            before?.IsBeforeSteps = item is StepGroupItemViewModel;
+            before = item;
+        }
+
+        foreach (var marker in Items.OfType<MarkerItemViewModel>())
+        {
+            marker.IsHeldByCard = marker == before && (Card is AttentionCard.Reply or AttentionCard.Approval or AttentionCard.Question && marker.Kind == MarkerKind.Waiting
+                || Card == AttentionCard.Failed && marker.Kind == MarkerKind.Failed
+                || Card == AttentionCard.Conflict && marker.Kind == MarkerKind.Conflict);
+        }
+
+        ShowResults();
+    }
+
+    // A result shows under the newest message that reported it.
+    private void ShowResults()
+    {
+        var left = Node.Results.ToList();
+        foreach (var message in Items.OfType<MessageItemViewModel>().Reverse().Where(message => message.IsAgent && !message.IsSubagent))
+        {
+            var result = left.FirstOrDefault(entry => entry.Report.Trim() == message.Text.Trim());
+            message.Result = result;
+            left.Remove(result!);
+        }
+    }
+
+    private void RaiseStrip()
+    {
+        foreach (var name in StripProperties)
+        {
+            OnPropertyChanged(name);
+        }
+    }
+
+    private void RaiseState()
+    {
+        foreach (var name in StateProperties)
+        {
+            OnPropertyChanged(name);
+        }
+
+        if (Card != AttentionCard.Approval)
+        {
+            IsSendBackOpen = false;
+        }
+
+        Relate();
     }
 
     private void LoadEarlier()
@@ -152,6 +460,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         if (e.PropertyName == nameof(ConversationState.Draft))
         {
             OnPropertyChanged(nameof(Draft));
+            OnPropertyChanged(nameof(HasDraft));
             if (State.Draft.Length == 0)
             {
                 FollowRequested?.Invoke();
@@ -161,15 +470,40 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     private void OnNodeChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(TaskNodeViewModel.AgentLabel))
+        switch (e.PropertyName)
         {
-            OnPropertyChanged(nameof(AgentName));
-            OnPropertyChanged(nameof(Watermark));
-            OnPropertyChanged(nameof(Limitations));
-        }
-        else if (e.PropertyName is nameof(TaskNodeViewModel.EngineState))
-        {
-            OnPropertyChanged(nameof(ComposerHint));
+            case nameof(TaskNodeViewModel.AgentLabel):
+                OnPropertyChanged(nameof(AgentName));
+                OnPropertyChanged(nameof(Watermark));
+                OnPropertyChanged(nameof(Limitations));
+                OnPropertyChanged(nameof(ModelChip));
+                break;
+            case nameof(TaskNodeViewModel.EngineState) or nameof(TaskNodeViewModel.IsAsking):
+                RaiseState();
+                break;
+            case nameof(TaskNodeViewModel.Latest):
+                OnPropertyChanged(nameof(WorkingLine));
+                break;
+            case nameof(TaskNodeViewModel.Results):
+                RaiseStrip();
+                ShowResults();
+                break;
+            case nameof(TaskNodeViewModel.Inputs) or nameof(TaskNodeViewModel.Outputs):
+                RaiseStrip();
+                break;
         }
     }
+
+    private static readonly string[] StateProperties =
+    [
+        nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
+        nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
+        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardOffered), nameof(IsCompactCard),
+    ];
+
+    private static readonly string[] StripProperties =
+    [
+        nameof(Result), nameof(ShownInputs), nameof(MoreInputs), nameof(ShownOutputs), nameof(MoreOutputs), nameof(HasInputs), nameof(HasOutputs),
+        nameof(HasMoreInputs), nameof(HasMoreOutputs), nameof(MoreInputsLabel), nameof(MoreOutputsLabel), nameof(ShowsStrip),
+    ];
 }
