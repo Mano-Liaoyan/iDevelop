@@ -4,7 +4,7 @@ The canvas shows each task as a card with its kind's tile, its title, and one su
 
 ## Sub-features
 
-- `add-task` adds a task from the Add popover that `Add Node` in the canvas bar opens, selects it, and marks the project unsaved.
+- `add-task` adds a task from the Add popover that `+` in the canvas bar opens, selects it, and marks the project unsaved.
 - `add-popover` opens the same popover from a right-click, a double-click, or N on empty canvas, from a wire dropped on empty canvas, and from `Insert Node…` on a connection.
 - `card-content` shows each task's kind tile, title, and two lines: its client while idle and otherwise its status or what it needs, then its model and level.
 - `menus` offers Run, Cancel or Retry… when they apply, Rename, Duplicate, Replace With, Disconnect, Derive Blueprint…, Save as Blueprint…, and Delete on a card, and the kind, `Insert Node…`, and Delete on a connection. A card whose task has no agent offers `Choose Agent…` (`NodeMenuChooseAgent`) in place of Run, which opens the inspector's `TaskClient` list. Duplicate places the copies below their originals, at the first spot where they cover no card.
@@ -19,7 +19,7 @@ The canvas shows each task as a card with its kind's tile, its title, and one su
 
 ## How to get to it (user POV)
 
-- Choose `Add Node` at the top of the sidebar, then a type in the popover.
+- Choose `+` in the breadcrumb, then a type in the popover.
 - Right-click, double-click, or press N on empty canvas, then choose a type.
 - Right-click a card or a connection for its menu.
 - Choose `Undo` or `Redo` in the breadcrumb.
@@ -42,15 +42,15 @@ $editor = (Find-ById $s.Window 'Editor').Current.BoundingRectangle
 $card = { (Find-NameOutside $s.Window 'Review the storage change' 'SidebarTasks').Current.BoundingRectangle }
 ```
 
-- **Cards.** Read the three cards. Each card's first line shows its client as `CardAgent` while idle, and otherwise its status or what it needs as `CardStatus`. Its second line, `CardModel`, shows the model and level. Run `(Find-ById $s.Window 'Editor').FindAll('Children', [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'CardAgent')).Current.Name`. It lists `Codex` alone, and the same call for `CardModel` lists `GPT-6-Sol · medium`. With `CardStatus` in place of `CardAgent` it lists `Claude Code isn't ready` and `Choose an agent`, because Claude Code is not ready under the fake clients and the third task has no agent.
+- **Cards.** Read the three cards. Each card's first line shows `Idle ·` and its client as `CardAgent` while idle, and otherwise its status or what it needs as `CardStatus`. Its second line, `CardModel`, shows the model and level. Run `(Find-ById $s.Window 'Editor').FindAll('Children', [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'CardAgent')).Current.Name`. It lists `Codex` alone, and the same call for `CardModel` lists `GPT-6-Sol · medium`. With `CardStatus` in place of `CardAgent` it lists `Claude Code isn't ready` and `Choose an agent`, because Claude Code is not ready under the fake clients and the third task has no agent.
 - **Connections.** Show them and read them from the file. Run `Invoke-Element (Find-ById $s.Window 'FitToScreen')` and `Save-Evidence $s 'connections'`. Each line takes the color of the card it leaves, and the sample's three cards are Implement tasks, so the screenshot shows a solid indigo line with an arrow from the first card to the second, a dashed indigo line from the first card to the third that passes under the second card, and a solid indigo line from the second card to the third. The copied file under `connections\workflows` lists connection kinds `dependency`, `context`, and `dependency`.
-- **Zoom in.** Run `$before = & $title`, `Invoke-Element (Find-ById $s.Window 'ZoomIn')`, and `$after = Wait-Until { $v = & $title; if ($v -gt $before) { $v } } 5`. The title grows by about a quarter, one step of 2^(1/3).
+- **Zoom in.** Run `(Find-ById $s.Window 'ZoomOpen').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()`, because the zoom panel shows only Fit while every card is in view. Run `$before = & $title`, `Invoke-Element (Find-ById $s.Window 'ZoomIn')`, and `$after = Wait-Until { $v = & $title; if ($v -gt $before) { $v } } 5`. The title grows by about a quarter, one step of 2^(1/3).
 - **Zoom out.** Run `Invoke-Element (Find-ById $s.Window 'ZoomOut')` and `Wait-Until { $v = & $title; if ($v -lt $after) { $v } } 5`. The height returns to `$before`. The window title stays `project - iDevelop`, because the view is not part of the file.
 - **Fit.** Zoom in until the third card leaves the canvas, then fit. Run `1..4 | ForEach-Object { Invoke-Element (Find-ById $s.Window 'ZoomIn') }`. `$editor.Contains((& $card))` is `$false`. Run `Invoke-Element (Find-ById $s.Window 'FitToScreen')`, and `Wait-Until { $editor.Contains((& $card)) } 5` returns `$true`.
 - **Reveal from the sidebar.** Zoom in four times again, so the third card leaves the canvas, then choose its row. Run `Select-Element (Get-SidebarTasks $s.Window)[2]`. `Wait-Until { $editor.Contains((& $card)) } 5` returns `$true`, and `Get-Value (Find-ById $s.Window 'TaskTitle')` is `Review the storage change`.
 - **Add a task.** Run `Invoke-Element (Find-ById $s.Window 'AddTask')`. The Add popover opens under the button, and `(Find-ById $s.Window 'AddNodeItem').Current.Name`, its first row, reads `Add Implement`. Run `Invoke-Element (Find-ById $s.Window 'AddNodeItem')`. `TaskCount` reads `4`, `TaskTitle` reads `New task`, `(Get-SidebarTasks $s.Window).Current.Name` contains `New task`, and the window title becomes `project* - iDevelop`. The sidebar lists tasks in reading order, each after the tasks it depends on and otherwise from the top of the canvas and then from the left, so the new row's place depends on where its card lands. Run `Set-Text (Find-ById $s.Window 'TaskTitle') 'Write the changelog'`. `Find-NameOutside $s.Window 'Write the changelog' 'SidebarTasks'` finds the new card. Run `Save-Evidence $s 'added-task'`.
 - **Undo and redo.** After **Add a task**, run `Invoke-Element (Find-ById $s.Window 'Undo')`. `TaskTitle` reads `New task` again, because the retitle was the last edit. Run `Invoke-Element (Find-ById $s.Window 'Undo')` again. `TaskCount` reads `3`, and the window title becomes `project - iDevelop`, because the workflow matches the saved file. Run `Invoke-Element (Find-ById $s.Window 'Redo')`. `TaskCount` reads `4`, and the title is `project* - iDevelop`.
-- **Minimap.** Run `(Find-ById $s.Window 'Minimap').Current.BoundingRectangle`. It lies at the bottom right of `$editor`, and the screenshot shows one block per task in its kind's color, indigo for the sample's three Implement tasks.
+- **Minimap.** Run `(Find-ById $s.Window 'ShowMinimap').GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Toggle()`, because the minimap hides while every card is in view. Run `(Find-ById $s.Window 'Minimap').Current.BoundingRectangle`. It lies at the bottom right of `$editor`, and the screenshot shows one block per task in its state's fill.
 
 ## Gotchas
 
