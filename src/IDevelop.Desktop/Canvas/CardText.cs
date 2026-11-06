@@ -17,11 +17,11 @@ public static class CardText
         _ => "A",
     };
 
-    /// <summary>A zoomed out card's model lines: the shorter of a model's card lines, and last its family, which fits whole where its version does not.</summary>
-    public static IReadOnlyList<string> FarLines(IReadOnlyList<string> lines, string full)
+    /// <summary>A zoomed out card's model lines: a model's card lines, and last its family, which fits whole where its version does not.</summary>
+    public static IReadOnlyList<string> FarLines(IReadOnlyList<string> lines)
     {
         var words = lines[^1].Split(' ');
-        return [.. lines.Skip(1).DefaultIfEmpty(full).Append(words.Length > 1 ? string.Join(' ', words[..^1]) : lines[^1]).Distinct()];
+        return [.. lines.Append(words.Length > 1 ? string.Join(' ', words[..^1]) : lines[^1]).Distinct()];
     }
 
     /// <summary>A model's card lines, the fullest first, down to the words that name its version.</summary>

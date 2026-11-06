@@ -438,19 +438,16 @@
     <Setter Property="CornerRadius" Value="5" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus, TextBlock.cardIdle, TextBlock.cardModel">
+  <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus, TextBlock.cardModel">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Height" Value="16" />
     <Setter Property="LineHeight" Value="16" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="TextBlock.cardStatus, TextBlock.cardIdle, TextBlock.cardAgent">
+  <Style Selector="TextBlock.cardStatus, TextBlock.cardAgent">
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Margin" Value="0,0,6,0" />
-  </Style>
-  <Style Selector="TextBlock.cardIdle">
-    <Setter Property="Margin" Value="0,0,4,0" />
   </Style>
   <Style Selector="TextBlock.cardStatus.state-running">
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />

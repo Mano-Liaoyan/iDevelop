@@ -21,7 +21,7 @@ public sealed class CardIdentityTests
     [AvaloniaFact]
     public void A_card_keeps_its_model_and_client_letter_when_its_state_changes()
     {
-        using var f = new NodeFixture(Task(A, "A", 105));
+        using var f = new NodeFixture(Task(A, "A", 105, ConversationMode.Chat));
         f.Install(Reply("s-1", "Which file?"));
         var shell = f.Open();
         var node = shell.NodeModel("A");
@@ -47,7 +47,7 @@ public sealed class CardIdentityTests
         Assert.Null(canvas.RunScope);
 
         shell.RunNode("A");
-        shell.WaitForCard("A", "Reply");
+        shell.WaitForCard("A", "Completed");
 
         Assert.Equal("1 of 2", canvas.RunScope);
     }
@@ -102,10 +102,10 @@ public sealed class CardIdentityTests
 
     [Theory]
     [InlineData("Sonnet 5.5", "Sonnet 5.5|Sonnet")]
-    [InlineData("GPT-6.1 Terra", "GPT-6.1|GPT-6.1 Terra")]
+    [InlineData("GPT-6.1 Terra", "GPT-6.1 Terra|GPT-6.1|GPT-6.1")]
     public void A_far_card_falls_back_to_the_model_family(string model, string lines)
     {
-        var shown = CardText.FarLines(CardText.ModelLines(model, model), model);
-        Assert.Equal(lines.Split('|').Order(), shown.Order());
+        var shown = CardText.FarLines(CardText.ModelLines(model, model));
+        Assert.Equal(lines.Split('|').Distinct().Order(), shown.Order());
     }
 }

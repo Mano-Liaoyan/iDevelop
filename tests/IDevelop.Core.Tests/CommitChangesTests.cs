@@ -14,6 +14,6 @@ public sealed class CommitChangesTests
     public void A_diff_starts_at_its_first_hunk_and_keeps_to_its_limit()
     {
         var diff = "diff --git a/f b/f\nindex 1..2\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-old\n+new\n";
-        Assert.Equal(["@@ -1 +1 @@", "-old"], CommitChanges.Hunks(diff, 2));
+        Assert.Equal(["@@ -1 +1 @@", "-old"], [.. CommitChanges.Hunks(diff, 2)]);
     }
 }
