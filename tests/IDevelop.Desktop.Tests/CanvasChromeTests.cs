@@ -382,10 +382,12 @@ public sealed class CanvasChromeTests : IDisposable
             if (id == "RunWorkflow")
             {
                 // The workflow's primary action keeps a word on a compact canvas.
-                Assert.Equal(compact ? "Run" : "Run Workflow", Assert.Single(labels));
+                var workflow = shell.Window.ViewModel.Canvas!;
+                Assert.Equal(compact ? workflow.RunWorkflowShortLabel : workflow.RunWorkflowLabel, Assert.Single(labels));
             }
-            else if (compact)
+            else if (compact || !shell.Window.ViewModel.Canvas!.RunsNothing)
             {
+                // A run's Stop All takes the label's width.
                 Assert.Empty(labels);
                 Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
             }
@@ -420,7 +422,7 @@ public sealed class CanvasChromeTests : IDisposable
 
         // The bar holds its status, its progress, and whichever of its buttons show, its text whole.
         var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunProgress", "RunStatus", "RunStatusShort", "NextWaiting", "StopAll" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
+        var inside = new[] { "RunProgress", "RunStatus", "RunStatusShort", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
         Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
         if (shell.ShowsAny("StopWorkflow"))
         {

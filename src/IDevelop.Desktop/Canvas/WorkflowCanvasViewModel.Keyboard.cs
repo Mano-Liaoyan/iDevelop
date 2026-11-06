@@ -1,3 +1,5 @@
+using Avalonia.Threading;
+
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>A move of the selection along the graph.</summary>
@@ -59,6 +61,10 @@ public sealed partial class WorkflowCanvasViewModel
 
     private static IEnumerable<TaskNodeViewModel> ByPlace(IEnumerable<TaskNodeViewModel> nodes) =>
         nodes.OrderBy(node => node.Location.Y).ThenBy(node => node.Location.X);
+
+    /// <summary>Shows a card that the person looked for, once a workflow that just came into view has made its first fit.</summary>
+    internal void ShowFound(TaskNodeViewModel node) =>
+        Dispatcher.UIThread.Post(() => View?.RevealFound(node), DispatcherPriority.Background);
 
     private void Reveal(TaskNodeViewModel node)
     {

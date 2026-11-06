@@ -42,8 +42,32 @@ public sealed partial class WorkflowCanvasViewModel
     public int RunningCount
     {
         get;
-        private set => SetProperty(ref field, value);
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(RunsNothing));
+                OnPropertyChanged(nameof(CanStartRun));
+                OnPropertyChanged(nameof(RunWorkflowLabel));
+                OnPropertyChanged(nameof(RunWorkflowShortLabel));
+            }
+        }
     }
+
+    /// <summary>No node runs, so Run Workflow is the bar's primary action. While one runs, it says so and Stop All stands beside it.</summary>
+    public bool RunsNothing => RunningCount == 0;
+
+    /// <summary>A graph exists and no node runs, so Run Workflow takes the primary look.</summary>
+    public bool CanStartRun => !IsEmpty && RunsNothing;
+
+    /// <summary>What the toolbar's run button says.</summary>
+    public string RunWorkflowLabel => RunningCount == 0 ? "Run Workflow" : "Running…";
+
+    /// <summary>What the toolbar's run button says on a compact canvas.</summary>
+    public string RunWorkflowShortLabel => RunningCount == 0 ? "Run" : "Running…";
+
+    /// <summary>The toolbar offers Generate while the canvas's own Generate card does not. A plan in progress or under review keeps it, because it reports that state.</summary>
+    public bool ShowsGenerate => !IsEmpty || IsPlanning || IsReviewing;
 
     /// <summary>Every node is completed and nothing is stale, so the bar offers Merge into my branch.</summary>
     public bool CanMergeIntoBranch
@@ -80,8 +104,8 @@ public sealed partial class WorkflowCanvasViewModel
     public string? BarActivity => RunningCount == 0 ? null
         : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
 
-    /// <summary>The summary on a narrow canvas: "5/9".</summary>
-    public string BarShort => $"{Counts.Completed}/{Counts.Total}";
+    /// <summary>The summary on a narrow canvas: "5/9 done".</summary>
+    public string BarShort => $"{Counts.Completed}/{Counts.Total} done";
 
     /// <summary>The bar's tooltip: the whole summary, then the running nodes' titles.</summary>
     public string BarTip => string.Join("\n", new[]

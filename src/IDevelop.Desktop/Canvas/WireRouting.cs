@@ -6,9 +6,10 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>
 /// The path a wire takes from an output port to an input port. It keeps the step the canvas has always drawn, out of the
 /// output, across at the midpoint, and into the input, unless that step passes behind a card. Then it takes the
-/// orthogonal detour around every card that weighs least in length and turns. Of those it takes the one that runs least
-/// away from its own ports' rows and stub columns, so a wire never seems to come out of a card it does not join, and
-/// then the one that passes below the cards rather than above.
+/// orthogonal detour around every card that weighs least in length and turns. A detour first keeps to the middle of the
+/// gaps of a saved layout, so it never frames a card it passes, and it comes closer only where cards stand too close for
+/// that. Of the detours it takes the one that runs least away from its own ports' rows and stub columns, so a wire never
+/// seems to come out of a card it does not join, and then the one that passes below the cards rather than above.
 /// </summary>
 internal static class WireRouting
 {
@@ -21,6 +22,13 @@ internal static class WireRouting
     // How far a detour keeps from a card's container: half the gap that FreeSpot leaves between the cards it stacks, so a
     // detour can still pass between them.
     private static readonly double Clearance = (WorkflowCanvasViewModel.TaskFootprint.Height - WorkflowCanvasViewModel.TaskCardHeight) / 2;
+
+    // How far a detour keeps from a card where the layout has room: most of a saved layout's 80 px gap between columns and
+    // of its 126 px gap between rows, so lanes meet near the gaps' middles.
+    private static readonly Thickness WideClearance = new(40, 56);
+
+    // How much longer a wide detour may run than a close one, so it never goes around a whole group of cards for clearance.
+    private const double WideDetour = 100;
 
     // One turn weighs as much as this much length, so a detour turns no more than it has to.
     private const double TurnCost = 60;
@@ -37,8 +45,16 @@ internal static class WireRouting
         var start = new Point(source.X + Stub, source.Y);
         var end = new Point(target.X - Stub, target.Y);
         var step = Step(start, end);
-        return cards.Any(card => Crosses(step, card)) ? Detour(start, end, cards) ?? step : step;
+        if (!cards.Any(card => Crosses(step, card)))
+        {
+            return step;
+        }
+
+        var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance)), Detour(start, end, cards, WideClearance));
+        return wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour) ? clear : close ?? step;
     }
+
+    private static double Length(ImmutableArray<Point> path) => path.Zip(path.Skip(1)).Sum(run => Point.Distance(run.First, run.Second));
 
     // Nodify's step: across at the middle when the input lies ahead, back along the middle row when it lies behind.
     private static ImmutableArray<Point> Step(Point start, Point end)
@@ -54,11 +70,11 @@ internal static class WireRouting
     }
 
     // A shortest path on the grid of lines through the stubs' ends and the cards' edges pushed out by the clearance.
-    private static ImmutableArray<Point>? Detour(Point start, Point end, IReadOnlyList<Rect> cards)
+    private static ImmutableArray<Point>? Detour(Point start, Point end, IReadOnlyList<Rect> cards, Thickness clearance)
     {
-        // A card closer to a stub's end than the clearance gives up its clearance, so the wire can still leave.
-        var walls = cards.Select(card => card.Inflate(Clearance))
-            .Select((wall, index) => Inside(start, wall) || Inside(end, wall) ? cards[index] : wall)
+        // A card closer to a stub's end than the clearance gives up as much of it as it must, so the wire can still leave.
+        var walls = cards.Select(card => new[] { card.Inflate(clearance), card.Inflate(Clearance) }
+                .Where(wall => !Inside(start, wall) && !Inside(end, wall)).DefaultIfEmpty(card).First())
             .ToArray();
         if (walls.Any(wall => Inside(start, wall) || Inside(end, wall)))
         {

@@ -17,7 +17,7 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(EngineState), nameof(IsIdle), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
+        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
@@ -53,6 +53,9 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The node's state as the engine gives it, with why it waits for the person.</summary>
     public EngineState EngineState => _engineState;
 
+    /// <summary>What the node needs from the person now, which its glyph tells apart.</summary>
+    public WaitReason WaitReason => NodeStates.Why(_engineState);
+
     /// <summary>"Running", "Completed", or what the node needs, such as "Input required · approval".</summary>
     public string StatusLabel => NodeStates.Label(_engineState, _background);
 
@@ -69,6 +72,9 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>The node runs now, so a list's state glyph spins.</summary>
     public bool IsRunningNow => State == NodeState.Running;
+
+    /// <summary>A zoomed out card's corner badge shows a state or a planner's open proposal. An idle node has no glyph.</summary>
+    public bool ShowsStateBadge => State != NodeState.Idle || Role != NodeRole.None;
 
     /// <summary>Why the engine would not start the node now, which keeps Run and Retry off and is their tooltip, or null.</summary>
     public string? RunRefusal => State == NodeState.Running || IsAsking ? null : _runRefusal;

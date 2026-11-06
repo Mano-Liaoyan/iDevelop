@@ -171,9 +171,18 @@
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
+  <!-- Stale is the one dashed edge, drawn over this one, because its hue sits close to Input required's at a card's scale. -->
   <Style Selector="Border.stateStroke.state-stale">
-    <Setter Property="BorderThickness" Value="1.5" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateWarningStrokeBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Rectangle.staleEdge">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Stroke" Value="{DynamicResource StateWarningStrokeBrush}" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeDashArray" Value="4,3" />
+  </Style>
+  <Style Selector="Rectangle.staleEdge.state-stale:not(.role-proposing)">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
 
   <Style Selector="Border.stateTint.state-running">
@@ -242,6 +251,23 @@
   </Style>
   <Style Selector="PathIcon.stateIcon.state-failed">
     <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
+  </Style>
+
+  <!-- What a waiting node needs, told apart by its glyph, because each asks a different action of the person. -->
+  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-reply">
+    <Setter Property="Data" Value="{StaticResource IconChat}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-approval">
+    <Setter Property="Data" Value="{StaticResource IconKindApproval}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-conflict">
+    <Setter Property="Data" Value="{StaticResource IconDisconnect}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-interrupted">
+    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-roundlimit">
+    <Setter Property="Data" Value="{StaticResource IconStateNeedsSetup}" />
   </Style>
 
   <!-- A planner with an open proposal takes the accent instead of its state, and does not pulse. -->

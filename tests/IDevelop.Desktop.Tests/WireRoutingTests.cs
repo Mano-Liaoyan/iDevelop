@@ -50,6 +50,15 @@ public sealed class WireRoutingTests : IDisposable
     }
 
     [Fact]
+    public void A_detour_in_a_saved_layout_keeps_to_the_gap_so_it_never_frames_the_card_it_passes()
+    {
+        // A column pitch of 340 and a row pitch of 190, as a saved layout has.
+        var route = WireRouting.Route(new Point(370, 122), new Point(810, 122), [Card(120, 90), Card(460, 90), Card(800, 90)]);
+
+        Assert.Equal<Point>([new Point(396, 122), new Point(396, 210), new Point(784, 210), new Point(784, 122)], route);
+    }
+
+    [Fact]
     public void A_detour_passes_between_cards_stacked_one_footprint_apart()
     {
         // The second card sits one footprint below Build, where FreeSpot stacks cards, which leaves a 30 px gap.

@@ -5,12 +5,12 @@ namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
 /// Moves apart the wires that share a run, so a person can trace each one. Wires from one output, and wires into one input,
-/// stay on one line, because each of those is one tree. Other wires on a run take lanes 6 px apart, in order of their source
+/// stay on one line, because each of those is one tree. Other wires on a run take lanes 10 px apart, in order of their source
 /// positions. A wire's ends stay on its ports' rows. A wire that its lane would take through a card stays where it was.
 /// </summary>
 internal static class WireLanes
 {
-    private const double Lane = 6;
+    private const double Lane = 10;
 
     private const double Tolerance = 0.01;
 

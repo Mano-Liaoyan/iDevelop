@@ -30,7 +30,14 @@ internal sealed partial class Shell
 
     public string Status => Find<TextBlock>("Status").Text ?? "";
 
-    public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
+    public bool ShowsUnsavedChanges => Find<Avalonia.Controls.Shapes.Ellipse>("UnsavedChanges").IsVisible;
+
+    /// <summary>Opens the Generate sheet from the canvas's card on an empty workflow, or from the toolbar otherwise.</summary>
+    public void OpenGenerate()
+    {
+        Window.UpdateLayout();
+        Click(Find<Avalonia.Controls.Button>(Window.ViewModel.Canvas!.IsEmpty ? "GenerateStart" : "GenerateWorkflow"));
+    }
 
     /// <summary>Without <paramref name="clients"/> nothing refreshes the window's directory, so every client stays Checking
     /// and no test probes this machine's clients.</summary>

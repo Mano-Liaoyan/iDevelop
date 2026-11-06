@@ -251,6 +251,7 @@ public sealed class MainWindowViewModel : ObservableObject
         if (result.Node is { } node)
         {
             ShowNode(node);
+            node.Canvas.ShowFound(node);
         }
         else
         {

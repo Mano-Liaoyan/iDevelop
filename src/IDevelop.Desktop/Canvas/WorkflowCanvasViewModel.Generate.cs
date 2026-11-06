@@ -51,6 +51,7 @@ public sealed partial class WorkflowCanvasViewModel
                 OnPropertyChanged(nameof(IsGenerateIdle));
                 OnPropertyChanged(nameof(IsPlanning));
                 OnPropertyChanged(nameof(IsReviewing));
+                OnPropertyChanged(nameof(ShowsGenerate));
             }
         }
     }
@@ -142,6 +143,8 @@ public sealed partial class WorkflowCanvasViewModel
         Nodes.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(CanStartRun));
+            OnPropertyChanged(nameof(ShowsGenerate));
             OnPropertyChanged(nameof(RunWorkflowTip));
             ShowGenerateProgress();
         };

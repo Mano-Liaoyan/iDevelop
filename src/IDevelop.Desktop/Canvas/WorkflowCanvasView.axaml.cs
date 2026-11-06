@@ -24,6 +24,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>How far a fitted view keeps its cards from the canvas's edges and from what floats over it.</summary>
     private const double CardMargin = 24;
 
+    /// <summary>How far apart the canvas's dots lie, in canvas units.</summary>
+    private const double DotPitch = 24;
+
+    /// <summary>The zoom at which a found card's title and neighbours read: a card shows its tile and two lines.</summary>
+    private const double FoundZoom = 0.6;
+
     private WorkflowCanvasViewModel? _viewModel;
     private Point? _windowAnchor;
     private bool _showingAdd;
@@ -66,13 +72,14 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
         Minimap.AddHandler(PointerWheelChangedEvent, OnMinimapWheel, RoutingStrategies.Tunnel);
         _dots = Editor.Background;
+        Editor.GotFocus += (_, e) => CanvasFocus.IsVisible = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional;
+        Editor.LostFocus += (_, _) => CanvasFocus.IsVisible = false;
         // A compact canvas shows its run bar's buttons as glyphs. A view that Fit made fits again at the new size, so a
         // resized panel or window never cuts the graph. A view that the person moved stays.
         SizeChanged += (_, e) =>
         {
             Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
             Classes.Set("narrowBar", CanvasChrome.IsNarrowBar(e.NewSize));
-            Classes.Set("shortBar", CanvasChrome.IsShortBar(e.NewSize));
             ShowChrome();
             if (IsFitted)
             {
@@ -96,11 +103,13 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
     private bool IsFitted => _viewModel?.FittedView is { } fit && fit.Location == Editor.ViewportLocation && fit.Zoom == Editor.ViewportZoom;
 
-    // The minimap and the zoom buttons show only while they are of use: while a card is outside the view, or on the person's choice.
+    // The minimap and the zoom buttons show only while they are of use: while a card is outside the view, in a graph too large to
+    // read at a fit, or on the person's choice.
     private void ShowChrome()
     {
         var hidden = Cards().Any(card => !new Rect(Editor.ViewportLocation, Editor.ViewportSize).Contains(card));
-        MinimapPanel.IsVisible = CanvasChrome.ShowsMinimap(Bounds.Size) && (hidden || MinimapToggle.IsChecked == true);
+        var large = _viewModel?.Nodes.Count >= CanvasChrome.LargeGraph;
+        MinimapPanel.IsVisible = CanvasChrome.ShowsMinimap(Bounds.Size) && (hidden || large || MinimapToggle.IsChecked == true);
         ZoomMore.IsVisible = hidden || ZoomOpen.IsChecked == true;
         ExpandAllSlot.IsVisible = CanvasChrome.ShowsMinimap(Bounds.Size);
     }
@@ -117,7 +126,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
-    // A tier takes one class on the view, so only a threshold changes the cards' layout, and the dots hide below a zoom of 0.5.
+    // A tier takes one class on the view, so only a threshold changes the cards' layout. Under a zoom of 0.5 the dots would turn
+    // into a texture, so they spread to a four times wider grid, and the smallest cards have only the canvas's color.
     private void ShowTier()
     {
         if (_viewModel is not { Tier: var tier } || tier == _shownTier && Classes.Contains(ZoomTiers.StyleClass(tier) ?? "tier-full"))
@@ -131,7 +141,13 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
 
         _shownTier = tier;
-        Editor.Background = tier is ZoomTier.Full or ZoomTier.Compact ? _dots : (IBrush?)this.FindResource("CanvasPlainBrush");
+        if (_dots is DrawingBrush dots)
+        {
+            var pitch = tier is ZoomTier.Full or ZoomTier.Compact ? DotPitch : DotPitch * 4;
+            dots.DestinationRect = new RelativeRect(0, 0, pitch, pitch, RelativeUnit.Absolute);
+        }
+
+        Editor.Background = tier == ZoomTier.Block ? (IBrush?)this.FindResource("CanvasPlainBrush") : _dots;
     }
 
     /// <inheritdoc />
@@ -156,6 +172,20 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     }
 
     void ICanvasView.Reveal(TaskNodeViewModel node) => BringIntoViewIfHidden(node);
+
+    /// <summary>Centres a card the person looked for and, at a zoom too low to read it, zooms in, so its title and its neighbours read.</summary>
+    void ICanvasView.RevealFound(TaskNodeViewModel node)
+    {
+        if (Editor.ViewportZoom >= FoundZoom)
+        {
+            BringIntoViewIfHidden(node);
+            return;
+        }
+
+        Editor.ViewportZoom = FoundZoom;
+        var room = new Rect(Editor.Bounds.Size).Deflate(FitInsets().First());
+        Editor.ViewportLocation = node.DisplayRect.Center - (Vector)room.Center / FoundZoom;
+    }
 
     /// <summary>Opens the Add popover for a node in view, with its top left at a point of the window.</summary>
     internal void OpenAddInView(Point anchorInWindow)

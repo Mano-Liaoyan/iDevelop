@@ -138,6 +138,10 @@
       </nodify:NodifyEditor.DecoratorContainerStyle>
     </nodify:NodifyEditor>
 
+    <!-- The keyboard's place: the canvas took the focus by a key, so its keys act here. -->
+    <Border x:Name="CanvasFocus" Classes="canvasFocus" IsHitTestVisible="False" IsVisible="False"
+            AutomationProperties.AutomationId="CanvasFocus" />
+
     <canvas:GenerateLayer />
 
     <canvas:AddNodePopover x:Name="AddPopover" />
@@ -149,7 +153,7 @@
         <Border Padding="1">
           <StackPanel>
             <!-- The panel is Fit and its chevron until the graph leaves the view or the person opens it. -->
-            <Grid x:Name="ZoomMore" ColumnDefinitions="28,28" RowDefinitions="28,28,28" IsVisible="False">
+            <Grid x:Name="ZoomMore" ColumnDefinitions="28,28" RowDefinitions="28,28" IsVisible="False">
               <!-- Expand All and Collapse All, for this workflow's cards only (ADR 0024), with the zoom controls, since it
                    changes only this machine's view. The chevron points down to expand every card, and right to collapse
                    them, as a card's points when it is expanded or collapsed, and the tooltip's first line names it. -->
@@ -177,15 +181,15 @@
                       AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
               </Button>
-              <Button Grid.Row="2" Grid.ColumnSpan="2" Classes="ghost zoom zoomValue" Click="OnZoomActual" ToolTip.Tip="Zoom to 100% (0)"
-                      AutomationProperties.AutomationId="ZoomValue" AutomationProperties.Name="Reset the zoom">
-                <TextBlock Text="{Binding ZoomLabel}" AutomationProperties.AutomationId="ZoomLabel" />
-              </Button>
             </Grid>
             <StackPanel Orientation="Horizontal">
               <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
                       AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
+              </Button>
+              <Button Classes="ghost zoom zoomValue" Click="OnZoomActual" ToolTip.Tip="Zoom to 100% (0)"
+                      AutomationProperties.AutomationId="ZoomValue" AutomationProperties.Name="Reset the zoom">
+                <TextBlock Text="{Binding ZoomLabel}" AutomationProperties.AutomationId="ZoomLabel" />
               </Button>
               <ToggleButton x:Name="ZoomOpen" Classes="zoom zoomOpen" ToolTip.Tip="Zoom controls"
                             AutomationProperties.AutomationId="ZoomOpen" AutomationProperties.Name="Zoom controls">
@@ -196,9 +200,9 @@
         </Border>
       </Border>
 
-      <!-- One bar for a run: progress by state, the counts, Next, Follow, Stop All, and Merge into my branch while every node is
-           completed and nothing is stale (ADR 0017). UI Automation shows no plain border, so a user control carries its id. On a
-           compact canvas its buttons show only their glyphs, and on a narrow one the summary shortens. -->
+      <!-- One bar for a run: progress by state, the counts, Next, Follow, and Merge into my branch while every node is completed
+           and nothing is stale (ADR 0017). Stop All sits with Run Workflow, where the run started. UI Automation shows no plain
+           border, so a user control carries its id. On a narrow canvas the summary shortens and Follow keeps only its glyph. -->
       <StackPanel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" VerticalAlignment="Bottom" Spacing="8">
         <UserControl HorizontalAlignment="Center" ClipToBounds="False"
                      IsVisible="{Binding ShowsBar}"
@@ -213,7 +217,7 @@
                   <theme:StateBar Counts="{Binding Counts}" AutomationProperties.AutomationId="RunProgress" />
                 </Border>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">
-                  <Button Classes="action glyph bar" Command="{Binding NextWaitingCommand}" IsVisible="{Binding HasAttention}"
+                  <Button Classes="action bar" Command="{Binding NextWaitingCommand}" IsVisible="{Binding HasAttention}"
                           ToolTip.Tip="{x:Static canvas:WorkflowCanvasView.NextHelp}"
                           AutomationProperties.AutomationId="NextWaiting"
                           AutomationProperties.Name="Show the next node that waits for you or failed">
@@ -226,18 +230,11 @@
                                 ToolTip.Tip="{Binding FollowLabel}"
                                 AutomationProperties.AutomationId="FollowRunning"
                                 AutomationProperties.Name="{Binding FollowLabel}">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFollow}" />
-                  </ToggleButton>
-                  <Button Classes="ghost glyph bar stopAll"
-                          Command="{Binding StopAllCommand}" IsVisible="{Binding !!RunningCount}"
-                          ToolTip.Tip="Stop All&#10;Stop every running node. Finished results stay."
-                          AutomationProperties.AutomationId="StopAll"
-                          AutomationProperties.Name="Stop All">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                      <TextBlock Classes="label" Text="Stop All" />
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFollow}" />
+                      <TextBlock Classes="followLabel" Text="Follow" VerticalAlignment="Center" />
                     </StackPanel>
-                  </Button>
+                  </ToggleButton>
                   <Button Classes="primary glyph bar"
                           Command="{Binding MergeIntoBranchCommand}" IsVisible="{Binding CanMergeIntoBranch}"
                           ToolTip.Tip="Merge into my branch&#10;Merge the end nodes' work into the branch you have checked out"

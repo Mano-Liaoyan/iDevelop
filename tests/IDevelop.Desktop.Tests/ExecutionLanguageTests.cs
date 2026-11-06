@@ -1,9 +1,14 @@
 using System.Collections.Immutable;
 using Avalonia;
+using Avalonia.Headless.XUnit;
+using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Theme;
 using IDevelop.Engine;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using EngineState = IDevelop.Engine.NodeState;
 using NodeState = IDevelop.Desktop.Canvas.NodeState;
 
 namespace IDevelop.Desktop.Tests;
@@ -52,7 +57,9 @@ public sealed class ExecutionLanguageTests
     [InlineData(0.5, ZoomTier.Compact)]
     [InlineData(0.49, ZoomTier.Label)]
     [InlineData(0.385, ZoomTier.Label)]
-    [InlineData(0.38, ZoomTier.Block)]
+    [InlineData(0.38, ZoomTier.Title)]
+    [InlineData(0.2, ZoomTier.Title)]
+    [InlineData(0.19, ZoomTier.Block)]
     public void A_falling_zoom_leaves_a_tier_at_its_threshold_so_a_title_never_draws_under_10_px(double zoom, ZoomTier tier) =>
         Assert.Equal(tier, ZoomTiers.Next(ZoomTier.Full, zoom));
 
@@ -61,8 +68,10 @@ public sealed class ExecutionLanguageTests
     [InlineData(ZoomTier.Compact, 0.86, ZoomTier.Full)]
     [InlineData(ZoomTier.Label, 0.51, ZoomTier.Label)]
     [InlineData(ZoomTier.Label, 0.52, ZoomTier.Compact)]
-    [InlineData(ZoomTier.Block, 0.4, ZoomTier.Block)]
-    [InlineData(ZoomTier.Block, 0.41, ZoomTier.Label)]
+    [InlineData(ZoomTier.Title, 0.4, ZoomTier.Title)]
+    [InlineData(ZoomTier.Title, 0.41, ZoomTier.Label)]
+    [InlineData(ZoomTier.Block, 0.21, ZoomTier.Block)]
+    [InlineData(ZoomTier.Block, 0.22, ZoomTier.Title)]
     public void A_rising_zoom_enters_the_larger_tier_past_a_gap_so_a_zoom_near_a_threshold_does_not_flicker(ZoomTier current, double zoom, ZoomTier tier) =>
         Assert.Equal(tier, ZoomTiers.Next(current, zoom));
 
@@ -70,7 +79,7 @@ public sealed class ExecutionLanguageTests
         new([.. points.Select(point => new Point(point.X, point.Y))], source, target, order);
 
     [Fact]
-    public void Wires_from_different_sources_to_different_targets_take_lanes_6_px_apart_in_source_order()
+    public void Wires_from_different_sources_to_different_targets_take_lanes_10_px_apart_in_source_order()
     {
         var routes = WireLanes.Spread(
         [
@@ -78,8 +87,8 @@ public sealed class ExecutionLanguageTests
             Wire("a", "y", 1, (100, 50), (200, 50), (200, 150), (300, 150)),
         ], []);
 
-        Assert.Equal(203, routes[0][1].X);
-        Assert.Equal(197, routes[1][1].X);
+        Assert.Equal(205, routes[0][1].X);
+        Assert.Equal(195, routes[1][1].X);
         Assert.Equal(0, routes[0][1].Y);
     }
 
@@ -110,6 +119,41 @@ public sealed class ExecutionLanguageTests
         ], [new Rect(201, 20, 40, 40)]);
 
         Assert.Equal(200, routes[0][1].X);
-        Assert.Equal(197, routes[1][1].X);
+        Assert.Equal(195, routes[1][1].X);
     }
+
+    [AvaloniaTheory]
+    [InlineData("A long title that a line limit cuts", 2)]
+    [InlineData("Averyveryveryverylongwordwithoutanybreakopportunity at all", 1)]
+    public void A_title_that_loses_text_ends_in_an_ellipsis_and_keeps_to_its_lines(string title, int lines)
+    {
+        var text = new EllipsisText { Whole = title, MaxLines = lines, TextWrapping = TextWrapping.Wrap, FontSize = 14 };
+
+        text.Measure(new Size(90, double.PositiveInfinity));
+
+        Assert.EndsWith("…", text.Text);
+        Assert.StartsWith(text.Text![..^1], title);
+        using var layout = new TextLayout(text.Text, Typeface.Default, 14, null, textWrapping: TextWrapping.Wrap, maxWidth: 90);
+        Assert.True(layout.TextLines.Count <= lines);
+    }
+
+    [AvaloniaFact]
+    public void A_title_that_fits_shows_whole()
+    {
+        var text = new EllipsisText { Whole = "Short", MaxLines = 2, TextWrapping = TextWrapping.Wrap, FontSize = 14 };
+
+        text.Measure(new Size(200, double.PositiveInfinity));
+
+        Assert.Equal("Short", text.Text);
+    }
+
+    [Theory]
+    [InlineData(EngineState.Approval, WaitReason.Approval)]
+    [InlineData(EngineState.Reply, WaitReason.Reply)]
+    [InlineData(EngineState.Conflict, WaitReason.Conflict)]
+    [InlineData(EngineState.Interrupted, WaitReason.Interrupted)]
+    [InlineData(EngineState.RoundLimit, WaitReason.RoundLimit)]
+    [InlineData("Which window?", WaitReason.Question)]
+    public void A_waiting_node_names_what_it_needs(string why, WaitReason reason) =>
+        Assert.Equal(reason, NodeStates.Why(new EngineState.InputRequired(why)));
 }

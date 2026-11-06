@@ -96,14 +96,16 @@ public sealed class KindStyleTests
         var glyph = new PathIcon { Classes = { "stateIcon" } };
         var pillGlyph = new PathIcon();
         var pill = new Border { Classes = { "pill", "warning" }, Child = pillGlyph };
-        Show(new StackPanel { Children = { ring, tint, glyph, pill } }, ThemeVariant.Light);
-        foreach (var element in new StyledElement[] { ring, tint, glyph })
+        var dashes = new Avalonia.Controls.Shapes.Rectangle { Classes = { "staleEdge" } };
+        Show(new StackPanel { Children = { ring, tint, glyph, pill, dashes } }, ThemeVariant.Light);
+        foreach (var element in new StyledElement[] { ring, tint, glyph, dashes })
         {
             StyleClass.SetKind(element, NodeKind.Implement);
             StyleClass.SetState(element, NodeState.Stale);
         }
 
-        Assert.Equal(Hex(ring.BorderBrush), Hex(pill.BorderBrush));
+        Assert.Equal("#00FFFFFF", Hex(ring.BorderBrush));
+        Assert.Equal(Hex(dashes.Stroke), Hex(pill.BorderBrush));
         Assert.Equal(Hex(glyph.Foreground), Hex(pillGlyph.Foreground));
         Assert.Same(Application.Current!.FindResource("IconStateOutOfDate"), glyph.Data);
         Assert.Same(glyph.Data, pillGlyph.Data);

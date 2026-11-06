@@ -548,7 +548,7 @@ public sealed class WorkspaceTests : IDisposable
     {
         var (shell, _, _) = OpenBoth();
         shell.Click(shell.WorkflowRow("alpha", "Release"));
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         var (alpha, beta) = (shell.Window.ViewModel.Projects[0], shell.Window.ViewModel.Projects[1]);
         Assert.NotNull(alpha.Workflows[1].Sheet);
 
@@ -557,7 +557,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal([("beta", ["Build", "Release"])], shell.Tree());
         Assert.Null(alpha.Workflows[1].Sheet);
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         Assert.NotNull(beta.Workflows[0].Sheet);
 
         shell.Window.Close();

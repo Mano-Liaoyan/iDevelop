@@ -57,7 +57,7 @@ internal static class FanOut
     /// <summary>Generates from <see cref="Goal"/> and waits until the planner's proposal shows.</summary>
     public static void Generate(Shell shell)
     {
-        shell.Click(shell.Find<Avalonia.Controls.Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         shell.Enter(Goal);
         shell.Click(shell.Find<Avalonia.Controls.Button>("GenerateSubmit"));
         shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.GenerateProgress == GenerateProgress.Reviewing, "the proposal shows");

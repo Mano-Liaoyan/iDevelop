@@ -34,7 +34,7 @@
             <TextBlock Text="Generate Workflow…" />
           </Button>
           <TextBlock Text="or right-click the canvas to add a node" HorizontalAlignment="Center" IsHitTestVisible="False"
-                     FontSize="11" Foreground="{DynamicResource TextFaintBrush}" />
+                     FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
         </StackPanel>
       </Panel>
     </UserControl>

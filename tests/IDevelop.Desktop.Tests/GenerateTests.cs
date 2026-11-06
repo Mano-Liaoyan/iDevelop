@@ -312,7 +312,7 @@ public sealed class GenerateTests : IDisposable
 
         Assert.Equal("Planning…", ButtonLabel(shell));
         canvas.SelectedNodes.Clear();
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         Assert.Same(planner, canvas.SelectedNode);
         Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
 
@@ -323,7 +323,7 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => planner.State == NodeState.Completed, "the planner is done");
         Assert.Equal("Generate", ButtonLabel(shell));
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         Assert.True(shell.Has<GenerateSheet>("GenerateSheet"));
     }
 
@@ -840,7 +840,7 @@ public sealed class GenerateTests : IDisposable
 
     private static void OpenSheet(Shell shell)
     {
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         Assert.True(shell.Find<TextBox>("GeneratePrompt").IsFocused);
     }
 

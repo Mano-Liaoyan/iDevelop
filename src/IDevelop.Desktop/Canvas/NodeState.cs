@@ -11,6 +11,9 @@ public enum NodeState { Idle, Running, InputRequired, Completed, Failed, Stale }
 /// <summary>What the node is to another node, drawn over its state: a running review's subject, or a planner with an open proposal.</summary>
 public enum NodeRole { None, UnderReview, Proposing }
 
+/// <summary>What a node that needs the person needs, which its glyph tells apart. None for every other state.</summary>
+public enum WaitReason { None, Question, Reply, Approval, Conflict, Interrupted, RoundLimit }
+
 public static class NodeStates
 {
     public static NodeState Of(EngineState state) => state switch
@@ -21,6 +24,18 @@ public static class NodeStates
         EngineState.Failed => NodeState.Failed,
         EngineState.Stale => NodeState.Stale,
         _ => NodeState.Idle,
+    };
+
+    /// <summary>What <paramref name="state"/> waits for.</summary>
+    public static WaitReason Why(EngineState state) => state switch
+    {
+        EngineState.InputRequired { Why: EngineState.Approval } => WaitReason.Approval,
+        EngineState.InputRequired { Why: EngineState.Reply } => WaitReason.Reply,
+        EngineState.InputRequired { Why: EngineState.Conflict } => WaitReason.Conflict,
+        EngineState.InputRequired { Why: EngineState.Interrupted } => WaitReason.Interrupted,
+        EngineState.InputRequired { Why: EngineState.RoundLimit } => WaitReason.RoundLimit,
+        EngineState.InputRequired => WaitReason.Question,
+        _ => WaitReason.None,
     };
 
     /// <summary>The card's status, which names why a node needs the person, such as "Input required · approval".</summary>

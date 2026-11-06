@@ -45,8 +45,10 @@
        moves its wires' rows. The state's ring, tint, and glow are separate layers, because they pulse and must not take the
        text with them.
 
-       The canvas's zoom tier decides how much a collapsed card shows, so a title never draws under 10 px on screen: the full
-       card, then cardFar's tile and two lines of larger title, then only those lines, and at last cardBlock's state fill. -->
+       The canvas's zoom tier decides how much a collapsed card shows, so a title never draws under 10 px on screen. Every
+       tier under the full card has one form: a stripe in the kind's hue, the title as large as the tier lets it fit, and the
+       state's glyph in a badge on the card's top right corner, clear of the output port. Only the last tier gives up the title,
+       for cardBlock's state fill. -->
   <DataTemplate x:Key="TaskCardTemplate" DataType="canvas:TaskNodeViewModel">
     <Panel Classes="taskCard" Classes.expanded="{Binding IsExpanded}"
            canvas:CardBehaviors.ReportsSize="True"
@@ -90,6 +92,7 @@
                 <Panel IsVisible="{Binding !HasAttention}">
                   <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}" Width="14" Height="14"
                             theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}"
+                            theme:StyleClass.Why="{Binding WaitReason}"
                             AutomationProperties.AutomationId="CardStateGlyph" />
                 </Panel>
                 <Button Classes="attention" Margin="{x:Static canvas:CardBehaviors.GlyphMargin}" IsVisible="{Binding HasAttention}"
@@ -99,7 +102,8 @@
                         AutomationProperties.Name="{Binding AttentionLabel}"
                         AutomationProperties.HelpText="{Binding AttendHelp}">
                   <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}" Width="14" Height="14"
-                            theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
+                            theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}"
+                            theme:StyleClass.Why="{Binding WaitReason}" />
                 </Button>
               </Panel>
             </Grid>
@@ -131,12 +135,9 @@
           <!-- The zoomed out card. Only Label takes the kind's tint over all of the card, for an idle or a completed node. -->
           <Border Classes="cardFarTint kindTint" CornerRadius="{StaticResource RadiusLg}" theme:StyleClass.Kind="{Binding Kind}"
                   theme:StyleClass.State="{Binding State}" IsHitTestVisible="False" />
-          <Grid Classes="cardFar" Margin="10,0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" IsHitTestVisible="False">
-            <theme:KindTile Classes="farTile" Kind="{Binding Kind}" TileSize="20" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Classes="farTitle" Text="{Binding Title}" />
-            <PathIcon Grid.Column="2" Classes="stateIcon farGlyph" Theme="{StaticResource Glyph}" VerticalAlignment="Center"
-                      theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-          </Grid>
+          <Border Classes="cardEdge kindTile" theme:StyleClass.Kind="{Binding Kind}" IsHitTestVisible="False" />
+          <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title}" IsHitTestVisible="False"
+                              AutomationProperties.AccessibilityView="Raw" />
           <Border Classes="cardBlock stateBlock" CornerRadius="{StaticResource RadiusLg}" IsHitTestVisible="False"
                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
         </Panel>
@@ -144,12 +145,21 @@
       </StackPanel>
       <Border Classes="stateStroke" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" IsHitTestVisible="False"
               theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
+      <Rectangle Classes="staleEdge" Margin="10,0" RadiusX="10" RadiusY="10" IsHitTestVisible="False"
+                 theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
       <!-- The selection ring lies outside the card, over the card's shadow. -->
       <Border Classes="ring" CornerRadius="13" IsHitTestVisible="False" />
-      <!-- The marker keeps its size on screen, so a running node stays findable at any zoom. -->
-      <canvas:ExecutionMarker HorizontalAlignment="Center" VerticalAlignment="Top" IsHitTestVisible="False"
-                              IsVisible="{Binding IsRunningNow}" Zoom="{Binding Canvas.ViewportZoom}"
-                              AutomationProperties.AutomationId="CardRunningMarker" />
+      <Panel Classes="stateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
+        <Panel IsVisible="{Binding ShowsStateBadge}">
+          <Ellipse Fill="{DynamicResource SurfaceRaisedBrush}" />
+          <Viewbox Margin="2">
+            <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}" Width="14" Height="14"
+                      theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}"
+                      theme:StyleClass.Why="{Binding WaitReason}"
+                      AutomationProperties.AutomationId="CardFarGlyph" />
+          </Viewbox>
+        </Panel>
+      </Panel>
       <!-- The ports sit on the header's first line, 32 px down, however tall the card is. -->
       <ContentControl Content="{Binding Input}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.PortMargin}">
         <ContentControl.ContentTemplate>

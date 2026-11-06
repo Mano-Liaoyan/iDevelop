@@ -33,7 +33,7 @@ public sealed class RunBarTests
 
         Assert.True(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
         Assert.Equal("1 failed", shell.Text("RunStatus"));
-        Assert.Equal("0/1", shell.Window.ViewModel.Canvas!.BarShort);
+        Assert.Equal("0/1 done", shell.Window.ViewModel.Canvas!.BarShort);
         Assert.True(shell.Find<Button>("NextWaiting").IsEffectivelyVisible);
     }
 
