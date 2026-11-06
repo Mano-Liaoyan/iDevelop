@@ -1,0 +1,12 @@
+<!-- The two ways a picker shows a choice. The inspector's and a card's pickers wrap a long choice. A proposal's pickers keep
+     each choice on one line. -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:canvas="using:IDevelop.Desktop.Canvas">
+  <DataTemplate x:Key="WrappedChoice" DataType="canvas:Choice">
+    <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+  </DataTemplate>
+  <DataTemplate x:Key="TrimmedChoice" DataType="canvas:Choice">
+    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+  </DataTemplate>
+</ResourceDictionary>

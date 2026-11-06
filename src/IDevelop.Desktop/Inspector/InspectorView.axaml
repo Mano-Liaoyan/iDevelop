@@ -252,37 +252,19 @@
                                               RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding CanRevertAgent}" RevertId="RevertAgent">
                         <ComboBox ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   AutomationProperties.AutomationId="TaskClient"
-                                  AutomationProperties.Name="Client">
-                          <ComboBox.ItemTemplate>
-                            <DataTemplate DataType="canvas:ClientChoice">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                          </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  AutomationProperties.Name="Client" ItemTemplate="{StaticResource WrappedChoice}" />
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Label="Model" Icon="{StaticResource IconModel}" IsShown="{Binding HasClient}">
                         <ComboBox ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   PlaceholderText="Choose a model"
                                   AutomationProperties.AutomationId="TaskModel"
-                                  AutomationProperties.Name="Model">
-                          <ComboBox.ItemTemplate>
-                            <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                          </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  AutomationProperties.Name="Model" ItemTemplate="{StaticResource WrappedChoice}" />
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Label="Reasoning" Icon="{StaticResource IconReasoning}" IsShown="{Binding Picker.HasReasoning}">
                         <ComboBox ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                   PlaceholderText="Choose a level"
                                   AutomationProperties.AutomationId="TaskReasoning"
-                                  AutomationProperties.Name="Reasoning">
-                          <ComboBox.ItemTemplate>
-                            <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                          </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource WrappedChoice}" />
                       </inspector:InspectorRow>
                       <!-- The skill picker opens its list in place, under the box, so the list keeps the panel's edges and scroll. -->
                       <inspector:InspectorRow Label="Skills" Icon="{StaticResource IconSkills}" IsShown="{Binding HasClient}"
@@ -330,13 +312,7 @@
                                               RevertCommand="{Binding RevertConversationCommand}" CanRevert="{Binding CanRevertConversation}" RevertId="RevertConversation">
                         <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
                                   AutomationProperties.AutomationId="TaskConversation"
-                                  AutomationProperties.Name="Conversation">
-                          <ComboBox.ItemTemplate>
-                            <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                          </ComboBox.ItemTemplate>
-                        </ComboBox>
+                                  AutomationProperties.Name="Conversation" ItemTemplate="{StaticResource WrappedChoice}" />
                       </inspector:InspectorRow>
                     </StackPanel>
                   </inspector:InspectorSection>
@@ -554,37 +530,19 @@
                                               <inspector:InspectorRow Label="Client" Icon="{StaticResource IconAgent}">
                                                 <ComboBox ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           AutomationProperties.AutomationId="ProposalAgentClient"
-                                                          AutomationProperties.Name="Client">
-                                                  <ComboBox.ItemTemplate>
-                                                    <DataTemplate DataType="canvas:ClientChoice">
-                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                                                    </DataTemplate>
-                                                  </ComboBox.ItemTemplate>
-                                                </ComboBox>
+                                                          AutomationProperties.Name="Client" ItemTemplate="{StaticResource TrimmedChoice}" />
                                               </inspector:InspectorRow>
                                               <inspector:InspectorRow Label="Model" Icon="{StaticResource IconModel}">
                                                 <ComboBox ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           PlaceholderText="Choose a model"
                                                           AutomationProperties.AutomationId="ProposalAgentModel"
-                                                          AutomationProperties.Name="Model">
-                                                  <ComboBox.ItemTemplate>
-                                                    <DataTemplate DataType="canvas:Choice">
-                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                                                    </DataTemplate>
-                                                  </ComboBox.ItemTemplate>
-                                                </ComboBox>
+                                                          AutomationProperties.Name="Model" ItemTemplate="{StaticResource TrimmedChoice}" />
                                               </inspector:InspectorRow>
                                               <inspector:InspectorRow Label="Reasoning" Icon="{StaticResource IconReasoning}" IsShown="{Binding Picker.HasReasoning}">
                                                 <ComboBox ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}" SelectionChanged="OnAgentChosen"
                                                           PlaceholderText="Choose a level"
                                                           AutomationProperties.AutomationId="ProposalAgentReasoning"
-                                                          AutomationProperties.Name="Reasoning">
-                                                  <ComboBox.ItemTemplate>
-                                                    <DataTemplate DataType="canvas:Choice">
-                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                                                    </DataTemplate>
-                                                  </ComboBox.ItemTemplate>
-                                                </ComboBox>
+                                                          AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource TrimmedChoice}" />
                                               </inspector:InspectorRow>
                                             </StackPanel>
                                           </DataTemplate>
