@@ -58,26 +58,32 @@ internal static class CanvasChrome
         new(Math.Round(location.X * zoom) / zoom, Math.Round(location.Y * zoom) / zoom);
 
     /// <summary>
-    /// The viewport location near <paramref name="location"/> that cuts the fewest cards at the view's edges and keeps
-    /// <paramref name="keep"/> inside the view. A view zoomed in on one card lands in the gaps between the cards around it.
+    /// The viewport location near <paramref name="location"/> that cuts the fewest cards at the view's edges and keeps all of
+    /// <paramref name="keep"/> inside <paramref name="room"/>, the part of the view where a card rests. <paramref name="view"/>
+    /// and <paramref name="room"/> are in screen pixels, and the rest in canvas units. A view zoomed in on one card lands in
+    /// the gaps between the cards around it.
     /// </summary>
-    public static Point ClearOfCards(Point location, Size view, IReadOnlyCollection<Rect> cards, Rect keep)
+    public static Point ClearOfCards(Point location, Size view, Rect room, double zoom, IReadOnlyCollection<Rect> cards, Rect keep)
     {
         const double margin = 12;
         static int Cut(double near, double far, IEnumerable<(double Near, double Far)> spans) =>
             spans.Count(span => (span.Near < near && span.Far > near) || (span.Near < far && span.Far > far));
-        double Best(double from, double span, double keepNear, double keepFar, (double Near, double Far)[] spans)
+        double Best(double from, double span, double roomNear, double roomFar, double keepNear, double keepFar, (double Near, double Far)[] spans)
         {
+            // The locations that hold the kept card in the room. A card wider than the room keeps its near edge in view.
+            var last = keepNear - roomNear;
+            var first = Math.Min(last, keepFar - roomFar);
+            var start = Math.Clamp(from, first, last);
             var reach = span / 2;
-            var choices = spans.SelectMany(card => new[] { card.Near - margin, card.Far + margin, card.Near + margin - span, card.Far - margin - span + 2 * margin })
-                .Where(near => Math.Abs(near - from) <= reach && near <= keepNear - margin && near + span >= keepFar + margin)
-                .Prepend(from);
-            return choices.OrderBy(near => Cut(near, near + span, spans)).ThenBy(near => Math.Abs(near - from)).First();
+            var choices = spans.SelectMany(card => new[] { card.Near - margin, card.Far + margin, card.Near + margin - span, card.Far + margin - span })
+                .Where(near => Math.Abs(near - start) <= reach && near >= first && near <= last)
+                .Prepend(start);
+            return choices.OrderBy(near => Cut(near, near + span, spans)).ThenBy(near => Math.Abs(near - start)).First();
         }
 
         return new Point(
-            Best(location.X, view.Width, keep.Left, keep.Right, [.. cards.Select(card => (card.Left, card.Right))]),
-            Best(location.Y, view.Height, keep.Top, keep.Bottom, [.. cards.Select(card => (card.Top, card.Bottom))]));
+            Best(location.X, view.Width / zoom, room.Left / zoom, room.Right / zoom, keep.Left, keep.Right, [.. cards.Select(card => (card.Left, card.Right))]),
+            Best(location.Y, view.Height / zoom, room.Top / zoom, room.Bottom / zoom, keep.Top, keep.Bottom, [.. cards.Select(card => (card.Top, card.Bottom))]));
     }
 
     public static bool IsShortBar(Size canvas) => canvas.Width < ShortBarWidth;

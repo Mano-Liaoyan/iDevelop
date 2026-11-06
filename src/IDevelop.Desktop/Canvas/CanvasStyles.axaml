@@ -160,6 +160,16 @@
     <Setter Property="FontSize" Value="44" />
     <Setter Property="LineHeight" Value="52" />
   </Style>
+  <!-- A ghost keeps a card's form at each zoom: its three lines close up, and far out only its title shows, as large as a card's. -->
+  <Style Selector="TextBlock.ghostFar">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail TextBlock.ghostFar, :is(Control).tier-compact TextBlock.ghostFar, :is(Control).tier-label TextBlock.ghostFar, :is(Control).tier-title TextBlock.ghostFar">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Grid.ghostFull, :is(Control).tier-compact Grid.ghostFull, :is(Control).tier-label Grid.ghostFull, :is(Control).tier-title Grid.ghostFull, :is(Control).tier-block Grid.ghostFull">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
   <Style Selector="Panel.cardBody">
     <Setter Property="MinHeight" Value="64" />
   </Style>

@@ -290,7 +290,7 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         FanOut.Generate(shell);
 
-        shell.Editor.ViewportZoom = 0.5;
+        shell.Editor.ZoomAtPosition(0.5 / shell.Editor.ViewportZoom, new Point(0, 0));
         shell.Render();
 
         var card = shell.CardRect("Design the API");
@@ -310,6 +310,82 @@ public sealed class CanvasChromeTests : IDisposable
             Assert.Contains(ports, port => Point.Distance(port + WorkflowCanvasViewModel.OutputPortCenter, from) <= 2);
             Assert.Contains(ports, port => Point.Distance(port + WorkflowCanvasViewModel.InputPortCenter, to) <= 2);
         }
+    }
+
+    /// <summary>A pan, a zoom, and a fit each move a ghost with the cards, so the ghost keeps its place among them.</summary>
+    [AvaloniaFact]
+    public void A_ghost_keeps_its_place_among_the_cards_at_each_zoom_and_location()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Generate(shell);
+        var card = shell.Nodes().First(node => ((TaskNodeViewModel)node.DataContext!).Title == "Design the API");
+        var ghost = Shell.ById<Control>(shell.Window, "GhostCard").First();
+        void Check()
+        {
+            shell.Render();
+            var zoom = shell.Editor.ViewportZoom;
+            var apart = ((GhostCardViewModel)ghost.DataContext!).Location - ((TaskNodeViewModel)card.DataContext!).DisplayLocation;
+            var (shown, at) = (Box(shell, ghost), Box(shell, card));
+            // Layout places a box on a whole pixel, so a ghost may land half a pixel away.
+            Assert.InRange(shown.X - at.X - apart.X * zoom, -1, 1);
+            Assert.InRange(shown.Y - at.Y - apart.Y * zoom, -1, 1);
+        }
+
+        Check();
+        shell.Editor.ViewportZoom = 0.5;
+        Check();
+        shell.Editor.ViewportLocation = new Point(37, -21);
+        Check();
+        shell.Editor.ZoomAtPosition(2, new Point(300, 200));
+        Check();
+        shell.Window.GetVisualDescendants().OfType<WorkflowCanvasView>().First().FitToView();
+        Check();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(0.7)]
+    [InlineData(0.3)]
+    public void A_ghost_shows_a_cards_far_form_while_the_cards_do(double zoom)
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Generate(shell);
+        shell.Editor.ViewportZoom = zoom;
+        shell.Render();
+
+        var ghost = Shell.ById<Control>(shell.Window, "GhostCard").First();
+        Assert.True(ghost.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("ghostFar")).IsEffectivelyVisible);
+        Assert.False(Shell.ById<TextBlock>(ghost, "GhostTitle").Single().IsEffectivelyVisible);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(5000, 3000)]
+    [InlineData(5000, 0)]
+    [InlineData(0, 3000)]
+    public void Reveal_holds_the_found_card_inside_the_room_wherever_the_view_starts(double x, double y)
+    {
+        var room = new Rect(24, 24, 652, 452);
+        const double zoom = 0.6;
+        var keep = new Rect(2000, 1000, 260, 90);
+        Rect[] cards = [keep, new Rect(1700, 1000, 260, 90), new Rect(2300, 1000, 260, 90), new Rect(2000, 800, 260, 90), new Rect(2000, 1200, 260, 90)];
+
+        var at = CanvasChrome.ClearOfCards(new Point(x, y), new Size(700, 500), room, zoom, cards, keep);
+
+        var seen = new Rect(at + (Vector)room.Position / zoom, room.Size / zoom);
+        Assert.True(seen.Contains(keep), $"{keep} is not inside {seen}.");
+    }
+
+    [Fact]
+    public void Reveal_keeps_the_near_edge_of_a_card_wider_than_the_room()
+    {
+        var room = new Rect(24, 24, 100, 100);
+        var keep = new Rect(500, 500, 400, 400);
+
+        var at = CanvasChrome.ClearOfCards(new Point(0, 0), new Size(148, 148), room, 1, [keep], keep);
+
+        Assert.Equal(new Point(476, 476), at);
     }
 
     [AvaloniaFact]

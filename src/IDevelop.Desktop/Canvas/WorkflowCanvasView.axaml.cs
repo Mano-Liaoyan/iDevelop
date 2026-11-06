@@ -88,13 +88,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
                 Dispatcher.UIThread.Post(FitToView, DispatcherPriority.Background);
             }
         };
-        Editor.PropertyChanged += (_, e) =>
-        {
-            if (e.Property == NodifyEditor.ViewportLocationProperty || e.Property == NodifyEditor.ViewportZoomProperty || e.Property == NodifyEditor.ViewportSizeProperty)
-            {
-                PlaceGhosts();
-            }
-        };
         MinimapToggle.IsCheckedChanged += (_, _) => ShowMinimap();
     }
 
@@ -112,18 +105,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
     // The minimap shows on the person's choice, where the canvas has room for its dock.
     private void ShowMinimap() => MinimapPanel.IsVisible = MinimapToggle.IsChecked == true && CanvasChrome.ShowsMinimap(Bounds.Size);
-
-    // NodifyAvalonia 6.6.0 moves its decorators by the viewport's location before the zoom, where cards move after it, so at
-    // a zoom other than 100% a ghost would leave the cards it belongs to. Each ghost moves back by the difference, in the
-    // zoomed units of its own layer.
-    private void PlaceGhosts()
-    {
-        var shift = (Vector)Editor.ViewportLocation * (1 - Editor.ViewportZoom) / Editor.ViewportZoom;
-        foreach (var ghost in Editor.GetVisualDescendants().OfType<DecoratorContainer>())
-        {
-            ghost.RenderTransform = new TranslateTransform(shift.X, shift.Y);
-        }
-    }
 
     // A tier takes one class on the view, so only a threshold changes the cards' layout. Under a zoom of 0.5 the dots would turn
     // into a texture, so they spread to a four times wider grid, and the smallest cards have only the canvas's color.
@@ -182,10 +163,13 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         // A card shows its last line under its 64 px box at this zoom.
         var card = node.DisplayRect;
         var cards = Cards().Select(rect => new Rect(rect.Position, rect.Size + new Size(0, FarLineHeight))).ToArray();
-        var view = Editor.Bounds.Size / FoundZoom;
+        var room = Room();
+        var found = new Rect(card.Position, card.Size + new Size(0, FarLineHeight));
         Editor.ViewportLocation = CanvasChrome.OnWholePixels(
-            CanvasChrome.ClearOfCards(CanvasChrome.ViewOn(Extent(), Room(), FoundZoom, card.Center), view, cards, new Rect(card.Position, card.Size + new Size(0, FarLineHeight))),
+            CanvasChrome.ClearOfCards(CanvasChrome.ViewOn(Extent(), room, FoundZoom, card.Center), Editor.Bounds.Size, room, FoundZoom, cards, found),
             FoundZoom);
+        // Choosing the node can change the panels beside the canvas, so the card gets one more look after their layout.
+        Dispatcher.UIThread.Post(() => BringIntoViewIfHidden(node), DispatcherPriority.Background);
     }
 
     // The part of the editor where a view keeps its cards. A small docked canvas has no room for the margin.
@@ -289,7 +273,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         if (_viewModel is { } old)
         {
             old.PropertyChanged -= OnViewModelChanged;
-            old.Ghosts.CollectionChanged -= OnGhostsChanged;
             old.View = null;
         }
 
@@ -298,7 +281,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             canvas.View = this;
             canvas.PropertyChanged += OnViewModelChanged;
-            canvas.Ghosts.CollectionChanged += OnGhostsChanged;
             Editor.LayoutUpdated += RestoreSelection;
             Editor.LayoutUpdated += PositionOnce;
             ShowTier();
@@ -340,9 +322,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             FitToView();
         }
     }
-
-    private void OnGhostsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) =>
-        Dispatcher.UIThread.Post(PlaceGhosts, DispatcherPriority.Loaded);
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
