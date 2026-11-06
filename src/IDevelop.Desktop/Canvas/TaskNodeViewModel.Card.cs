@@ -47,7 +47,7 @@ public sealed partial class TaskNodeViewModel
     /// The zoomed out card's last line: the model in every state, or the type of a node with no agent. State never takes the
     /// agent's place, and the badge at the line's end shows the state.
     /// </summary>
-    public IReadOnlyList<string> CardLines => AgentModel.Length == 0 ? [TypeName] : ModelLines.Skip(1).DefaultIfEmpty(AgentModel).ToArray();
+    public IReadOnlyList<string> CardLines => AgentModel.Length == 0 ? [TypeName] : CardText.FarLines(ModelLines, AgentModel);
 
     /// <summary>The node names a model, which the card's last line shows after its client.</summary>
     public bool HasModel => AgentModel.Length > 0;

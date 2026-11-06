@@ -304,8 +304,8 @@
                         <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
                                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
                       </Panel>
-                      <TextBlock Classes="barText chipLong" Text="{Binding Label}" />
-                      <TextBlock Classes="barText chipShort" Text="{Binding Short}" />
+                      <TextBlock Classes="barText chipLong" Classes.urgent="{Binding IsUrgent}" Text="{Binding Label}" />
+                      <TextBlock Classes="barText chipShort" Classes.urgent="{Binding IsUrgent}" Text="{Binding Short}" />
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -325,8 +325,8 @@
                         <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
                                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
                       </Panel>
-                      <TextBlock Classes="barText chipLong" Text="{Binding Label}" />
-                      <TextBlock Classes="barText chipShort" Text="{Binding Short}" />
+                      <TextBlock Classes="barText chipLong" Classes.urgent="{Binding IsUrgent}" Text="{Binding Label}" />
+                      <TextBlock Classes="barText chipShort" Classes.urgent="{Binding IsUrgent}" Text="{Binding Short}" />
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>

@@ -500,15 +500,32 @@
                             <TextBlock Classes="lineCount deleted" Text="{Binding Result.Deleted, FallbackValue={x:Null}}" />
                           </StackPanel>
                         </ToggleButton>
-                        <ItemsControl ItemsSource="{Binding Result.Changes, FallbackValue={x:Null}}" IsVisible="{Binding Result.IsChangesOpen, FallbackValue=False}" Margin="0,2,0,0"
+                        <ItemsControl ItemsSource="{Binding Result.ChangeRows, FallbackValue={x:Null}}" IsVisible="{Binding Result.IsChangesOpen, FallbackValue=False}" Margin="0,2,0,0"
                                       AutomationProperties.AutomationId="ResultFiles">
                           <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="git:FileChange">
-                              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Height="20">
-                                <TextBlock Classes="resultCommit" Text="{Binding Path}" TextTrimming="PrefixCharacterEllipsis" ToolTip.Tip="{Binding Path}" />
-                                <TextBlock Grid.Column="1" Classes="lineCount added" Text="{Binding Added, StringFormat='+{0}'}" />
-                                <TextBlock Grid.Column="2" Classes="lineCount deleted" Text="{Binding Deleted, StringFormat='−{0}'}" />
-                              </Grid>
+                            <DataTemplate x:DataType="execution:ChangeRow">
+                              <StackPanel>
+                                <ToggleButton Classes="steps" IsChecked="{Binding IsOpen}" IsEnabled="{Binding HasDiff}" ToolTip.Tip="{Binding OpenLabel}"
+                                              AutomationProperties.AutomationId="ResultFile" AutomationProperties.Name="{Binding OpenLabel}">
+                                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                                    <PathIcon Theme="{StaticResource Glyph}" />
+                                    <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Path}" TextTrimming="PrefixCharacterEllipsis" />
+                                    <TextBlock Grid.Column="2" Classes="lineCount added" Text="{Binding Added}" />
+                                    <TextBlock Grid.Column="3" Classes="lineCount deleted" Text="{Binding Deleted}" />
+                                  </Grid>
+                                </ToggleButton>
+                                <!-- The file's own lines, in the same mono face as the code in the transcript. -->
+                                <ItemsControl Classes="diff" ItemsSource="{Binding Lines}" IsVisible="{Binding IsOpen}"
+                                              AutomationProperties.AutomationId="ResultDiff">
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="execution:DiffLine">
+                                      <Border Classes="diffLine" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.hunk="{Binding IsHunk}">
+                                        <TextBlock Classes="diffText" Text="{Binding Text}" />
+                                      </Border>
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                              </StackPanel>
                             </DataTemplate>
                           </ItemsControl.ItemTemplate>
                         </ItemsControl>

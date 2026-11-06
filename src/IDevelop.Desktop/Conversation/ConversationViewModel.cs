@@ -486,7 +486,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         {
             var result = left.FirstOrDefault(entry => entry.Report.Trim() == message.Text.Trim());
             message.Result = result;
-            result?.ReadChanges(Node.ReadChanges);
+            result?.ReadChanges(Node.ReadChanges, Node.ReadDiff);
             left.Remove(result!);
         }
     }

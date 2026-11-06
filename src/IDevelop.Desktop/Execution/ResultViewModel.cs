@@ -52,6 +52,13 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
 
     public bool HasChanges => Changes.Length > 0;
 
+    /// <summary>A row for each changed file, which opens onto its diff.</summary>
+    public IReadOnlyList<ChangeRow> ChangeRows
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
+
     /// <summary>More than one file changed, so a summary line has something to add to the file rows.</summary>
     public bool HasSeveralChanges => Changes.Length > 1;
 
@@ -79,7 +86,7 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
         .Select(line => line is ['-' or '*', ' ', ..] ? $"• {line[2..]}" : line));
 
     /// <summary>Reads the commit's changes off the UI thread. A second call and a result with no commit read nothing.</summary>
-    internal void ReadChanges(Func<string, ImmutableArray<FileChange>> read)
+    internal void ReadChanges(Func<string, ImmutableArray<FileChange>> read, Func<string, string, ImmutableArray<string>> readDiff)
     {
         if (_read || result.Commit is not { Length: >= 7 } commit)
         {
@@ -87,6 +94,14 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
         }
 
         _read = true;
-        UiWork.Start(async () => Changes = await Task.Run(() => read(commit)), _ => { });
+        UiWork.Start(async () =>
+        {
+            Changes = await Task.Run(() => read(commit));
+            ChangeRows = [.. Changes.Select(file => new ChangeRow(file, path => readDiff(commit, path), startsOpen: Changes.Length == 1))];
+            foreach (var row in ChangeRows.Where(row => row.IsOpen))
+            {
+                row.Open();
+            }
+        }, _ => { });
     }
 }

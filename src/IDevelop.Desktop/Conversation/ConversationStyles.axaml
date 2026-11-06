@@ -93,7 +93,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- A long line wraps, so the block never cuts a character at its edge. -->
+  <!-- A long line wraps at a space or after a comma, so the block never cuts a character at its edge. -->
   <Style Selector="SelectableTextBlock.mdCodeText">
     <Setter Property="Margin" Value="12,0,12,12" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -379,6 +379,29 @@
   </Style>
   <Style Selector="TextBlock.lineCount.deleted">
     <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
+  </Style>
+  <!-- A file's diff under its row in a result's card. -->
+  <Style Selector="ItemsControl.diff">
+    <Setter Property="Margin" Value="0,2,0,4" />
+  </Style>
+  <Style Selector="Border.diffLine">
+    <Setter Property="Padding" Value="8,1" />
+  </Style>
+  <Style Selector="Border.diffLine.added">
+    <Setter Property="Background" Value="{DynamicResource StateSuccess10Brush}" />
+  </Style>
+  <Style Selector="Border.diffLine.deleted">
+    <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
+  </Style>
+  <Style Selector="TextBlock.diffText">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Border.diffLine.hunk TextBlock.diffText">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <!-- A group of steps: one quiet row with a real chevron, which opens onto a list with a guide at its left. -->
   <Style Selector="ToggleButton.steps">

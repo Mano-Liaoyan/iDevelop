@@ -98,7 +98,7 @@
         </ContentControl.Content>
         <ContentControl.DataTemplates>
           <DataTemplate DataType="canvas:TaskNodeViewModel">
-            <inspector:InspectorHeader>
+            <inspector:InspectorHeader IsBrief="{Binding IsConversationShown}">
               <!-- The node's next steps have their own row, so the sections start at one height in every state. -->
               <StackPanel Grid.Row="2" Grid.ColumnSpan="4" Classes="headerState">
                 <!-- The node's next steps, primary first. -->

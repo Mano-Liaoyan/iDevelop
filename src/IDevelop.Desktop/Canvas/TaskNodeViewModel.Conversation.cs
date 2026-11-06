@@ -20,6 +20,12 @@ public sealed partial class TaskNodeViewModel
     internal System.Collections.Immutable.ImmutableArray<IDevelop.Git.FileChange> ReadChanges(string commit) =>
         IDevelop.Git.CommitChanges.Read(_canvas.Project.Folder, commit, _canvas.GitEnvironment);
 
+    /// <summary>The lines a commit of this node changed in one file, as many as a result's card shows.</summary>
+    internal System.Collections.Immutable.ImmutableArray<string> ReadDiff(string commit, string path) =>
+        IDevelop.Git.CommitChanges.ReadDiff(_canvas.Project.Folder, commit, path, DiffLineLimit, _canvas.GitEnvironment);
+
+    private const int DiffLineLimit = 200;
+
     public bool HasAttention => Attention is not null;
 
     public string? AttentionLabel => Attention?.Label;

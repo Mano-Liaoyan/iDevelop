@@ -16,6 +16,22 @@ public static class CommitChanges
         return result.ExitCode == 0 ? Parse(result.Text) : [];
     }
 
+    /// <summary>
+    /// The lines <paramref name="commit"/> changed in <paramref name="path"/> against its first parent, from its first hunk on, at
+    /// most <paramref name="limit"/>. None when Git cannot read them or the file has no text lines.
+    /// </summary>
+    public static ImmutableArray<string> ReadDiff(string projectFolder, string commit, string path, int limit, IReadOnlyDictionary<string, string> environment)
+    {
+        var result = GitRepository.Run(["show", "--no-renames", "--first-parent", "--no-color", "--format=", commit, "--", path], projectFolder, GitOperation.Metadata, GitLimits.Default, environment);
+        return result.ExitCode == 0 ? Hunks(result.Text, limit) : [];
+    }
+
+    internal static ImmutableArray<string> Hunks(string diff, int limit) =>
+    [
+        .. diff.Split('\n').Select(line => line.TrimEnd('\r')).SkipWhile(line => !line.StartsWith("@@", StringComparison.Ordinal))
+            .Where((line, index) => line.Length > 0).Take(limit),
+    ];
+
     // Each line is "added<tab>deleted<tab>path", with a dash for each count of a binary file.
     internal static ImmutableArray<FileChange> Parse(string numstat) =>
     [

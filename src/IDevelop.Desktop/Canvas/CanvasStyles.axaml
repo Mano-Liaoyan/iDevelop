@@ -230,7 +230,7 @@
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="40" />
-    <Setter Property="Margin" Value="20,114,58,0" />
+    <Setter Property="Margin" Value="20,114,52,0" />
   </Style>
   <Style Selector="theme|KindTile.farTile">
     <Setter Property="TileSize" Value="20" />
@@ -312,9 +312,9 @@
     <Setter Property="Margin" Value="0,81,18,0" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
-    <Setter Property="Width" Value="38" />
-    <Setter Property="Height" Value="38" />
-    <Setter Property="Margin" Value="0,115,16,0" />
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Margin" Value="0,117,16,0" />
   </Style>
   <Style Selector=":is(Control).tier-block Panel.stateBadge">
     <Setter Property="Width" Value="80" />
@@ -671,10 +671,10 @@
   <Style Selector="Button.barTight, TextBlock.chipShort">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightChips TextBlock.chipShort">
+  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightChips TextBlock.chipShort:not(.urgent)">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightChips TextBlock.chipLong">
+  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightChips TextBlock.chipLong:not(.urgent)">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Border.barRule">

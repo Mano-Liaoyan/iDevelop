@@ -102,7 +102,7 @@ public sealed class EllipsisText : TextBlock
     // A start that keeps its words reads as the same start on every similar title. A first word that is cut stays as it is.
     private static int WholeWords(string whole, int length)
     {
-        if (length >= whole.Length || whole[length] == ' ' || length > 0 && whole[length - 1] == ' ')
+        if (length == 0 || length >= whole.Length || whole[length] == ' ' || whole[length - 1] == ' ')
         {
             return length;
         }

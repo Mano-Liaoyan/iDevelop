@@ -159,4 +159,12 @@ public sealed class ExecutionLanguageTests
     [InlineData("Which window?", WaitReason.Question)]
     public void A_waiting_node_names_what_it_needs(string why, WaitReason reason) =>
         Assert.Equal(reason, NodeStates.Why(new EngineState.InputRequired(why)));
+
+    [AvaloniaFact]
+    public void A_title_too_narrow_for_a_start_of_it_still_keeps_its_place()
+    {
+        var text = new EllipsisText { Whole = "Backfill ledger partition 2024-Q3", KeepFrom = 26, MaxLines = 2, TextWrapping = TextWrapping.Wrap, FontSize = 13 };
+        text.Measure(new Avalonia.Size(4, 100));
+        Assert.True(text.IsCut);
+    }
 }

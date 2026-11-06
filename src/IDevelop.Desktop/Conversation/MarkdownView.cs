@@ -290,13 +290,14 @@ public sealed class MarkdownView : StackPanel
         Grid.SetColumn(copy, 1);
         header.Children.Add(copy);
         var body = new SelectableTextBlock { Classes = { "mdMono", "mdCodeText" } };
-        if (CodeColors.Runs(source, language) is { } runs)
+        var shown = BreakableCode(source);
+        if (CodeColors.Runs(shown, language) is { } runs)
         {
             body.Inlines = [.. runs];
         }
         else
         {
-            body.Text = source;
+            body.Text = shown;
         }
 
         var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto") };
@@ -305,6 +306,10 @@ public sealed class MarkdownView : StackPanel
         layout.Children.Add(body);
         return new Border { Classes = { "mdCode" }, Child = layout };
     }
+
+    // A long line wraps between its values and not inside a name.
+    private static string BreakableCode(string code) =>
+        System.Text.RegularExpressions.Regex.Replace(code, ",(?=\\S)", $",{BreakHere}");
 
     // A long run with no break opportunity takes time that grows with its square to wrap, so it runs past the edge instead.
     private static SelectableTextBlock Plain(string source) => new() { Classes = { "md", "mdMono" }, Text = source, TextWrapping = TextWrapping.WrapWithOverflow };

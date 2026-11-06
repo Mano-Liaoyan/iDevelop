@@ -11,6 +11,9 @@ public static class ZoomTiers
     private const double LabelFrom = 0.36;
     private const double TitleFrom = 0.23;
 
+    /// <summary>The least zoom at which a card's title reads at a glance.</summary>
+    public const double ReadableZoom = LabelFrom;
+
     /// <summary>A zoom that rises enters the larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
     private const double Gap = 0.02;
 

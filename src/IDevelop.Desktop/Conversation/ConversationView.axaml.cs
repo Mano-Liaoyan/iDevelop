@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
 
@@ -24,6 +25,15 @@ public partial class ConversationView : UserControl
 
     /// <summary>The column of Copy, whose styles place it beside each kind of message.</summary>
     public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 0 : 1);
+
+    // Text fades as it leaves the view's top, so a block under the header reads as scrolled and not as cut. A mask reads only
+    // each stop's alpha, so these stops are opacities and no part of the palette.
+    private static readonly LinearGradientBrush TopFade = new()
+    {
+        StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute),
+        EndPoint = new RelativePoint(0, 12, RelativeUnit.Absolute),
+        GradientStops = { new GradientStop(default, 0), new GradientStop(new Color(255, 0, 0, 0), 1) },
+    };
 
     /// <summary>The attention card's row of its actions: under its text, or on its header's line.</summary>
     public static readonly IValueConverter ActionsRow = new FuncValueConverter<bool, int>(compact => compact ? 0 : 2);
@@ -52,6 +62,7 @@ public partial class ConversationView : UserControl
     public ConversationView()
     {
         InitializeComponent();
+        Scroller.OpacityMask = TopFade;
         Scroller.ScrollChanged += OnScrollChanged;
         // A wheel, a drag, the scroll bar, or a key scrolls on the person's behalf, even when rows coming into view change the
         // extent in the same scroll. Layout alone, such as an item measured for the first time, never decides whether the

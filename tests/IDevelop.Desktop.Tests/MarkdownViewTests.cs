@@ -143,7 +143,7 @@ public sealed class MarkdownViewTests
         const string Span = "entry_id,account_id,tenant_id,posted_at,effective_at,currency,amount_minor,direction,source_system";
         var (window, view) = Show($"The header is `{Span}`, and it stays.");
         var blocks = view.GetVisualDescendants().OfType<SelectableTextBlock>().Select(Shown).ToList();
-        Assert.Equal(["The header is ", Span, ", and it stays."], blocks);
+        Assert.Equal(["The header is ", Span, ", and it stays."], blocks.Select(block => block?.Replace("\u00AD", "", StringComparison.Ordinal)));
         window.Close();
     }
 

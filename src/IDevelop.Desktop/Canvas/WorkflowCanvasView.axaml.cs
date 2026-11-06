@@ -153,7 +153,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>Centres a card the person looked for and, at a zoom too low to read it, zooms in, so its title and its neighbours read.</summary>
     void ICanvasView.RevealFound(TaskNodeViewModel node)
     {
-        if (Editor.ViewportZoom >= FoundZoom)
+        // A view that reads its cards' titles keeps its zoom, so a found card stays among its neighbours.
+        if (Editor.ViewportZoom >= ZoomTiers.ReadableZoom)
         {
             BringIntoViewIfHidden(node);
             return;
