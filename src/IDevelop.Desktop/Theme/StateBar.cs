@@ -39,7 +39,7 @@ public readonly record struct StateCounts(int Completed, int Running, int Waitin
     }
 }
 
-/// <summary>A thin bar with one segment per state, in the order completed, running, waiting, failed, stale, and then what has not run.</summary>
+/// <summary>A thin line that shows how many of the nodes completed. The row beside it says what needs the person.</summary>
 public sealed class StateBar : Control
 {
     public static readonly StyledProperty<StateCounts> CountsProperty = AvaloniaProperty.Register<StateBar, StateCounts>(nameof(Counts));
@@ -64,20 +64,7 @@ public sealed class StateBar : Control
 
         var (width, height) = (Bounds.Width, Bounds.Height);
         context.DrawRectangle(Brush("StateNeutral10Brush"), null, new Rect(0, 0, width, height));
-        var left = 0.0;
-        foreach (var (count, brush) in new[]
-        {
-            (counts.Completed, "StateSuccessStrokeBrush"), (counts.Running, "StateRunningBrush"), (counts.Waiting, "StateWaitingStrokeBrush"),
-            (counts.Failed, "StateFailedStrokeBrush"), (counts.Stale, "StateNeutralStrokeBrush"),
-        })
-        {
-            if (count > 0)
-            {
-                var segment = Math.Max(3, width * count / counts.Total);
-                context.DrawRectangle(Brush(brush), null, new Rect(left, 0, Math.Max(0, Math.Min(segment, width - left)), height));
-                left += segment;
-            }
-        }
+        context.DrawRectangle(Brush("StateNeutralStrokeBrush"), null, new Rect(0, 0, width * counts.Completed / counts.Total, height));
     }
 
     private IBrush? Brush(string key) => this.TryFindResource(key, ActualThemeVariant, out var found) ? found as IBrush : null;

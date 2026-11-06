@@ -1,6 +1,5 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:theme="using:IDevelop.Desktop.Theme">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!-- The app's one design language. Type: 11/16 for key hints, 12/16 for second lines and captions, 13/18 for rows, fields,
        buttons, and menus, 14/22 for conversation text, 14/20 semibold for titles. Spacing sits on a 4 px grid, with 2 px only
@@ -420,6 +419,17 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
+  <!-- Find's list floats from under its box, wider than the panel, so a result keeps each line whole. -->
+  <Style Selector="Border.findPalette">
+    <Setter Property="Width" Value="440" />
+    <Setter Property="MaxHeight" Value="420" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource FloatingShadow}" />
+  </Style>
   <!-- Find's rows have two lines. The one in the box's choice takes the row selection fill. -->
   <Style Selector="ListBox.results ListBoxItem">
     <Setter Property="MinHeight" Value="44" />
@@ -474,6 +484,29 @@
   <Style Selector="ToggleButton.projectRow:checked PathIcon:not(.stateIcon)">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
   </Style>
+  <!-- The tab on a panel's edge. It stays at the window's edge while the panel is closed. -->
+  <Style Selector="Button.panelEdge">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Button.panelEdge /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+  </Style>
+  <Style Selector="Button.panelEdge:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
   <Style Selector="StackPanel.counts, StackPanel.count, StackPanel.rowActions">
     <Setter Property="Orientation" Value="Horizontal" />
   </Style>
@@ -497,7 +530,7 @@
   <Style Selector="StackPanel.rowActions">
     <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Margin" Value="0,2,0,0" />
+    <Setter Property="Margin" Value="0,2,8,0" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
@@ -535,10 +568,6 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
     <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
   </Style>
-  <!-- The rows fade at the bottom edge while more follow, so the edge never cuts a row in half. -->
-  <Style Selector="ScrollViewer.fadesEnd.more /template/ ScrollContentPresenter#PART_ContentPresenter">
-    <Setter Property="OpacityMask" Value="{x:Static theme:EdgeFade.EndFade}" />
-  </Style>
   <!-- A section heading that folds its list. -->
   <Style Selector="ToggleButton.sectionFold">
     <Setter Property="MinHeight" Value="28" />
@@ -559,10 +588,10 @@
   <Style Selector="ToggleButton.sectionFold:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.sectionFold:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
-  <Style Selector="ToggleButton.sectionFold PathIcon">
+  <Style Selector="ToggleButton.sectionFold PathIcon:not(.stateIcon)">
     <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
   </Style>
-  <Style Selector="ToggleButton.sectionFold:checked PathIcon">
+  <Style Selector="ToggleButton.sectionFold:checked PathIcon:not(.stateIcon)">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
   </Style>
   <Style Selector="TextBlock.caption.reason.state-failed">
@@ -597,8 +626,8 @@
   </Style>
   <Style Selector="Button.nav.workflow">
     <Setter Property="Height" Value="NaN" />
-    <Setter Property="MinHeight" Value="44" />
-    <Setter Property="Padding" Value="44,4,8,4" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="42,5,8,5" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="FontWeight" Value="Normal" />
   </Style>
@@ -645,14 +674,14 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- A workflow row's chevron: a 20 px column as tall as the row, under the project's name, with its glyph on the first line. -->
+  <!-- A workflow row's chevron: a 20 px column as tall as the row, under the project's letter, with its glyph on the first line. -->
   <Style Selector="ToggleButton.workflowChevron">
     <Setter Property="Width" Value="20" />
-    <Setter Property="Margin" Value="22,0,0,0" />
+    <Setter Property="Margin" Value="20,0,0,0" />
     <Setter Property="Height" Value="NaN" />
     <Setter Property="VerticalAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
-    <Setter Property="Padding" Value="0,7,0,0" />
+    <Setter Property="Padding" Value="0,8,0,0" />
   </Style>
   <Style Selector="ToggleButton.chevron PathIcon">
     <Setter Property="Width" Value="12" />

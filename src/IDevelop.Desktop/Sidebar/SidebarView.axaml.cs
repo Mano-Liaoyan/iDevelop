@@ -20,7 +20,7 @@ public partial class SidebarView : UserControl
     // At or below this window height Activity shows fewer rows, and it never takes more than half of the panel.
     private const double SmallHeight = 700;
 
-    // What the pinned project row and the bottom fade cover at the tree's edges.
+    // What the pinned project row covers at the tree's top edge, and the same again at the bottom, so a row never sits on an edge.
     private const double TreeEdgeRoom = 32;
 
     private IInputElement? _beforeFind;
@@ -29,6 +29,8 @@ public partial class SidebarView : UserControl
     {
         InitializeComponent();
         FindBox.AddHandler(KeyDownEvent, OnFindKeyDown, RoutingStrategies.Tunnel);
+        // A click anywhere else leaves Find, as it leaves any floating list. A result takes no focus, so a click on one stays here.
+        FindBox.LostFocus += (_, _) => ViewModel.Find.Clear();
         AddHandler(KeyDownEvent, OnRowKeyDown, RoutingStrategies.Tunnel);
         Rows.SizeChanged += (_, e) =>
         {
@@ -48,6 +50,8 @@ public partial class SidebarView : UserControl
     internal void FocusFind()
     {
         _beforeFind = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        ViewModel.IsSidebarOpen = true;
+        Window?.UpdateLayout();
         FindBox.Focus();
         FindBox.SelectAll();
     }
@@ -119,7 +123,7 @@ public partial class SidebarView : UserControl
         return true;
     }
 
-    // The room over a row clears the pinned project, and the room under it clears the bottom edge's fade.
+    // The room over a row clears the pinned project.
     private static void InView(Control row) => row.BringIntoView(new Rect(row.Bounds.Size).Inflate(new Thickness(0, TreeEdgeRoom)));
 
     private void Reveal(FindResult result)
@@ -221,7 +225,6 @@ public partial class SidebarView : UserControl
 
     private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        TreeRows.Margin = new Thickness(0, 0, Tree.ScrollBarMaximum.Y > 0 ? 16 : 8, 8);
         // The project whose rows meet the top edge stays pinned there.
         var top = Tree.Offset.Y;
         var pinned = top < 1 ? null : TreeRows.GetVisualDescendants().OfType<ToggleButton>()
@@ -293,15 +296,6 @@ public partial class SidebarView : UserControl
         }
     }
 
-    // The header's New workflow adds to the project on show.
-    private void OnNewWorkflowHere(object? sender, RoutedEventArgs e)
-    {
-        if (ViewModel.Canvas?.Project is { } project)
-        {
-            ViewModel.NewWorkflow(project);
-        }
-    }
-
     private void OnForgetProject(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is UnopenedProject project)
@@ -319,6 +313,14 @@ public partial class SidebarView : UserControl
     }
 
     private void OnOpenFolder(object? sender, RoutedEventArgs e) => Window?.OpenFolder();
+
+    private void OnOpenRecent(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is RecentProject project)
+        {
+            ViewModel.Open(project.Folder);
+        }
+    }
 
     // The list also follows its canvas's selection, so only a change made while the list has focus is a choice in it.
     private void OnSidebarSelectionChanged(object? sender, SelectionChangedEventArgs e)

@@ -100,7 +100,7 @@ public sealed class ActivityTests : IDisposable
 
         Assert.Equal(["Node docs | beta", "Node 1 | alpha › Build", "Node 2 | alpha › Build", "Node 3 | alpha › Build"], Find(shell, "node"));
         Assert.True(shell.Find<ListBox>("FindResults").IsEffectivelyVisible);
-        Assert.False(shell.Find<ItemsControl>("Projects").IsEffectivelyVisible);
+        Assert.True(shell.Find<ItemsControl>("Projects").IsEffectivelyVisible);
 
         Assert.Empty(Find(shell, "nothing like this"));
         Assert.True(shell.Find<TextBlock>("FindNoMatch").IsEffectivelyVisible);
@@ -170,7 +170,7 @@ public sealed class ActivityTests : IDisposable
         FanOut.Run(shell);
         var view = shell.Window.ViewModel;
 
-        Assert.Equal(["Write docs · Reply · Workflow", "Build the API · Running · Workflow"], view.Activity.Rows.Select(row => $"{row.Node.Title} · {row.Detail}"));
+        Assert.Equal(["Write docs · Reply · Workflow", "Build the API · Running · Workflow"], view.Activity.Rows.Select(row => $"{row.Node.Title} · {row.Reason} · {row.Place}"));
         Assert.True(shell.Find<ItemsControl>("Activity").IsEffectivelyVisible);
         Assert.Equal("1 of 3 · 1 running · 1 waiting", view.Canvas!.Summary);
         Assert.Equal(1, view.Projects[0].WaitingCount);

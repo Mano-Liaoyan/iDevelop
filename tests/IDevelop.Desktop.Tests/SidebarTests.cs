@@ -23,7 +23,7 @@ public sealed class SidebarTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     // The canvas is 738 px wide, so a 260 px card at this x shows its left 183 px and hides the rest.
-    private const double PartlyOffScreen = 555;
+    private const double PartlyOffScreen = 539;
 
     // Nodify animates a pan by default, for up to a second of real time, and counts it as panning until it ends.
     private static void WaitForPan(Shell shell)
@@ -41,7 +41,7 @@ public sealed class SidebarTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90), TaskAt(Review, "Review", 405, 300)));
         Assert.Equal([("seed", ["Workflow"])], shell.Tree());
-        Assert.Equal("3 nodes", shell.Find<TextBlock>("WorkflowSummary").Text);
+        Assert.Equal("0/3", shell.Find<TextBlock>("WorkflowSummary").Text);
         Assert.False(shell.Find<ListBox>("SidebarTasks").IsEffectivelyVisible);
 
         shell.ShowTasks();
@@ -52,7 +52,8 @@ public sealed class SidebarTests : IDisposable
         shell.AddNode();
 
         // The new task lands under Design, above Review, and the list reads the canvas from the top.
-        Assert.Equal("4 nodes · Unsaved", shell.Find<TextBlock>("WorkflowSummary").Text);
+        Assert.Equal("0/4", shell.Find<TextBlock>("WorkflowSummary").Text);
+        Assert.True(shell.Find<Control>("WorkflowUnsaved").IsEffectivelyVisible);
         Assert.Equal(["Design", "Build", "New task", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
     }
 
@@ -107,8 +108,8 @@ public sealed class SidebarTests : IDisposable
         WaitForPan(shell);
 
         Assert.True(new Rect(shell.Editor.Bounds.Size).Contains(shell.CardRect("Build")), $"{shell.CardRect("Build")} is outside {shell.Editor.Bounds.Size}");
-        Assert.Equal(new Point(2179, 1239), shell.Editor.ViewportLocation);
-        Assert.Equal(new Point(2179, 1239), shell.Find<Minimap>("Minimap").ViewportLocation);
+        Assert.Equal(new Point(2187, 1239), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(2187, 1239), shell.Find<Minimap>("Minimap").ViewportLocation);
     }
 
     [AvaloniaFact]
@@ -124,7 +125,7 @@ public sealed class SidebarTests : IDisposable
         WaitForPan(shell);
 
         Assert.True(shell.Node("Build").IsSelected);
-        Assert.Equal(new Point(2179, 1239), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(2187, 1239), shell.Editor.ViewportLocation);
     }
 
     private Shell SelectBuildOnTheCanvasAndPanItAway()
@@ -150,7 +151,7 @@ public sealed class SidebarTests : IDisposable
 
         shell.Click(shell.SidebarRow("Build"));
 
-        Assert.Equal(new Point(184, -271), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(192, -271), shell.Editor.ViewportLocation);
     }
 
     [AvaloniaTheory]
@@ -160,8 +161,8 @@ public sealed class SidebarTests : IDisposable
     {
         var shell = SelectBuildOnTheCanvasAndPanItAway();
         shell.Find<TextBox>("FindBox").Focus();
-        // Open Folder, New Workflow, the project's row, its New Workflow and Close Project, the workflow's row, then its selected task.
-        for (var stop = 0; stop < 7; stop++)
+        // Open Folder, the project's row, its New Workflow and Close Project, the workflow's row, then its selected task.
+        for (var stop = 0; stop < 6; stop++)
         {
             shell.Press(Key.Tab);
         }
@@ -170,7 +171,7 @@ public sealed class SidebarTests : IDisposable
 
         shell.Press(key);
 
-        Assert.Equal(new Point(184, -271), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(192, -271), shell.Editor.ViewportLocation);
     }
 
     [AvaloniaFact]
@@ -201,7 +202,7 @@ public sealed class SidebarTests : IDisposable
         WaitForPan(shell);
 
         Assert.Equal(new Point(0, 0), shell.Editor.ViewportLocation);
-        Assert.Equal(new Point(360, 90), shell.Node("Design").Location);
+        Assert.Equal(new Point(330, 90), shell.Node("Design").Location);
     }
 
     [AvaloniaFact]
@@ -248,7 +249,7 @@ public sealed class SidebarTests : IDisposable
         }
 
         Assert.Equal(
-            ["OpenFolder", "ProjectsNewWorkflow", "ProjectExpand", "NewWorkflow", "CloseProject", "WorkflowRow", "Design", "AgentsStatus", "ThemeSystem", "ThemeLight", "ThemeDark"],
-            Enumerable.Range(0, 11).Select(_ => Tab()));
+            ["OpenFolder", "ProjectExpand", "NewWorkflow", "CloseProject", "WorkflowRow", "Design", "AgentsStatus", "ThemeSystem", "ThemeLight", "ThemeDark"],
+            Enumerable.Range(0, 10).Select(_ => Tab()));
     }
 }

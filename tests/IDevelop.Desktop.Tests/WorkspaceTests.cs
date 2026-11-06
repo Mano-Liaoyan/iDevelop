@@ -94,7 +94,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("beta", "Build"), shell.Breadcrumb());
         Assert.Equal("beta - iDevelop", shell.Window.Title);
         Assert.Equal(
-            ["2 nodes", "1 node", "2 nodes", "1 node"],
+            ["0/2", "0/1", "0/2", "0/1"],
             new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }.Select(row => shell.WorkflowText(row.Item1, row.Item2, "WorkflowSummary")));
         Assert.DoesNotContain(new[] { "alpha", "beta" }.SelectMany(project => new[] { "Build", "Release" }.Select(workflow => (project, workflow))),
             row => shell.WorkflowTasks(row.project, row.workflow).IsEffectivelyVisible);
@@ -161,7 +161,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal("alpha* - iDevelop: Design, Implement, New task", Shown(shell));
         Assert.Equal([true, true, false, false], new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }
-            .Select(row => shell.WorkflowText(row.Item1, row.Item2, "WorkflowSummary").Contains("Unsaved")));
+            .Select(row => AutomationProperties.GetHelpText(shell.WorkflowRow(row.Item1, row.Item2))!.Contains("Unsaved")));
         shell.Click(shell.Find<Button>("Undo"));
         Assert.Equal("alpha - iDevelop: Design, Implement", Shown(shell));
         shell.Click(shell.Find<Button>("Redo"));
@@ -169,7 +169,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal(["Design", "Implement", "New task"], SavedTitles(alpha, "Build"));
         Assert.Equal(release, File.ReadAllBytes(WorkflowFile(alpha, "Release")));
-        Assert.Equal([false, true], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowText("alpha", workflow, "WorkflowSummary").Contains("Unsaved")));
+        Assert.Equal([false, true], new[] { "Build", "Release" }.Select(workflow => AutomationProperties.GetHelpText(shell.WorkflowRow("alpha", workflow))!.Contains("Unsaved")));
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         Assert.Equal("alpha* - iDevelop: New task, Ship", Shown(shell));
         shell.Click(shell.Find<Button>("Undo"));
@@ -187,11 +187,11 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(new Point(600, 300), shell.Editor.ViewportLocation);
         shell.Click(shell.Find<Button>("ZoomIn"));
         var build = (Math.Round(shell.Editor.ViewportZoom, 4), Shell.Rounded(shell.Editor.ViewportLocation));
-        Assert.Equal((1.2599, new Point(672.41, 382.52)), build);
+        Assert.Equal((1.2599, new Point(670.76, 382.52)), build);
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.Equal((1.0, new Point(-116, -271)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        Assert.Equal((1.0, new Point(-108, -271)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
         Assert.Null(shell.Window.ViewModel.Canvas!.SelectedNode);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
 
@@ -467,7 +467,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(
             "iDevelop converted this workflow from format 2. Its 3 tasks became Implement nodes, and its review connection became a dependency. Save to keep it in format 3.",
             shell.Status);
-        Assert.Equal(["1 node", "3 nodes · Unsaved"], new[] { "seed", "legacy" }.Select(project => shell.WorkflowText(project, "Workflow", "WorkflowSummary")));
+        Assert.Equal(["0/1", "0/3"], new[] { "seed", "legacy" }.Select(project => shell.WorkflowText(project, "Workflow", "WorkflowSummary")));
         Assert.Equal("legacy* - iDevelop", shell.Window.Title);
     }
 
@@ -803,7 +803,7 @@ public sealed class WorkspaceTests : IDisposable
 
         shell.Render();
         var close = ProjectButton(shell, "alpha", "CloseProject");
-        var open = shell.Find<Button>("ProjectsNewWorkflow");
+        var open = shell.Find<Button>("OpenFolder");
 
         Assert.Equal(0, close.TranslatePoint(new Point(close.Bounds.Width, 0), open)!.Value.X - open.Bounds.Width);
     }

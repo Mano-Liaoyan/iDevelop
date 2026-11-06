@@ -31,13 +31,23 @@ public sealed class ActivityViewModel : ObservableObject
         ShowAllCommand = new RelayCommand(() => IsShowingAll = true);
     }
 
-    /// <summary>The rows in view: failed, then waiting, then running, each in project order and then the node list's order.</summary>
+    /// <summary>The rows in view: waiting, then failed, then running, each in project order and then the node list's order.</summary>
     public ObservableCollection<ActivityRow> Rows { get; } = [];
 
     public bool HasRows => _ordered.Count > 0;
 
     /// <summary>"3 nodes", the whole list's size.</summary>
     public int Count => _ordered.Count;
+
+    /// <summary>How many rows wait for the person, which the heading shows apart from what failed.</summary>
+    public int WaitingCount => _ordered.Count(row => row.Node.State == NodeState.InputRequired);
+
+    /// <summary>How many rows failed.</summary>
+    public int FailedCount => _ordered.Count(row => row.Node.State == NodeState.Failed);
+
+    public bool HasWaiting => WaitingCount > 0;
+
+    public bool HasFailed => FailedCount > 0;
 
     public int Limit
     {
@@ -86,27 +96,19 @@ public sealed class ActivityViewModel : ObservableObject
     /// <summary>What the heading's toggle does now, for a screen reader and the tooltip.</summary>
     public string FoldLabel => IsFolded ? "Show Activity" : "Hide Activity";
 
-    /// <summary>The list reads every open project, so the heading says so once several are open.</summary>
-    public bool SpansProjects
-    {
-        get;
-        private set => SetProperty(ref field, value);
-    }
-
     public bool HasMore => !IsShowingAll && _ordered.Count > Limit;
 
     public string ShowAllLabel => $"Show all {_ordered.Count}";
 
     public ICommand ShowAllCommand { get; }
 
-    /// <summary>The nodes that wait for the person or failed, in list order.</summary>
-    internal IEnumerable<TaskNodeViewModel> Attention => _ordered.Where(row => row.Node.State is NodeState.InputRequired or NodeState.Failed).Select(row => row.Node);
+    /// <summary>The nodes in <paramref name="state"/>, in list order.</summary>
+    internal IEnumerable<TaskNodeViewModel> InState(NodeState state) => _ordered.Where(row => row.Node.State == state).Select(row => row.Node);
 
     /// <summary>Reads every node again.</summary>
     internal void Refresh()
     {
         var projects = _projects();
-        SpansProjects = projects.Count > 1;
         var nodes = projects.SelectMany(project => project.Workflows).SelectMany(canvas => canvas.Outline)
             .Where(node => GroupOf(node) is not null)
             .OrderBy(node => GroupOf(node))
@@ -136,14 +138,18 @@ public sealed class ActivityViewModel : ObservableObject
         ShowRows();
         OnPropertyChanged(nameof(HasRows));
         OnPropertyChanged(nameof(Count));
+        OnPropertyChanged(nameof(WaitingCount));
+        OnPropertyChanged(nameof(FailedCount));
+        OnPropertyChanged(nameof(HasWaiting));
+        OnPropertyChanged(nameof(HasFailed));
         OnPropertyChanged(nameof(HasMore));
         OnPropertyChanged(nameof(ShowAllLabel));
     }
 
     private static int? GroupOf(TaskNodeViewModel node) => node.State switch
     {
-        NodeState.Failed => 0,
-        NodeState.InputRequired => 1,
+        NodeState.InputRequired => 0,
+        NodeState.Failed => 1,
         NodeState.Running => 2,
         _ => null,
     };
@@ -193,8 +199,8 @@ public sealed class ActivityRow : ObservableObject
 
     public ICommand OpenCommand { get; }
 
-    /// <summary>"Question · Payment webhook hardening", with the project's name before the workflow's while the rows span projects.</summary>
-    public string Detail => $"{Reason} · {Place}";
+    /// <summary>"Question · Payment webhook hardening · Claude Code", with the project's name before the workflow's while the rows span projects.</summary>
+    public string Detail => string.Join(" · ", new[] { Reason, Place, Node.AgentClientName }.OfType<string>());
 
     /// <summary>Why the node is listed, in the state's own word.</summary>
     public string Reason

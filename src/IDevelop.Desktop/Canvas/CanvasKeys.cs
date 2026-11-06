@@ -25,9 +25,18 @@ public static class CanvasKeys
     /// <summary>Selects the next node that waits for the person or failed.</summary>
     public static KeyGesture NextAttention => new(Key.J, Command);
 
+    /// <summary>Shows the next node that failed. A failed node does not wait, so it has its own key.</summary>
+    public static KeyGesture NextFailed => new(Key.J, Command | KeyModifiers.Shift);
+
     /// <summary>Puts the focus in the inspector's model picker.</summary>
     /// <summary>The Model row's tooltip.</summary>
     public static string ModelHint => $"Model ({Hint(ModelPicker)})";
+
+    /// <summary>Shows or hides the left panel.</summary>
+    public static KeyGesture ToggleSidebar => new(Key.B, Command);
+
+    /// <summary>Shows or hides the inspector.</summary>
+    public static KeyGesture ToggleInspector => new(Key.B, Command | KeyModifiers.Alt);
 
     public static KeyGesture ModelPicker { get; } = new(Key.M, KeyModifiers.Alt);
 

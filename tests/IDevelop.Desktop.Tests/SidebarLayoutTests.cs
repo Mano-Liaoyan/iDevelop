@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using IDevelop.Desktop.Theme;
 using IDevelop.Clients;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -103,7 +104,7 @@ public sealed class SidebarLayoutTests : IDisposable
         var sidebar = shell.Window.FindControl<Grid>("Columns")!.ColumnDefinitions[0];
 
         shell.Drag(shell.Center(splitter), shell.Center(splitter) + new Vector(100, 0));
-        Assert.InRange(sidebar.ActualWidth, 355, 357);
+        Assert.InRange(sidebar.ActualWidth, 371, 373);
 
         shell.Drag(shell.Center(splitter), shell.Center(splitter) - new Vector(200, 0));
         Assert.Equal(240, sidebar.ActualWidth);
@@ -159,7 +160,7 @@ public sealed class SidebarLayoutTests : IDisposable
     {
         var title = row.GetVisualDescendants().OfType<TextBlock>().Single();
         var line = FirstLine(title);
-        return $"first line {line - Top(row):0.#}, glyph {Centre(row.GetVisualDescendants().OfType<PathIcon>().First()) - line:0.#}";
+        return $"first line {line - Top(row):0.#}, glyph {Centre(row.GetVisualDescendants().OfType<KindTile>().First()) - line:0.#}";
     }
 
     [AvaloniaFact]
@@ -212,16 +213,17 @@ public sealed class SidebarLayoutTests : IDisposable
         var shell = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.SizeSidebar(width);
         var row = shell.WorkflowRow(Reports, ReleaseNotes);
-        Assert.Equal((28.0, 44.0), (shell.ProjectName(Reports).FindAncestorOfType<ToggleButton>()!.Bounds.Height, row.Bounds.Height));
-        Assert.Equal("2 nodes", shell.WorkflowText(Reports, ReleaseNotes, "WorkflowSummary"));
+        Assert.Equal((28.0, 28.0), (shell.ProjectName(Reports).FindAncestorOfType<ToggleButton>()!.Bounds.Height, row.Bounds.Height));
+        Assert.Equal("0/2", shell.WorkflowText(Reports, ReleaseNotes, "WorkflowSummary"));
 
         shell.Click(row);
         shell.RunNode("Task 1");
         shell.AddNode();
         shell.Render();
 
-        Assert.Equal(44, row.Bounds.Height);
-        Assert.Equal("0 of 3 · Unsaved", shell.WorkflowText(Reports, ReleaseNotes, "WorkflowSummary"));
+        Assert.Equal(28, row.Bounds.Height);
+        Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
+        Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowProgress").IsEffectivelyVisible);
     }
 
@@ -237,7 +239,7 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.Hover(shell.Center(shell.ProjectName(Reports)));
 
         Assert.Equal(1, actions.Opacity);
-        Assert.Equal("× 0, + 24", $"× {FromEdge(shell, close):0.#}, + {FromEdge(shell, add):0.#}");
+        Assert.Equal("× 8, + 32", $"× {FromEdge(shell, close):0.#}, + {FromEdge(shell, add):0.#}");
     }
 
     /// <summary>The name shows whole and ends before the tree's content edge.</summary>

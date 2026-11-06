@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -50,10 +51,20 @@ public partial class MainWindow : Window
                 _docked = !_docked;
                 SizeDock();
             }
+            else if (e.PropertyName is nameof(MainWindowViewModel.IsSidebarOpen) or nameof(MainWindowViewModel.IsInspectorOpen))
+            {
+                ShowPanels();
+            }
         };
         _sidebarMax = Columns.ColumnDefinitions[0].MaxWidth;
         _inspectorMax = Columns.ColumnDefinitions[4].MaxWidth;
-        Columns.SizeChanged += (_, _) => LimitPanels();
+        _sidebarMin = Columns.ColumnDefinitions[0].MinWidth;
+        _inspectorMin = Columns.ColumnDefinitions[4].MinWidth;
+        Columns.SizeChanged += (_, e) =>
+        {
+            ViewModel.IsNarrow = e.NewSize.Width < PanelWidths.NarrowWindow;
+            LimitPanels();
+        };
         Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
         Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
         CanvasArea.SizeChanged += (_, e) => TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
@@ -61,9 +72,47 @@ public partial class MainWindow : Window
         DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
     }
 
-    // The largest widths the sidebar's and the inspector's columns declare for themselves.
+    // A tab sits over the canvas's bottom band, clear of the splitter's middle, where a person drags it.
+    private const double TabLift = 72;
+
+    /// <summary>The left panel's tab sits at the window's edge while the panel is closed.</summary>
+    public static readonly IValueConverter LeftEdge = new FuncValueConverter<bool, Thickness>(open => open ? new Thickness(-6, 0, -6, TabLift) : new Thickness(6, 0, -6, TabLift));
+
+    public static readonly IValueConverter RightEdge = new FuncValueConverter<bool, Thickness>(open => open ? new Thickness(-6, 0, -6, TabLift) : new Thickness(-6, 0, 6, TabLift));
+
+    // The largest widths the sidebar's and the inspector's columns declare for themselves, and the widths and least widths they
+    // go back to when they open.
     private readonly double _sidebarMax;
     private readonly double _inspectorMax;
+    private readonly double _sidebarMin;
+    private readonly double _inspectorMin;
+    private double _sidebarWidth;
+    private double _inspectorWidth;
+
+    // A closed panel's column takes no width.
+    private void ShowPanels()
+    {
+        Fold(Columns.ColumnDefinitions[0], ViewModel.IsSidebarOpen, ref _sidebarWidth, _sidebarMin, _sidebarMax);
+        Fold(Columns.ColumnDefinitions[4], ViewModel.IsInspectorOpen, ref _inspectorWidth, _inspectorMin, _inspectorMax);
+        LimitPanels();
+    }
+
+    private static void Fold(ColumnDefinition column, bool open, ref double width, double min, double max)
+    {
+        if (open && column.MaxWidth == 0)
+        {
+            column.MaxWidth = max;
+            column.MinWidth = min;
+            column.Width = new GridLength(width);
+        }
+        else if (!open && column.MaxWidth != 0)
+        {
+            width = column.Width.Value;
+            column.MinWidth = 0;
+            column.MaxWidth = 0;
+            column.Width = new GridLength(0);
+        }
+    }
 
     private void OnPanelColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
@@ -84,7 +133,7 @@ public partial class MainWindow : Window
         }
 
         var (sidebarMax, inspectorMax) = Columns.Bounds.Width < PanelWidths.NarrowWindow ? (sidebar.MinWidth, inspector.MinWidth) : PanelWidths.Limits(room,
-            new(sidebar.Width.Value, sidebar.MinWidth, _sidebarMax), new(inspector.Width.Value, inspector.MinWidth, _inspectorMax));
+            new(sidebar.Width.Value, sidebar.MinWidth, ViewModel.IsSidebarOpen ? _sidebarMax : 0), new(inspector.Width.Value, inspector.MinWidth, ViewModel.IsInspectorOpen ? _inspectorMax : 0));
         sidebar.MaxWidth = sidebarMax;
         inspector.MaxWidth = inspectorMax;
     }
@@ -232,15 +281,22 @@ public partial class MainWindow : Window
             return true;
         }
 
+        if (CanvasKeys.ToggleInspector.Matches(e) || CanvasKeys.ToggleSidebar.Matches(e))
+        {
+            (e.KeyModifiers.HasFlag(KeyModifiers.Alt) ? ViewModel.ToggleInspectorCommand : ViewModel.ToggleSidebarCommand).Execute(null);
+            return true;
+        }
+
         if (CanvasKeys.Find.Matches(e))
         {
             Sidebar.FocusFind();
             return true;
         }
 
-        if (CanvasKeys.NextAttention.Matches(e))
+        // The longer gesture comes first, because a gesture with Shift also holds the shorter one's key.
+        if (CanvasKeys.NextFailed.Matches(e) || CanvasKeys.NextAttention.Matches(e))
         {
-            if (ViewModel.ShowNextAttention() is not null)
+            if (ViewModel.ShowNext(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? NodeState.Failed : NodeState.InputRequired) is not null)
             {
                 FocusNode();
             }
@@ -302,6 +358,8 @@ public partial class MainWindow : Window
 
     private bool FocusModelPicker()
     {
+        ViewModel.ShowInspector();
+        UpdateLayout();
         var picker = InspectorPanel.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(box =>
             box.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(box) == "TaskModel");
         picker?.BringIntoView();
@@ -314,7 +372,11 @@ public partial class MainWindow : Window
         var conversation = ShownConversation;
         IEnumerable<(Control Region, Action Enter)> Regions()
         {
-            yield return (Sidebar, Sidebar.FocusFirst);
+            if (ViewModel.IsSidebarOpen)
+            {
+                yield return (Sidebar, Sidebar.FocusFirst);
+            }
+
             if (ViewModel.ShowsCanvas && CanvasView is { } canvas)
             {
                 yield return (canvas, () => canvas.Editor.Focus(NavigationMethod.Directional));
@@ -325,7 +387,10 @@ public partial class MainWindow : Window
                 yield return (conversation, conversation.FocusComposer);
             }
 
-            yield return (InspectorPanel, FocusInspector);
+            if (ViewModel.IsInspectorOpen)
+            {
+                yield return (InspectorPanel, FocusInspector);
+            }
         }
 
         var regions = Regions().ToList();

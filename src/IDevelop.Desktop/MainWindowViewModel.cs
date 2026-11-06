@@ -25,6 +25,11 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly Func<string, Task> _copy;
     private readonly string? _personalBlueprints;
     private readonly string? _sessionFile;
+    // The most folders the empty left area offers.
+    private const int MaxRecent = 5;
+
+    private bool? _inspectorChoice;
+
     private readonly RelayCommand _save;
     private readonly RelayCommand _undo;
     private readonly RelayCommand _redo;
@@ -54,6 +59,9 @@ public sealed class MainWindowViewModel : ObservableObject
         Activity = new ActivityViewModel(() => Projects, Attend);
         Find = new FindViewModel(() => Projects, Choose);
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProjects));
+        Recent.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecent));
+        ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
+        ToggleInspectorCommand = new RelayCommand(() => ChooseInspector(!IsInspectorOpen));
         Unopened.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProjects));
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
@@ -72,6 +80,49 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Whether the left area has a project to list, open or not. Without one it shows only Open Folder.</summary>
     public bool HasProjects => Projects.Count > 0 || Unopened.Count > 0;
 
+    /// <summary>The folders the person closed, newest first, which the empty left area offers again.</summary>
+    public ObservableCollection<RecentProject> Recent { get; } = [];
+
+    public bool HasRecent => Recent.Count > 0;
+
+    /// <summary>The left area is open. Find opens it.</summary>
+    public bool IsSidebarOpen
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(SidebarToggleLabel));
+            }
+        }
+    } = true;
+
+    /// <summary>The window is too narrow to keep the inspector open beside the canvas, unless the person opens it.</summary>
+    internal bool IsNarrow
+    {
+        get;
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                RaiseInspector();
+            }
+        }
+    }
+
+    /// <summary>The inspector is open: as the person last chose, or else while the window has room for it.</summary>
+    public bool IsInspectorOpen => _inspectorChoice ?? !IsNarrow;
+
+    public string SidebarToggleLabel => IsSidebarOpen ? "Hide the left panel" : "Show the left panel";
+
+    public string InspectorToggleLabel => IsInspectorOpen ? "Hide the inspector" : "Show the inspector";
+
+    public ICommand ToggleSidebarCommand { get; }
+
+    public ICommand ToggleInspectorCommand { get; }
+
     /// <summary>The left area's list of nodes that wait, failed, or run, in every open project.</summary>
     public ActivityViewModel Activity { get; }
 
@@ -85,7 +136,7 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>A node was shown from outside its canvas, so the window brings its card into view.</summary>
     internal event Action<TaskNodeViewModel>? NodeShown;
 
-    /// <summary>The person asked for a conversation, so the window puts the focus in its composer.</summary>
+    /// <summary>The person asked for the conversation of a node that waits for their words, so the window puts the focus in its composer.</summary>
     internal event Action? ComposerRequested;
 
     /// <summary>The workflow the window shows, or null when no project is open.</summary>
@@ -235,9 +286,38 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Selects the next node that waits or failed, after the selected one, in the Activity list's order.</summary>
-    internal TaskNodeViewModel? ShowNextAttention()
+    /// <summary>Opens the inspector for what the person asked to see in it.</summary>
+    internal void ShowInspector() => ChooseInspector(true);
+
+    private void ChooseInspector(bool open)
     {
-        var nodes = Activity.Attention.ToList();
+        _inspectorChoice = open;
+        RaiseInspector();
+    }
+
+    private void RaiseInspector()
+    {
+        OnPropertyChanged(nameof(IsInspectorOpen));
+        OnPropertyChanged(nameof(InspectorToggleLabel));
+    }
+
+    private void Remember(string folder)
+    {
+        foreach (var known in Recent.Where(project => ProjectFolders.Comparer.Equals(project.Folder, folder)).ToList())
+        {
+            Recent.Remove(known);
+        }
+
+        Recent.Insert(0, new RecentProject(folder));
+        while (Recent.Count > MaxRecent)
+        {
+            Recent.RemoveAt(Recent.Count - 1);
+        }
+    }
+
+    internal TaskNodeViewModel? ShowNext(Canvas.NodeState state)
+    {
+        var nodes = Activity.InState(state).ToList();
         if (nodes.Count == 0)
         {
             return null;
@@ -330,6 +410,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         Projects.RemoveAt(index);
+        Remember(project.Folder);
         if (Canvas?.Project == project)
         {
             Show(Projects.Count == 0 ? null : Projects[Math.Min(index, Projects.Count - 1)].Workflows[0]);
@@ -368,6 +449,11 @@ public sealed class MainWindowViewModel : ObservableObject
     public void Restore(string? folder)
     {
         var session = _sessionFile is null ? WorkspaceSession.Empty : WorkspaceSession.Read(_sessionFile);
+        foreach (var known in session.Recent.Take(MaxRecent))
+        {
+            Recent.Add(new RecentProject(known));
+        }
+
         List<string> notes = [];
         _restoring = true;
         try
@@ -497,7 +583,10 @@ public sealed class MainWindowViewModel : ObservableObject
         project.ConversationRequested += target =>
         {
             OpenConversation(target);
-            ComposerRequested?.Invoke();
+            if (Conversation?.WaitsForWords == true)
+            {
+                ComposerRequested?.Invoke();
+            }
         };
         project.PropertyChanged += (_, e) =>
         {
@@ -616,6 +705,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 .Select(canvas => new WorkflowCards(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ExpandedCards))],
             Folded = [.. Projects.Where(project => !project.IsExpanded).Select(project => project.Folder)],
             ActivityFolded = Activity.IsFolded,
+            Recent = [.. Recent.Select(project => project.Folder).Where(folder => !Projects.Any(open => ProjectFolders.Comparer.Equals(open.Folder, folder)))],
         };
         try
         {
