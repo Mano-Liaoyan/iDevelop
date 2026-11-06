@@ -120,7 +120,8 @@ public sealed class EllipsisText : TextBlock
         return fits;
     }
 
-    private static string Cut(string whole, int length) => whole[..length].TrimEnd() + Ellipsis;
+    // A sentence's own period would read as a fourth dot.
+    private static string Cut(string whole, int length) => whole[..length].TrimEnd().TrimEnd('.') + Ellipsis;
 
     private bool Fits(string text, double width)
     {
