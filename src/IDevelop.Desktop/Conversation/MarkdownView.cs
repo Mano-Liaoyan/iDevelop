@@ -265,6 +265,7 @@ public sealed class MarkdownView : StackPanel
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             AllowAutoHide = false,
+            Classes = { "mdScroll" },
             Content = new Border { Classes = { "mdTable" }, Child = grid },
         };
     }
@@ -293,6 +294,7 @@ public sealed class MarkdownView : StackPanel
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             AllowAutoHide = false,
+            Classes = { "mdScroll" },
             Content = new SelectableTextBlock { Classes = { "mdMono", "mdCodeText" }, Text = source },
         };
         var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto") };

@@ -186,7 +186,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     /// <summary>What Approve hands on, and to which nodes.</summary>
     public string ApproveHelp => Card == AttentionCard.Reply
-        ? $"Reply below, or complete the node with the agent's message above as the result for {Recipients}."
+        ? $"Accepting completes the node and hands the agent's message above to {Recipients}."
         : $"Makes the agent's last reply the result for {Recipients}.";
 
     // "A and B", "A, B, and 2 more", or the node itself when nothing reads it.

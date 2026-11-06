@@ -75,7 +75,7 @@ internal static class CanvasChrome
             var first = Math.Min(last, keepFar - roomFar);
             var start = Math.Clamp(from, first, last);
             var reach = span / 2;
-            var choices = spans.SelectMany(card => new[] { card.Near - margin, card.Far + margin, card.Near + margin - span, card.Far + margin - span })
+            var choices = spans.SelectMany(card => new[] { card.Near - margin, card.Far + margin, card.Near + margin - span, card.Far + margin - span, card.Near - roomNear, card.Far - roomFar })
                 .Where(near => Math.Abs(near - start) <= reach && near >= first && near <= last)
                 .Prepend(start);
             return choices.OrderBy(near => Cut(near, near + span, spans)).ThenBy(near => Math.Abs(near - start)).First();

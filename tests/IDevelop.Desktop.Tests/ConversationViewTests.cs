@@ -371,4 +371,15 @@ public sealed class ConversationViewTests : IDisposable
 
         Assert.True(scroller.Offset.Y > start, $"The view stayed at {start}.");
     }
+
+    [AvaloniaFact]
+    public void A_message_without_a_result_shows_no_empty_card()
+    {
+        _conversation.Add([new ConversationLine.Agent("A plain message.")]);
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        Render();
+
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<Border>(), border => border.Classes.Contains("resultCard") && border.IsEffectivelyVisible);
+    }
 }

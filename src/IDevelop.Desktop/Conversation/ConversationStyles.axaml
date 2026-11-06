@@ -97,7 +97,20 @@
     <Setter Property="Margin" Value="12,0,12,12" />
     <Setter Property="TextWrapping" Value="NoWrap" />
   </Style>
-  <!-- A line longer than the block keeps its scroll bar in view, so the block says that the line goes on. A short block has none. -->
+  <!-- A line longer than the block keeps a thin scroll bar in view, so the block says that the line goes on. A short block has none. -->
+  <Style Selector="ScrollViewer.mdScroll /template/ ScrollBar">
+    <Setter Property="Height" Value="10" />
+    <Setter Property="MinHeight" Value="10" />
+  </Style>
+  <Style Selector="ScrollViewer.mdScroll /template/ ScrollBar /template/ RepeatButton">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="ScrollViewer.mdScroll /template/ ScrollBar /template/ Thumb">
+    <Setter Property="Height" Value="4" />
+    <Setter Property="MinHeight" Value="4" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
   <Style Selector="Button.mdLink">
     <Setter Property="Padding" Value="0" />
     <Setter Property="MinHeight" Value="0" />

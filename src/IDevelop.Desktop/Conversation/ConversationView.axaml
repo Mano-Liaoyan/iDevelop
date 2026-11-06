@@ -478,14 +478,12 @@
                                  AutomationProperties.AutomationId="ResultNote" />
                     </Border>
                     <!-- With the inspector open it holds the result, so a card with nothing more to say gives way to it. -->
+                    <Panel IsVisible="{Binding Result, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <Border Classes="resultCard" AutomationProperties.AutomationId="ResultCard">
                       <Border.IsVisible>
                         <MultiBinding Converter="{x:Static BoolConverters.Or}">
                           <Binding Path="Result.HasDetail" FallbackValue="False" />
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="Result" Converter="{x:Static ObjectConverters.IsNotNull}" />
-                            <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
-                          </MultiBinding>
+                          <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
                         </MultiBinding>
                       </Border.IsVisible>
                       <!-- The message above the card is the result's whole report, so the card names it and says what it changed. -->
@@ -523,6 +521,7 @@
                         </ItemsControl>
                       </StackPanel>
                     </Border>
+                    </Panel>
                   </StackPanel>
                 </Panel>
               </DataTemplate>

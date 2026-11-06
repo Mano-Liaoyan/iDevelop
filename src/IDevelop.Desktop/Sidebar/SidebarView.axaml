@@ -241,7 +241,7 @@
                     </StackPanel>
                   </Panel>
                   <StackPanel Spacing="2" IsVisible="{Binding IsExpanded}">
-                    <Grid ColumnDefinitions="*,Auto" Margin="42,0,8,0" IsVisible="{Binding HasNoWorkflows}">
+                    <Grid ColumnDefinitions="*,Auto" Margin="38,0,8,0" IsVisible="{Binding HasNoWorkflows}">
                       <TextBlock Classes="caption" Text="No workflows yet" VerticalAlignment="Center" />
                       <Button Grid.Column="1" Classes="ghost" Height="24" Content="New workflow" Click="OnNewWorkflow"
                               AutomationProperties.AutomationId="EmptyNewWorkflow" />
@@ -274,7 +274,7 @@
                                               AutomationProperties.Name="Rename" theme:MenuGlyph.Data="{StaticResource IconRename}" />
                                   </ContextMenu>
                                 </Button.ContextMenu>
-                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                                   <TextBlock Classes="rowName strong" Text="{Binding Name}"
                                              AutomationProperties.AutomationId="WorkflowName" />
                                   <Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Top" Margin="0,6,0,0" Fill="{DynamicResource AccentBrush}"
@@ -283,12 +283,12 @@
                                                 AutomationProperties.AutomationId="WorkflowAlert">
                                     <ItemsControl.ItemsPanel>
                                       <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="6" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4" />
                                       </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                       <DataTemplate DataType="canvas:RowFact">
-                                        <StackPanel Classes="count">
+                                        <StackPanel Classes="count tight">
                                           <PathIcon Classes="stateIcon" Classes.spin="{Binding IsRunning}" Theme="{StaticResource Glyph}" Width="14" Height="14" theme:StyleClass.State="{Binding State}" />
                                           <TextBlock Classes="caption" Text="{Binding Count}" />
                                         </StackPanel>
@@ -303,7 +303,7 @@
                                   </StackPanel>
                                 </Grid>
                               </Button>
-                              <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="42,2,4,2"
+                              <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="38,2,4,2"
                                                      AutomationProperties.AutomationId="WorkflowNameBox"
                                                      AutomationProperties.Name="Workflow name" />
                               <Border Width="2" Margin="0,6" HorizontalAlignment="Left" CornerRadius="1" IsHitTestVisible="False"
@@ -317,7 +317,7 @@
                               </ToggleButton>
                             </Panel>
                             <Border IsVisible="{Binding IsExpanded}"
-                                    Margin="30,0,0,0" Padding="4,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border100Brush}">
+                                    Margin="28,0,0,0" Padding="4,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border100Brush}">
                               <ListBox Classes="tasks" Classes.hidden="{Binding !IsSelected}"
                                        ItemsSource="{Binding Outline}"
                                        SelectedItem="{Binding SelectedNode}"
