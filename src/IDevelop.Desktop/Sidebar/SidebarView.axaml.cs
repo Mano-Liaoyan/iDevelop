@@ -20,8 +20,10 @@ public partial class SidebarView : UserControl
     // At or below this window height Activity shows fewer rows, and it never takes more than half of the panel.
     private const double SmallHeight = 700;
 
-    // What the pinned project row covers at the tree's top edge, and the same again at the bottom, so a row never sits on an edge.
-    private const double TreeEdgeRoom = 32;
+    // What the pinned project and workflow cover at the tree's top edge, and the room at the bottom, so a row never sits on an edge.
+    private const double TreeTopRoom = 60;
+
+    private const double TreeBottomRoom = 32;
 
     private IInputElement? _beforeFind;
 
@@ -123,8 +125,8 @@ public partial class SidebarView : UserControl
         return true;
     }
 
-    // The room over a row clears the pinned project.
-    private static void InView(Control row) => row.BringIntoView(new Rect(row.Bounds.Size).Inflate(new Thickness(0, TreeEdgeRoom)));
+    // The room over a row clears the pinned rows.
+    private static void InView(Control row) => row.BringIntoView(new Rect(row.Bounds.Size).Inflate(new Thickness(0, TreeTopRoom, 0, TreeBottomRoom)));
 
     private void Reveal(FindResult result)
     {
@@ -225,22 +227,79 @@ public partial class SidebarView : UserControl
 
     private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        // The project whose rows meet the top edge stays pinned there.
-        var top = Tree.Offset.Y;
-        var pinned = top < 1 ? null : TreeRows.GetVisualDescendants().OfType<ToggleButton>()
-            .Where(row => row.Classes.Contains("projectRow") && row.DataContext is ProjectViewModel)
-            .LastOrDefault(row => row.TranslatePoint(default, TreeRows)?.Y < top + 1);
-        StickyProject.DataContext = pinned?.DataContext;
-        StickyProject.IsVisible = pinned is not null;
+        PinRows();
+        CoverCutRows();
     }
 
-    private void OnStickyProject(object? sender, RoutedEventArgs e)
+    private IEnumerable<ToggleButton> ProjectRows() => TreeRows.GetVisualDescendants().OfType<ToggleButton>().Where(row => row.Classes.Contains("projectRow") && row.IsEffectivelyVisible);
+
+    private IEnumerable<Button> WorkflowRows() => TreeRows.GetVisualDescendants().OfType<Button>().Where(row => row.Classes.Contains("workflow") && row.IsEffectivelyVisible);
+
+    private double TopOf(Visual row) => row.TranslatePoint(default, TreeRows)?.Y ?? 0;
+
+    // The project whose rows meet the top edge stays pinned there, and so does the open workflow whose nodes meet it.
+    private void PinRows()
     {
-        var row = TreeRows.GetVisualDescendants().OfType<ToggleButton>()
-            .FirstOrDefault(row => row.Classes.Contains("projectRow") && row.DataContext == StickyProject.DataContext);
-        if (row?.TranslatePoint(default, TreeRows) is { } at)
+        var top = Tree.Offset.Y;
+        var project = top < 1 ? null : ProjectRows().LastOrDefault(row => TopOf(row) < top + 1);
+        var workflow = project is null ? null : WorkflowRows().LastOrDefault(row => row.DataContext is WorkflowCanvasViewModel { IsExpanded: true } && TopOf(row) + row.Bounds.Height <= top + PinnedRowHeight + 1
+            && ListBottom(row) > top + 2 * PinnedRowHeight && TopOf(row) >= TopOf(project));
+        StickyProject.DataContext = project?.DataContext;
+        StickyProject.IsVisible = project is not null;
+        StickyWorkflow.DataContext = workflow?.DataContext;
+        StickyWorkflow.IsVisible = workflow is not null;
+        TreeHead.IsVisible = project is not null;
+    }
+
+    private const double PinnedRowHeight = 28;
+
+    // The bottom of the workflow's list of nodes.
+    private double ListBottom(Button row) =>
+        row.FindAncestorOfType<StackPanel>() is { } block ? TopOf(block) + block.Bounds.Height : 0;
+
+    // A row that an edge of the tree would cut hides under a cover until it comes in whole.
+    private void CoverCutRows()
+    {
+        var head = (StickyProject.IsVisible ? PinnedRowHeight : 0) + (StickyWorkflow.IsVisible ? PinnedRowHeight : 0);
+        var rows = TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow).Select(row => (Top: TopOf(row) - Tree.Offset.Y, row.Bounds.Height)).ToList();
+        var height = Tree.Viewport.Height;
+        var cutAbove = rows.Where(row => row.Top < head - 0.5 && row.Top + row.Height > head + 0.5).Select(row => row.Top + row.Height - head).DefaultIfEmpty(0).Max();
+        var cutBelow = rows.Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5).Select(row => height - row.Top).DefaultIfEmpty(0).Max();
+        Cover(TreeTopCover, cutAbove, new Thickness(0, head, 8, 0));
+        Cover(TreeFootCover, cutBelow, new Thickness(0, 0, 8, 0));
+    }
+
+    private static void Cover(Border cover, double height, Thickness margin)
+    {
+        cover.Height = height;
+        cover.Margin = margin;
+        cover.IsVisible = height > 0;
+    }
+
+    private static bool IsTreeRow(Control control) => control.IsEffectivelyVisible && control switch
+    {
+        ListBoxItem item => item.FindAncestorOfType<ListBox>()?.Classes.Contains("tasks") == true,
+        ToggleButton toggle => toggle.Classes.Contains("projectRow"),
+        Button button => button.Classes.Contains("workflow"),
+        _ => false,
+    };
+
+    private void ScrollToRow(Control? row)
+    {
+        if (row is not null)
         {
-            Tree.Offset = Tree.Offset.WithY(at.Y);
+            Tree.Offset = Tree.Offset.WithY(TopOf(row));
+        }
+    }
+
+    private void OnStickyProject(object? sender, RoutedEventArgs e) =>
+        ScrollToRow(ProjectRows().FirstOrDefault(row => row.DataContext == StickyProject.DataContext));
+
+    private void OnStickyWorkflow(object? sender, RoutedEventArgs e)
+    {
+        if (WorkflowRows().FirstOrDefault(row => row.DataContext == StickyWorkflow.DataContext) is { } row)
+        {
+            Tree.Offset = Tree.Offset.WithY(TopOf(row) - PinnedRowHeight);
         }
     }
 
@@ -290,6 +349,16 @@ public partial class SidebarView : UserControl
     private void OnNewWorkflow(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is ProjectViewModel project && ViewModel.NewWorkflow(project) is { } canvas)
+        {
+            Window?.UpdateLayout();
+            this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();
+        }
+    }
+
+    private void OnNewWorkflowHere(object? sender, RoutedEventArgs e)
+    {
+        var view = ViewModel;
+        if ((view.Projects.FirstOrDefault(project => project.IsCurrent) ?? view.Projects.FirstOrDefault()) is { } project && view.NewWorkflow(project) is { } canvas)
         {
             Window?.UpdateLayout();
             this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();

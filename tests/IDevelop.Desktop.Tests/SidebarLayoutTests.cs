@@ -153,8 +153,8 @@ public sealed class SidebarLayoutTests : IDisposable
 
         Assert.All(titles, title => AssertWhole(shell, title));
         Assert.True(titles[0].TextLayout.TextLines.Count > 1, $"The long title fits on one line at {width} px, so nothing here wraps.");
-        // Each row centres its glyph on its title's first line, 14 px into the row, the middle of a one-line row's 28 px.
-        Assert.Equal(["first line 14, glyph 0", "first line 14, glyph 0, row 28"],
+        // Each row centres its glyph on its title's first line, 12 px into the row, the middle of a one-line row's 24 px.
+        Assert.Equal(["first line 12, glyph 0", "first line 12, glyph 0, row 24"],
             rows.Select((row, index) => TaskCentres(row) + (index == 1 ? $", row {row.Bounds.Height:0.#}" : "")));
     }
 
@@ -226,7 +226,55 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.Equal(28, row.Bounds.Height);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
-        Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowProgress").IsEffectivelyVisible);
+        // What needs the person takes the row's end, in place of the progress.
+        Assert.False(Of<Control>(row.GetVisualParent()!, "WorkflowProgress").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_node_s_name_reads_one_size_under_its_workflow_s()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, "Ship");
+        var shell = Shell.Open(reports);
+        shell.Click(shell.WorkflowExpand(Reports, ReleaseNotes));
+        shell.Render();
+
+        var workflow = shell.WorkflowRow(Reports, ReleaseNotes).GetVisualDescendants().OfType<TextBlock>().First();
+        var node = shell.TaskRow(Reports, ReleaseNotes, "Ship").GetVisualDescendants().OfType<TextBlock>().Single();
+        Assert.True(node.FontSize < workflow.FontSize, $"A node's name is {node.FontSize} and its workflow's is {workflow.FontSize}.");
+    }
+
+    [AvaloniaFact]
+    public void No_row_shows_cut_at_either_edge_of_the_tree_and_the_rows_workflow_stays_pinned()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.Click(shell.WorkflowExpand(Reports, ReleaseNotes));
+        shell.Window.Width = 900;
+        shell.Window.Height = 600;
+        shell.Render();
+        T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+        var tree = Named<ScrollViewer>("Tree");
+        var (top, foot, pinned) = (Named<Border>("TreeTopCover"), Named<Border>("TreeFootCover"), Named<Button>("StickyWorkflow"));
+
+        foreach (var offset in new[] { 0.0, 53, 171, 299, 433 })
+        {
+            tree.Offset = tree.Offset.WithY(offset);
+            shell.Render();
+            var height = tree.Viewport.Height;
+            var head = pinned.IsVisible ? 56 : Named<Button>("StickyProject").IsVisible ? 28 : 0;
+            foreach (var row in tree.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible))
+            {
+                var at = row.TranslatePoint(default, tree)!.Value.Y;
+                var bottom = at + row.Bounds.Height;
+                Assert.True(!(at < height - 0.5 && bottom > height + 0.5) || (foot.IsVisible && height - foot.Height <= at + 0.5), $"The row at {at} is cut at {height}.");
+                Assert.True(!(at < head - 0.5 && bottom > head + 0.5) || (top.IsVisible && head + top.Height >= bottom - 0.5), $"The row at {at} is cut at {head}.");
+            }
+        }
+
+        Assert.True(pinned.IsVisible);
+        Assert.Equal(ReleaseNotes, ((Canvas.WorkflowCanvasViewModel)pinned.DataContext!).Name);
     }
 
     [AvaloniaFact]

@@ -39,14 +39,16 @@ public readonly record struct StateCounts(int Completed, int Running, int Waitin
     }
 }
 
-/// <summary>A thin line that shows how many of the nodes completed. The row beside it says what needs the person.</summary>
-public sealed class StateBar : Control
+/// <summary>A small ring beside a workflow's count that closes as its nodes complete.</summary>
+public sealed class ProgressRing : Control
 {
-    public static readonly StyledProperty<StateCounts> CountsProperty = AvaloniaProperty.Register<StateBar, StateCounts>(nameof(Counts));
+    public static readonly StyledProperty<StateCounts> CountsProperty = AvaloniaProperty.Register<ProgressRing, StateCounts>(nameof(Counts));
 
-    static StateBar() => AffectsRender<StateBar>(CountsProperty);
+    private const double Stroke = 2;
 
-    public StateBar() => ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+    static ProgressRing() => AffectsRender<ProgressRing>(CountsProperty);
+
+    public ProgressRing() => ActualThemeVariantChanged += (_, _) => InvalidateVisual();
 
     public StateCounts Counts
     {
@@ -62,9 +64,29 @@ public sealed class StateBar : Control
             return;
         }
 
-        var (width, height) = (Bounds.Width, Bounds.Height);
-        context.DrawRectangle(Brush("StateNeutral10Brush"), null, new Rect(0, 0, width, height));
-        context.DrawRectangle(Brush("StateNeutralStrokeBrush"), null, new Rect(0, 0, width * counts.Completed / counts.Total, height));
+        var center = new Point(Bounds.Width / 2, Bounds.Height / 2);
+        var radius = (Math.Min(Bounds.Width, Bounds.Height) - Stroke) / 2;
+        var line = new Pen(Brush("StateNeutralStrokeBrush"), Stroke);
+        var share = (double)counts.Completed / counts.Total;
+        context.DrawEllipse(null, new Pen(Brush("StateNeutral10Brush"), Stroke), center, radius, radius);
+        if (share >= 1)
+        {
+            context.DrawEllipse(null, line, center, radius, radius);
+        }
+        else if (share > 0)
+        {
+            var angle = share * 2 * Math.PI;
+            var end = center + new Vector(Math.Sin(angle), -Math.Cos(angle)) * radius;
+            var arc = new StreamGeometry();
+            using (var path = arc.Open())
+            {
+                path.BeginFigure(center - new Vector(0, radius), false);
+                path.ArcTo(end, new Size(radius, radius), 0, share > 0.5, SweepDirection.Clockwise);
+                path.EndFigure(false);
+            }
+
+            context.DrawGeometry(null, line, arc);
+        }
     }
 
     private IBrush? Brush(string key) => this.TryFindResource(key, ActualThemeVariant, out var found) ? found as IBrush : null;

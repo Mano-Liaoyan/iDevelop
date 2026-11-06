@@ -113,8 +113,8 @@ public sealed class ActivityViewModel : ObservableObject
             .Where(node => GroupOf(node) is not null)
             .OrderBy(node => GroupOf(node))
             .ToList();
-        // The project's name tells rows apart only while they come from more than one project.
-        var showsProject = nodes.Select(node => node.Canvas.Project).Distinct().Skip(1).Any();
+        // The project's name says whose a row is while more than one project is open.
+        var showsProject = projects.Count > 1;
         foreach (var gone in _rows.Keys.Except(nodes).ToList())
         {
             _rows.Remove(gone);
@@ -154,10 +154,22 @@ public sealed class ActivityViewModel : ObservableObject
         _ => null,
     };
 
+    /// <summary>The first <paramref name="limit"/> rows, whose last gives way to the first that failed, so the short list keeps a failure in view.</summary>
+    internal static List<T> Shortened<T>(IReadOnlyList<T> rows, int limit, Func<T, bool> failed) where T : class
+    {
+        var shown = rows.Take(limit).ToList();
+        if (shown.Count > 0 && !shown.Any(failed) && rows.FirstOrDefault(failed) is { } first)
+        {
+            shown[^1] = first;
+        }
+
+        return shown;
+    }
+
     // The rows that stay keep their controls, so a keyboard focus on one survives a change to another.
     private void ShowRows()
     {
-        var shown = IsShowingAll ? _ordered : _ordered.Take(Limit).ToList();
+        var shown = IsShowingAll ? _ordered : Shortened(_ordered, Limit, row => row.Node.State == NodeState.Failed);
         if (!Rows.SequenceEqual(shown))
         {
             foreach (var row in Rows.Except(shown).ToList())
@@ -199,7 +211,7 @@ public sealed class ActivityRow : ObservableObject
 
     public ICommand OpenCommand { get; }
 
-    /// <summary>"Question · Payment webhook hardening · Claude Code", with the project's name before the workflow's while the rows span projects.</summary>
+    /// <summary>"Question · Payment webhook hardening · Claude Code", with the project's name before the workflow's while several projects are open.</summary>
     public string Detail => string.Join(" · ", new[] { Reason, Place, Node.AgentClientName }.OfType<string>());
 
     /// <summary>Why the node is listed, in the state's own word.</summary>
@@ -215,7 +227,7 @@ public sealed class ActivityRow : ObservableObject
         }
     } = "";
 
-    /// <summary>The node's workflow, after its project's name while the rows span projects.</summary>
+    /// <summary>The node's workflow, after its project's name while several projects are open.</summary>
     public string Place
     {
         get;

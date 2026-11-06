@@ -82,6 +82,13 @@ public sealed class ProjectViewModel : ObservableObject
 
     public bool HasFailed => FailedCount > 0;
 
+    /// <summary>How many of its nodes run now, which a folded row sums too.</summary>
+    public int RunningCount => Workflows.Sum(canvas => canvas.RunningCount);
+
+    public bool HasRunningNodes => RunningCount > 0;
+
+    public string RunningLabel => RunningCount == 1 ? "1 node runs" : $"{RunningCount} nodes run";
+
     public string WaitingLabel => WaitingCount == 1 ? "1 node waits for you" : $"{WaitingCount} nodes wait for you";
 
     public string FailedLabel => FailedCount == 1 ? "1 node failed" : $"{FailedCount} nodes failed";
@@ -128,6 +135,9 @@ public sealed class ProjectViewModel : ObservableObject
                 OnPropertyChanged(nameof(HasFailed));
                 OnPropertyChanged(nameof(WaitingLabel));
                 OnPropertyChanged(nameof(FailedLabel));
+                OnPropertyChanged(nameof(RunningCount));
+                OnPropertyChanged(nameof(HasRunningNodes));
+                OnPropertyChanged(nameof(RunningLabel));
             }
         };
         Workflows.Add(canvas);

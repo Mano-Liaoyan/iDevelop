@@ -43,6 +43,14 @@ public sealed class ActivityTests : IDisposable
         Assert.Equal("Checking…", Execution.RunText.AgentsSummary([new ClientStatus.Checking(), missing]));
     }
 
+    [Fact]
+    public void The_short_list_keeps_a_failure_in_view_behind_what_waits()
+    {
+        Assert.Equal(["w1", "f1"], Sidebar.ActivityViewModel.Shortened(["w1", "w2", "w3", "f1", "f2"], 2, row => row[0] == 'f'));
+        Assert.Equal(["w1", "f1"], Sidebar.ActivityViewModel.Shortened(["w1", "f1", "f2"], 2, row => row[0] == 'f'));
+        Assert.Equal(["w1", "w2"], Sidebar.ActivityViewModel.Shortened(["w1", "w2", "w3"], 2, _ => false));
+    }
+
     private Shell OpenWaiting(int waiting)
     {
         var folder = _temp.Create("alpha");

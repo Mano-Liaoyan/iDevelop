@@ -387,17 +387,22 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
   </Style>
-  <!-- A node's row is flat, 28 px for one line. Hover and selection are its only fills, so state color stays the loudest
+  <!-- A node's row is flat, 24 px for one line, under the 28 px workflow above it. Hover and selection are its only fills, so state color stays the loudest
        thing in the list. -->
   <Style Selector="ListBox.tasks ListBoxItem">
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="6,5,8,5" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="6,4,8,4" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="12" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ListBox.tasks PathIcon.stateIcon.state-idle">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Data" Value="{StaticResource IconIdle}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
   </Style>
   <Style Selector="ListBox.tasks ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.tasks ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
@@ -419,9 +424,8 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- Find's list floats from under its box, wider than the panel, so a result keeps each line whole. -->
+  <!-- Find's list floats from under its box, as wide as the box. -->
   <Style Selector="Border.findPalette">
-    <Setter Property="Width" Value="440" />
     <Setter Property="MaxHeight" Value="420" />
     <Setter Property="Padding" Value="4" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
@@ -448,6 +452,11 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="LineHeight" Value="18" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <!-- A node's name reads one size under its workflow's, so the tree's levels show at a glance. -->
+  <Style Selector="TextBlock.rowName.nodeName">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
   </Style>
   <Style Selector="TextBlock.rowName.strong">
     <Setter Property="FontWeight" Value="Medium" />
@@ -555,8 +564,17 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="Button.stickyProject">
+  <Style Selector="Border.treeHead">
     <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+  </Style>
+  <Style Selector="Border.treeCover">
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+  </Style>
+  <Style Selector="Button.stickyRow">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -564,9 +582,11 @@
     <Setter Property="MinHeight" Value="28" />
     <Setter Property="Padding" Value="16,0" />
     <Setter Property="CornerRadius" Value="0" />
-    <Setter Property="BorderThickness" Value="0,0,0,1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.stickyRow.workflowHead">
+    <Setter Property="Padding" Value="50,0,16,0" />
   </Style>
   <!-- A section heading that folds its list. -->
   <Style Selector="ToggleButton.sectionFold">
