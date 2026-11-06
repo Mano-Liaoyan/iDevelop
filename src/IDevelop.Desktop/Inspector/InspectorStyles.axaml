@@ -481,6 +481,42 @@
   <Style Selector="ContentPresenter:nth-child(1) > Border.fieldGroup">
     <Setter Property="BorderThickness" Value="0" />
   </Style>
+  <!-- A blueprint field's fold row: two lines of 44 px, with the chevron in the disclosure's column. -->
+  <Style Selector="ToggleButton.fieldFold">
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="Padding" Value="2,4" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.fieldFold /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.fieldFold:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.fieldFold:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.fieldFold PathIcon.fieldChevron">
+    <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.fieldFold:checked PathIcon.fieldChevron">
+    <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+  </Style>
+  <Style Selector="TextBlock.fieldTitle">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.fieldSummary">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
   <!-- A chip grows to a second line rather than losing the end of a long name. -->
   <Style Selector="Border.chip">
     <Setter Property="MinHeight" Value="22" />

@@ -107,6 +107,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Window.ViewModel.Canvas!.Blueprints.Derive(BuiltInBlueprints.Implement);
         shell.Render();
 
+        OpenFields(shell);
         AssertUnder(shell, under, "BlueprintName", "BlueprintClient", "BlueprintConversation", "FieldKey", "FieldLabel");
         // A field's boxes and its Remove button keep to the panel's two edges.
         Assert.Equal("actions at 12, values at 64", Edges(shell));
@@ -372,6 +373,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Window.ViewModel.Canvas!.Blueprints.Derive(BuiltInBlueprints.Implement);
         shell.Render();
 
+        OpenFields(shell);
         var content = shell.Bounds(shell.Find<Control>("Inspector")).Left + Inset;
         var rows = shell.Find<Control>("BlueprintEditor").GetVisualDescendants().OfType<InspectorRow>()
             .Where(row => row is { IsEffectivelyVisible: true, Layout: RowLayout.Columns or RowLayout.Stacked }).ToArray();
@@ -707,7 +709,7 @@ public sealed class InspectorLayoutTests : IDisposable
         bool InRow(Control control) => control.FindAncestorOfType<InspectorRow>() is not null;
         string? Id(Control control) => AutomationProperties.GetAutomationId(control);
 
-        var actions = shown.Where(control => Id(control) is "InspectorMore" or "InspectorTools" || control.Name == "PART_Trail");
+        var actions = shown.Where(control => Id(control) is "InspectorMore" or "InspectorTools" or "RemoveField" || control.Name == "PART_Trail");
         var values = shown.Where(control =>
             control is ComboBox
             || control is TextBox && (Id(control) == "InspectorFilter" || InRow(control))
@@ -718,6 +720,16 @@ public sealed class InspectorLayoutTests : IDisposable
         string Insets(IEnumerable<Control> controls) =>
             string.Join(" and ", controls.Select(control => Math.Round(right - shell.Bounds(control).Right, 1)).Distinct().Order());
         return $"actions at {Insets(actions)}, values at {Insets(values)}";
+    }
+
+    private static void OpenFields(Shell shell)
+    {
+        foreach (var fold in Shell.ById<ToggleButton>(shell.Window, "FieldFold"))
+        {
+            fold.IsChecked = true;
+        }
+
+        shell.Render();
     }
 
     private static string? IconKey(Geometry? icon) =>

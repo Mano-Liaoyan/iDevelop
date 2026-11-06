@@ -19,11 +19,11 @@ public partial class InspectorView : UserControl
         InspectorState.SetCurrent(EditorHost, new InspectorState());
         // Every row of the panel, the blueprint editor's too, puts its value under its label below the default width.
         SizeChanged += (_, change) => InspectorGrid.SetIsNarrow(this, change.NewSize.Width < InspectorGrid.NarrowPanelWidth);
-        Editor.PropertyChanged += (_, change) =>
+        EditorHost.PropertyChanged += (_, change) =>
         {
             if (change.Property == ContentProperty)
             {
-                EditorHost.ScrollToHome();
+                EditorHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.ScrollToHome();
             }
         };
     }

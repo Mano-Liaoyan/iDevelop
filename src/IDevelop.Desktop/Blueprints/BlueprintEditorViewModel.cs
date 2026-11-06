@@ -323,7 +323,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     private void AddField()
     {
         var number = Enumerable.Range(1, Fields.Count + 1).First(n => Fields.All(field => field.Key != $"field{n}"));
-        Fields.Add(new FieldRowViewModel(this, new FieldSpec($"field{number}", $"Field {number}", FieldShape.Line, Required: false, ""), ""));
+        Fields.Add(new FieldRowViewModel(this, new FieldSpec($"field{number}", $"Field {number}", FieldShape.Line, Required: false, ""), "", isNew: true));
     }
 }
 
@@ -337,9 +337,10 @@ public sealed class FieldRowViewModel : ObservableObject
     private bool _required;
     private string _default;
 
-    internal FieldRowViewModel(BlueprintEditorViewModel editor, FieldSpec field, string defaultText)
+    internal FieldRowViewModel(BlueprintEditorViewModel editor, FieldSpec field, string defaultText, bool isNew = false)
     {
         _editor = editor;
+        IsOpen = isNew;
         _key = field.Key;
         _label = field.Label;
         _multiline = field.Shape == FieldShape.Text;
@@ -348,29 +349,68 @@ public sealed class FieldRowViewModel : ObservableObject
         RemoveCommand = new RelayCommand(() => editor.Remove(this));
     }
 
+    /// <summary>The field's fold shows its key and its other settings. A new field starts open, because it needs them.</summary>
+    public bool IsOpen
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(FoldLabel));
+            }
+        }
+    }
+
+    /// <summary>What the fold's row calls the field: its label, or its key until it has one.</summary>
+    public string Title => string.IsNullOrWhiteSpace(_label) ? string.IsNullOrWhiteSpace(_key) ? "New field" : _key : _label;
+
+    /// <summary>"Required · Several lines", or "Optional · One line".</summary>
+    public string Summary => $"{(_required ? "Required" : "Optional")} · {(_multiline ? "Several lines" : "One line")}";
+
+    public string FoldLabel => $"{(IsOpen ? "Hide" : "Show")} the settings of {Title}";
+
     /// <summary>The template variable that inserts the field's value.</summary>
     public string Key
     {
         get => _key;
-        set => Set(ref _key, value);
+        set
+        {
+            Set(ref _key, value);
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(FoldLabel));
+        }
     }
 
     public string Label
     {
         get => _label;
-        set => Set(ref _label, value);
+        set
+        {
+            Set(ref _label, value);
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(FoldLabel));
+        }
     }
 
     public bool Multiline
     {
         get => _multiline;
-        set => Set(ref _multiline, value);
+        set
+        {
+            Set(ref _multiline, value);
+            OnPropertyChanged(nameof(Summary));
+        }
     }
 
     public bool Required
     {
         get => _required;
-        set => Set(ref _required, value);
+        set
+        {
+            Set(ref _required, value);
+            OnPropertyChanged(nameof(Summary));
+        }
     }
 
     /// <summary>The value a placed node starts with.</summary>

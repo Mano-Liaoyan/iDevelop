@@ -44,15 +44,14 @@
   </UserControl.Resources>
   <Panel>
     <!-- The blueprint editor takes the panel while it is open. Its sections fold apart from the inspector's. -->
-    <ScrollViewer x:Name="EditorHost" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <ContentControl x:Name="Editor" Content="{Binding Blueprints.Editor}" Margin="12,12,12,16">
-        <ContentControl.DataTemplates>
-          <DataTemplate DataType="blueprints:BlueprintEditorViewModel">
-            <blueprints:BlueprintEditorView />
-          </DataTemplate>
-        </ContentControl.DataTemplates>
-      </ContentControl>
-    </ScrollViewer>
+    <ContentControl x:Name="EditorHost" Content="{Binding Blueprints.Editor}"
+                    IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <ContentControl.DataTemplates>
+        <DataTemplate DataType="blueprints:BlueprintEditorViewModel">
+          <blueprints:BlueprintEditorView />
+        </DataTemplate>
+      </ContentControl.DataTemplates>
+    </ContentControl>
 
     <!-- The header and the filter stay put while the sections scroll. The selection fills both, or the workflow
          when nothing is selected. -->
