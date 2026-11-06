@@ -57,10 +57,14 @@ public sealed class ConversationTests
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.Running);
         shell.Talk();
-        shell.WaitUntil(() => shell.InView<Button>("ConversationSendMenu").IsEffectivelyVisible, "the turn runs");
+        shell.WaitUntil(() => shell.InView<Button>("ConversationStop").IsEffectivelyVisible, "the turn runs");
+        Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyVisible);
 
         shell.InView<TextBox>("ConversationComposer").Text = "Stop and write hi.";
-        shell.ChooseMenu("ConversationSendMenu", "ConversationStopAndSend");
+        shell.Render();
+        Assert.False(shell.InView<Button>("ConversationStop").IsEffectivelyVisible);
+        Assert.True(shell.InView<Button>("ConversationSend").IsEffectivelyVisible);
+        shell.Click(shell.InView<Button>("ConversationStopAndSend"));
 
         var resumed = Path.Combine(f.Evidence, "resumed.txt");
         shell.WaitUntil(() => File.Exists(resumed) && shell.NodeModel("Say hi").State == NodeState.Completed, "the next turn ends");
@@ -116,7 +120,12 @@ public sealed class ConversationTests
         shell.WaitForState("Say hi", NodeState.Completed);
 
         shell.Talk();
-        shell.Click(shell.Find<Button>("ConversationTerminal"));
+        var more = shell.Find<Button>("ConversationMore");
+        shell.Click(more);
+        Assert.True(shell.Has<Control>("ClientLimitations"));
+        more.Flyout!.Hide();
+        shell.Render();
+        shell.NodeModel("Say hi").OpenInTerminalCommand.Execute(null);
 
         shell.WaitUntil(() => shell.Status.StartsWith("Copied the command", StringComparison.Ordinal), "the command is copied");
         Assert.EndsWith("agy --conversation s-1", shell.Status);

@@ -49,6 +49,17 @@ public static class NodeStates
         _ => "Idle",
     };
 
+    /// <summary>What a waiting node needs, in the one word that a zoomed out card has room for.</summary>
+    public static string Need(WaitReason why) => why switch
+    {
+        WaitReason.Reply => "Reply",
+        WaitReason.Approval => "Approval",
+        WaitReason.Conflict => "Conflict",
+        WaitReason.Interrupted => "Interrupted",
+        WaitReason.RoundLimit => "Round limit",
+        _ => "Question",
+    };
+
     /// <summary>
     /// The status of a running node whose client waits for <paramref name="background"/> work, such as "Waiting for a
     /// background subagent" (ADR 0030), and otherwise the state's own.

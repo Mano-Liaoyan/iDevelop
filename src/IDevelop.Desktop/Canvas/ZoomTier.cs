@@ -24,11 +24,21 @@ public static class ZoomTiers
     /// <summary>How much thicker a wire draws in the tier, so that it stays near its weight on screen.</summary>
     public static double WireScale(ZoomTier tier) => tier switch
     {
-        ZoomTier.Detail or ZoomTier.Compact => 1.2,
-        ZoomTier.Label => 1.5,
-        ZoomTier.Title => 2,
-        ZoomTier.Block => 2.5,
+        ZoomTier.Detail => 1.3,
+        ZoomTier.Compact => 1.5,
+        ZoomTier.Label => 2,
+        ZoomTier.Title => 3,
+        ZoomTier.Block => 3,
         _ => 1,
+    };
+
+    /// <summary>How far a collapsed card draws under its 64 px box in the tier. The styles set the same heights, and the wires go around them.</summary>
+    public static double CardReach(ZoomTier tier) => tier switch
+    {
+        ZoomTier.Detail => 30,
+        ZoomTier.Compact => 34,
+        ZoomTier.Label or ZoomTier.Title => 60,
+        _ => 0,
     };
 
     /// <summary>The style class that the canvas takes in the tier, or null for the full card.</summary>

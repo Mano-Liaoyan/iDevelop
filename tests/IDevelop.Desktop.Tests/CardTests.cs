@@ -327,7 +327,7 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         shell.WaitUntil(() => Wire("Build").StrokeThickness == 2.5, "the connection from Design stands out");
         Assert.Equal((2.5, 1.5), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
-        shell.WaitUntil(() => Opacities() == (1, 0.35), "the other connection recedes");
+        shell.WaitUntil(() => Opacities() == (1, 0.6), "the other connection recedes");
 
         shell.Click(shell.Editor.TranslatePoint(new Point(400, 500), shell.Window)!.Value);
         shell.WaitUntil(() => Wire("Build").StrokeThickness == 1.5, "nothing stands out without a selection");

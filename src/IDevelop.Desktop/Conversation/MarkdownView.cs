@@ -289,14 +289,16 @@ public sealed class MarkdownView : StackPanel
         header.Children.Add(new TextBlock { Classes = { "mdCodeLanguage" }, Text = string.IsNullOrWhiteSpace(language) ? "Code" : language.Trim() });
         Grid.SetColumn(copy, 1);
         header.Children.Add(copy);
-        var body = new ScrollViewer
+        var body = new SelectableTextBlock { Classes = { "mdMono", "mdCodeText" } };
+        if (CodeColors.Runs(source, language) is { } runs)
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            AllowAutoHide = false,
-            Classes = { "mdScroll" },
-            Content = new SelectableTextBlock { Classes = { "mdMono", "mdCodeText" }, Text = source },
-        };
+            body.Inlines = [.. runs];
+        }
+        else
+        {
+            body.Text = source;
+        }
+
         var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto") };
         Grid.SetRow(body, 1);
         layout.Children.Add(header);

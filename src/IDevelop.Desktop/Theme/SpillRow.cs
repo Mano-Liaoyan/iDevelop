@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.VisualTree;
 
 namespace IDevelop.Desktop.Theme;
 
@@ -45,6 +47,12 @@ public sealed class SpillRow : Panel
     /// </summary>
     public static readonly AttachedProperty<bool> BesideOnlyProperty = AvaloniaProperty.RegisterAttached<SpillRow, Control, bool>("BesideOnly");
 
+    /// <summary>
+    /// Marks a text that gets as wide as its words inside the row. A text measures again at the width of its last measure, so
+    /// one that was cut would stay cut at that width when a longer text arrives. This measures the row again too.
+    /// </summary>
+    public static readonly AttachedProperty<bool> FollowsTextProperty = AvaloniaProperty.RegisterAttached<SpillRow, TextBlock, bool>("FollowsText");
+
     private readonly List<Placement> _placements = [];
     private double _leadInset;
 
@@ -52,6 +60,18 @@ public sealed class SpillRow : Panel
     {
         AffectsMeasure<SpillRow>(MinLeadWidthProperty, SpacingProperty, LineSpacingProperty, ItemsAlignmentProperty, SpillIndentProperty);
         AffectsParentMeasure<SpillRow>(PinnedProperty, BesideOnlyProperty);
+        TextBlock.TextProperty.Changed.AddClassHandler<TextBlock>((text, _) =>
+        {
+            if (GetFollowsText(text))
+            {
+                foreach (var above in text.GetVisualAncestors().OfType<Layoutable>().TakeWhile(ancestor => ancestor is not SpillRow).Prepend(text))
+                {
+                    above.InvalidateMeasure();
+                }
+
+                text.FindAncestorOfType<SpillRow>()?.InvalidateMeasure();
+            }
+        });
     }
 
     public double MinLeadWidth
@@ -83,6 +103,10 @@ public sealed class SpillRow : Panel
         get => GetValue(SpillIndentProperty);
         set => SetValue(SpillIndentProperty, value);
     }
+
+    public static bool GetFollowsText(TextBlock text) => text.GetValue(FollowsTextProperty);
+
+    public static void SetFollowsText(TextBlock text, bool value) => text.SetValue(FollowsTextProperty, value);
 
     public static bool GetPinned(Control control) => control.GetValue(PinnedProperty);
 

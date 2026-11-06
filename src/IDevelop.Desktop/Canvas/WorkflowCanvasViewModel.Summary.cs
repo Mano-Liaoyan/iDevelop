@@ -20,8 +20,8 @@ public sealed partial class WorkflowCanvasViewModel
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
 
     /// <summary>
-    /// What a row says at its end: what runs, what waits, and what failed, each with its count. A stale node shows only while
-    /// none of them does. Without any of these the row shows its progress.
+    /// What a row says at its end: the state that most needs the person, with its count. The run bar holds every count. Without
+    /// any of these the row shows its progress.
     /// </summary>
     public IReadOnlyList<RowFact> RowFacts
     {
@@ -30,12 +30,12 @@ public sealed partial class WorkflowCanvasViewModel
             var counts = Counts;
             RowFact?[] facts =
             [
-                counts.Running > 0 ? new(NodeState.Running, counts.Running) : null,
-                counts.Waiting > 0 ? new(NodeState.InputRequired, counts.Waiting) : null,
                 counts.Failed > 0 ? new(NodeState.Failed, counts.Failed) : null,
+                counts.Waiting > 0 ? new(NodeState.InputRequired, counts.Waiting) : null,
+                counts.Running > 0 ? new(NodeState.Running, counts.Running) : null,
+                counts.Stale > 0 ? new(NodeState.Stale, counts.Stale) : null,
             ];
-            var shown = facts.OfType<RowFact>().ToList();
-            return shown.Count == 0 && counts.Stale > 0 ? [new(NodeState.Stale, counts.Stale)] : shown;
+            return [.. facts.OfType<RowFact>().Take(1)];
         }
     }
 

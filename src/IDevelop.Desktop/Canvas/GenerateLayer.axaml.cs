@@ -1,3 +1,4 @@
+using Avalonia.Interactivity;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
@@ -44,6 +45,14 @@ public partial class GenerateLayer : UserControl
         if (e.Property == NodifyEditor.ViewportSizeProperty)
         {
             ShowViewportSize();
+        }
+    }
+
+    private void OnAddNode(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && TopLevel.GetTopLevel(button) is { } window)
+        {
+            this.FindAncestorOfType<WorkflowCanvasView>()?.OpenAddInView(button.TranslatePoint(new Point(0, button.Bounds.Height + 4), window) ?? default);
         }
     }
 

@@ -82,12 +82,12 @@
               <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" />
               <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="10" RadiusY="10" StrokeThickness="1.5" StrokeDashArray="4,3"
                          theme:StyleClass.Kind="{Binding Kind}" />
-              <TextBlock Classes="ghostFar farTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+              <theme:EllipsisText Classes="ghostFar farTitle" Whole="{Binding Title}" />
               <Grid Classes="ghostFull" Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
                 <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Classes="cardText">
-                  <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                             AutomationProperties.AutomationId="GhostTitle" />
+                  <theme:EllipsisText Classes="cardTitle" Whole="{Binding Title}"
+                                      AutomationProperties.AutomationId="GhostTitle" />
                   <TextBlock Classes="cardAgent" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="GhostLabel" />
                   <TextBlock Classes="cardAgent" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
@@ -140,6 +140,8 @@
         </ControlTheme>
       </nodify:NodifyEditor.DecoratorContainerStyle>
     </nodify:NodifyEditor>
+
+    <Border Classes="runFrame" IsHitTestVisible="False" IsVisible="{Binding !!RunningCount}" AutomationProperties.AutomationId="CanvasRunFrame" />
 
     <!-- The keyboard's place: the canvas took the focus by a key, so its keys act here. -->
     <Border x:Name="CanvasFocus" Classes="canvasFocus" IsHitTestVisible="False" IsVisible="False"
@@ -194,7 +196,7 @@
                 AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
         </Button>
-        <Button Classes="icon zoom wideOnly" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
+        <Button Classes="icon zoom barRoomy" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
                 AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
         </Button>
@@ -202,23 +204,38 @@
                 AutomationProperties.AutomationId="ZoomValue" AutomationProperties.Name="Reset the zoom">
           <TextBlock Text="{Binding ZoomLabel}" AutomationProperties.AutomationId="ZoomLabel" />
         </Button>
-        <Button Classes="icon zoom wideOnly" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
+        <Button Classes="icon zoom barRoomy" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
                 AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
         </Button>
         <!-- Expand All and Collapse All, for this workflow's cards only (ADR 0024), since it changes only this machine's view.
              The tooltip's first line names it. -->
-        <Button Classes="icon zoom wideOnly" Command="{Binding ExpandCardsCommand}"
+        <Button Classes="icon zoom barRoomy" Command="{Binding ExpandCardsCommand}"
                 ToolTip.Tip="{Binding ExpandCardsLabel, StringFormat='{}{0}&#10;Show or hide the details of every card in this workflow'}"
                 AutomationProperties.AutomationId="ExpandAll"
                 AutomationProperties.Name="{Binding ExpandCardsLabel}">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconExpandAll}" />
         </Button>
-        <ToggleButton x:Name="MinimapToggle" Classes="zoom wideOnly"
+        <ToggleButton x:Name="MinimapToggle" Classes="zoom barRoomy"
                       ToolTip.Tip="Show the minimap"
                       AutomationProperties.AutomationId="ShowMinimap" AutomationProperties.Name="Show the minimap">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMinimap}" />
         </ToggleButton>
+        <!-- A narrow bar keeps its view controls here. The minimap needs more room than a narrow canvas has. -->
+        <Button Classes="icon zoom barTight" ToolTip.Tip="More view controls"
+                AutomationProperties.AutomationId="ZoomMore" AutomationProperties.Name="More view controls">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
+          <Button.Flyout>
+            <MenuFlyout Placement="TopEdgeAlignedLeft">
+              <MenuItem Header="Zoom out" Click="OnZoomOut" AutomationProperties.AutomationId="ZoomOutMenu" theme:MenuGlyph.Data="{StaticResource IconZoomOut}" />
+              <MenuItem Header="Zoom in" Click="OnZoomIn" AutomationProperties.AutomationId="ZoomInMenu" theme:MenuGlyph.Data="{StaticResource IconZoomIn}" />
+              <MenuItem Header="{Binding ExpandCardsLabel}" Command="{Binding ExpandCardsCommand}" AutomationProperties.AutomationId="ExpandAllMenu"
+                        theme:MenuGlyph.Data="{StaticResource IconExpandAll}" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+        <!-- The view's controls end here, and the run's begin. -->
+        <Border Classes="barRule" />
       </StackPanel>
 
       <!-- One bar for a run: how far it went, one labelled chip per group of nodes, Next, Follow, and Merge into my branch while
@@ -287,7 +304,8 @@
                         <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
                                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
                       </Panel>
-                      <TextBlock Classes="barText" Text="{Binding Label}" />
+                      <TextBlock Classes="barText chipLong" Text="{Binding Label}" />
+                      <TextBlock Classes="barText chipShort" Text="{Binding Short}" />
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>

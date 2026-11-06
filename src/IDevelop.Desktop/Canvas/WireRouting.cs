@@ -27,6 +27,9 @@ internal static class WireRouting
     // of its 126 px gap between rows, so lanes meet near the gaps' middles.
     private static readonly Thickness WideClearance = new(40, 56);
 
+    // A wire that goes straight past a card keeps this far from its top and bottom edges, or it reads as the card's own wire.
+    private static readonly Thickness PassClearance = new(0, 10);
+
     // How much longer a wide detour may run than a close one, so it never goes around a whole group of cards for clearance.
     private const double WideDetour = 100;
 
@@ -38,19 +41,21 @@ internal static class WireRouting
     /// <summary>
     /// The corners of a wire from the output port centered at <paramref name="source"/> to the input port centered at
     /// <paramref name="target"/>, from the end of the source stub to the start of the target stub. <paramref name="cards"/>
-    /// holds every card's bounds, the wire's own two included.
+    /// holds every card's bounds, the wire's own two included. <paramref name="reach"/> is how far those bounds run past a
+    /// card's 64 px box at this zoom, which the gaps between its rows lose.
     /// </summary>
-    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards)
+    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards, double reach = 0)
     {
         var start = new Point(source.X + Stub, source.Y);
         var end = new Point(target.X - Stub, target.Y);
         var step = Step(start, end);
-        if (!cards.Any(card => Crosses(step, card)))
+        if (!cards.Any(card => Crosses(step, card.Inflate(PassClearance))))
         {
             return step;
         }
 
-        var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance)), Detour(start, end, cards, WideClearance));
+        var wideRows = new Thickness(WideClearance.Left, Math.Max(Clearance, WideClearance.Top - reach / 2));
+        var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance)), Detour(start, end, cards, wideRows));
         return wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour) ? clear : close ?? step;
     }
 

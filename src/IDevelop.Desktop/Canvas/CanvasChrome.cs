@@ -12,8 +12,8 @@ internal static class CanvasChrome
     public const double Spacing = 12;
 
     /// <summary>
-    /// Below this canvas width the canvas is compact: Generate and the run bar's buttons show only their glyphs, Run Workflow says Run,
-    /// the breadcrumb shows only the workflow's name, and the minimap hides.
+    /// Below this canvas width the canvas is compact: Generate and the run bar's buttons show only their glyphs, Run Workflow says Run all,
+    /// and the breadcrumb shows only the workflow's name.
     /// </summary>
     public const double CompactWidth = 680;
 
@@ -28,7 +28,10 @@ internal static class CanvasChrome
     /// <summary>Below this canvas height, as with the conversation docked under it, the minimap hides.</summary>
     public const double MinimapMinHeight = 480;
 
-    /// <summary>Below this canvas width the run bar's words stand in for its chips, and its tooltip keeps the whole text.</summary>
+    /// <summary>
+    /// Below this canvas width the run bar's words stand in for its chips, its tooltip keeps the whole text, the view controls
+    /// move to the overflow menu, and the minimap hides.
+    /// </summary>
     public const double NarrowBarWidth = 520;
 
     /// <summary>Below this canvas width the run bar's progress shortens to "5/9", so its chips fit whole.</summary>
@@ -95,5 +98,5 @@ internal static class CanvasChrome
 
     public static bool IsCompact(Size canvas) => canvas.Width < CompactWidth;
 
-    public static bool ShowsMinimap(Size canvas) => !IsCompact(canvas) && canvas.Height >= MinimapMinHeight;
+    public static bool ShowsMinimap(Size canvas) => !IsNarrowBar(canvas) && canvas.Height >= MinimapMinHeight;
 }

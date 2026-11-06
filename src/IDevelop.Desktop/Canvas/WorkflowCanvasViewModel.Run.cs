@@ -97,31 +97,21 @@ public sealed partial class WorkflowCanvasViewModel
     public string BarIdle => (Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes") + (Counts.Completed > 0 ? $" · {Counts.Completed} complete" : "");
 
     /// <summary>
-    /// One chip for each group of nodes that the bar names, in the order of what needs the person first. Nodes that wait for
-    /// the person, for any reason, are one group, as in the inspector's overview, and its tooltip tells the reasons apart.
+    /// One chip for each group of nodes that the bar names, in the order of what needs the person first. Each reason to wait is
+    /// its own group with the glyph its cards show, so the bar says what the person will find.
     /// </summary>
     public IReadOnlyList<StateChip> BarChips
     {
         get
         {
-            var reasons = Nodes.Where(node => node.State == NodeState.InputRequired).Select(node => node.WaitReason).ToList();
-            var (approvals, stopped) = (reasons.Count(why => why == WaitReason.Approval), reasons.Count(why => why == WaitReason.Interrupted));
-            var answers = reasons.Count - approvals - stopped;
-            var tip = string.Join("\n", new[]
-            {
-                answers > 0 ? $"{answers} waiting for an answer" : null,
-                approvals > 0 ? $"{approvals} waiting for approval" : null,
-                stopped > 0 ? $"{stopped} interrupted" : null,
-            }.OfType<string>());
-            var why = approvals == reasons.Count ? WaitReason.Approval : stopped == reasons.Count ? WaitReason.Interrupted : WaitReason.Question;
             var counts = Counts;
-            return new StateChip?[]
-            {
-                StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed"),
-                StateChip.Of(NodeState.InputRequired, why, reasons.Count, "waiting", tip),
-                StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"),
-                StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, "stale"),
-            }.OfType<StateChip>().ToList();
+            var waiting = Nodes.Where(node => node.State == NodeState.InputRequired).GroupBy(node => node.WaitReason).OrderBy(group => group.Key)
+                .Select(group => StateChip.Of(NodeState.InputRequired, group.Key, group.Count(), NodeStates.Need(group.Key).ToLowerInvariant()));
+            return new[] { StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed") }
+                .Concat(waiting)
+                .Append(StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"))
+                .Append(StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, "stale"))
+                .OfType<StateChip>().ToList();
         }
     }
 

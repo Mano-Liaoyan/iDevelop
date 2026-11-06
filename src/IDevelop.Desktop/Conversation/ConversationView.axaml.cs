@@ -22,8 +22,8 @@ public partial class ConversationView : UserControl
     /// <summary>The columns a message spans: a person's message spans one, and other messages span both.</summary>
     public static readonly IValueConverter MessageColumnSpan = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 2);
 
-    /// <summary>The column of Copy: beside a person's message, and over the end of other messages.</summary>
-    public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 0 : 1);
+    /// <summary>The column of Copy: beside a person's message, and at the start under other messages.</summary>
+    public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(_ => 0);
 
     /// <summary>The attention card's row of its actions: under its text, or on its header's line.</summary>
     public static readonly IValueConverter ActionsRow = new FuncValueConverter<bool, int>(compact => compact ? 0 : 2);
@@ -375,6 +375,8 @@ public partial class ConversationView : UserControl
     }
 
     private void OnChangeModel(object? sender, RoutedEventArgs e) => ModelChip.Flyout?.ShowAt(ModelChip);
+
+    private void OnCloseMore(object? sender, RoutedEventArgs e) => ComposerMore.Flyout?.Hide();
 
     private void OnAgentChosen(object? sender, SelectionChangedEventArgs e) => AgentPicker.OnChosen(sender);
 

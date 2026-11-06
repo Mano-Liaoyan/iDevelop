@@ -146,7 +146,6 @@ public sealed class CardExpansionTests : IDisposable
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();
-        Assert.False(shell.Find<Button>("ExpandAll").IsEffectivelyVisible);
         Assert.True(canvas.IsEmptyAt(new CanvasPoint(20, 300)));
 
         shell.RightClick(Screen(shell, new Point(20, 300)));

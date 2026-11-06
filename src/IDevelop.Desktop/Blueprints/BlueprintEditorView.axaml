@@ -179,10 +179,8 @@
         </inspector:InspectorRow>
         <!-- What the agent would read, from the fields' defaults. -->
         <inspector:InspectorRow Label="Preview" IsShown="{Binding TemplatePreview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <ToggleButton x:Name="PreviewOpen" Classes="picker" ToolTip.Tip="Show what the agent would read"
-                        AutomationProperties.AutomationId="BlueprintPreviewOpen" AutomationProperties.Name="Show the preview">
-            <TextBlock Text="View preview" TextTrimming="CharacterEllipsis" />
-          </ToggleButton>
+          <CheckBox x:Name="PreviewOpen" IsChecked="True" Content="Show what the agent reads"
+                    AutomationProperties.AutomationId="BlueprintPreviewOpen" AutomationProperties.Name="Show the preview" />
         </inspector:InspectorRow>
         <inspector:InspectorRow Layout="Full" Label="Preview" IsShown="{Binding #PreviewOpen.IsChecked}">
           <Border Classes="templatePreview">

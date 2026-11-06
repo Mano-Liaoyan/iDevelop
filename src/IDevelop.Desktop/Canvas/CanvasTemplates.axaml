@@ -63,6 +63,11 @@
         <Border Classes="stateTint" Margin="10,0" VerticalAlignment="Top"
                 IsHitTestVisible="False"
                 theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
+        <!-- The zoomed out card's stripe runs its whole height, and its band holds its title. -->
+        <Border Classes="cardFar farBand cardBand kindTint" Margin="10,0" VerticalAlignment="Top" theme:StyleClass.Kind="{Binding Kind}" IsHitTestVisible="False" />
+        <Border Classes="cardEdgeClip" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" ClipToBounds="True" IsHitTestVisible="False">
+          <Border Classes="cardEdge kindTile" theme:StyleClass.Kind="{Binding Kind}" />
+        </Border>
         <StackPanel Margin="10,0">
           <Panel Classes="cardHead">
             <Grid Classes="cardFull" RowDefinitions="42,22,*">
@@ -121,7 +126,7 @@
                 <canvas:FittingText Classes="cardStatus" Choices="{Binding SubtitleChoices}" TextTrimming="CharacterEllipsis"
                                     IsVisible="{Binding !ShowsAgent}" theme:StyleClass.State="{Binding State}"
                                     AutomationProperties.AutomationId="CardStatus" />
-                <TextBlock Grid.Column="1" Classes="cardModel" Text="{Binding AgentModel}" TextTrimming="CharacterEllipsis"
+                <canvas:FittingText Grid.Column="1" Classes="cardModel" Choices="{Binding ModelLines}" TextTrimming="CharacterEllipsis"
                            IsVisible="{Binding ShowsCardModel}" ToolTip.Tip="{Binding AgentModel}"
                            AutomationProperties.AutomationId="CardModel" />
                 <!-- The disclosure: a 24 px target drawn in the 12 px column. -->
@@ -134,10 +139,7 @@
                 </ToggleButton>
               </Grid>
             </Grid>
-            <!-- The zoomed out card's stripe and title. -->
-            <Border Classes="cardEdgeClip" CornerRadius="{StaticResource RadiusLg}" ClipToBounds="True" IsHitTestVisible="False">
-              <Border Classes="cardEdge kindTile" theme:StyleClass.Kind="{Binding Kind}" />
-            </Border>
+            <!-- The zoomed out card's title. -->
             <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title}" KeepFrom="{Binding TitleKeep}" IsHitTestVisible="False"
                                 AutomationProperties.AccessibilityView="Raw" />
             <Border Classes="cardBlock stateBlock" CornerRadius="{StaticResource RadiusLg}" IsHitTestVisible="False"

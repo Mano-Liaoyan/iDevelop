@@ -9,7 +9,8 @@ namespace IDevelop.Desktop.Theme;
 /// Wrapped text that keeps to <see cref="TextBlock.MaxLines"/> and ends in an ellipsis when it loses text. Avalonia's own
 /// trimming adds no ellipsis to text that its line limit cuts at a word's end, and it cuts a long last line short, so
 /// this control finds the longest start of <see cref="Whole"/> that fits, ellipsis included. When <see cref="KeepFrom"/> marks
-/// the part of the text that tells it from a similar one, the cut falls before that part, so the part stays in view. It
+/// the part of the text that tells it from a similar one and that part fits after a start of the text, the cut falls before
+/// that part, so the part stays in view. The text always starts with its own first word and is cut in one place only. It
 /// styles as a <see cref="TextBlock"/>.
 /// </summary>
 public sealed class EllipsisText : TextBlock
@@ -78,13 +79,7 @@ public sealed class EllipsisText : TextBlock
 
         var kept = whole[KeepFrom..];
         var head = Longest(KeepFrom, length => Joined(whole, length, kept), width);
-        if (head > 0)
-        {
-            return Joined(whole, head, kept);
-        }
-
-        var tail = Ellipsis + kept;
-        return Fits(tail, width) ? tail : Cut(tail, Longest(tail.Length, length => Cut(tail, length), width));
+        return head > 0 ? Joined(whole, head, kept) : Cut(whole, end);
     }
 
     private static string Joined(string whole, int length, string kept) => whole[..length].TrimEnd() + Ellipsis + " " + kept;

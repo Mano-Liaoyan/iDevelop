@@ -127,17 +127,14 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.All(header.GetVisualDescendants().OfType<SpillRow>(), row => Assert.True(row is { IsMeasureValid: true, IsArrangeValid: true }));
         var lines = Lines(header.GetVisualDescendants().OfType<Control>()
             .Where(control => AutomationProperties.GetAutomationId(control) is "ConversationTitle" or "ConversationStatus"
-                or "ConversationLayout" or "CloseConversation" or "ClientLimitationsInfo")
+                or "ConversationLayout" or "CloseConversation")
             .Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 })
             .Select(shell.Bounds));
         Assert.True(lines <= 2, $"The docked header has {lines} lines.");
-        // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit behind a glyph.
+        // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit in the composer's menu.
         Assert.False(shell.Find<Control>("ConversationBreadcrumb").IsEffectivelyVisible);
         Assert.False(shell.Has<Control>("ClientLimitations"));
-        var info = shell.Find<Control>("ClientLimitationsInfo");
-        Assert.True(info.IsEffectivelyVisible);
-        var limitations = shell.Window.ViewModel.DockedConversation!.Limitations;
-        Assert.Equal((limitations, limitations), (AutomationProperties.GetName(info), ToolTip.GetTip(info)));
+        Assert.True(shell.Find<Control>("ConversationMore").IsEffectivelyVisible);
         var box = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer")).Deflate(1);
         foreach (var id in new[] { "ConversationComposer", "ConversationModel", "ConversationSend" })
         {
@@ -448,7 +445,7 @@ public sealed class CanvasChromeTests : IDisposable
             if (id == "RunWorkflow")
             {
                 // The workflow's primary action keeps its verb on a compact canvas.
-                Assert.Equal(compact ? "Run" : "Run Workflow", Assert.Single(labels));
+                Assert.Equal(compact ? "Run all" : "Run Workflow", Assert.Single(labels));
             }
             else if (tight)
             {

@@ -29,6 +29,8 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
     /// <summary>"Commit 1a2b3c4" for a node that edits the project, or null.</summary>
     public string? Commit => result.Commit is { Length: >= 7 } commit ? $"Commit {commit[..7]}" : null;
 
+    private const int ShortList = 3;
+
     /// <summary>The files the result's commit changed, once they are read.</summary>
     public ImmutableArray<FileChange> Changes
     {
@@ -41,6 +43,8 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
                 OnPropertyChanged(nameof(ChangeLabel));
                 OnPropertyChanged(nameof(Added));
                 OnPropertyChanged(nameof(Deleted));
+                // A short list costs little room and answers what changed at once.
+                IsChangesOpen = value.Length is > 0 and <= ShortList;
             }
         }
     } = [];

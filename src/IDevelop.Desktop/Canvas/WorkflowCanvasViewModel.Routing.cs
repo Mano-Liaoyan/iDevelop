@@ -30,7 +30,7 @@ public sealed partial class WorkflowCanvasViewModel
             return;
         }
 
-        Rect[] cards = [.. Nodes.Select(node => node.DisplayRect)];
+        Rect[] cards = [.. Nodes.Select(node => node.DrawnRect)];
         var routes = WireLanes.Spread([.. Connections.Select(connection => connection.Lane)], cards);
         var fans = WireCurve.Fans([.. Connections.Select(connection => connection.Ends)]);
         for (var wire = 0; wire < routes.Length; wire++)

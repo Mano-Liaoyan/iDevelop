@@ -93,13 +93,13 @@ public sealed class CanvasTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         // The line is 1.5 px wide and starts 1 px outside the card, so this pixel is on its straight top edge.
         Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -1));
-        Assert.NotEqual(Color.Parse("#0B0E10"), Ring());
+        Assert.NotEqual(Color.Parse("#0088FF"), Ring());
 
         shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Equal(Color.Parse("#0B0E10"), Ring());
+        Assert.Equal(Color.Parse("#0088FF"), Ring());
 
         shell.Click(shell.Find<RadioButton>("ThemeDark"));
-        Assert.Equal(Color.Parse("#F2F2EF"), Ring());
+        Assert.Equal(Color.Parse("#0091FF"), Ring());
     }
 
     [AvaloniaFact]

@@ -88,13 +88,13 @@
                 <DockPanel Margin="0,0,6,0">
                   <PathIcon DockPanel.Dock="Left" Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" Margin="8,0,6,0"
                             Foreground="{DynamicResource TextMutedBrush}" />
-                  <TextBlock DockPanel.Dock="Left" Classes="wideOnly" Text="{Binding ProjectName}" MaxWidth="120" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                  <TextBlock DockPanel.Dock="Left" Classes="wideOnly" Text="{Binding ProjectName}" theme:SpillRow.FollowsText="True" MaxWidth="120" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                              FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                              ToolTip.Tip="{Binding ProjectName}"
                              AutomationProperties.AutomationId="BreadcrumbProject" />
                   <PathIcon DockPanel.Dock="Left" Classes="wideOnly" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" Margin="6,0,6,0"
                             Foreground="{DynamicResource TextFaintBrush}" />
-                  <TextBlock Text="{Binding WorkflowName}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                  <TextBlock Text="{Binding WorkflowName}" theme:SpillRow.FollowsText="True" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                              FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                              ToolTip.Tip="{Binding WorkflowName}"
                              AutomationProperties.AutomationId="BreadcrumbWorkflow" />
@@ -194,7 +194,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
                           <TextBlock Classes="wideOnly" Text="Run Workflow" VerticalAlignment="Center" />
-                          <TextBlock Classes="compactOnly" Text="Run" VerticalAlignment="Center" />
+                          <TextBlock Classes="compactOnly" Text="Run all" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                     </StackPanel>
@@ -207,7 +207,7 @@
                  the zoom panel and the minimap at the window's minimum height, and the tooltip holds the whole message. -->
             <Border Classes="breadcrumb" canvas:CanvasTopBar.Slot="Below" HorizontalAlignment="Left" Padding="12,7" MaxWidth="420"
                     IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-              <TextBlock Classes="caption" Text="{Binding Status}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="10"
+              <theme:EllipsisText Classes="caption" Whole="{Binding Status}" TextWrapping="Wrap" MaxLines="10"
                          ToolTip.Tip="{Binding Status}"
                          AutomationProperties.AutomationId="Status"
                          AutomationProperties.Name="Status" />

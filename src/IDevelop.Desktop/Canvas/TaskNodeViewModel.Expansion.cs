@@ -82,6 +82,12 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The card's container where it shows.</summary>
     public Rect DisplayRect => new(DisplayLocation, _cardSize);
 
+    /// <summary>The card's size as it draws at this zoom. A collapsed card draws past its box in the zoomed out tiers.</summary>
+    internal Size DrawnSize => IsExpanded ? _cardSize : new(_cardSize.Width, _cardSize.Height + ZoomTiers.CardReach(_canvas.Tier));
+
+    /// <summary>The card as it draws, which the wires go around.</summary>
+    internal Rect DrawnRect => new(DisplayLocation, DrawnSize);
+
     /// <summary>The details while the card is expanded or its peek shows, else null.</summary>
     public CardDetailViewModel? Detail
     {

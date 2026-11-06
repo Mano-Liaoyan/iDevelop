@@ -53,4 +53,16 @@ public sealed class TitlePartsTests
 
         Assert.Equal("Review", text.Text);
     }
+
+    [AvaloniaFact]
+    public void A_kept_part_that_leaves_no_room_for_the_start_gives_way_to_a_cut_at_the_end()
+    {
+        var text = new EllipsisText { Whole = "Reconcile the adjustment postings by tenant", KeepFrom = "Reconcile ".Length, FontSize = 13, MaxLines = 2, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+
+        text.Measure(new Avalonia.Size(70, double.PositiveInfinity));
+
+        Assert.StartsWith("Recon", text.Text);
+        Assert.Single(text.Text!, letter => letter == '…');
+        Assert.EndsWith("…", text.Text);
+    }
 }

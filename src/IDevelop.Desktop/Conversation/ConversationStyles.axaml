@@ -93,9 +93,27 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
+  <!-- A long line wraps, so the block never cuts a character at its edge. -->
   <Style Selector="SelectableTextBlock.mdCodeText">
     <Setter Property="Margin" Value="12,0,12,12" />
-    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <!-- Quiet colors for what a reader looks for first. The body keeps the block's text color. -->
+  <Style Selector="Run.codeKeyword">
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+  <Style Selector="Run.codeString">
+    <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
+  </Style>
+  <Style Selector="Run.codeComment">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="FontStyle" Value="Italic" />
+  </Style>
+  <Style Selector="Button.composerMore">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
   </Style>
   <!-- A line longer than the block keeps a thin scroll bar in view, so the block says that the line goes on. A short block has none. -->
   <Style Selector="ScrollViewer.mdScroll /template/ ScrollBar">
@@ -166,8 +184,7 @@
     <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="MaxLines" Value="2" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="1" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.limitsText">
@@ -294,15 +311,18 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
   <!-- Copy shows on the row the pointer is over, and for the keyboard when it has focus. -->
+  <!-- Copy hangs under the message's first column, where the eye ends the message, in the gap before the next row. -->
   <Style Selector="Panel.row Button.copy">
     <Setter Property="Opacity" Value="0" />
-    <Setter Property="HorizontalAlignment" Value="Right" />
-    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Margin" Value="0,0,0,-22" />
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
   </Style>
   <Style Selector="Panel.row Button.copy.person">
+    <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
     <Setter Property="Margin" Value="0,0,4,0" />
     <Setter Property="Background" Value="Transparent" />
@@ -580,7 +600,7 @@
     <Setter Property="Margin" Value="12,8,12,10" />
   </Style>
   <Style Selector="Border.attentionHeader">
-    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="MinHeight" Value="32" />
   </Style>
   <Style Selector="StackPanel.attentionActions">
     <Setter Property="Margin" Value="12,4,12,12" />

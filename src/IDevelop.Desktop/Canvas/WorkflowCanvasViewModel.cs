@@ -167,6 +167,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
                 {
                     connection.OnStrokeChanged();
                 }
+
+                Reroute();
             }
         }
     }

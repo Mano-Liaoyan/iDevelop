@@ -47,8 +47,30 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The model and level without the maker's name, which the client's name says, so they fit a card's line.</summary>
     public string AgentBrief => AgentModel.StartsWith("Claude ", StringComparison.Ordinal) ? AgentModel["Claude ".Length..] : AgentModel;
 
-    /// <summary>The zoomed out card's last line: the model and level, or the model alone where they do not fit, since its badge says its state.</summary>
-    public IReadOnlyList<string> CardLines => Role == NodeRole.Proposing ? [Subtitle] : [AgentBrief, AgentBrief.Split(" · ")[0]];
+    /// <summary>
+    /// The card's model line, the fullest first: the model and level, without the maker's name, then the model, then the part of
+    /// its name that tells its version, so a short line reads "Gemini 4" and not a cut name. The peek and the inspector hold the rest.
+    /// </summary>
+    public IReadOnlyList<string> ModelLines
+    {
+        get
+        {
+            var model = AgentBrief.Split(" · ")[0];
+            var words = model.Split(' ');
+            var version = Array.FindIndex(words, word => word.Any(char.IsDigit));
+            return [.. new[] { AgentModel, AgentBrief, model, version < 0 ? model : string.Join(' ', words[..(version + 1)]) }.Distinct()];
+        }
+    }
+
+    /// <summary>
+    /// The zoomed out card's last line. It says what a node that needs the person needs or why it stopped, because its badge
+    /// alone does not. Every other node shows its model, or its type when it has no agent.
+    /// </summary>
+    public IReadOnlyList<string> CardLines => Role == NodeRole.Proposing ? [Subtitle]
+        : State == NodeState.InputRequired ? [NodeStates.Need(WaitReason)]
+        : State is NodeState.Failed or NodeState.Stale ? [StatusLabel]
+        : AgentModel.Length == 0 ? [TypeName]
+        : ModelLines.Skip(1).DefaultIfEmpty(AgentModel).ToArray();
 
     /// <summary>The idle line names the client only when it has no model to name, so every card's line reads the same.</summary>
     public bool ShowsCardClient => AgentModel.Length == 0;

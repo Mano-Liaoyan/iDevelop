@@ -6,7 +6,7 @@
              x:Class="IDevelop.Desktop.Canvas.GenerateLayer"
              x:DataType="canvas:WorkflowCanvasViewModel">
   <Panel>
-    <!-- Only the card's button takes input, so a right-click or a pan anywhere else on the card reaches the canvas.
+    <!-- Only the card's buttons take input, so a right-click or a pan anywhere else on the card reaches the canvas.
          UI Automation shows no plain border, so a user control carries the card's id. A user control clips to its
          bounds by default, which would cut off the card's shadow. The card keeps 24 px from the canvas's sides, so on the
          narrowest canvas it narrows and its text wraps. -->
@@ -33,8 +33,11 @@
                   AutomationProperties.Name="Generate Workflow…">
             <TextBlock Text="Generate Workflow…" />
           </Button>
-          <TextBlock Text="or right-click the canvas to add a node" HorizontalAlignment="Center" IsHitTestVisible="False"
-                     FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+          <Button Classes="ghost" HorizontalAlignment="Center" Height="28" Click="OnAddNode"
+                  ToolTip.Tip="Add one node by hand (N)"
+                  AutomationProperties.AutomationId="EmptyAddNode" AutomationProperties.Name="Add a node">
+            <TextBlock Text="Add a node" />
+          </Button>
         </StackPanel>
       </Panel>
     </UserControl>

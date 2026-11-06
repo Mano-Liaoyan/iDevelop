@@ -111,15 +111,16 @@ public sealed class ConnectionViewModel : ObservableObject
     /// <summary>Finds the wire's path again, as any card may have moved into it or out of it.</summary>
     internal void Reroute()
     {
-        // Every card stands where it shows and at the size it shows, so a wire goes around an expanded card (ADR 0024). The
+        // Every card stands where it shows and at the size it draws, so a wire goes around an expanded card (ADR 0024) and a
+        // zoomed out card's last line. The
         // wire's own two cards stand where their ports are, which Nodify keeps current while a card is dragged.
         Rect[] cards =
         [
-            .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => node.DisplayRect),
-            new(From.Output.Anchor - new Vector(From.CardSize.Width - WorkflowCanvasViewModel.InputPortCenter.X, WorkflowCanvasViewModel.InputPortCenter.Y), From.CardSize),
-            new(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter, To.CardSize),
+            .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => node.DrawnRect),
+            new(From.Output.Anchor - new Vector(From.CardSize.Width - WorkflowCanvasViewModel.InputPortCenter.X, WorkflowCanvasViewModel.InputPortCenter.Y), From.DrawnSize),
+            new(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter, To.DrawnSize),
         ];
-        var route = WireRouting.Route(From.Output.Anchor, To.Input.Anchor, cards);
+        var route = WireRouting.Route(From.Output.Anchor, To.Input.Anchor, cards, ZoomTiers.CardReach(_canvas.Tier));
         if (!route.SequenceEqual(_ownRoute))
         {
             _ownRoute = route;

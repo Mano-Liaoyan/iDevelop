@@ -142,7 +142,7 @@
 
       <Border Grid.Row="4" Padding="12,8,12,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
         <StackPanel Spacing="6">
-          <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+          <theme:EllipsisText Whole="{Binding Description}" FontSize="11" TextWrapping="Wrap" MaxLines="2"
                      MinHeight="28" Foreground="{DynamicResource TextMutedBrush}"
                      AutomationProperties.AutomationId="AddNodeDescription" />
           <StackPanel Orientation="Horizontal" Spacing="6" Background="Transparent"

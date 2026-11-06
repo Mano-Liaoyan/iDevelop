@@ -28,7 +28,7 @@ internal sealed partial class Shell
 
     public MainWindow Window { get; }
 
-    public string Status => Find<TextBlock>("Status").Text ?? "";
+    public string Status => Find<Theme.EllipsisText>("Status").Whole ?? "";
 
     public bool ShowsUnsavedChanges => Find<Avalonia.Controls.Shapes.Ellipse>("UnsavedChanges").IsVisible;
 

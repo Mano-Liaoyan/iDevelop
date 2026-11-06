@@ -160,8 +160,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public string CardTitle => Card switch
     {
-        AttentionCard.Question => Node.Questions is [var only] ? only.Header : "Question",
-        AttentionCard.Reply => HasOwnReason ? "Question" : "Waiting for your reply",
+        AttentionCard.Question => Node.Questions is [var only] ? only.Header : Node.Questions.Count == 0 ? "The agent asks. Answer below." : "Question",
+        AttentionCard.Reply => HasOwnReason ? "The agent asks. Answer below." : "The agent waits for your reply",
         AttentionCard.Approval => "Approval",
         AttentionCard.Conflict => "Conflict",
         AttentionCard.Interrupted => "Interrupted",
@@ -178,11 +178,29 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _ => Node.StateDetail,
     };
 
-    /// <summary>What a reply's Approve would hand on, or null. The composer under a question already says how to answer it.</summary>
-    public string? CardHint => Card == AttentionCard.Reply && !HasOwnReason ? ApproveHelp : null;
+    /// <summary>A reply's card says what its action does in the action's words and tooltip, so it holds no hint.</summary>
+    public string? CardHint => null;
 
     /// <summary>Approve's words: on a wait for a reply it ends the node with the agent's message, and never the draft, so it says so.</summary>
-    public string ApproveLabel => Card == AttentionCard.Reply ? "Accept as result" : "Approve";
+    public string ApproveLabel => Card == AttentionCard.Reply ? "Use this reply as the result" : "Approve";
+
+    /// <summary>The card's action ends the node on the agent's words, so it stays quiet beside the composer.</summary>
+    public bool IsReplyCard => Card == AttentionCard.Reply;
+
+    /// <summary>Approve is neither the card's main action nor a reply's quiet way out.</summary>
+    public bool IsPlainApprove => !IsApprovalCard && !IsReplyCard;
+
+    /// <summary>A person who writes a reply has chosen to go on, so a reply's way to end the node gives way to Send.</summary>
+    public bool ShowsCardApprove => Node.ShowsApprove && !(IsReplyCard && HasDraft);
+
+    /// <summary>Stop is the composer's one action while a turn runs and nothing is written.</summary>
+    public bool ShowsComposerStop => Node.ShowsStop && (!HasDraft || Node.IsAsking);
+
+    /// <summary>Send has something to send: a draft, the choices of a question, or anything at all once no turn runs.</summary>
+    public bool ShowsSend => HasDraft || !Node.ShowsStop || Node.IsAsking;
+
+    /// <summary>A draft during a turn offers the way to send it now.</summary>
+    public bool ShowsStopAndSend => Node.CanStopAndSend && HasDraft;
 
     /// <summary>What Approve hands on, and to which nodes.</summary>
     public string ApproveHelp => Card == AttentionCard.Reply
@@ -242,7 +260,13 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The first turn shows while the transcript reaches back to the start and the node has a task to show.</summary>
     public bool ShowsTask => !HasEarlier && Items.Count > 0 && TaskFields.Count > 0;
 
-    /// <summary>The task's fields that hold text, as the node's agent got them.</summary>
+    /// <summary>The earlier nodes that the agent read, by name, or null.</summary>
+    public string? TaskInputLine => HasInputs ? $"Input: {string.Join(", ", Node.Inputs.Select(link => link.Node.Title))}" : null;
+
+    /// <summary>The opened task names the earlier nodes it read.</summary>
+    public bool ShowsTaskInputLine => IsTaskOpen && HasInputs;
+
+    /// <summary>The node's own fields, which the agent received as its task.</summary>
     public IReadOnlyList<FieldViewModel> TaskFields => [.. Node.Fields.Where(entry => !string.IsNullOrWhiteSpace(entry.Text))];
 
     /// <summary>The task's first line, which shows while the first turn is folded.</summary>
@@ -252,7 +276,13 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     public bool IsTaskOpen
     {
         get;
-        set => SetProperty(ref field, value);
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowsTaskInputLine));
+            }
+        }
     }
 
     private bool HasOwnReason => Node.EngineState is EngineState.InputRequired { Why: not EngineState.Reply };
@@ -500,6 +530,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(Draft));
             OnPropertyChanged(nameof(HasDraft));
             OnPropertyChanged(nameof(SendHelp));
+            OnPropertyChanged(nameof(ShowsCardApprove));
+            OnPropertyChanged(nameof(ShowsComposerStop));
+            OnPropertyChanged(nameof(ShowsSend));
+            OnPropertyChanged(nameof(ShowsStopAndSend));
             if (State.Draft.Length == 0)
             {
                 FollowRequested?.Invoke();
@@ -537,7 +571,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     private static readonly string[] StateProperties =
     [
-        nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
+        nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(IsReplyCard), nameof(IsPlainApprove), nameof(ShowsCardApprove),
+        nameof(ShowsComposerStop), nameof(ShowsSend), nameof(ShowsStopAndSend), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
         nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
         nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody),
     ];

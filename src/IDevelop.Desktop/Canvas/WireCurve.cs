@@ -45,8 +45,9 @@ internal static class WireCurve
 
     private const int Samples = 16;
 
-    // A card's body inside its container's 10 px port gutters, less 1 px, so a wire may leave its own port.
-    private static readonly Thickness Gutter = new(11, 1);
+    // A card's body inside its container's 10 px port gutters, less 1 px, so a wire may leave its own port, and a little past
+    // its top and bottom, so a curve that passes a card keeps clear of it.
+    private static readonly Thickness Gutter = new(11, -8);
 
     /// <summary>A wire's two ends and how far each aims off its port's row.</summary>
     public readonly record struct Ends(object Source, object Target, double SourceRow, double TargetRow);
