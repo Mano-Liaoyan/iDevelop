@@ -8,8 +8,8 @@ public static class ZoomTiers
     private const double FullFrom = 0.84;
     private const double DetailFrom = 0.6;
     private const double CompactFrom = 0.5;
-    private const double LabelFrom = 0.385;
-    private const double TitleFrom = 0.2;
+    private const double LabelFrom = 0.36;
+    private const double TitleFrom = 0.23;
 
     /// <summary>A zoom that rises enters the larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
     private const double Gap = 0.02;

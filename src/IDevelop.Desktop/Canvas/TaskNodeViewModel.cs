@@ -18,12 +18,12 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     // each list in this order.
     private static readonly Dictionary<string, string[]> Dependents = new()
     {
-        [nameof(State)] = [nameof(ShowsCardModel), nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(ShowsNextRunNote)],
-        [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(IsUnderReview)],
-        [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine)],
-        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(ShowsAcceptAndFinish), nameof(Actions)],
+        [nameof(State)] = [nameof(ShowsCardModel), nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLines), nameof(ShowsNextRunNote)],
+        [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLines), nameof(IsUnderReview)],
+        [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLines)],
+        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLines), nameof(ShowsAcceptAndFinish), nameof(Actions)],
         [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
-        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentBrief), nameof(ShowsCardClient), nameof(CardLine), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
+        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentBrief), nameof(ShowsCardClient), nameof(CardLines), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
         [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
         [nameof(Preview)] = [nameof(TaskChanges), nameof(SystemPrompt), nameof(HasSystemPrompt)],
         [nameof(Title)] = [nameof(SystemPrompt)],

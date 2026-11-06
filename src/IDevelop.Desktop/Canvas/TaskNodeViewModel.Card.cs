@@ -47,8 +47,8 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The model and level without the maker's name, which the client's name says, so they fit a card's line.</summary>
     public string AgentBrief => AgentModel.StartsWith("Claude ", StringComparison.Ordinal) ? AgentModel["Claude ".Length..] : AgentModel;
 
-    /// <summary>The zoomed out card's last line: the model, or what the node waits for, which its badge does not say.</summary>
-    public string CardLine => ShowsCardModel && Role != NodeRole.Proposing ? AgentBrief : Subtitle;
+    /// <summary>The zoomed out card's last line: the model and level, or the model alone where they do not fit, since its badge says its state.</summary>
+    public IReadOnlyList<string> CardLines => Role == NodeRole.Proposing ? [Subtitle] : [AgentBrief, AgentBrief.Split(" · ")[0]];
 
     /// <summary>The idle line names the client only when it has no model to name, so every card's line reads the same.</summary>
     public bool ShowsCardClient => AgentModel.Length == 0;

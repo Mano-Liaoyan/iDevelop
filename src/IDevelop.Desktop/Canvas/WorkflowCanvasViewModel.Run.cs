@@ -134,8 +134,8 @@ public sealed partial class WorkflowCanvasViewModel
     public string? BarActivity => RunningCount == 0 ? null
         : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
 
-    /// <summary>The progress on a short bar: "5/9 done".</summary>
-    public string BarShort => $"{Counts.Completed}/{Counts.Total} done";
+    /// <summary>The progress on a short bar: "5/9".</summary>
+    public string BarShort => $"{Counts.Completed}/{Counts.Total}";
 
     /// <summary>The whole bar on a narrow canvas, without its chips: "5/9 · 3 waiting · 1 failed".</summary>
     public string BarBrief => string.Join(" · ", new[]

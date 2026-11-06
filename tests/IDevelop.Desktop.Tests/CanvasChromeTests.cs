@@ -60,7 +60,9 @@ public sealed class CanvasChromeTests : IDisposable
         Resize(shell, 1000, 600);
         var splitter = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 3);
 
-        shell.Drag(shell.Center(splitter), shell.Center(splitter) - new Vector(200, 0));
+        // The panel's tab sits on the splitter's centre.
+        var grip = shell.Center(splitter) + new Vector(0, 150);
+        shell.Drag(grip, grip - new Vector(200, 0));
 
         Assert.Equal((272, 390, 336), Widths(shell));
     }
@@ -145,7 +147,9 @@ public sealed class CanvasChromeTests : IDisposable
         // The canvas above keeps its two bands apart, and the editor between them holds its cards.
         AssertTopRow(shell, "the dock", "Breadcrumb", "GenerateWorkflow");
         AssertBottomRow(shell, "the dock");
-        Assert.All(Cards(shell), card => Assert.True(shell.Bounds(shell.Editor).Inflate(0.5).Contains(card), $"The card at {card} leaves the editor."));
+        var zoom = shell.Editor.ViewportZoom;
+        Assert.All(shell.Nodes().Select(node => shell.Bounds(node).WithWidth(node.Bounds.Width * zoom).WithHeight(node.Bounds.Height * zoom)),
+            card => Assert.True(shell.Bounds(shell.Editor).Inflate(0.5).Contains(card), $"The card at {card} leaves the editor."));
 
         // A taller window gives the canvas its 280 px before the dock grows to its default.
         Resize(shell, 900, 660);
@@ -193,7 +197,7 @@ public sealed class CanvasChromeTests : IDisposable
         Resize(shell, 1590, 1000);
         Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
         var inspector = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 3);
-        shell.Drag(shell.Center(inspector), shell.Center(inspector) - new Vector(40, 0));
+        shell.Drag(shell.Center(inspector) + new Vector(0, 150), shell.Center(inspector) + new Vector(-40, 150));
         Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
         shell.Drag(shell.Center(shell.Window.DockSplitter), shell.Center(shell.Window.DockSplitter) - new Vector(0, 30));
         Assert.True(shell.Window.MainArea.RowDefinitions[2].ActualHeight > 400, "The dock's splitter did not move.");
@@ -302,8 +306,9 @@ public sealed class CanvasChromeTests : IDisposable
         {
             var (source, target) = shell.Ends(wire);
             var (from, to) = (Shell.Rounded(shell.CanvasPointAt(source)), Shell.Rounded(shell.CanvasPointAt(target)));
-            Assert.Contains(ports, port => Shell.Rounded(port + WorkflowCanvasViewModel.OutputPortCenter) == from);
-            Assert.Contains(ports, port => Shell.Rounded(port + WorkflowCanvasViewModel.InputPortCenter) == to);
+            // An anchor sits on a whole screen pixel, which is 2 canvas units at this zoom.
+            Assert.Contains(ports, port => Point.Distance(port + WorkflowCanvasViewModel.OutputPortCenter, from) <= 2);
+            Assert.Contains(ports, port => Point.Distance(port + WorkflowCanvasViewModel.InputPortCenter, to) <= 2);
         }
     }
 

@@ -35,7 +35,7 @@ public sealed class RunBarTests
         Assert.Equal("0 of 1 complete", shell.Text("RunStatus"));
         Assert.Equal("1 failed", shell.Window.ViewModel.Canvas!.BarSummary);
         Assert.Equal("1 failed", Assert.Single(shell.Window.ViewModel.Canvas!.BarChips).Label);
-        Assert.Equal("0/1 done", shell.Window.ViewModel.Canvas!.BarShort);
+        Assert.Equal("0/1", shell.Window.ViewModel.Canvas!.BarShort);
         Assert.True(shell.Find<Button>("NextWaiting").IsEffectivelyVisible);
     }
 
@@ -141,4 +141,17 @@ public sealed class RunBarTests
         fields[^1].Key = "bug";
         Assert.Equal("bug", fields[^1].Title);
     }
+
+    [AvaloniaFact]
+    public void The_band_counts_the_nodes_with_no_run_and_next_names_what_it_selects()
+    {
+        using var temp = AppTempFolder.New();
+        var shell = Shell.Open(temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90), TaskAt(TestTasks.Build, "Build", 405, 90)));
+        var canvas = shell.Window.ViewModel.Canvas!;
+
+        Assert.Equal("2 nodes", canvas.BarIdle);
+        Assert.Equal("Next failed", canvas.NextLabel);
+        Assert.Equal("0/2", canvas.BarBrief);
+    }
+
 }

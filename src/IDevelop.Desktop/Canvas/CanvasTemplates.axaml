@@ -156,8 +156,8 @@
         <!-- The zoomed out card's last line, under its title, which leaves the state's badge its place at the end. -->
         <DockPanel Classes="cardFar farLine" VerticalAlignment="Top" IsHitTestVisible="False">
           <theme:KindTile Classes="farTile" DockPanel.Dock="Left" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" VerticalAlignment="Center" />
-          <TextBlock Classes="farAgent" Text="{Binding CardLine}" theme:StyleClass.State="{Binding State}"
-                     AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
+          <canvas:FittingText Classes="farAgent" Choices="{Binding CardLines}" TextTrimming="CharacterEllipsis" theme:StyleClass.State="{Binding State}"
+                              AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
         </DockPanel>
         <Panel Classes="stateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
           <Viewbox IsVisible="{Binding ShowsStateBadge}">

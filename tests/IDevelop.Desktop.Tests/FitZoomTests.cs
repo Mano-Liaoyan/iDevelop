@@ -50,6 +50,26 @@ public sealed class FitZoomTests
         Assert.Equal(room.TopLeft, (Point)((extent.TopLeft - location) * CanvasChrome.LeastFitZoom), new PointComparer());
     }
 
+    [Fact]
+    public void A_view_moves_into_the_gaps_so_it_cuts_no_card_and_keeps_the_found_one()
+    {
+        Rect[] column = [new(0, 0, 240, 90), new(0, 190, 240, 90), new(0, 380, 240, 90), new(0, 570, 240, 90)];
+
+        var location = CanvasChrome.ClearOfCards(new Point(-40, 150), new Size(320, 340), column, column[2]);
+
+        var view = new Rect(location, new Size(320, 340));
+        Assert.All(column, card => Assert.True(view.Contains(card) || !view.Intersects(card), $"{view} cuts {card}."));
+        Assert.True(view.Contains(column[2]));
+    }
+
+    [Fact]
+    public void A_view_with_no_clear_place_stays_where_it_is()
+    {
+        Rect[] wall = [new(0, 0, 2000, 90)];
+
+        Assert.Equal(new Point(100, -100), CanvasChrome.ClearOfCards(new Point(100, -100), new Size(320, 340), wall, new Rect(120, 0, 240, 90)));
+    }
+
     private sealed class PointComparer : IEqualityComparer<Point>
     {
         public bool Equals(Point x, Point y) => Point.Distance(x, y) < 0.001;

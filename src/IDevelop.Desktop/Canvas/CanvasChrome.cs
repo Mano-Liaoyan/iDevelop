@@ -31,7 +31,7 @@ internal static class CanvasChrome
     /// <summary>Below this canvas width the run bar's words stand in for its chips, and its tooltip keeps the whole text.</summary>
     public const double NarrowBarWidth = 520;
 
-    /// <summary>Below this canvas width the run bar's progress shortens to "5/9 done", so its chips fit whole.</summary>
+    /// <summary>Below this canvas width the run bar's progress shortens to "5/9", so its chips fit whole.</summary>
     public const double ShortBarWidth = 760;
 
     /// <summary>The zoom that fits <paramref name="extent"/> in <paramref name="room"/>, never above 100% and never under <see cref="LeastFitZoom"/>.</summary>
@@ -56,6 +56,29 @@ internal static class CanvasChrome
     /// <summary>The nearest viewport location that puts the canvas's origin on a whole screen pixel, so a view leaves a card's edges sharp.</summary>
     public static Point OnWholePixels(Point location, double zoom) =>
         new(Math.Round(location.X * zoom) / zoom, Math.Round(location.Y * zoom) / zoom);
+
+    /// <summary>
+    /// The viewport location near <paramref name="location"/> that cuts the fewest cards at the view's edges and keeps
+    /// <paramref name="keep"/> inside the view. A view zoomed in on one card lands in the gaps between the cards around it.
+    /// </summary>
+    public static Point ClearOfCards(Point location, Size view, IReadOnlyCollection<Rect> cards, Rect keep)
+    {
+        const double margin = 12;
+        static int Cut(double near, double far, IEnumerable<(double Near, double Far)> spans) =>
+            spans.Count(span => (span.Near < near && span.Far > near) || (span.Near < far && span.Far > far));
+        double Best(double from, double span, double keepNear, double keepFar, (double Near, double Far)[] spans)
+        {
+            var reach = span / 2;
+            var choices = spans.SelectMany(card => new[] { card.Near - margin, card.Far + margin, card.Near + margin - span, card.Far - margin - span + 2 * margin })
+                .Where(near => Math.Abs(near - from) <= reach && near <= keepNear - margin && near + span >= keepFar + margin)
+                .Prepend(from);
+            return choices.OrderBy(near => Cut(near, near + span, spans)).ThenBy(near => Math.Abs(near - from)).First();
+        }
+
+        return new Point(
+            Best(location.X, view.Width, keep.Left, keep.Right, [.. cards.Select(card => (card.Left, card.Right))]),
+            Best(location.Y, view.Height, keep.Top, keep.Bottom, [.. cards.Select(card => (card.Top, card.Bottom))]));
+    }
 
     public static bool IsShortBar(Size canvas) => canvas.Width < ShortBarWidth;
 

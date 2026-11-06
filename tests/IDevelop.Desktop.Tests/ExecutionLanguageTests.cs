@@ -57,10 +57,10 @@ public sealed class ExecutionLanguageTests
     [InlineData(0.59, ZoomTier.Compact)]
     [InlineData(0.5, ZoomTier.Compact)]
     [InlineData(0.49, ZoomTier.Label)]
-    [InlineData(0.385, ZoomTier.Label)]
-    [InlineData(0.38, ZoomTier.Title)]
-    [InlineData(0.2, ZoomTier.Title)]
-    [InlineData(0.19, ZoomTier.Block)]
+    [InlineData(0.36, ZoomTier.Label)]
+    [InlineData(0.35, ZoomTier.Title)]
+    [InlineData(0.23, ZoomTier.Title)]
+    [InlineData(0.22, ZoomTier.Block)]
     public void A_falling_zoom_leaves_a_tier_at_its_threshold_so_a_title_never_draws_under_10_px(double zoom, ZoomTier tier) =>
         Assert.Equal(tier, ZoomTiers.Next(ZoomTier.Full, zoom));
 
@@ -71,10 +71,10 @@ public sealed class ExecutionLanguageTests
     [InlineData(ZoomTier.Compact, 0.62, ZoomTier.Detail)]
     [InlineData(ZoomTier.Label, 0.51, ZoomTier.Label)]
     [InlineData(ZoomTier.Label, 0.52, ZoomTier.Compact)]
-    [InlineData(ZoomTier.Title, 0.4, ZoomTier.Title)]
-    [InlineData(ZoomTier.Title, 0.41, ZoomTier.Label)]
-    [InlineData(ZoomTier.Block, 0.21, ZoomTier.Block)]
-    [InlineData(ZoomTier.Block, 0.22, ZoomTier.Title)]
+    [InlineData(ZoomTier.Title, 0.37, ZoomTier.Title)]
+    [InlineData(ZoomTier.Title, 0.39, ZoomTier.Label)]
+    [InlineData(ZoomTier.Block, 0.24, ZoomTier.Block)]
+    [InlineData(ZoomTier.Block, 0.26, ZoomTier.Title)]
     public void A_rising_zoom_enters_the_larger_tier_past_a_gap_so_a_zoom_near_a_threshold_does_not_flicker(ZoomTier current, double zoom, ZoomTier tier) =>
         Assert.Equal(tier, ZoomTiers.Next(current, zoom));
 

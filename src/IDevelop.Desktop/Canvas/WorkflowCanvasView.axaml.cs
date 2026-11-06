@@ -24,6 +24,9 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>The zoom at which a found card's title and neighbours read: a card shows its tile and two lines.</summary>
     private const double FoundZoom = 0.6;
 
+    /// <summary>How far a zoomed out card's last line reaches under its box at <see cref="FoundZoom"/>.</summary>
+    private const double FarLineHeight = 26;
+
     private WorkflowCanvasViewModel? _viewModel;
     private Point? _windowAnchor;
     private bool _showingAdd;
@@ -176,7 +179,13 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
 
         Editor.ViewportZoom = FoundZoom;
-        Editor.ViewportLocation = CanvasChrome.ViewOn(Extent(), Room(), FoundZoom, node.DisplayRect.Center);
+        // A card shows its last line under its 64 px box at this zoom.
+        var card = node.DisplayRect;
+        var cards = Cards().Select(rect => new Rect(rect.Position, rect.Size + new Size(0, FarLineHeight))).ToArray();
+        var view = Editor.Bounds.Size / FoundZoom;
+        Editor.ViewportLocation = CanvasChrome.OnWholePixels(
+            CanvasChrome.ClearOfCards(CanvasChrome.ViewOn(Extent(), Room(), FoundZoom, card.Center), view, cards, new Rect(card.Position, card.Size + new Size(0, FarLineHeight))),
+            FoundZoom);
     }
 
     // The part of the editor where a view keeps its cards. A small docked canvas has no room for the margin.
