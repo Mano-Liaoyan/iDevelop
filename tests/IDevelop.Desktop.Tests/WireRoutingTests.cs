@@ -128,4 +128,15 @@ public sealed class WireRoutingTests : IDisposable
             (canvas.Y - editor.ViewportLocation.Y) * editor.ViewportZoom);
         return editor.TranslatePoint(local, shell.Window) ?? throw new InvalidOperationException("The editor is not in the window.");
     }
+
+    [Fact]
+    public void A_wire_that_would_skim_a_card_goes_around_it()
+    {
+        Rect[] cards = [new(300, 0, 260, 64)];
+
+        var route = WireRouting.Route(new Point(0, 70), new Point(800, 70), cards);
+
+        Assert.DoesNotContain(route, point => point.Y > -10 && point.Y < 74 && point.X > 300 && point.X < 560);
+        Assert.True(route.Length > 2, "The wire keeps to the straight line past the card's bottom edge.");
+    }
 }

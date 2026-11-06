@@ -175,7 +175,7 @@
     <Setter Property="LineHeight" Value="31" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="22,0,16,0" />
+    <Setter Property="Margin" Value="20,0,12,0" />
     <Setter Property="FontSize" Value="44" />
     <Setter Property="LineHeight" Value="52" />
   </Style>
@@ -639,10 +639,10 @@
   <Style Selector="Button.barTight, TextBlock.chipShort">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).narrowBar Button.barTight, .compact TextBlock.chipShort">
+  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightChips TextBlock.chipShort">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, .compact TextBlock.chipLong">
+  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightChips TextBlock.chipLong, :is(Control).tightChips TextBlock.nextLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Border.barRule">

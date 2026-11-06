@@ -329,6 +329,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             ShowAdd();
         }
+        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.BarChips))
+        {
+            BottomBar.RefitChips();
+        }
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Tier))
         {
             ShowTier();

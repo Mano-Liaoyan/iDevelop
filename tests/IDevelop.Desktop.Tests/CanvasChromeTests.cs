@@ -90,6 +90,22 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_run_bar_that_lacks_room_for_its_words_shows_its_counts_and_cuts_no_word()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Run(shell);
+        FanOut.Generate(shell);
+        var bar = shell.Find<Control>("WorkflowRunBar");
+
+        foreach (var (width, height, inspector) in Sizes)
+        {
+            Resize(shell, width, height, inspector);
+            Assert.True(bar.DesiredSize.Width <= bar.GetVisualParent<Control>()!.Bounds.Width + 0.5, $"The bar at {width}x{height} wants {bar.DesiredSize.Width} px.");
+        }
+    }
+
+    [AvaloniaFact]
     public void A_running_workflow_keeps_its_run_bar_in_the_bottom_band_beside_the_zoom_controls_at_every_size()
     {
         using var f = FanOut.Fixture();

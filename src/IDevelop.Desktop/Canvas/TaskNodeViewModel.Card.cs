@@ -51,16 +51,7 @@ public sealed partial class TaskNodeViewModel
     /// The card's model line, the fullest first: the model and level, without the maker's name, then the model, then the part of
     /// its name that tells its version, so a short line reads "Gemini 4" and not a cut name. The peek and the inspector hold the rest.
     /// </summary>
-    public IReadOnlyList<string> ModelLines
-    {
-        get
-        {
-            var model = AgentBrief.Split(" · ")[0];
-            var words = model.Split(' ');
-            var version = Array.FindIndex(words, word => word.Any(char.IsDigit));
-            return [.. new[] { AgentModel, AgentBrief, model, version < 0 ? model : string.Join(' ', words[..(version + 1)]) }.Distinct()];
-        }
-    }
+    public IReadOnlyList<string> ModelLines => CardText.ModelLines(AgentModel, AgentBrief);
 
     /// <summary>
     /// The zoomed out card's last line. It says what a node that needs the person needs or why it stopped, because its badge
