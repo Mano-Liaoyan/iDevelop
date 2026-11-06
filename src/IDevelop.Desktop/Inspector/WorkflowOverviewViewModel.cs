@@ -59,7 +59,7 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
         var counts = _canvas.Counts;
         (NodeState State, string Label, int Count)[] all =
         [
-            (NodeState.InputRequired, "Input required", counts.Waiting), (NodeState.Failed, "Failed", counts.Failed), (NodeState.Running, "Running", counts.Running),
+            (NodeState.InputRequired, "Waiting", counts.Waiting), (NodeState.Failed, "Failed", counts.Failed), (NodeState.Running, "Running", counts.Running),
             (NodeState.Stale, "Stale", counts.Stale), (NodeState.Completed, "Completed", counts.Completed),
             (NodeState.Idle, "Idle", counts.Total - counts.Waiting - counts.Failed - counts.Running - counts.Stale - counts.Completed),
         ];

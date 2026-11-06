@@ -96,8 +96,8 @@ public sealed class ConnectionTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData("ThemeLight", "#90969C")]
-    [InlineData("ThemeDark", "#64635D")]
+    [InlineData("ThemeLight", "#5A6168")]
+    [InlineData("ThemeDark", "#999893")]
     public void A_connection_at_rest_is_quiet_whatever_its_nodes_kinds_and_a_context_connection_is_dashed(string theme, string stroke)
     {
         // Review sits below Build, so the connection from Design to Review leaves the row before it reaches Build's input.

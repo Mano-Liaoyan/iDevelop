@@ -160,7 +160,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             // Nodify's animated pan moves the editor alone, so the view model, which places new tasks, would keep
             // the old location.
-            Editor.ViewportLocation = card.Center - (Vector)room.Center / zoom;
+            Editor.ViewportLocation = CanvasChrome.OnWholePixels(card.Center - (Vector)room.Center / zoom, zoom);
         }
     }
 

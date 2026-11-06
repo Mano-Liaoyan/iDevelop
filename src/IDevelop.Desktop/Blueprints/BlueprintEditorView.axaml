@@ -36,6 +36,7 @@
         </StackPanel>
       </StackPanel>
     </Border>
+    <Panel>
     <ScrollViewer>
   <StackPanel Margin="8,8,8,16" AutomationProperties.AutomationId="BlueprintEditor">
     <inspector:InspectorSection Key="BlueprintAbout" Title="Blueprint">
@@ -59,7 +60,7 @@
                    AutomationProperties.AutomationId="BlueprintName"
                    AutomationProperties.Name="Name" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Label="Description" Layout="Stacked">
+        <inspector:InspectorRow Label="Description">
           <TextBox Classes="multiline" Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
                    AutomationProperties.AutomationId="BlueprintDescription"
                    AutomationProperties.Name="Description" />
@@ -145,8 +146,29 @@
     <inspector:InspectorSection Key="BlueprintTemplate" Title="{Binding TemplateHeading, Converter={x:Static inspector:InspectorConverters.TitleCase}}"
                                 IsShown="{Binding HasTemplate}">
       <StackPanel>
+        <!-- Each chip puts one value at the caret, so a person need not know the delimiters. -->
         <inspector:InspectorRow Layout="Full">
-          <TextBox Classes="multiline code" Text="{Binding Template}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="120"
+          <StackPanel Spacing="4">
+            <ItemsControl ItemsSource="{Binding TemplateTokens}" AutomationProperties.AutomationId="TemplateTokens">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel ItemSpacing="4" LineSpacing="4" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="blueprints:TemplateToken">
+                  <Button Classes="action tokenChip" Content="{Binding Label}" Click="OnInsertToken"
+                          ToolTip.Tip="{Binding Insert, StringFormat='Insert {0}'}"
+                          AutomationProperties.AutomationId="TemplateToken"
+                          AutomationProperties.Name="{Binding Label, StringFormat='Insert {0}'}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="note" Text="{Binding TemplateHint}" AutomationProperties.AutomationId="TemplateHint" />
+          </StackPanel>
+        </inspector:InspectorRow>
+        <inspector:InspectorRow Layout="Full">
+          <TextBox x:Name="TemplateBox" Classes="multiline code" Text="{Binding Template}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="120"
                    AutomationProperties.AutomationId="BlueprintTemplate"
                    AutomationProperties.Name="Template" />
         </inspector:InspectorRow>
@@ -156,7 +178,13 @@
                    AutomationProperties.Name="Fix template" />
         </inspector:InspectorRow>
         <!-- What the agent would read, from the fields' defaults. -->
-        <inspector:InspectorRow Label="Preview" Layout="Stacked" IsShown="{Binding TemplatePreview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <inspector:InspectorRow Label="Preview" IsShown="{Binding TemplatePreview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <ToggleButton x:Name="PreviewOpen" Classes="picker" ToolTip.Tip="Show what the agent would read"
+                        AutomationProperties.AutomationId="BlueprintPreviewOpen" AutomationProperties.Name="Show the preview">
+            <TextBlock Text="View preview" TextTrimming="CharacterEllipsis" />
+          </ToggleButton>
+        </inspector:InspectorRow>
+        <inspector:InspectorRow Layout="Full" Label="Preview" IsShown="{Binding #PreviewOpen.IsChecked}">
           <Border Classes="templatePreview">
             <conversation:MarkdownView Classes="promptView" Markdown="{Binding TemplatePreview}"
                                        AutomationProperties.AutomationId="BlueprintPreview" />
@@ -200,5 +228,7 @@
 
   </StackPanel>
     </ScrollViewer>
+    <Border Classes="scrollFade" />
+    </Panel>
   </DockPanel>
 </UserControl>

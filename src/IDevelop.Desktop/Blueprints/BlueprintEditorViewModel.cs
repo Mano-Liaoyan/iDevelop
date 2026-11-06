@@ -63,7 +63,11 @@ public sealed class BlueprintEditorViewModel : ObservableObject
             Fields.Add(new FieldRowViewModel(this, field, values?.GetValueOrDefault(field.Key) ?? field.Default));
         }
 
-        Fields.CollectionChanged += (_, _) => Validate();
+        Fields.CollectionChanged += (_, _) =>
+        {
+            Validate();
+            OnPropertyChanged(nameof(TemplateTokens));
+        };
         _save = new RelayCommand(Save, () => Problem is null);
         AddFieldCommand = new RelayCommand(AddField);
         CancelCommand = new RelayCommand(owner.Close);
@@ -168,6 +172,13 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         }
     }
 
+    /// <summary>What a template can insert: the node's title and each field.</summary>
+    public IReadOnlyList<TemplateToken> TemplateTokens =>
+        [new TemplateToken("Title", "{{title}}"), .. Fields.Select(row => new TemplateToken(row.Label, $"{{{{{row.Key}}}}}"))];
+
+    /// <summary>The template's syntax in one sentence, beside the box.</summary>
+    public string TemplateHint => "Double braces insert a value. {{#key}} ... {{/key}} keeps text only when that value is set.";
+
     public string TemplateHelp =>
         "{{title}} inserts the node's title, {{inputs}} what earlier nodes handed on, and {{key}} a field's value. " +
         (IsReview ? "{{ticket}}, {{report}}, and {{change}} insert the reviewed task's ticket, its report, and its change, and {{findings}} the findings that stand. " : "") +
@@ -239,6 +250,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     internal void Validate()
     {
         OnPropertyChanged(nameof(TemplatePreview));
+        OnPropertyChanged(nameof(TemplateTokens));
         Problem = Build(out var problem) is null ? problem : null;
         _save.NotifyCanExecuteChanged();
     }
@@ -452,3 +464,6 @@ public sealed class FieldRowViewModel : ObservableObject
         }
     }
 }
+
+/// <summary>One value a template can insert: its name and the text that inserts it.</summary>
+public sealed record TemplateToken(string Label, string Insert);

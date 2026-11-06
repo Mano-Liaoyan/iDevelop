@@ -50,8 +50,12 @@ internal static class CanvasChrome
         double Middle(double near, double far, double span, double on) =>
             far - near <= span ? (near + far) / 2 : Math.Clamp(on, near + span / 2, far - span / 2);
         var center = new Point(Middle(extent.Left, extent.Right, seen.Width, focus.X), Middle(extent.Top, extent.Bottom, seen.Height, focus.Y));
-        return center - (Vector)room.Center / zoom;
+        return OnWholePixels(center - (Vector)room.Center / zoom, zoom);
     }
+
+    /// <summary>The nearest viewport location that puts the canvas's origin on a whole screen pixel, so a view leaves a card's edges sharp.</summary>
+    public static Point OnWholePixels(Point location, double zoom) =>
+        new(Math.Round(location.X * zoom) / zoom, Math.Round(location.Y * zoom) / zoom);
 
     public static bool IsShortBar(Size canvas) => canvas.Width < ShortBarWidth;
 

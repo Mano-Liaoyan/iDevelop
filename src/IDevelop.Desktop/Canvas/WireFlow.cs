@@ -54,7 +54,6 @@ public static class WireFlows
     public static double Stroke(WireFlow flow) => flow switch
     {
         WireFlow.Feeding => 4,
-        WireFlow.Delivered => 2,
         _ => 1.5,
     };
 

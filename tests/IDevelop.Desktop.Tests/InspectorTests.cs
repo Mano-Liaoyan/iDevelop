@@ -82,8 +82,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal("", shell.Find<TextBox>("InspectorFilter").Text);
         Assert.True(shell.Shows("Agent"));
-        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode"], shell.ShownRows().Take(5));
-        Assert.Contains("Instructions", shell.ShownRows());
+        Assert.Equal(["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Mode"], shell.ShownRows().Take(7));
     }
 
     [AvaloniaFact]

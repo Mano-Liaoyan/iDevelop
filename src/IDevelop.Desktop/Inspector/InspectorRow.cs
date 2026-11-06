@@ -66,6 +66,8 @@ public sealed class InspectorRow : InspectorPart
 
     public static readonly StyledProperty<string?> RevertIdProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(RevertId));
 
+    public static readonly StyledProperty<bool> IsEditedProperty = AvaloniaProperty.Register<InspectorRow, bool>(nameof(IsEdited));
+
     private InspectorSection? _section;
     private Panel? _labelLine;
 
@@ -145,6 +147,13 @@ public sealed class InspectorRow : InspectorPart
         set => SetValue(CanRevertProperty, value);
     }
 
+    /// <summary>The value differs from the saved workflow's, so the row marks it even with no default to go back to.</summary>
+    public bool IsEdited
+    {
+        get => GetValue(IsEditedProperty);
+        set => SetValue(IsEditedProperty, value);
+    }
+
     /// <summary>The revert arrow's automation id, such as RevertInstructions.</summary>
     public string? RevertId
     {
@@ -189,9 +198,9 @@ public sealed class InspectorRow : InspectorPart
         {
             ShowNote();
         }
-        else if (change.Property == CanRevertProperty)
+        else if (change.Property == CanRevertProperty || change.Property == IsEditedProperty)
         {
-            PseudoClasses.Set(":changed", CanRevert);
+            PseudoClasses.Set(":changed", CanRevert || IsEdited);
         }
         else if (change.Property == LabelProperty)
         {

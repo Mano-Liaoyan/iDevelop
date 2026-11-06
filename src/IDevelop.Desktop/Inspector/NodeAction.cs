@@ -25,7 +25,7 @@ internal static class NodeActions
         // The open conversation holds what the state needs next, and the row must not offer it twice.
         if (node is { IsConversationShown: true, Proposal: null, State: NodeState.Running or NodeState.InputRequired or NodeState.Failed or NodeState.Stale })
         {
-            return Row(Conversation(node, "Conversation"));
+            return Row(Conversation(node, "Conversation"), node.State is NodeState.Failed or NodeState.Stale ? Retry(node, primary: false) : null);
         }
 
         if (node.ShowsSendBack)

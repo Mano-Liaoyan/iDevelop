@@ -36,9 +36,18 @@
   <Style Selector="Panel.taskCard.expanded">
     <Setter Property="Width" Value="340" />
   </Style>
+  <Style Selector="Panel.cardHead">
+    <Setter Property="Height" Value="64" />
+  </Style>
   <Style Selector="Panel.taskCard Border.stateTint">
+    <Setter Property="Height" Value="64" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
     <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <!-- The tint fills the taller zoomed out card too. -->
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.stateTint">
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
   </Style>
   <Style Selector="Border.cardBand">
     <Setter Property="CornerRadius" Value="10,10,0,0" />
@@ -94,19 +103,16 @@
 
   <!-- A zoomed out card. A collapsed card gives up its zones and an expanded card stays in the Full tier, so that it can be used.
        Each tier sets its stripe, title, badge, and edge in canvas units, so they stay near one size on screen. -->
-  <Style Selector=":is(Control).cardFar, Border.cardEdgeClip, Grid.cardDetail, Border.cardBlock, Panel.stateBadge">
+  <Style Selector=":is(Control).cardFar, Border.cardEdgeClip, Border.cardBlock, Panel.stateBadge">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-compact Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-label Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-title Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-block Panel.taskCard:not(.expanded) Grid.cardFull">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Grid.cardDetail">
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-compact Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-label Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-title Panel.taskCard:not(.expanded) :is(Control).cardFar">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-label Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-title Panel.taskCard:not(.expanded) :is(Control).cardFar">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardEdgeClip">
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardEdgeClip">
     <Setter Property="IsVisible" Value="True" />
   </Style>
   <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-compact Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-label Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-title Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-block Panel.taskCard:not(.expanded) Panel.stateBadge">
@@ -125,65 +131,119 @@
   <Style Selector=":is(Control).tier-title Border.cardEdge">
     <Setter Property="Width" Value="16" />
   </Style>
-  <Style Selector="TextBlock.detailTitle">
-    <Setter Property="FontSize" Value="17" />
-    <Setter Property="LineHeight" Value="20" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="MaxLines" Value="2" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-  </Style>
-  <Style Selector="TextBlock.detailLine">
-    <Setter Property="FontSize" Value="14" />
-    <Setter Property="LineHeight" Value="17" />
-    <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector="TextBlock.detailLine.state-running">
-    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
-  </Style>
-  <Style Selector="TextBlock.detailLine.state-failed">
-    <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
-  </Style>
+  <!-- The title has the card's whole width, and the last line's height comes on top of the card's 64 px. Each tier sets both in
+       canvas units, so the text stays at least 10 px on screen. -->
   <Style Selector="TextBlock.farTitle">
-    <Setter Property="Margin" Value="16,0,12,0" />
-    <Setter Property="FontSize" Value="20" />
-    <Setter Property="LineHeight" Value="24" />
+    <Setter Property="Margin" Value="16,0,10,0" />
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="LineHeight" Value="21" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="MaxLines" Value="2" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector=":is(Control).tier-compact TextBlock.farTitle">
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="LineHeight" Value="26" />
   </Style>
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="16,0,8,0" />
     <Setter Property="FontSize" Value="26" />
     <Setter Property="LineHeight" Value="30" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="26,0,6,0" />
+    <Setter Property="Margin" Value="26,0,8,0" />
     <Setter Property="FontSize" Value="50" />
     <Setter Property="LineHeight" Value="56" />
-    <Setter Property="MaxLines" Value="1" />
   </Style>
-  <!-- The badge centres on the card's top right corner, which lies 10 px inside the container. -->
+  <Style Selector="Panel.cardBody">
+    <Setter Property="MinHeight" Value="64" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Panel.cardBody">
+    <Setter Property="MinHeight" Value="90" />
+    <Setter Property="Margin" Value="0,0,0,-26" />
+  </Style>
+  <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) Panel.cardBody">
+    <Setter Property="MinHeight" Value="94" />
+    <Setter Property="Margin" Value="0,0,0,-30" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardBody">
+    <Setter Property="MinHeight" Value="102" />
+    <Setter Property="Margin" Value="0,0,0,-38" />
+  </Style>
+  <!-- Under a zoom of 0.385 the second line of the title takes the last line's place, and the badge sits above the card. -->
+  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardBody">
+    <Setter Property="MinHeight" Value="120" />
+    <Setter Property="Margin" Value="0,0,0,-56" />
+  </Style>
+  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardHead">
+    <Setter Property="Height" Value="120" />
+  </Style>
+  <Style Selector="DockPanel.farLine">
+    <Setter Property="Margin" Value="20,62,36,0" />
+    <Setter Property="Height" Value="24" />
+  </Style>
+  <Style Selector=":is(Control).tier-compact DockPanel.farLine">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Margin" Value="20,62,40,0" />
+  </Style>
+  <Style Selector=":is(Control).tier-label DockPanel.farLine">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Margin" Value="18,64,46,0" />
+  </Style>
+  <Style Selector=":is(Control).tier-title DockPanel.farLine">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="theme|KindTile.farTile">
+    <Setter Property="TileSize" Value="20" />
+    <Setter Property="Margin" Value="0,0,6,0" />
+  </Style>
+  <Style Selector=":is(Control).tier-compact theme|KindTile.farTile">
+    <Setter Property="TileSize" Value="22" />
+  </Style>
+  <Style Selector=":is(Control).tier-label theme|KindTile.farTile">
+    <Setter Property="TileSize" Value="26" />
+  </Style>
+  <Style Selector="TextBlock.farAgent">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector=":is(Control).tier-compact TextBlock.farAgent">
+    <Setter Property="FontSize" Value="20" />
+  </Style>
+  <Style Selector=":is(Control).tier-label TextBlock.farAgent">
+    <Setter Property="FontSize" Value="26" />
+  </Style>
+  <Style Selector="TextBlock.farAgent.state-running">
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+  <Style Selector="TextBlock.farAgent.state-failed">
+    <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
+  </Style>
+  <!-- The badge ends the last line in the two tiers with one, sits fully above the card where the title takes the card's height,
+       and centres on the corner of the Block tier's card, which has no text. -->
   <Style Selector="Panel.stateBadge">
     <Setter Property="Width" Value="24" />
     <Setter Property="Height" Value="24" />
-    <Setter Property="Margin" Value="0,-12,-2,0" />
+    <Setter Property="Margin" Value="0,62,18,0" />
+  </Style>
+  <Style Selector=":is(Control).tier-compact Panel.stateBadge">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="Margin" Value="0,63,18,0" />
   </Style>
   <Style Selector=":is(Control).tier-label Panel.stateBadge">
-    <Setter Property="Width" Value="40" />
-    <Setter Property="Height" Value="40" />
-    <Setter Property="Margin" Value="0,-20,-10,0" />
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Margin" Value="0,65,18,0" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
     <Setter Property="Width" Value="60" />
     <Setter Property="Height" Value="60" />
-    <Setter Property="Margin" Value="0,-30,-20,0" />
+    <Setter Property="Margin" Value="0,-64,12,0" />
   </Style>
   <Style Selector=":is(Control).tier-block Panel.stateBadge">
     <Setter Property="Width" Value="80" />
@@ -331,6 +391,25 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
 
+  <!-- A port keeps its size on screen as the cards shrink. -->
+  <Style Selector="Ellipse.port, Ellipse.portDot">
+    <Setter Property="Width" Value="10" />
+    <Setter Property="Height" Value="10" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Ellipse.port, :is(Control).tier-detail Ellipse.portDot, :is(Control).tier-compact Ellipse.port, :is(Control).tier-compact Ellipse.portDot">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Ellipse.port, :is(Control).tier-label Ellipse.portDot, :is(Control).tier-title Ellipse.port, :is(Control).tier-title Ellipse.portDot">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+  </Style>
+  <Style Selector="Ellipse.port">
+    <Setter Property="StrokeThickness" Value="2" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Ellipse.port, :is(Control).tier-title Ellipse.port">
+    <Setter Property="StrokeThickness" Value="4" />
+  </Style>
   <Style Selector="Ellipse.portDot">
     <Setter Property="StrokeThickness" Value="0" />
     <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
@@ -356,9 +435,8 @@
     <!-- Half a handle's width, so each end meets the edge of its 10 px handle. -->
     <Setter Property="SourceOffset" Value="5,0" />
     <Setter Property="TargetOffset" Value="5,0" />
-    <!-- A wire has no arrowhead at rest, as in Blender and Unreal, so wires into one port stay apart to its edge. An output and
-         an input already say which way a wire runs. -->
-    <Setter Property="ArrowSize" Value="0,0" />
+    <!-- A small arrowhead at the input says which way a wire runs. -->
+    <Setter Property="ArrowSize" Value="7,6" />
     <!-- An invisible solid outline gives the pointer a 12 px target around the line, gaps in a dash included. -->
     <Setter Property="OutlineBrush" Value="Transparent" />
     <Setter Property="OutlineThickness" Value="5" />
@@ -374,15 +452,11 @@
        canvas in both themes. The stroke comes from the wire's view model, because the flow, the selection, and the zoom tier
        all set it. -->
   <Style Selector="nodify|StepConnection">
-    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="nodify|StepConnection.wire">
     <Setter Property="StrokeThickness" Value="{ReflectionBinding Stroke}" />
-  </Style>
-  <Style Selector="nodify|StepConnection.wire.flow-delivered">
-    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="nodify|StepConnection.wire.highlighted">
     <Setter Property="Stroke" Value="{DynamicResource TextStrongBrush}" />

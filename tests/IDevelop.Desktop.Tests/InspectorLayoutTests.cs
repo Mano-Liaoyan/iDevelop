@@ -189,11 +189,11 @@ public sealed class InspectorLayoutTests : IDisposable
             .Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons) }).ToArray();
 
         Assert.Equal(
-            ["Client", "Model", "Reasoning", "Skills", "Mode", "System prompt", "Instructions", "Acceptance criteria"],
+            ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"],
             rows.Select(row => row.Label));
         Assert.All(rows, row => Assert.True(row.Icon is not null || row.Lead is not null, $"{row.Label} has no glyph."));
         Assert.Equal(
-            ["IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", "IconDescription", "IconEdit", "IconCheckmark"],
+            ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", "IconDescription"],
             rows.Select(row => IconKey(row.Icon)));
     }
 
@@ -322,7 +322,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode"], BesideRows(shell).Select(row => row.Label));
+        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"], BesideRows(shell).Select(row => row.Label));
         Assert.Equal("labels at 32, values at 108", Columns(shell));
 
         shell.Click(shell.ConnectionInto("Build"));
@@ -361,7 +361,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         var rows = BesideRows(shell);
-        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode"], rows.Select(row => row.Label));
+        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"], rows.Select(row => row.Label));
         foreach (var row in rows)
         {
             var line = shell.Bounds(Label(row)).Center.Y;
@@ -495,7 +495,7 @@ public sealed class InspectorLayoutTests : IDisposable
         foreach (var (title, model) in new[] { ("Claude", "Claude Sonnet 5.5"), ("Codex", "GPT-6.1-Sol"), ("Pi", "DeepSeek V4.1 Flash (deepseek)"), ("Antigravity", "Claude Opus 4.6 (Thinking)") })
         {
             shell.Click(shell.Header(shell.Node(title)));
-            Assert.Equal((title, model, model), (title, shell.Picked("TaskModel"), ToolTip.GetTip(shell.Find<ComboBox>("TaskModel"))));
+            Assert.Equal((title, model, $"{model} (Alt+M)"), (title, shell.Picked("TaskModel"), ToolTip.GetTip(shell.Find<ComboBox>("TaskModel"))));
             AssertNothingCutShort(shell);
         }
     }
@@ -611,7 +611,7 @@ public sealed class InspectorLayoutTests : IDisposable
     /// <summary>
     /// The distinct right insets, in px from the inspector's edge, of the actions and of the values it shows now. A row's
     /// actions are its trailing glyphs, such as a revert arrow, Place and More, or a kind's count, whose
-    /// trailing column ends with them.
+    /// trailing column ends with them. A revert arrow follows its value, so that row's arrow keeps the edge in the value's place.
     /// </summary>
     private static string Edges(Shell shell)
     {
@@ -622,7 +622,8 @@ public sealed class InspectorLayoutTests : IDisposable
         string? Id(Control control) => AutomationProperties.GetAutomationId(control);
 
         var actions = shown.Where(control => Id(control) is "InspectorMore" or "InspectorTools" or "RemoveField" || control.Name == "PART_Trail");
-        var values = shown.Where(control =>
+        bool Reverts(Control control) => control.FindAncestorOfType<InspectorRow>() is { CanRevert: true, Layout: RowLayout.Columns };
+        var values = shown.Where(control => !Reverts(control)).Where(control =>
             control is ComboBox
             || control is TextBox && InRow(control)
             || control is Button { Classes: var classes } && classes.Contains("rowLink")

@@ -77,7 +77,7 @@ public partial class MainWindow : Window
     }
 
     // A tab sits over the canvas's bottom band, clear of the splitter's middle, where a person drags it.
-    private const double TabLift = 72;
+    private const double TabLift = 0;
 
     /// <summary>The left panel's tab sits at the window's edge while the panel is closed.</summary>
     public static readonly IValueConverter LeftEdge = new FuncValueConverter<bool, Thickness>(open => open ? new Thickness(-6, 0, -6, TabLift) : new Thickness(6, 0, -6, TabLift));

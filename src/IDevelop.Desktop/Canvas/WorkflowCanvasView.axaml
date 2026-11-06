@@ -224,7 +224,7 @@
            is also the badges' legend. Stop All sits where Run Workflow was. UI Automation shows no plain border, so a user
            control carries its id. As the canvas narrows, the summary shortens, then the words stand in for the chips, and the
            buttons keep only their glyphs. With no run, the band says how many nodes the workflow has. -->
-      <Panel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center">
+      <Panel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
         <TextBlock Classes="barText" HorizontalAlignment="Center" Text="{Binding BarIdle}" IsVisible="{Binding !ShowsBar}"
                    AutomationProperties.AutomationId="RunIdle" />
         <UserControl HorizontalAlignment="Center" ClipToBounds="False"

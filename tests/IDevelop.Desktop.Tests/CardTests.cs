@@ -102,7 +102,7 @@ public sealed class CardTests : IDisposable
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
 
-        Assert.Equal(["Design", "Idle ·", "Codex", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Idle ·", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
         Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
         Assert.Equal(["Design", "Implement · Codex · GPT-5.5 · high", "Instructions", "Draft it."], shell.PeekTexts("Design")!);
     }
@@ -113,7 +113,7 @@ public sealed class CardTests : IDisposable
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
         var titleDrawnAt = shell.Bounds(shell.InCard<TextBlock>("Design", "CardTitle")).TopLeft;
-        var subtitle = shell.Bounds(shell.InCard<TextBlock>("Design", "CardAgent"));
+        var subtitle = shell.Bounds(shell.InCard<TextBlock>("Design", "CardModel"));
         shell.Click(shell.Header(shell.Node("Design")));
         var subtitleRows = shell.PixelRows(subtitle);
         int[] inked = [.. Enumerable.Range(0, subtitleRows.Length).Where(row => subtitleRows[row].Distinct().Count() > 1)];
@@ -170,16 +170,16 @@ public sealed class CardTests : IDisposable
 
         Assert.Equal(
             [
-                ["Design", "Idle ·", "Codex", "GPT-5.5 · high"],
-                ["Build", "Idle ·", "Claude Code", "Claude Sonnet 5.5 · xhigh"],
-                ["Review", "Idle ·", "Antigravity CLI", "Claude Opus 4.6 (Thinking)"],
-                ["Fourth", "Idle ·", "Antigravity CLI", "Gemini 3.8 Flash · medium"],
+                ["Design", "Idle ·", "GPT-5.5 · high"],
+                ["Build", "Idle ·", "Claude Sonnet 5.5 · xhigh"],
+                ["Review", "Idle ·", "Claude Opus 4.6 (Thinking)"],
+                ["Fourth", "Idle ·", "Gemini 3.8 Flash · medium"],
                 // Pi names its model's provider, which goes on the client's line, so the model keeps its level.
-                ["Fifth", "Idle ·", "Pi · deepseek", "DeepSeek V4.1 Flash · max"],
+                ["Fifth", "Idle ·", "DeepSeek V4.1 Flash · max"],
             ],
             titles.Select(title => Shell.Texts(shell.Node(title))));
         // Each line sits at the same height on every card, and only the model gives way, whose tooltip holds it whole.
-        Assert.Single(titles.Select(title => (Top(title, "CardAgent"), Top(title, "CardModel"))).Distinct());
+        Assert.Single(titles.Select(title => Top(title, "CardModel")).Distinct());
         Assert.All(titles.SelectMany(title => shell.Node(title).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible && !text.Classes.Contains("cardModel")),
             text => Assert.False(text.TextLayout.TextLines.Any(line => line.HasCollapsed), $"\"{text.Text}\" is cut short."));
 
@@ -344,6 +344,6 @@ public sealed class CardTests : IDisposable
 
         var wire = Assert.Single(shell.Connections());
 
-        Assert.Equal((Color.Parse("#90969C"), true), (((ISolidColorBrush)wire.Stroke!).Color, wire.StrokeDashArray is { Count: > 0 }));
+        Assert.Equal((Color.Parse("#5A6168"), true), (((ISolidColorBrush)wire.Stroke!).Color, wire.StrokeDashArray is { Count: > 0 }));
     }
 }

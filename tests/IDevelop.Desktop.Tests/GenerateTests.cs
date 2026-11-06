@@ -208,7 +208,7 @@ public sealed class GenerateTests : IDisposable
         var input = WorkflowCanvasViewModel.InputPortCenter;
 
         Assert.Equal(
-            [(Shell.Rounded(origin + output), Shell.Rounded(api + input)), (Shell.Rounded(api + output), Shell.Rounded(button + input)), (Shell.Rounded(api + output), Shell.Rounded(tests + input))],
+            [(Whole(origin + output), Whole(api + input)), (Whole(api + output), Whole(button + input)), (Whole(api + output), Whole(tests + input))],
             GhostWires(shell));
         Assert.All(GhostWireLines(shell), wire => Assert.Equal([4.0, 3.0], wire.StrokeDashArray!));
 
@@ -852,6 +852,9 @@ public sealed class GenerateTests : IDisposable
         shell.Window.GetVisualDescendants().OfType<StepConnection>().Where(wire => AutomationProperties.GetAutomationId(wire) == "GhostWire");
 
     /// <summary>Each ghost wire's two ends on the canvas.</summary>
+    // A wire's ends sit on whole pixels of the window.
+    private static Point Whole(Point point) => new(Math.Round(point.X, MidpointRounding.AwayFromZero), Math.Round(point.Y, MidpointRounding.AwayFromZero));
+
     private static (Point From, Point To)[] GhostWires(Shell shell) =>
         [.. GhostWireLines(shell)
             .Select(shell.Ends)

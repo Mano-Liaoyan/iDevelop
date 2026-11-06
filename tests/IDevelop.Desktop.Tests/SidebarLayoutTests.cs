@@ -103,10 +103,12 @@ public sealed class SidebarLayoutTests : IDisposable
         var splitter = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 1);
         var sidebar = shell.Window.FindControl<Grid>("Columns")!.ColumnDefinitions[0];
 
-        shell.Drag(shell.Center(splitter), shell.Center(splitter) + new Vector(100, 0));
+        // The panel's tab sits on the splitter's centre.
+        var grip = new Vector(0, 200);
+        shell.Drag(shell.Center(splitter) + grip, shell.Center(splitter) + grip + new Vector(100, 0));
         Assert.InRange(sidebar.ActualWidth, 371, 373);
 
-        shell.Drag(shell.Center(splitter), shell.Center(splitter) - new Vector(200, 0));
+        shell.Drag(shell.Center(splitter) + grip, shell.Center(splitter) + grip - new Vector(200, 0));
         Assert.Equal(240, sidebar.ActualWidth);
     }
 

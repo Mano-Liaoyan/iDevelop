@@ -491,7 +491,7 @@
     <Setter Property="Padding" Value="0" />
     <Setter Property="MinWidth" Value="0" />
     <Setter Property="MinHeight" Value="0" />
-    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="CornerRadius" Value="6" />

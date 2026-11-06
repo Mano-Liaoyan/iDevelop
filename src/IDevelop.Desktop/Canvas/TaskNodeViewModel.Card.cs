@@ -44,10 +44,14 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The status leaves the model its place on the card's last line. What a node waits for takes the whole line.</summary>
     public bool ShowsCardModel => State != NodeState.InputRequired;
 
-    /// <summary>The zoomed out card's last line: the model, after a status that its badge does not already say.</summary>
-    public string CardLine => State is NodeState.Completed or NodeState.Idle && Role == NodeRole.None
-        ? AgentModel ?? ""
-        : ShowsCardModel ? string.Join(" · ", new[] { Subtitle, AgentModel }.Where(part => !string.IsNullOrEmpty(part))) : Subtitle;
+    /// <summary>The model and level without the maker's name, which the client's name says, so they fit a card's line.</summary>
+    public string AgentBrief => AgentModel.StartsWith("Claude ", StringComparison.Ordinal) ? AgentModel["Claude ".Length..] : AgentModel;
+
+    /// <summary>The zoomed out card's last line: the model, or what the node waits for, which its badge does not say.</summary>
+    public string CardLine => ShowsCardModel && Role != NodeRole.Proposing ? AgentBrief : Subtitle;
+
+    /// <summary>The idle line names the client only when it has no model to name, so every card's line reads the same.</summary>
+    public bool ShowsCardClient => AgentModel.Length == 0;
 
     /// <summary>The first line when it is not the client: the proposal, else the engine's state.</summary>
     public string Subtitle => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count) : StatusLabel;

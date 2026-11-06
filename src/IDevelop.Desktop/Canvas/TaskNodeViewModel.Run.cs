@@ -125,6 +125,9 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The node's results, newest first, each with whether it is the current one.</summary>
     public IReadOnlyList<ResultViewModel> Results => _results;
 
+    /// <summary>What this node hands on now, in plain words, or null before a first result.</summary>
+    public string? HandsOn => _results.Count > 0 ? _results[0].PlainSummary : null;
+
     public bool HasResults => _history.Count > 0;
 
     /// <summary>The node's latest result, or null.</summary>
@@ -242,6 +245,7 @@ public sealed partial class TaskNodeViewModel
             current: index == _history.Count - 1 && State == NodeState.Completed)).Reverse()];
         _findings = Verdict is { } verdict ? [.. verdict.Findings.Select(finding => new FindingViewModel(finding))] : [];
         OnPropertyChanged(nameof(Results));
+        OnPropertyChanged(nameof(HandsOn));
         OnPropertyChanged(nameof(Findings));
     }
 

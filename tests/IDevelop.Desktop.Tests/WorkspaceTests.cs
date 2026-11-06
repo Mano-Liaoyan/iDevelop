@@ -191,7 +191,7 @@ public sealed class WorkspaceTests : IDisposable
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.Equal((1.0, new Point(-108, -231.5)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        Assert.Equal((1.0, new Point(-108, -232)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
         Assert.Null(shell.Window.ViewModel.Canvas!.SelectedNode);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
 
