@@ -4,7 +4,7 @@ The canvas shows each task as a card with its kind's tile, its title, and one su
 
 ## Sub-features
 
-- `add-task` adds a task from the Add popover that `Add Node` in the sidebar opens, selects it, and marks the project unsaved.
+- `add-task` adds a task from the Add popover that `Add Node` in the canvas bar opens, selects it, and marks the project unsaved.
 - `add-popover` opens the same popover from a right-click, a double-click, or N on empty canvas, from a wire dropped on empty canvas, and from `Insert Node…` on a connection.
 - `card-content` shows each task's kind tile, title, and two lines: its client while idle and otherwise its status or what it needs, then its model and level.
 - `menus` offers Run, Cancel or Retry… when they apply, Rename, Duplicate, Replace With, Disconnect, Derive Blueprint…, Save as Blueprint…, and Delete on a card, and the kind, `Insert Node…`, and Delete on a connection. A card whose task has no agent offers `Choose Agent…` (`NodeMenuChooseAgent`) in place of Run, which opens the inspector's `TaskClient` list. Duplicate places the copies below their originals, at the first spot where they cover no card.
