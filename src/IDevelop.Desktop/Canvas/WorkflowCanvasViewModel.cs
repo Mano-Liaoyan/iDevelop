@@ -141,6 +141,12 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         }
     } = 1;
 
+    /// <summary>
+    /// The view the last fit made, if any. It outlives the canvas's view, so a workflow left at a fit, such as above a docked
+    /// conversation, fits its canvas again when it comes back at another size. A view the person moved no longer matches it.
+    /// </summary>
+    internal (Point Location, double Zoom)? FittedView { get; set; }
+
     /// <summary>The zoom as a percent, on the control that resets it.</summary>
     public string ZoomLabel => $"{Math.Round(ViewportZoom * 100)}%";
 

@@ -28,7 +28,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private Point? _windowAnchor;
     private bool _showingAdd;
     private bool _addOnRelease;
-    private (Point Location, double Zoom)? _fitted;
     private IBrush? _dots;
     private ZoomTier _shownTier;
 
@@ -75,7 +74,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             Classes.Set("narrowBar", CanvasChrome.IsNarrowBar(e.NewSize));
             Classes.Set("shortBar", CanvasChrome.IsShortBar(e.NewSize));
             ShowChrome();
-            if (_fitted is not null && IsFitted)
+            if (IsFitted)
             {
                 Dispatcher.UIThread.Post(FitToView, DispatcherPriority.Background);
             }
@@ -95,7 +94,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>The tooltip of the run bar's Next, with its shortcut.</summary>
     public static string NextHelp => $"Next\n{CanvasKeys.Hint(CanvasKeys.NextAttention)}: show the next node that waits for you or failed";
 
-    private bool IsFitted => _fitted is { } fit && fit.Location == Editor.ViewportLocation && fit.Zoom == Editor.ViewportZoom;
+    private bool IsFitted => _viewModel?.FittedView is { } fit && fit.Location == Editor.ViewportLocation && fit.Zoom == Editor.ViewportZoom;
 
     // The minimap and the zoom buttons show only while they are of use: while a card is outside the view, or on the person's choice.
     private void ShowChrome()
@@ -180,7 +179,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
     private void Fit(Rect extent)
     {
-        if (extent.Width <= 0 || extent.Height <= 0 || Editor.Bounds.Width <= 0)
+        // A fit posted before the window showed another workflow finds this view gone, and its size no longer says anything.
+        if (extent.Width <= 0 || extent.Height <= 0 || Editor.Bounds.Width <= 0 || !this.IsAttachedToVisualTree())
         {
             return;
         }
@@ -199,7 +199,11 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
             Editor.ViewportZoom = zoom;
             Editor.ViewportLocation = extent.Center - (Vector)room.Center / Editor.ViewportZoom;
-            _fitted = (Editor.ViewportLocation, Editor.ViewportZoom);
+            if (_viewModel is { } canvas)
+            {
+                canvas.FittedView = (Editor.ViewportLocation, Editor.ViewportZoom);
+            }
+
             return;
         }
     }
