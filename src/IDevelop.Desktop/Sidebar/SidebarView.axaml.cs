@@ -109,12 +109,12 @@ public partial class SidebarView : UserControl
             return false;
         }
 
-        Window?.CanvasFocusTarget?.Focus();
+        Window?.CanvasFocusTarget?.Focus(NavigationMethod.Tab);
         _beforeFind = null;
         Dispatcher.UIThread.Post(() =>
         {
             Reveal(result);
-            Window?.CanvasFocusTarget?.Focus();
+            Window?.CanvasFocusTarget?.Focus(NavigationMethod.Tab);
         }, DispatcherPriority.Background);
         return true;
     }

@@ -199,7 +199,7 @@
       <!-- One bar for a run: how far it went, one chip per state that has nodes, Next, Follow, and Merge into my branch while
            every node is completed and nothing is stale (ADR 0017). The chips are the canvas's badges with their counts, so the bar
            is also the badges' legend. Stop All sits where Run Workflow was. UI Automation shows no plain border, so a user
-           control carries its id. On a narrow canvas the summary shortens and Follow keeps only its glyph. -->
+           control carries its id. On a narrow canvas the summary shortens, the tooltip alone holds the chips, and Follow keeps only its glyph. -->
       <StackPanel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" VerticalAlignment="Bottom" Spacing="8">
         <UserControl HorizontalAlignment="Center" ClipToBounds="False"
                      IsVisible="{Binding ShowsBar}"
@@ -240,12 +240,12 @@
                     </StackPanel>
                   </Button>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                  <Panel VerticalAlignment="Center">
+                <DockPanel VerticalAlignment="Center" ClipToBounds="True">
+                  <Panel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0">
                     <TextBlock Classes="barText barLong" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
                     <TextBlock Classes="barText barShort" Text="{Binding BarShort}" AutomationProperties.AutomationId="RunStatusShort" />
                   </Panel>
-                  <ItemsControl ItemsSource="{Binding BarChips}" VerticalAlignment="Center" AutomationProperties.AutomationId="RunChips">
+                  <ItemsControl Classes="barChips" ItemsSource="{Binding BarChips}" VerticalAlignment="Center" AutomationProperties.AutomationId="RunChips">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
                         <StackPanel Orientation="Horizontal" Spacing="8" />
@@ -265,7 +265,7 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
-                </StackPanel>
+                </DockPanel>
               </DockPanel>
             </Border>
           </Border>

@@ -69,23 +69,30 @@ public sealed class EllipsisText : TextBlock
             return whole;
         }
 
-        if (KeepFrom > 0 && KeepFrom < whole.Length)
+        // A plain cut will do when it leaves the word that differs in view.
+        var end = Longest(whole.Length, length => Cut(whole, length), width);
+        if (KeepFrom <= 0 || KeepFrom >= whole.Length || end >= WordEnd(whole, KeepFrom))
         {
-            var kept = whole[KeepFrom..];
-            var shown = Longest(KeepFrom, length => whole[..length].TrimEnd() + Ellipsis + " " + kept, width);
-            if (shown > 0)
-            {
-                return whole[..shown].TrimEnd() + Ellipsis + " " + kept;
-            }
-
-            whole = Ellipsis + kept;
-            if (Fits(whole, width))
-            {
-                return whole;
-            }
+            return Cut(whole, end);
         }
 
-        return Cut(whole, Longest(whole.Length, length => Cut(whole, length), width));
+        var kept = whole[KeepFrom..];
+        var head = Longest(KeepFrom, length => Joined(whole, length, kept), width);
+        if (head > 0)
+        {
+            return Joined(whole, head, kept);
+        }
+
+        var tail = Ellipsis + kept;
+        return Fits(tail, width) ? tail : Cut(tail, Longest(tail.Length, length => Cut(tail, length), width));
+    }
+
+    private static string Joined(string whole, int length, string kept) => whole[..length].TrimEnd() + Ellipsis + " " + kept;
+
+    private static int WordEnd(string text, int from)
+    {
+        var space = text.IndexOf(' ', from);
+        return space < 0 ? text.Length : space;
     }
 
     // The most characters, under the limit, whose text fits. No text fits at 0.

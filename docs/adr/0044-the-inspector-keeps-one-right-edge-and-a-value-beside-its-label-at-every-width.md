@@ -1,5 +1,7 @@
 # The inspector keeps one right edge and a value beside its label at every width
 
+[ADR 0045](0045-wires-curve-and-show-execution-and-a-node-kind-stays-quiet.md) supersedes its section order, its header line, a stacked row's arrow, and its rule for long values.
+
 The inspector has one right edge, and a labelled value sits beside its label at every panel width. Output follows Input. This record supersedes [ADR 0043](0043-the-inspector-pins-a-nodes-state-and-stacks-values-below-300-px.md), and its pinned header, its sections, and its Tab order stay.
 
 Round 1 of the UI review found that filter, fields, result card, and section band ended at four different edges, that the 280 px minimum nearly doubled the Agent section's height, that a node's result sat under every setting, and that a count of changes could name no row.

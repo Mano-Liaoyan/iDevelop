@@ -34,6 +34,9 @@
   <!-- The minimap's background is PlanWeave's muted mask, and the opaque viewport is the clear window in it. -->
   <ControlTheme x:Key="MinimapViewportTheme" TargetType="Rectangle">
     <Setter Property="Fill" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <!-- In canvas units, which the minimap draws about eight times smaller. -->
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="StrokeThickness" Value="14" />
   </ControlTheme>
 
   <!-- The card is 240 by 64 in a 260 wide container, whose 10 px gutters hold the ports on the card's edges. Two zones: the
@@ -105,18 +108,18 @@
               </Panel>
             </Grid>
             <!-- One line: the node's status, or while it is idle, the client that will run it, and then its model and level.
-                 A status names what it waits for when the name fits whole, and counts it when it does not. -->
+                 What a node waits for takes the whole line, because the person acts on it. -->
             <Grid Grid.Row="1" Margin="10,0,8,0" ColumnDefinitions="Auto,*,12">
               <DockPanel MaxWidth="124" IsVisible="{Binding ShowsAgent}">
                 <TextBlock DockPanel.Dock="Left" Classes="cardIdle" Text="Idle ·" />
                 <TextBlock Classes="cardAgent" Text="{Binding AgentClient}" TextTrimming="CharacterEllipsis"
                            AutomationProperties.AutomationId="CardAgent" />
               </DockPanel>
-              <canvas:FittingText Classes="cardStatus" MaxWidth="124" Choices="{Binding SubtitleChoices}" TextTrimming="CharacterEllipsis"
+              <canvas:FittingText Classes="cardStatus" Choices="{Binding SubtitleChoices}" TextTrimming="CharacterEllipsis"
                                   IsVisible="{Binding !ShowsAgent}" theme:StyleClass.State="{Binding State}"
                                   AutomationProperties.AutomationId="CardStatus" />
               <TextBlock Grid.Column="1" Classes="cardModel" Text="{Binding AgentModel}" TextTrimming="CharacterEllipsis"
-                         ToolTip.Tip="{Binding AgentModel}"
+                         IsVisible="{Binding ShowsCardModel}" ToolTip.Tip="{Binding AgentModel}"
                          AutomationProperties.AutomationId="CardModel" />
               <!-- The disclosure: a 24 px target drawn in the 12 px column. -->
               <ToggleButton Grid.Column="2" Classes="cardChevron" Margin="{x:Static canvas:CardBehaviors.ChevronMargin}"

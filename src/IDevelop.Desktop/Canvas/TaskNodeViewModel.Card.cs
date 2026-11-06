@@ -41,8 +41,13 @@ public sealed partial class TaskNodeViewModel
         internal set => SetProperty(ref field, value);
     }
 
-    /// <summary>The status and the model on one line, for the zoomed out card.</summary>
-    public string CardLine => string.Join(" · ", new[] { ShowsAgent ? "Idle" : Subtitle, AgentModel }.Where(part => !string.IsNullOrEmpty(part)));
+    /// <summary>The status leaves the model its place on the card's last line. What a node waits for takes the whole line.</summary>
+    public bool ShowsCardModel => State != NodeState.InputRequired;
+
+    /// <summary>The zoomed out card's last line: the model, after a status that its badge does not already say.</summary>
+    public string CardLine => State is NodeState.Completed or NodeState.Idle && Role == NodeRole.None
+        ? AgentModel ?? ""
+        : ShowsCardModel ? string.Join(" · ", new[] { Subtitle, AgentModel }.Where(part => !string.IsNullOrEmpty(part))) : Subtitle;
 
     /// <summary>The first line when it is not the client: the proposal, else the engine's state.</summary>
     public string Subtitle => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count) : StatusLabel;

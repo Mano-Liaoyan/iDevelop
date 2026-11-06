@@ -34,6 +34,17 @@ public sealed class TitlePartsTests
     }
 
     [AvaloniaFact]
+    public void A_plain_cut_stays_when_it_leaves_the_word_that_differs_in_view()
+    {
+        var text = new EllipsisText { Whole = "Add the usage_events schema now", KeepFrom = "Add ".Length, FontSize = 13, MaxLines = 1, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+
+        text.Measure(new Avalonia.Size(120, double.PositiveInfinity));
+
+        Assert.StartsWith("Add the", text.Text);
+        Assert.EndsWith("…", text.Text);
+    }
+
+    [AvaloniaFact]
     public void A_title_that_fits_ignores_the_part_it_would_keep()
     {
         var text = new EllipsisText { Whole = "Review", KeepFrom = 3, FontSize = 13, MaxLines = 2, TextWrapping = Avalonia.Media.TextWrapping.Wrap };

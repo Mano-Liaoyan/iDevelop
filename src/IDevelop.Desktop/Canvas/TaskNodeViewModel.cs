@@ -18,7 +18,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     // each list in this order.
     private static readonly Dictionary<string, string[]> Dependents = new()
     {
-        [nameof(State)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(ShowsNextRunNote)],
+        [nameof(State)] = [nameof(ShowsCardModel), nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(ShowsNextRunNote)],
         [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(IsUnderReview)],
         [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine)],
         [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(ShowsAcceptAndFinish), nameof(Actions)],

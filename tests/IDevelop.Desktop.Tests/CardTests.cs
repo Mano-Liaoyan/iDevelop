@@ -230,7 +230,7 @@ public sealed class CardTests : IDisposable
         shell.WaitForCard("Design", "Input required · reply");
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Input required · reply", "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Input required · reply"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-inputrequired", ring.Classes);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
     }
@@ -297,7 +297,7 @@ public sealed class CardTests : IDisposable
         shell.WaitForProposal();
 
         var ring = shell.CardLayer("Plan export", "stateStroke");
-        Assert.Equal(["Plan export", "Proposal · 2 tasks", "Gemini 3.8 Flash · low"], Shell.Texts(shell.Node("Plan export")));
+        Assert.Equal(["Plan export", "Proposal · 2 tasks"], Shell.Texts(shell.Node("Plan export")));
         Assert.Same(Application.Current!.FindResource("IconSparkle"), shell.CardGlyph("Plan export").Data);
         Assert.Contains("role-proposing", ring.Classes);
         Assert.Equal(Color.Parse("#1E6EF4"), ((ISolidColorBrush)ring.BorderBrush!).Color);

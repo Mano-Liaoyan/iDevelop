@@ -110,5 +110,9 @@ _Avoid_: reject, which names a review's verdict
 A node's card unfolded in place to show what goes on now, its agent's pickers, and its actions. Expansion is this machine's view of the workflow: the cards around it slide aside on screen only, and the workflow's positions and file never change ([ADR 0024](docs/adr/0024-an-expanded-card-unfolds-in-place-and-stays-expanded-on-this-machine.md)).
 _Avoid_: expanded node, and an expanded workflow, which is a sidebar row that shows its nodes
 
+**Wire**:
+A connection as the canvas draws it: a curve along an orthogonal plan, with a color that shows execution state and not a node's kind ([ADR 0045](docs/adr/0045-wires-curve-and-show-execution-and-a-node-kind-stays-quiet.md)).
+_Avoid_: edge, trunk
+
 **Peek**:
 A collapsed card's tooltip, a read-only look at what its expanded card shows first.

@@ -580,6 +580,7 @@
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:not(.multiline)">
     <Setter Property="Padding" Value="8,3" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <!-- Fluent pads a ComboBox 5 px above its text and 7 px below. On Windows, Inter's line at 13 px takes 18 px. With 3 px above
        and below and its border, it is one line high, as the skill picker is. -->

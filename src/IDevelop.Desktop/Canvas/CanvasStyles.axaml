@@ -525,6 +525,9 @@
   <Style Selector=":is(Control).narrowBar TextBlock.barLong">
     <Setter Property="IsVisible" Value="False" />
   </Style>
+  <Style Selector=":is(Control).narrowBar ItemsControl.barChips">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
   <Style Selector=":is(Control).narrowBar TextBlock.followLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
