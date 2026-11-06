@@ -34,7 +34,8 @@ public sealed class RunTests
         shell.WaitForState("B", NodeState.Running);
         Assert.Equal(NodeState.Idle, shell.NodeModel("C").State);
         Assert.True(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal("2 running", shell.Text("RunStatus"));
+        Assert.Equal("0 of 3 complete", shell.Text("RunStatus"));
+        Assert.Equal("2 running", shell.Window.ViewModel.Canvas!.BarSummary);
         Assert.Contains("\"A\", \"B\"", shell.Window.ViewModel.Canvas!.BarTip);
         Assert.False(shell.Find<Button>("MergeIntoBranch").IsEffectivelyVisible);
 

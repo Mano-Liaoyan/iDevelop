@@ -79,14 +79,19 @@ public sealed partial class TaskNodeViewModel
 
     private ExecutionSettings? Default => _task.Blueprint.Defaults.Execution;
 
-    /// <summary>The prompt template that the blueprint gives the agent, or null for a node with no agent.</summary>
-    public string? SystemPrompt => _task.Blueprint.Work switch
+    /// <summary>
+    /// What the blueprint tells the node's agent, with the node's title and fields in place, or null for a node with no agent.
+    /// A value that only a run knows, such as the input from earlier nodes, stays a name in brackets.
+    /// </summary>
+    public string? SystemPrompt => (_task.Blueprint.Work switch
     {
-        WorkSpec.Agent agent => agent.Template.Text,
-        WorkSpec.Review review => review.Reviewer.Text,
-        WorkSpec.Merge merge => merge.Template.Text,
+        WorkSpec.Agent agent => agent.Template,
+        WorkSpec.Review review => review.Reviewer,
+        WorkSpec.Merge merge => merge.Template,
         _ => null,
-    };
+    })?.Render(name => name == "title" ? _task.Title
+        : Fields.FirstOrDefault(row => row.Spec.Key == name) is { } value ? value.Text
+        : $"[{name}]").Trim();
 
     public bool HasSystemPrompt => !string.IsNullOrEmpty(SystemPrompt);
 

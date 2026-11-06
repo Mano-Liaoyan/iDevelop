@@ -72,8 +72,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
         Minimap.AddHandler(PointerWheelChangedEvent, OnMinimapWheel, RoutingStrategies.Tunnel);
         _dots = Editor.Background;
-        Editor.GotFocus += (_, e) => CanvasFocus.IsVisible = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional;
-        Editor.LostFocus += (_, _) => CanvasFocus.IsVisible = false;
+        Editor.GotFocus += (_, e) => ShowKeyboardFocus(e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional);
+        Editor.LostFocus += (_, _) => ShowKeyboardFocus(false);
         // A compact canvas shows its run bar's buttons as glyphs. A view that Fit made fits again at the new size, so a
         // resized panel or window never cuts the graph. A view that the person moved stays.
         SizeChanged += (_, e) =>
@@ -97,6 +97,13 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         };
         ZoomOpen.IsCheckedChanged += (_, _) => ShowChrome();
         MinimapToggle.IsCheckedChanged += (_, _) => ShowChrome();
+    }
+
+    // The canvas's edge says the keys act here, and the selected card takes the same ring as every focused control.
+    private void ShowKeyboardFocus(bool shown)
+    {
+        CanvasFocus.IsVisible = shown;
+        Classes.Set("keyboardFocus", shown);
     }
 
     /// <summary>The tooltip of the run bar's Next, with its shortcut.</summary>
@@ -185,7 +192,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
         Editor.ViewportZoom = FoundZoom;
         var room = new Rect(Editor.Bounds.Size).Deflate(FitInsets().First());
-        Editor.ViewportLocation = node.DisplayRect.Center - (Vector)room.Center / FoundZoom;
+        Editor.ViewportLocation = CanvasChrome.ViewOn(Extent(), room, FoundZoom, node.DisplayRect.Center);
     }
 
     /// <summary>Opens the Add popover for a node in view, with its top left at a point of the window.</summary>
@@ -197,18 +204,28 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
     /// <summary>
     /// Zooms and pans so every card, and every ghost card of an open proposal, fits clear of the controls that float along
-    /// the canvas's top and bottom edges, within the editor's zoom limits and never above 100%. See <see cref="FitInsets"/>.
+    /// the canvas's top and bottom edges, never above 100%. A graph too large to read at that fit stops at
+    /// <see cref="CanvasChrome.ReadableZoom"/> around the node that matters now. See <see cref="FitInsets"/>.
     /// </summary>
     public void FitToView()
     {
-        var cards = Cards().ToList();
-        if (cards.Count > 0)
+        if (Cards().Any())
         {
-            Fit(cards.Aggregate((union, card) => union.Union(card)));
+            Fit(Extent(), FocusPoint());
         }
     }
 
-    private void Fit(Rect extent)
+    private Rect Extent() => Cards().Aggregate((union, card) => union.Union(card));
+
+    // The selected node, else a running node, else a node that needs the person, else the graph's start.
+    private Point FocusPoint()
+    {
+        var nodes = _viewModel?.Nodes ?? [];
+        var node = _viewModel?.SelectedNode ?? nodes.FirstOrDefault(node => node.State == NodeState.Running) ?? nodes.FirstOrDefault(node => node.HasAttention);
+        return node?.DisplayRect.Center ?? Extent().TopLeft;
+    }
+
+    private void Fit(Rect extent, Point focus)
     {
         // A fit posted before the window showed another workflow finds this view gone, and its size no longer says anything.
         if (extent.Width <= 0 || extent.Height <= 0 || Editor.Bounds.Width <= 0 || !this.IsAttachedToVisualTree())
@@ -222,14 +239,13 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         for (var i = 0; i < insets.Length; i++)
         {
             var room = new Rect(Editor.Bounds.Size).Deflate(insets[i]);
-            var zoom = Math.Min(1, Math.Min(room.Width / extent.Width, room.Height / extent.Height));
-            if (i < insets.Length - 1 && (room.Width < MinFitRoom || room.Height < MinFitRoom || i == 0 && zoom < Editor.MinViewportZoom))
+            if (i < insets.Length - 1 && (room.Width < MinFitRoom || room.Height < MinFitRoom))
             {
                 continue;
             }
 
-            Editor.ViewportZoom = zoom;
-            Editor.ViewportLocation = extent.Center - (Vector)room.Center / Editor.ViewportZoom;
+            Editor.ViewportZoom = CanvasChrome.FitZoom(extent, room);
+            Editor.ViewportLocation = CanvasChrome.ViewOn(extent, room, Editor.ViewportZoom, focus);
             if (_viewModel is { } canvas)
             {
                 canvas.FittedView = (Editor.ViewportLocation, Editor.ViewportZoom);
@@ -243,7 +259,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// The margins a fit tries in turn. First <see cref="CardMargin"/> clear of everything that floats along the canvas's
     /// top edge, which the window lays out over the canvas, and of the bottom row. Where that leaves too little room, as with a
     /// long status above the docked conversation, right against those controls, and with no room left at all, the whole
-    /// canvas. The minimap does not count, because it hides once every card fits.
+    /// canvas. The minimap does not count: it hides once every card fits, and a larger graph runs on under it.
     /// </summary>
     private IEnumerable<Thickness> FitInsets()
     {
@@ -305,7 +321,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     {
         if (nodes.Count > 0)
         {
-            Fit(nodes.Select(node => node.DisplayRect).Aggregate((union, rect) => union.Union(rect)));
+            var extent = nodes.Select(node => node.DisplayRect).Aggregate((union, rect) => union.Union(rect));
+            Fit(extent, extent.Center);
         }
     }
 

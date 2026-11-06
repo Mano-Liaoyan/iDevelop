@@ -135,7 +135,7 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(280)]
     [InlineData(320)]
     [InlineData(520)]
-    public void Antigravitys_note_wraps_in_full_under_its_picker(double width)
+    public void Antigravitys_skills_are_a_plain_value_whose_tooltip_says_why(double width)
     {
         Install(_fakes, ClientId.Antigravity);
         var shell = Shell.Open(
@@ -146,8 +146,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         Assert.Equal("actions at 12, values at 12", Edges(shell));
         AssertNothingCutShort(shell);
-        var (inspector, note) = (shell.Bounds(shell.Find<Control>("Inspector")), shell.Bounds(shell.Find<Control>("SkillsNote")));
-        Assert.Equal((inspector.Left + Inset, inspector.Right - Inset), (Math.Round(note.Left, 1), Math.Round(note.Right, 1)));
+        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue")));
     }
 
     [AvaloniaFact]
@@ -190,11 +189,11 @@ public sealed class InspectorLayoutTests : IDisposable
             .Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons) }).ToArray();
 
         Assert.Equal(
-            ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Mode", "System prompt"],
+            ["Client", "Model", "Reasoning", "Skills", "Mode", "System prompt", "Instructions", "Acceptance criteria"],
             rows.Select(row => row.Label));
         Assert.All(rows, row => Assert.True(row.Icon is not null || row.Lead is not null, $"{row.Label} has no glyph."));
         Assert.Equal(
-            ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", "IconDescription"],
+            ["IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", "IconDescription", "IconEdit", "IconCheckmark"],
             rows.Select(row => IconKey(row.Icon)));
     }
 
@@ -231,7 +230,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         Assert.NotEmpty(counts);
         Assert.Equal(6, more.Length);
-        Assert.All(more.Append(shell.Find<Button>("InspectorTools")), control => Assert.Equal(edge, shell.Bounds(control).Right, 1));
+        Assert.All(more, control => Assert.Equal(edge, shell.Bounds(control).Right, 1));
         // A glyph's drawing ends inside its button, so a count's digits end there too, which the next test sees in pixels.
         Assert.All(counts, count => Assert.Equal(edge - InspectorGrid.GlyphInkInset, shell.Bounds(count).Right, 1));
     }
@@ -409,19 +408,19 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(280)]
     [InlineData(320)]
     [InlineData(520)]
-    public void The_filter_sits_under_the_pinned_header_whether_a_task_a_connection_or_nothing_is_selected(double width)
+    public void The_filter_sits_under_the_pinned_header_on_a_task_and_a_connection_and_hides_with_nothing_selected(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
         shell.SizeInspector(width);
         double Gap() => shell.Bounds(shell.Find<TextBox>("InspectorFilter")).Top - shell.Bounds(shell.Find<Control>("InspectorHeader")).Bottom;
-        var nothing = Gap();
+        Assert.False(shell.Find<TextBox>("InspectorFilter").IsEffectivelyVisible);
 
         shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Equal(nothing, Gap(), 0.5);
+        var gap = Gap();
 
         shell.Click(shell.ConnectionInto("Build"));
-        Assert.Equal(nothing, Gap(), 0.5);
+        Assert.Equal(gap, Gap(), 0.5);
     }
 
     [AvaloniaTheory]

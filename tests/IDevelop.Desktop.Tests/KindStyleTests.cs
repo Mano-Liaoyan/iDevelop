@@ -47,10 +47,10 @@ public sealed class KindStyleTests
         })];
 
         Assert.Equal(
-            ["#FF564ADE #FF564ADE", "#FF007EAE #FF007EAE", "#FFB02FC2 #FFB02FC2", "#FF008575 #FF008575", "#FF956D51 #FF956D51", "#FFE7124D #FFE7124D", "#FF6C6C70 #FF6C6C70"],
+            ["#FF564ADE #FF564ADE", "#FF007EAE #FF007EAE", "#FFB02FC2 #FFB02FC2", "#FF008575 #FF008575", "#FF956D51 #FF956D51", "#FF5E6B10 #FF5E6B10", "#FF6C6C70 #FF6C6C70"],
             Paint(ThemeVariant.Light));
         Assert.Equal(
-            ["#FF6D7CFF #FF6D7CFF", "#FF1894C2 #FF3CD3FE", "#FFDB34F2 #FFDB34F2", "#FF009B89 #FF00DAC3", "#FFB78A66 #FFB78A66", "#FFFF375F #FFFF375F", "#FF8E8E93 #FF8E8E93"],
+            ["#FF6D7CFF #FF6D7CFF", "#FF1894C2 #FF3CD3FE", "#FFDB34F2 #FFDB34F2", "#FF009B89 #FF00DAC3", "#FFB78A66 #FFB78A66", "#FF7C8F22 #FFA9BC3F", "#FF8E8E93 #FF8E8E93"],
             Paint(ThemeVariant.Dark));
     }
 
@@ -76,7 +76,7 @@ public sealed class KindStyleTests
         Assert.Equal(
             [
                 "#FFE5E5E5  #FF564ADE False",
-                "#FF0088FF #1A0088FF #FF0088FF True",
+                "#FF0088FF #400088FF #FF0088FF True",
                 "#FFC55300 #1AFF8D28 #FFC55300 True",
                 "#FFE9152D #1AFF383C #FFE9152D True",
                 "#FFE5E5E5  #FF008932 True",
@@ -86,6 +86,29 @@ public sealed class KindStyleTests
                 Paint(NodeState.Idle), Paint(NodeState.Running), Paint(NodeState.InputRequired), Paint(NodeState.Failed),
                 Paint(NodeState.Completed), Paint(NodeState.InputRequired, NodeRole.Proposing),
             ]);
+    }
+
+    [AvaloniaFact]
+    public void Each_wait_has_its_own_ring_tint_and_badge_and_no_ring_but_failure_is_red()
+    {
+        var ring = new Border { Classes = { "stateStroke" } };
+        var tint = new Border { Classes = { "stateTint" } };
+        var disc = new Avalonia.Controls.Shapes.Ellipse { Classes = { "badgeDisc" } };
+        Show(new StackPanel { Children = { ring, tint, disc } }, ThemeVariant.Light);
+        string Paint(WaitReason why)
+        {
+            foreach (var element in new StyledElement[] { ring, tint, disc })
+            {
+                StyleClass.SetState(element, NodeState.InputRequired);
+                StyleClass.SetWhy(element, why);
+            }
+
+            return $"{Hex(ring.BorderBrush)} {Hex(tint.Background)} {Hex(disc.Fill)}";
+        }
+
+        Assert.Equal(
+            ["#FFC55300 #1AFF8D28 #FFC55300", "#FFB02FC2 #1ACB30E0 #FFB02FC2", "#FF6C6C70 #1A8E8E93 #FF6C6C70"],
+            [Paint(WaitReason.Question), Paint(WaitReason.Approval), Paint(WaitReason.Interrupted)]);
     }
 
     [AvaloniaFact]

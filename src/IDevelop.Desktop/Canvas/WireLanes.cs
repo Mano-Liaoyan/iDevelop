@@ -4,9 +4,9 @@ using Avalonia;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// Moves apart the wires that share a run, so a person can trace each one. Wires from one output, and wires into one input,
-/// stay on one line, because each of those is one tree. Other wires on a run take lanes 10 px apart, in order of their source
-/// positions. A wire's ends stay on its ports' rows. A wire that its lane would take through a card stays where it was.
+/// Moves apart the wires that share a run, so a person can trace each one. Every wire on a run takes its own lane, 10 px from
+/// the next, in order of its source position and then its target position, so no wires share a trunk (ADR 0045). A wire's
+/// ends stay on its ports' rows. A wire that its lane would take through a card stays where it was.
 /// </summary>
 internal static class WireLanes
 {
@@ -14,8 +14,8 @@ internal static class WireLanes
 
     private const double Tolerance = 0.01;
 
-    /// <summary>One wire's route, the ends that decide its tree, and its place in the order of lanes.</summary>
-    public readonly record struct Wire(ImmutableArray<Point> Route, object Source, object Target, double Order);
+    /// <summary>One wire's route and its place in the order of lanes.</summary>
+    public readonly record struct Wire(ImmutableArray<Point> Route, double Order, double TargetOrder);
 
     private readonly record struct Run(int Wire, int First, double Line, double Start, double End);
 
@@ -37,16 +37,10 @@ internal static class WireLanes
         var runs = wires.SelectMany((wire, index) => Runs(wire.Route, index, vertical)).OrderBy(run => run.Line).ThenBy(run => run.Start).ToList();
         foreach (var shared in Shared(runs))
         {
-            var lanes = shared.Select(run => wires[run.Wire].Source).Distinct().ToList();
-            if (lanes.Count < 2 || shared.Select(run => wires[run.Wire].Target).Distinct().Count() < 2)
-            {
-                continue;
-            }
-
-            lanes = [.. lanes.OrderBy(source => shared.Where(run => wires[run.Wire].Source == source).Min(run => wires[run.Wire].Order))];
+            var lanes = shared.Select(run => run.Wire).Distinct().OrderBy(wire => wires[wire].Order).ThenBy(wire => wires[wire].TargetOrder).ToList();
             foreach (var run in shared)
             {
-                var offset = (lanes.IndexOf(wires[run.Wire].Source) - (lanes.Count - 1) / 2.0) * Lane;
+                var offset = (lanes.IndexOf(run.Wire) - (lanes.Count - 1) / 2.0) * Lane;
                 var move = vertical ? new Vector(offset, 0) : new Vector(0, offset);
                 moves[run.Wire][run.First] += move;
                 moves[run.Wire][run.First + 1] += move;

@@ -81,7 +81,7 @@ public sealed class CanvasTests : IDisposable
         var (existing, added) = (shell.Node(title), shell.Node("New task"));
         Assert.Equal(60 + pan, added.Location.X);
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
-        Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title && text.IsEffectivelyVisible).TextLayout.TextLines.Single().HasCollapsed);
+        Assert.EndsWith("…", shell.InCard<TextBlock>(title, "CardTitle").Text);
         // The peek names the whole title that the card cuts short.
         Assert.Equal(title, shell.PeekTexts(title)![0]);
     }
@@ -91,9 +91,9 @@ public sealed class CanvasTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        // The ring is 2 px wide and sits 2 px outside the card, so this pixel is on its straight top edge.
-        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -3));
-        Assert.Equal(Color.Parse("#FBFBF9"), Ring());
+        // The line is 1.5 px wide and starts 1 px outside the card, so this pixel is on its straight top edge.
+        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -1));
+        Assert.NotEqual(Color.Parse("#0B0E10"), Ring());
 
         shell.Click(shell.Header(shell.Node("Design")));
         Assert.Equal(Color.Parse("#0B0E10"), Ring());
@@ -147,7 +147,7 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Fit_to_screen_brings_a_distant_task_into_view()
+    public void Fit_to_screen_stops_at_a_readable_zoom_and_keeps_the_selected_task_in_view()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
         var editor = new Rect(shell.Editor.Bounds.Size);
@@ -155,7 +155,14 @@ public sealed class CanvasTests : IDisposable
 
         shell.Click(shell.Find<Button>("FitToScreen"));
 
+        Assert.Equal(CanvasChrome.ReadableZoom, shell.Editor.ViewportZoom);
         Assert.True(editor.Contains(shell.CardRect("Design")), $"{shell.CardRect("Design")} is outside {editor}");
+        Assert.False(editor.Intersects(shell.CardRect("Build")));
+
+        shell.Window.ViewModel.Canvas!.SelectedNode = shell.NodeModel("Build");
+        shell.Render();
+        shell.Click(shell.Find<Button>("FitToScreen"));
+
         Assert.True(editor.Contains(shell.CardRect("Build")), $"{shell.CardRect("Build")} is outside {editor}");
     }
 

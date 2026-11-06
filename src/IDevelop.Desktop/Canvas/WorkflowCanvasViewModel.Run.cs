@@ -48,23 +48,15 @@ public sealed partial class WorkflowCanvasViewModel
             {
                 OnPropertyChanged(nameof(RunsNothing));
                 OnPropertyChanged(nameof(CanStartRun));
-                OnPropertyChanged(nameof(RunWorkflowLabel));
-                OnPropertyChanged(nameof(RunWorkflowShortLabel));
             }
         }
     }
 
-    /// <summary>No node runs, so Run Workflow is the bar's primary action. While one runs, it says so and Stop All stands beside it.</summary>
+    /// <summary>No node runs, so Run Workflow is the bar's primary action. While one runs, Stop All takes its place.</summary>
     public bool RunsNothing => RunningCount == 0;
 
     /// <summary>A graph exists and no node runs, so Run Workflow takes the primary look.</summary>
     public bool CanStartRun => !IsEmpty && RunsNothing;
-
-    /// <summary>What the toolbar's run button says.</summary>
-    public string RunWorkflowLabel => RunningCount == 0 ? "Run Workflow" : "Running…";
-
-    /// <summary>What the toolbar's run button says on a compact canvas.</summary>
-    public string RunWorkflowShortLabel => RunningCount == 0 ? "Run" : "Running…";
 
     /// <summary>The toolbar offers Generate while the canvas's own Generate card does not. A plan in progress or under review keeps it, because it reports that state.</summary>
     public bool ShowsGenerate => !IsEmpty || IsPlanning || IsReviewing;
@@ -95,6 +87,29 @@ public sealed partial class WorkflowCanvasViewModel
                 counts.Waiting > 0 ? $"{counts.Waiting} waiting" : null,
                 counts.Failed > 0 ? $"{counts.Failed} failed" : null,
             }.OfType<string>());
+        }
+    }
+
+    /// <summary>How far the run went: "5 of 9 complete". The chips after it hold the other states.</summary>
+    public string BarProgress => $"{Counts.Completed} of {Counts.Total} complete";
+
+    /// <summary>One chip for each group of nodes that the bar names, in the order of what needs the person first.</summary>
+    public IReadOnlyList<StateChip> BarChips
+    {
+        get
+        {
+            var reasons = Nodes.Where(node => node.State == NodeState.InputRequired).Select(node => node.WaitReason).ToList();
+            var (approvals, stopped) = (reasons.Count(why => why == WaitReason.Approval), reasons.Count(why => why == WaitReason.Interrupted));
+            var counts = Counts;
+            return new StateChip?[]
+            {
+                StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"),
+                StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed"),
+                StateChip.Of(NodeState.InputRequired, WaitReason.Question, reasons.Count - approvals - stopped, "waiting for an answer"),
+                StateChip.Of(NodeState.InputRequired, WaitReason.Approval, approvals, "waiting for approval"),
+                StateChip.Of(NodeState.InputRequired, WaitReason.Interrupted, stopped, "interrupted"),
+                StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, "stale"),
+            }.OfType<StateChip>().ToList();
         }
     }
 
@@ -201,6 +216,8 @@ public sealed partial class WorkflowCanvasViewModel
         OnWaitingChanged();
         OnPropertyChanged(nameof(ShowsBar));
         OnPropertyChanged(nameof(BarSummary));
+        OnPropertyChanged(nameof(BarProgress));
+        OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(HasAttention));
         OnPropertyChanged(nameof(BarTone));
         OnPropertyChanged(nameof(BarActivity));

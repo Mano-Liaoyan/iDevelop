@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
              xmlns:theme="using:IDevelop.Desktop.Theme"
+             xmlns:conversation="using:IDevelop.Desktop.Conversation"
              xmlns:inspector="using:IDevelop.Desktop.Inspector"
              x:Class="IDevelop.Desktop.Blueprints.BlueprintEditorView"
              x:DataType="blueprints:BlueprintEditorViewModel">
@@ -35,7 +36,7 @@
         </StackPanel>
       </StackPanel>
     </Border>
-    <ScrollViewer theme:EdgeFade.IsEnabled="True">
+    <ScrollViewer>
   <StackPanel Margin="8,8,8,16" AutomationProperties.AutomationId="BlueprintEditor">
     <inspector:InspectorSection Key="BlueprintAbout" Title="Blueprint">
       <StackPanel>
@@ -157,8 +158,8 @@
         <!-- What the agent would read, from the fields' defaults. -->
         <inspector:InspectorRow Label="Preview" Layout="Stacked" IsShown="{Binding TemplatePreview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
           <Border Classes="templatePreview">
-            <TextBlock Classes="promptText" Text="{Binding TemplatePreview}"
-                       AutomationProperties.AutomationId="BlueprintPreview" />
+            <conversation:MarkdownView Classes="promptView" Markdown="{Binding TemplatePreview}"
+                                       AutomationProperties.AutomationId="BlueprintPreview" />
           </Border>
         </inspector:InspectorRow>
         <inspector:InspectorRow Layout="Buttons">

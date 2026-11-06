@@ -1,3 +1,5 @@
+using Avalonia;
+
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
@@ -20,7 +22,7 @@ public sealed partial class WorkflowCanvasViewModel
         SpreadWires();
     }
 
-    /// <summary>Gives each wire its lane beside the wires that share a run with it.</summary>
+    /// <summary>Gives each wire its lane beside the wires that share a run with it, and its curve along that lane.</summary>
     internal void SpreadWires()
     {
         if (_spreadHeld)
@@ -28,10 +30,22 @@ public sealed partial class WorkflowCanvasViewModel
             return;
         }
 
-        var routes = WireLanes.Spread([.. Connections.Select(connection => connection.Lane)], [.. Nodes.Select(node => node.DisplayRect)]);
-        foreach (var (connection, route) in Connections.Zip(routes))
+        Rect[] cards = [.. Nodes.Select(node => node.DisplayRect)];
+        var routes = WireLanes.Spread([.. Connections.Select(connection => connection.Lane)], cards);
+        var fans = WireCurve.Fans([.. Connections.Select(connection => connection.Ends)]);
+        for (var wire = 0; wire < routes.Length; wire++)
         {
-            connection.ShowRoute(route);
+            Connections[wire].ShowRoute(routes[wire], fans[wire], cards);
+        }
+    }
+
+    /// <summary>Tells each card which part of its title sets it apart from the other cards' titles.</summary>
+    private void MarkTitles()
+    {
+        var keeps = TitleParts.KeepFrom([.. Nodes.Select(node => node.Title)]);
+        foreach (var (node, keep) in Nodes.Zip(keeps))
+        {
+            node.TitleKeep = keep;
         }
     }
 

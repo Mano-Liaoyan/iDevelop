@@ -178,9 +178,9 @@ public sealed class CardTests : IDisposable
                 ["Fifth", "Idle ·", "Pi · deepseek", "DeepSeek V4.1 Flash · max"],
             ],
             titles.Select(title => Shell.Texts(shell.Node(title))));
-        // Each line sits at the same height on every card, and none is cut short at the default zoom.
+        // Each line sits at the same height on every card, and only the model gives way, whose tooltip holds it whole.
         Assert.Single(titles.Select(title => (Top(title, "CardAgent"), Top(title, "CardModel"))).Distinct());
-        Assert.All(titles.SelectMany(title => shell.Node(title).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible),
+        Assert.All(titles.SelectMany(title => shell.Node(title).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible && !text.Classes.Contains("cardModel")),
             text => Assert.False(text.TextLayout.TextLines.Any(line => line.HasCollapsed), $"\"{text.Text}\" is cut short."));
 
         double Top(string title, string id) => shell.InCard<TextBlock>(title, id).TranslatePoint(default, shell.Node(title))!.Value.Y;
@@ -269,7 +269,7 @@ public sealed class CardTests : IDisposable
 
         shell.WaitForCard("Design", "Stale");
         Assert.Contains("state-stale", shell.CardLayer("Design", "stateStroke").Classes);
-        Assert.Same(Application.Current!.FindResource("IconStateOutOfDate"), shell.CardGlyph("Design").Data);
+        Assert.Same(Application.Current!.FindResource("IconBadgeStale"), shell.CardGlyph("Design").Data);
         Assert.True(shell.NodeModel("Design").RetryCommand.CanExecute(null));
     }
 
@@ -312,7 +312,7 @@ public sealed class CardTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Selecting_a_node_thickens_its_connections_and_keeps_the_others_readable()
+    public void Selecting_a_node_thickens_its_connections_and_dims_the_others()
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90),
@@ -322,20 +322,19 @@ public sealed class CardTests : IDisposable
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency)));
         BaseConnection Wire(string to) => shell.Connections().Single(connection => ((ConnectionViewModel)connection.DataContext!).To.Title == to);
         (double, double) Opacities() => (Wire("Build").Opacity, Wire("Review").Opacity);
-        Assert.Equal((0.8, 0.8), Opacities());
+        Assert.Equal((1, 1), Opacities());
 
-        // A selection shows by weight, so a wire away from it keeps its contrast with the canvas.
         shell.Click(shell.Header(shell.Node("Design")));
         shell.WaitUntil(() => Wire("Build").StrokeThickness == 2.5, "the connection from Design stands out");
         Assert.Equal((2.5, 1.5), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
-        Assert.Equal((0.8, 0.8), Opacities());
+        shell.WaitUntil(() => Opacities() == (1, 0.35), "the other connection recedes");
 
         shell.Click(shell.Editor.TranslatePoint(new Point(400, 500), shell.Window)!.Value);
         shell.WaitUntil(() => Wire("Build").StrokeThickness == 1.5, "nothing stands out without a selection");
     }
 
     [AvaloniaFact]
-    public void A_context_connection_is_dashed_in_its_source_kinds_stroke()
+    public void A_context_connection_is_dashed_and_quiet_whatever_its_nodes_kinds()
     {
         var shell = Shell.Open(_temp.Seed(
             Place(Design, BuiltInBlueprints.Plan, "Plan", 105, 90),
@@ -345,6 +344,6 @@ public sealed class CardTests : IDisposable
 
         var wire = Assert.Single(shell.Connections());
 
-        Assert.Equal((Color.Parse("#007EAE"), true), (((ISolidColorBrush)wire.Stroke!).Color, wire.StrokeDashArray is { Count: > 0 }));
+        Assert.Equal((Color.Parse("#90969C"), true), (((ISolidColorBrush)wire.Stroke!).Color, wire.StrokeDashArray is { Count: > 0 }));
     }
 }

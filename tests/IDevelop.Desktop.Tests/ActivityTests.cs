@@ -1,3 +1,4 @@
+using IDevelop.Desktop.Inspector;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -233,7 +234,7 @@ public sealed class ActivityTests : IDisposable
             var focused = (Control)shell.Window.FocusManager!.GetFocusedElement()!;
             return focused.FindAncestorOfType<SidebarView>() is not null ? "left"
                 : shell.Editor.IsKeyboardFocusWithin ? "canvas"
-                : Avalonia.Automation.AutomationProperties.GetAutomationId(focused) == "InspectorFilter" ? "inspector" : "other";
+                : focused.FindAncestorOfType<InspectorView>() is not null ? "inspector" : "other";
         }
 
         List<string> seen = [];

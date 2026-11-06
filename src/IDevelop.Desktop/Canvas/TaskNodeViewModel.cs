@@ -18,14 +18,15 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     // each list in this order.
     private static readonly Dictionary<string, string[]> Dependents = new()
     {
-        [nameof(State)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsNextRunNote)],
-        [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(IsUnderReview)],
-        [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices)],
-        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsAcceptAndFinish), nameof(Actions)],
+        [nameof(State)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(ShowsNextRunNote)],
+        [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(IsUnderReview)],
+        [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine)],
+        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(CardLine), nameof(ShowsAcceptAndFinish), nameof(Actions)],
         [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
-        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
+        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(CardLine), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
         [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
-        [nameof(Preview)] = [nameof(TaskChanges)],
+        [nameof(Preview)] = [nameof(TaskChanges), nameof(SystemPrompt), nameof(HasSystemPrompt)],
+        [nameof(Title)] = [nameof(SystemPrompt)],
         [nameof(PermissionNote)] = [nameof(PermissionSummary)],
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
         [nameof(Location)] = [nameof(DisplayLocation)],

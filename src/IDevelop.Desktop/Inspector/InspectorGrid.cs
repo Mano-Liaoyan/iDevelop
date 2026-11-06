@@ -24,7 +24,7 @@ public sealed class InspectorGrid : Grid
     public const double GlyphGap = 6;
 
     /// <summary>The height of a row's first line, a picker's height. A row's glyph, label, buttons, and a short value centre on it.</summary>
-    public const double LineHeight = 28;
+    public const double LineHeight = 26;
 
     /// <summary>
     /// The height of a label's line over its value, a glyph button's height, so the label sits 4 px above the value rather

@@ -98,7 +98,7 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal([true, true, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.Equal(
             [
-                "Filter properties", "Sections", "Workflow", "0 nodes", "Select a node to edit it.", "Library",
+                "Workflow", "0 nodes", "Select a node to edit it.", "Library",
                 "Built-in", "Implement", "Plan", "Architect", "Review", "Approval", "Merge",
                 "No project or personal blueprints yet. Derive one to add it.",
                 "Reload Libraries",

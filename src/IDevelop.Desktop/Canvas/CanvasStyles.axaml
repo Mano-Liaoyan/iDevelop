@@ -6,10 +6,11 @@
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:theme="using:IDevelop.Desktop.Theme">
-  <!-- One neutral ring, 3 px outside the card, says selected. It leaves blue to Running. -->
+  <!-- One neutral line on the card's edge says selected, and it leaves the state's own edge visible inside it. The keyboard's
+       ring, the app's one focus ring, sits outside it while the canvas has the keyboard's focus. -->
   <Style Selector="Border.ring">
-    <Setter Property="Margin" Value="7,-3" />
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="Margin" Value="9,-1" />
+    <Setter Property="BorderThickness" Value="1.5" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
@@ -17,6 +18,14 @@
   </Style>
   <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
     <Setter Property="BorderBrush" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Border.keyRing">
+    <Setter Property="Margin" Value="7,-3" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector=":is(Control).keyboardFocus nodify|ItemContainer:selected Border.keyRing">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <!-- A card is 240 wide in its 260 wide container, and an expanded card 320 in 340 (ADR 0024). An expanded card's state
        tint stays on its header, so its details read on the card's own surface. -->
@@ -34,13 +43,13 @@
   <Style Selector="Border.cardBand">
     <Setter Property="CornerRadius" Value="10,10,0,0" />
   </Style>
-  <Style Selector="Border.bandHover">
-    <Setter Property="CornerRadius" Value="10,10,0,0" />
+  <!-- The pointer over a card lifts its surface a little, and only a selection draws a line. -->
+  <Style Selector="Border.cardHover">
     <Setter Property="Background" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="Opacity" Value="0" />
   </Style>
-  <Style Selector="nodify|ItemContainer:pointerover Border.bandHover">
-    <Setter Property="Opacity" Value="0.06" />
+  <Style Selector="nodify|ItemContainer:pointerover Border.cardHover">
+    <Setter Property="Opacity" Value="0.05" />
   </Style>
   <Style Selector="Panel.taskCard.expanded Border.stateTint">
     <Setter Property="CornerRadius" Value="10,10,0,0" />
@@ -82,38 +91,33 @@
   <Style Selector="nodify|ItemContainer:pointerover Border.card">
     <Setter Property="BoxShadow" Value="{DynamicResource NodeHoverShadow}" />
   </Style>
-  <!-- The pointer over a card draws the ring's place in a quiet line, which a selection then replaces. -->
-  <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
-  </Style>
 
   <!-- A zoomed out card. A collapsed card gives up its zones and an expanded card stays in the Full tier, so that it can be used.
        Each tier sets its stripe, title, badge, and edge in canvas units, so they stay near one size on screen. -->
-  <Style Selector=":is(Control).cardFar, Border.cardEdge, Border.cardFarTint, Border.cardBlock, Panel.stateBadge">
+  <Style Selector=":is(Control).cardFar, Border.cardEdgeClip, Grid.cardDetail, Border.cardBlock, Panel.stateBadge">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-label Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-title Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-block Panel.taskCard:not(.expanded) Grid.cardFull">
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-compact Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-label Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-title Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-block Panel.taskCard:not(.expanded) Grid.cardFull">
     <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Grid.cardDetail">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
   <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-label Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-title Panel.taskCard:not(.expanded) :is(Control).cardFar">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) Border.cardEdge, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardEdge, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardEdge">
+  <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardEdgeClip">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-label Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-title Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-block Panel.taskCard:not(.expanded) Panel.stateBadge">
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-compact Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-label Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-title Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-block Panel.taskCard:not(.expanded) Panel.stateBadge">
     <Setter Property="IsVisible" Value="True" />
   </Style>
   <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) Border.cardBlock">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardFarTint.state-idle, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardFarTint.state-completed, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardFarTint.state-idle, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardFarTint.state-completed">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
   <Style Selector="Border.cardEdge">
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="Width" Value="5" />
-    <Setter Property="CornerRadius" Value="10,0,0,10" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.cardEdge">
     <Setter Property="Width" Value="8" />
@@ -121,8 +125,31 @@
   <Style Selector=":is(Control).tier-title Border.cardEdge">
     <Setter Property="Width" Value="16" />
   </Style>
+  <Style Selector="TextBlock.detailTitle">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.detailLine">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="LineHeight" Value="17" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.detailLine.state-running">
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+  <Style Selector="TextBlock.detailLine.state-failed">
+    <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
+  </Style>
   <Style Selector="TextBlock.farTitle">
-    <Setter Property="Margin" Value="14,0,8,0" />
+    <Setter Property="Margin" Value="16,0,12,0" />
     <Setter Property="FontSize" Value="20" />
     <Setter Property="LineHeight" Value="24" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -132,7 +159,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="16,0,6,0" />
+    <Setter Property="Margin" Value="16,0,8,0" />
     <Setter Property="FontSize" Value="26" />
     <Setter Property="LineHeight" Value="30" />
   </Style>
@@ -149,9 +176,9 @@
     <Setter Property="Margin" Value="0,-12,-2,0" />
   </Style>
   <Style Selector=":is(Control).tier-label Panel.stateBadge">
-    <Setter Property="Width" Value="36" />
-    <Setter Property="Height" Value="36" />
-    <Setter Property="Margin" Value="0,-18,-8,0" />
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Margin" Value="0,-20,-10,0" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
     <Setter Property="Width" Value="60" />
@@ -163,8 +190,9 @@
     <Setter Property="Height" Value="80" />
     <Setter Property="Margin" Value="0,-40,-30,0" />
   </Style>
-  <!-- A card's edge keeps its weight on screen as the cards shrink, and a node with no state keeps a visible edge. -->
-  <Style Selector=":is(Control).tier-compact Border.stateStroke">
+  <!-- A card's edge keeps its weight on screen as the cards shrink, and a node with no state keeps a visible edge. A running
+       node's edge and glow stay the heaviest in every tier. -->
+  <Style Selector=":is(Control).tier-detail Border.stateStroke, :is(Control).tier-compact Border.stateStroke">
     <Setter Property="BorderThickness" Value="2" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.stateStroke">
@@ -173,24 +201,58 @@
   <Style Selector=":is(Control).tier-title Border.stateStroke, :is(Control).tier-block Border.stateStroke">
     <Setter Property="BorderThickness" Value="5" />
   </Style>
+  <Style Selector=":is(Control).tier-detail Border.stateStroke.state-running, :is(Control).tier-compact Border.stateStroke.state-running">
+    <Setter Property="BorderThickness" Value="4" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Border.stateStroke.state-running">
+    <Setter Property="BorderThickness" Value="6" />
+  </Style>
+  <Style Selector=":is(Control).tier-title Border.stateStroke.state-running, :is(Control).tier-block Border.stateStroke.state-running">
+    <Setter Property="BorderThickness" Value="10" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Border.glow, :is(Control).tier-compact Border.glow">
+    <Setter Property="BorderThickness" Value="6" />
+    <Setter Property="Margin" Value="4,-6" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Border.glow">
+    <Setter Property="BorderThickness" Value="10" />
+    <Setter Property="Margin" Value="0,-10" />
+  </Style>
+  <Style Selector=":is(Control).tier-title Border.glow, :is(Control).tier-block Border.glow">
+    <Setter Property="BorderThickness" Value="16" />
+    <Setter Property="Margin" Value="-6,-16" />
+  </Style>
   <Style Selector=":is(Control).tier-label Border.stateStroke.state-idle, :is(Control).tier-title Border.stateStroke.state-idle, :is(Control).tier-block Border.stateStroke.state-idle,
                    :is(Control).tier-label Border.stateStroke.state-completed, :is(Control).tier-title Border.stateStroke.state-completed, :is(Control).tier-block Border.stateStroke.state-completed">
     <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
   </Style>
   <Style Selector=":is(Control).tier-label Rectangle.staleEdge">
-    <Setter Property="StrokeThickness" Value="4" />
+    <Setter Property="StrokeThickness" Value="3" />
   </Style>
   <Style Selector=":is(Control).tier-title Rectangle.staleEdge, :is(Control).tier-block Rectangle.staleEdge">
-    <Setter Property="StrokeThickness" Value="6" />
+    <Setter Property="StrokeThickness" Value="5" />
   </Style>
-  <!-- A selection ring and a wire keep their weight on screen as the cards shrink. -->
+  <!-- A selection line and a focus ring keep their weight on screen as the cards shrink. -->
+  <Style Selector=":is(Control).tier-detail Border.ring, :is(Control).tier-compact Border.ring">
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
   <Style Selector=":is(Control).tier-label Border.ring">
-    <Setter Property="Margin" Value="4,-6" />
-    <Setter Property="BorderThickness" Value="4" />
+    <Setter Property="BorderThickness" Value="3" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
-    <Setter Property="Margin" Value="0,-10" />
-    <Setter Property="BorderThickness" Value="8" />
+    <Setter Property="BorderThickness" Value="6" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Border.keyRing, :is(Control).tier-compact Border.keyRing">
+    <Setter Property="Margin" Value="6,-4" />
+    <Setter Property="BorderThickness" Value="3" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Border.keyRing">
+    <Setter Property="Margin" Value="2,-8" />
+    <Setter Property="BorderThickness" Value="5" />
+  </Style>
+  <Style Selector=":is(Control).tier-title Border.keyRing, :is(Control).tier-block Border.keyRing">
+    <Setter Property="Margin" Value="-4,-14" />
+    <Setter Property="BorderThickness" Value="10" />
   </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
        show through it (#85). Its dashed edge and faded tile say it is a proposal. -->
@@ -224,8 +286,11 @@
   </Style>
   <Style Selector="TextBlock.cardTitle">
     <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="17" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Height" Value="18" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- The box is its font's line plus a 1 px border at the top and bottom, so no font loses its descenders. The -5 left
@@ -249,8 +314,9 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="TextBlock.cardStatus, TextBlock.cardIdle">
+  <Style Selector="TextBlock.cardStatus, TextBlock.cardIdle, TextBlock.cardAgent">
     <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Margin" Value="0,0,6,0" />
   </Style>
   <Style Selector="TextBlock.cardIdle">
     <Setter Property="Margin" Value="0,0,4,0" />
@@ -267,10 +333,14 @@
 
   <Style Selector="Ellipse.portDot">
     <Setter Property="StrokeThickness" Value="0" />
+    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- A port's ring is neutral until a connection uses it. Then Kinds.axaml paints it in its node's kind. -->
-  <Style Selector="Ellipse.port:not(.kindStroke)">
+  <!-- A port's ring is faint until a connection uses it. -->
+  <Style Selector="Ellipse.port">
     <Setter Property="Stroke" Value="{DynamicResource Border100Brush}" />
+  </Style>
+  <Style Selector="Ellipse.port.connected">
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
   </Style>
 
   <!-- Nodify's own rule that draws connections below the cards never matches its internal host type. -->
@@ -283,11 +353,12 @@
     <!-- A routed wire ignores the spacing. WireRouting.Stub is the spacing plus the offset, one value for both ends, so
          a change to the spacing or to both offsets needs the same change in Stub. -->
     <Setter Property="Spacing" Value="20" />
-    <Setter Property="CornerRadius" Value="8" />
     <!-- Half a handle's width, so each end meets the edge of its 10 px handle. -->
     <Setter Property="SourceOffset" Value="5,0" />
     <Setter Property="TargetOffset" Value="5,0" />
-    <Setter Property="ArrowSize" Value="9,9" />
+    <!-- A wire has no arrowhead at rest, as in Blender and Unreal, so wires into one port stay apart to its edge. An output and
+         an input already say which way a wire runs. -->
+    <Setter Property="ArrowSize" Value="0,0" />
     <!-- An invisible solid outline gives the pointer a 12 px target around the line, gaps in a dash included. -->
     <Setter Property="OutlineBrush" Value="Transparent" />
     <Setter Property="OutlineThickness" Value="5" />
@@ -298,48 +369,27 @@
       </Transitions>
     </Setter>
   </Style>
-  <!-- A wire's stroke and arrow take its source node's kind. Nodify's connections are not Avalonia shapes, so Kinds.axaml's
-       shape rules miss them. -->
-  <Style Selector=":is(nodify|BaseConnection).kind-implement">
-    <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindImplementStrokeBrush}" />
+  <!-- A wire's color shows what happens on it, never the kinds of its nodes (ADR 0045). It is quiet while it is idle or done,
+       and only the wire into a running node is loud: thick, bright, glowing, and moving. The neutral brushes keep 3:1 with the
+       canvas in both themes. The stroke comes from the wire's view model, because the flow, the selection, and the zoom tier
+       all set it. -->
+  <Style Selector="nodify|StepConnection">
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextFaintBrush}" />
   </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-plan">
-    <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindPlanStrokeBrush}" />
-  </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-architect">
-    <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindArchitectStrokeBrush}" />
-  </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-review">
-    <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindReviewStrokeBrush}" />
-  </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-approval">
-    <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-merge">
-    <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindMergeStrokeBrush}" />
-  </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-readonlyagent">
-    <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
-  </Style>
-  <!-- A wire's flow sets its weight, opacity, and motion, and its hue stays its source kind's unless it reports a problem.
-       The stroke comes from the wire's view model, because the flow, the selection, and the zoom tier all set it. An opacity
-       keeps a wire's contrast with the canvas at 3:1 or more in both themes, so the lit path shows by weight and by motion. -->
   <Style Selector="nodify|StepConnection.wire">
     <Setter Property="StrokeThickness" Value="{ReflectionBinding Stroke}" />
-    <Setter Property="Opacity" Value="0.8" />
   </Style>
-  <Style Selector="nodify|StepConnection.wire.flow-delivered, nodify|StepConnection.wire.flow-feeding, nodify|StepConnection.wire.flow-outdated">
-    <Setter Property="Opacity" Value="1" />
+  <Style Selector="nodify|StepConnection.wire.flow-delivered">
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.wire.flow-ready">
-    <Setter Property="Opacity" Value="0.9" />
+  <Style Selector="nodify|StepConnection.wire.highlighted">
+    <Setter Property="Stroke" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="nodify|StepConnection.wire.dimmed">
+    <Setter Property="Opacity" Value="0.35" />
   </Style>
   <Style Selector="nodify|StepConnection.wire.flow-outdated">
     <Setter Property="Stroke" Value="{DynamicResource StateWarningStrokeBrush}" />
@@ -349,8 +399,14 @@
     <Setter Property="Stroke" Value="{DynamicResource StateFailedStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
-  <!-- Moving arrows follow the wire's corners and mean a node reads this result now. Dashes mean context, so nothing dashes here. -->
+  <!-- Moving arrows follow the wire's curve and mean a node reads this result now. Dashes mean context, so nothing dashes here. -->
   <Style Selector="nodify|StepConnection.wire.flow-feeding">
+    <Setter Property="Stroke" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="OutlineBrush" Value="{DynamicResource StateRunning45Brush}" />
+    <Setter Property="OutlineThickness" Value="4" />
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="ArrowSize" Value="10,10" />
     <Setter Property="DirectionalArrowsCount" Value="3" />
     <Setter Property="IsAnimatingDirectionalArrows" Value="True" />
     <Setter Property="DirectionalArrowsAnimationDuration" Value="1.2" />
@@ -363,8 +419,7 @@
   <Style Selector="nodify|StepConnection.ghost">
     <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeDashArray" Value="4,3" />
-    <Setter Property="Opacity" Value="0.7" />
-    <Setter Property="ArrowSize" Value="7,7" />
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="nodify|StepConnection.ghost.context">
     <Setter Property="StrokeDashArray" Value="1,3" />
@@ -377,6 +432,7 @@
     <Setter Property="ArrowSize" Value="0,0" />
     <Setter Property="SourceOffsetMode" Value="None" />
     <Setter Property="TargetOffsetMode" Value="None" />
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="nodify|StepConnection.wire:pointerover">
     <Setter Property="StrokeThickness" Value="{ReflectionBinding HotStroke}" />
@@ -386,26 +442,8 @@
     <Setter Property="StrokeThickness" Value="{ReflectionBinding HotStroke}" />
     <Setter Property="Opacity" Value="1" />
   </Style>
-  <Style Selector="nodify|PendingConnection.kind-implement">
-    <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-plan">
-    <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-architect">
-    <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-review">
-    <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-approval">
-    <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-merge">
-    <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-readonlyagent">
-    <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
+  <Style Selector="nodify|PendingConnection">
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="nodify|PendingConnection.rejected">
     <Setter Property="Stroke" Value="{DynamicResource StateFailedStrokeBrush}" />
@@ -422,6 +460,10 @@
        card does at the Block tier. A ghost is a faint fill in a dashed ring. -->
   <Style Selector="Border.minimapItem">
     <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+  </Style>
+  <!-- A node that has not run stays visible on the map's surface, under the states that have happened. -->
+  <Style Selector="Border.minimapItem.state-idle">
+    <Setter Property="Background" Value="{DynamicResource TextFaintBrush}" />
   </Style>
   <Style Selector="Border.minimapItem.ghost">
     <Setter Property="Opacity" Value="0.3" />
@@ -482,16 +524,6 @@
   </Style>
   <Style Selector=":is(Control).narrowBar TextBlock.barLong">
     <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- The progress gives up width first, so the words it stands beside fit whole. -->
-  <Style Selector="Border.barProgress">
-    <Setter Property="Width" Value="120" />
-  </Style>
-  <Style Selector=":is(Control).shortBar Border.barProgress">
-    <Setter Property="Width" Value="56" />
-  </Style>
-  <Style Selector=":is(Control).narrowBar Border.barProgress">
-    <Setter Property="Width" Value="32" />
   </Style>
   <Style Selector=":is(Control).narrowBar TextBlock.followLabel">
     <Setter Property="IsVisible" Value="False" />

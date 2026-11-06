@@ -100,13 +100,12 @@
           </StackPanel>
         </DataTemplate>
         <DataTemplate DataType="canvas:GhostWireViewModel">
-          <nodify:StepConnection Classes="ghost" Source="{Binding Source}" Target="{Binding Target}"
-                                 theme:StyleClass.Kind="{Binding Kind}" Classes.context="{Binding IsContext}"
-                                 AutomationProperties.AutomationId="GhostWire" />
+          <canvas:RoutedConnection Classes="ghost" Source="{Binding Source}" Target="{Binding Target}"
+                                   Classes.context="{Binding IsContext}"
+                                   AutomationProperties.AutomationId="GhostWire" />
         </DataTemplate>
         <DataTemplate DataType="canvas:DanglingWireViewModel">
           <nodify:LineConnection Classes="dangling" Source="{Binding Source}" Target="{Binding Target}"
-                                 theme:StyleClass.Kind="{Binding Kind}"
                                  AutomationProperties.AutomationId="DanglingWire" />
         </DataTemplate>
       </nodify:NodifyEditor.DataTemplates>
@@ -155,17 +154,14 @@
             <!-- The panel is Fit and its chevron until the graph leaves the view or the person opens it. -->
             <Grid x:Name="ZoomMore" ColumnDefinitions="28,28" RowDefinitions="28,28" IsVisible="False">
               <!-- Expand All and Collapse All, for this workflow's cards only (ADR 0024), with the zoom controls, since it
-                   changes only this machine's view. The chevron points down to expand every card, and right to collapse
-                   them, as a card's points when it is expanded or collapsed, and the tooltip's first line names it. -->
+                   changes only this machine's view. The tooltip's first line names it. Its glyph is no chevron, so the panel's
+                   one chevron is the one that closes the panel. -->
               <Panel x:Name="ExpandAllSlot">
               <Button Classes="icon zoom" Command="{Binding ExpandCardsCommand}" IsVisible="{Binding !IsEmpty}"
                       ToolTip.Tip="{Binding ExpandCardsLabel, StringFormat='{}{0}&#10;Show or hide the details of every card in this workflow'}"
                       AutomationProperties.AutomationId="ExpandAll"
                       AutomationProperties.Name="{Binding ExpandCardsLabel}">
-                <Panel>
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" IsVisible="{Binding !AnyCardExpanded}" />
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" IsVisible="{Binding AnyCardExpanded}" />
-                </Panel>
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconExpandAll}" />
               </Button>
               </Panel>
               <ToggleButton x:Name="MinimapToggle" Grid.Column="1" Classes="zoom"
@@ -200,9 +196,10 @@
         </Border>
       </Border>
 
-      <!-- One bar for a run: progress by state, the counts, Next, Follow, and Merge into my branch while every node is completed
-           and nothing is stale (ADR 0017). Stop All sits with Run Workflow, where the run started. UI Automation shows no plain
-           border, so a user control carries its id. On a narrow canvas the summary shortens and Follow keeps only its glyph. -->
+      <!-- One bar for a run: how far it went, one chip per state that has nodes, Next, Follow, and Merge into my branch while
+           every node is completed and nothing is stale (ADR 0017). The chips are the canvas's badges with their counts, so the bar
+           is also the badges' legend. Stop All sits where Run Workflow was. UI Automation shows no plain border, so a user
+           control carries its id. On a narrow canvas the summary shortens and Follow keeps only its glyph. -->
       <StackPanel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" VerticalAlignment="Bottom" Spacing="8">
         <UserControl HorizontalAlignment="Center" ClipToBounds="False"
                      IsVisible="{Binding ShowsBar}"
@@ -211,11 +208,8 @@
                      AutomationProperties.AutomationId="WorkflowRunBar"
                      AutomationProperties.Name="{Binding BarSummary}">
           <Border Classes="floating">
-            <Border Height="38" Padding="8,0">
+            <Border Height="38" Padding="10,0,8,0">
               <DockPanel>
-                <Border DockPanel.Dock="Left" Classes="barProgress" Height="6" CornerRadius="3" ClipToBounds="True" Margin="0,0,8,0" VerticalAlignment="Center">
-                  <theme:StateBar Counts="{Binding Counts}" AutomationProperties.AutomationId="RunProgress" />
-                </Border>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">
                   <Button Classes="action bar" Command="{Binding NextWaitingCommand}" IsVisible="{Binding HasAttention}"
                           ToolTip.Tip="{x:Static canvas:WorkflowCanvasView.NextHelp}"
@@ -246,11 +240,32 @@
                     </StackPanel>
                   </Button>
                 </StackPanel>
-                <Panel VerticalAlignment="Center">
-                  <TextBlock Classes="barText barLong" Text="{Binding BarSummary}" TextTrimming="CharacterEllipsis"
-                             AutomationProperties.AutomationId="RunStatus" />
-                  <TextBlock Classes="barText barShort" Text="{Binding BarShort}" AutomationProperties.AutomationId="RunStatusShort" />
-                </Panel>
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                  <Panel VerticalAlignment="Center">
+                    <TextBlock Classes="barText barLong" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
+                    <TextBlock Classes="barText barShort" Text="{Binding BarShort}" AutomationProperties.AutomationId="RunStatusShort" />
+                  </Panel>
+                  <ItemsControl ItemsSource="{Binding BarChips}" VerticalAlignment="Center" AutomationProperties.AutomationId="RunChips">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="8" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="canvas:StateChip">
+                        <StackPanel Orientation="Horizontal" Spacing="4" Background="Transparent" ToolTip.Tip="{Binding Label}"
+                                    AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
+                          <Panel Width="16" Height="16" VerticalAlignment="Center">
+                            <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
+                            <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
+                                      theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
+                          </Panel>
+                          <TextBlock Classes="barText" Text="{Binding Count}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
               </DockPanel>
             </Border>
           </Border>

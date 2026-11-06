@@ -16,6 +16,7 @@
       <SolidColorBrush x:Key="TextBrush" Color="#25292E" />
       <SolidColorBrush x:Key="TextMutedBrush" Color="#5A6168" />
       <SolidColorBrush x:Key="TextFaintBrush" Color="#90969C" />
+      <SolidColorBrush x:Key="OnStateBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="Border100Brush" Color="#E5E5E5" />
       <SolidColorBrush x:Key="Border80Brush" Color="#CCE5E5E5" />
       <SolidColorBrush x:Key="Border60Brush" Color="#99E5E5E5" />
@@ -59,11 +60,11 @@
       <SolidColorBrush x:Key="KindApprovalStrongBrush" Color="#956D51" />
       <SolidColorBrush x:Key="KindApprovalTileBrush" Color="#956D51" />
       <SolidColorBrush x:Key="KindApprovalStrokeBrush" Color="#956D51" />
-      <SolidColorBrush x:Key="KindMergeBrush" Color="#FF2D55" />
-      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1AFF2D55" />
-      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#E7124D" />
-      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#E7124D" />
-      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#E7124D" />
+      <SolidColorBrush x:Key="KindMergeBrush" Color="#7C8A1E" />
+      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1A7C8A1E" />
+      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#5E6B10" />
+      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#5E6B10" />
+      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#5E6B10" />
       <SolidColorBrush x:Key="KindReadOnlyAgentBrush" Color="#8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgent10Brush" Color="#1A8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgentStrongBrush" Color="#6C6C70" />
@@ -72,6 +73,9 @@
       <SolidColorBrush x:Key="StateWaiting10Brush" Color="#1AFF8D28" />
       <SolidColorBrush x:Key="StateWaitingStrongBrush" Color="#C55300" />
       <SolidColorBrush x:Key="StateWaitingStrokeBrush" Color="#C55300" />
+      <SolidColorBrush x:Key="StateApproval10Brush" Color="#1ACB30E0" />
+      <SolidColorBrush x:Key="StateApprovalStrongBrush" Color="#B02FC2" />
+      <SolidColorBrush x:Key="StateApprovalStrokeBrush" Color="#B02FC2" />
       <SolidColorBrush x:Key="StateWarning10Brush" Color="#1AFFCC00" />
       <SolidColorBrush x:Key="StateWarningStrongBrush" Color="#A16A00" />
       <SolidColorBrush x:Key="StateWarningStrokeBrush" Color="#A16A00" />
@@ -125,6 +129,7 @@
       <SolidColorBrush x:Key="TextBrush" Color="#D2D1CD" />
       <SolidColorBrush x:Key="TextMutedBrush" Color="#999893" />
       <SolidColorBrush x:Key="TextFaintBrush" Color="#64635D" />
+      <SolidColorBrush x:Key="OnStateBrush" Color="#0B0E10" />
       <SolidColorBrush x:Key="Border100Brush" Color="#1AFFFFFF" />
       <SolidColorBrush x:Key="Border80Brush" Color="#14FFFFFF" />
       <SolidColorBrush x:Key="Border60Brush" Color="#0FFFFFFF" />
@@ -168,11 +173,11 @@
       <SolidColorBrush x:Key="KindApprovalStrongBrush" Color="#DBA679" />
       <SolidColorBrush x:Key="KindApprovalTileBrush" Color="#B78A66" />
       <SolidColorBrush x:Key="KindApprovalStrokeBrush" Color="#B78A66" />
-      <SolidColorBrush x:Key="KindMergeBrush" Color="#FF375F" />
-      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1AFF375F" />
-      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#FF8AC4" />
-      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#FF375F" />
-      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#FF375F" />
+      <SolidColorBrush x:Key="KindMergeBrush" Color="#A9BC3F" />
+      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1AA9BC3F" />
+      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#C6D66B" />
+      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#7C8F22" />
+      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#A9BC3F" />
       <SolidColorBrush x:Key="KindReadOnlyAgentBrush" Color="#8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgent10Brush" Color="#1A8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgentStrongBrush" Color="#AEAEB2" />
@@ -181,6 +186,9 @@
       <SolidColorBrush x:Key="StateWaiting10Brush" Color="#1AFF9230" />
       <SolidColorBrush x:Key="StateWaitingStrongBrush" Color="#FFA056" />
       <SolidColorBrush x:Key="StateWaitingStrokeBrush" Color="#FF9230" />
+      <SolidColorBrush x:Key="StateApproval10Brush" Color="#1ADB34F2" />
+      <SolidColorBrush x:Key="StateApprovalStrongBrush" Color="#EA8DFF" />
+      <SolidColorBrush x:Key="StateApprovalStrokeBrush" Color="#DB34F2" />
       <SolidColorBrush x:Key="StateWarning10Brush" Color="#1AFFD600" />
       <SolidColorBrush x:Key="StateWarningStrongBrush" Color="#FEDF43" />
       <SolidColorBrush x:Key="StateWarningStrokeBrush" Color="#FFD600" />

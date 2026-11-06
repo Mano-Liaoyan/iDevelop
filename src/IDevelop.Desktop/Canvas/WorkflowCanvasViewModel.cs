@@ -478,6 +478,11 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             ScheduleCardLayout();
         }
 
+        if (tasksChanged)
+        {
+            MarkTitles();
+        }
+
         if (connectionsChanged || tasksChanged || positionsChanged)
         {
             ArrangeOutline();

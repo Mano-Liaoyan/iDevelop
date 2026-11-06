@@ -96,8 +96,8 @@ public sealed class KindTileTests
             return [.. Enumerable.Range(0, 7).Select(tile => At(hex, tile, 32, 3, 16))];
         }
 
-        Assert.Equal(["#564ADE", "#007EAE", "#B02FC2", "#008575", "#956D51", "#E7124D", "#6C6C70"], Hues(ThemeVariant.Light));
-        Assert.Equal(["#6D7CFF", "#1894C2", "#DB34F2", "#009B89", "#B78A66", "#FF375F", "#8E8E93"], Hues(ThemeVariant.Dark));
+        Assert.Equal(["#564ADE", "#007EAE", "#B02FC2", "#008575", "#956D51", "#5E6B10", "#6C6C70"], Hues(ThemeVariant.Light));
+        Assert.Equal(["#6D7CFF", "#1894C2", "#DB34F2", "#009B89", "#B78A66", "#7C8F22", "#8E8E93"], Hues(ThemeVariant.Dark));
     }
 
     [AvaloniaFact]

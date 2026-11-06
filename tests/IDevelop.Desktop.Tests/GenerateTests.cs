@@ -210,9 +210,6 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal(
             [(origin + output, api + input), (api + output, button + input), (api + output, tests + input)],
             GhostWires(shell));
-        Assert.Equal(
-            ["kind-implement", "kind-implement", "kind-plan"],
-            GhostWireLines(shell).Select(wire => wire.Classes.Single(name => name.StartsWith("kind-", StringComparison.Ordinal))).Order());
         Assert.All(GhostWireLines(shell), wire => Assert.Equal([4.0, 3.0], wire.StrokeDashArray!));
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));

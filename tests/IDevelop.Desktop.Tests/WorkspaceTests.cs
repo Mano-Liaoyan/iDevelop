@@ -857,14 +857,12 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void With_nothing_selected_the_inspector_names_the_workflow_whose_tasks_it_counts()
+    public void With_nothing_selected_the_inspector_counts_the_workflow_and_leaves_its_name_to_the_breadcrumb()
     {
         var (shell, _, _) = OpenBoth();
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
-        Assert.Equal(["Release", "1 node"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
 
-        Rename(shell, "alpha", "Release", "Ship it");
-        Assert.Equal(["Ship it", "1 node"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+        Assert.Equal(["Workflow", "1 node"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
     }
 }

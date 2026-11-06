@@ -292,6 +292,14 @@ public partial class MainWindow : Window
     private TextBox? InspectorFilter() => InspectorPanel.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(box =>
         box.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(box) == "InspectorFilter");
 
+    // The filter shows while something is selected, and otherwise the panel's first control takes the focus.
+    private void FocusInspector()
+    {
+        var target = InspectorFilter() ?? InspectorPanel.GetVisualDescendants().OfType<Control>().FirstOrDefault(control =>
+            control is Button or TextBox && control is { Focusable: true, IsEffectivelyVisible: true, IsEffectivelyEnabled: true });
+        target?.Focus(NavigationMethod.Directional);
+    }
+
     private bool FocusModelPicker()
     {
         var picker = InspectorPanel.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(box =>
@@ -317,7 +325,7 @@ public partial class MainWindow : Window
                 yield return (conversation, conversation.FocusComposer);
             }
 
-            yield return (InspectorPanel, () => InspectorFilter()?.Focus(NavigationMethod.Directional));
+            yield return (InspectorPanel, FocusInspector);
         }
 
         var regions = Regions().ToList();

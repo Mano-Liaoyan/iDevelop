@@ -20,6 +20,12 @@ internal static class CanvasChrome
     /// </summary>
     public const double CompactWidth = 700;
 
+    /// <summary>
+    /// The lowest zoom at which Fit keeps a graph whole. A card's title still reads there, in two lines over 10 px on screen. A
+    /// larger graph stops here, and the rest is for panning and the minimap.
+    /// </summary>
+    public const double ReadableZoom = 0.4;
+
     /// <summary>Below this canvas height, as with the conversation docked under it, the minimap hides.</summary>
     public const double MinimapMinHeight = 480;
 
@@ -28,6 +34,25 @@ internal static class CanvasChrome
 
     /// <summary>Below this canvas width the run bar's progress shrinks, so its summary fits whole.</summary>
     public const double ShortBarWidth = 760;
+
+    /// <summary>The zoom that fits <paramref name="extent"/> in <paramref name="room"/>, never above 100% and never under <see cref="ReadableZoom"/>.</summary>
+    public static double FitZoom(Rect extent, Rect room) =>
+        Math.Clamp(Math.Min(room.Width / extent.Width, room.Height / extent.Height), ReadableZoom, 1);
+
+    /// <summary>
+    /// The viewport location that shows the most of <paramref name="extent"/> around <paramref name="focus"/> in
+    /// <paramref name="room"/>, a part of the view. Along an axis where the extent fits, it centres the extent. Along an axis
+    /// where it does not, the view stays on <paramref name="focus"/> and stops at the extent's edge, so no card sits under a
+    /// control while empty canvas shows past it.
+    /// </summary>
+    public static Point ViewOn(Rect extent, Rect room, double zoom, Point focus)
+    {
+        var seen = room.Size / zoom;
+        double Middle(double near, double far, double span, double on) =>
+            far - near <= span ? (near + far) / 2 : Math.Clamp(on, near + span / 2, far - span / 2);
+        var center = new Point(Middle(extent.Left, extent.Right, seen.Width, focus.X), Middle(extent.Top, extent.Bottom, seen.Height, focus.Y));
+        return center - (Vector)room.Center / zoom;
+    }
 
     public static bool IsShortBar(Size canvas) => canvas.Width < ShortBarWidth;
 

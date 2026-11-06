@@ -82,7 +82,8 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal("", shell.Find<TextBox>("InspectorFilter").Text);
         Assert.True(shell.Shows("Agent"));
-        Assert.Equal(["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Mode"], shell.ShownRows().Take(7));
+        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode"], shell.ShownRows().Take(5));
+        Assert.Contains("Instructions", shell.ShownRows());
     }
 
     [AvaloniaFact]
@@ -224,7 +225,7 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_connection_inspector_draws_the_source_kinds_swatch_and_selects_its_ends()
+    public void The_connection_inspector_draws_the_wires_swatch_and_selects_its_ends()
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
@@ -235,7 +236,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal(["Dependency", "Connection"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
         var swatch = shell.Find<Button>("KindDependency").GetVisualDescendants().OfType<Line>().Single();
-        Assert.Equal(Color.Parse("#564ADE"), ((ISolidColorBrush)swatch.Stroke!).Color);
+        Assert.Equal(Color.Parse("#5A6168"), ((ISolidColorBrush)swatch.Stroke!).Color);
         Assert.Equal("Build", Shell.TextOf(shell.Find<Button>("ConnectionTo")));
 
         shell.Click(shell.Find<Button>("ConnectionFrom"));

@@ -5,6 +5,7 @@
      list of properties keep one rhythm. The sections sit 8 px from the panel's edge and hold their text 4 px further in, so a fill reaches past the text. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conversation="using:IDevelop.Desktop.Conversation"
         xmlns:inspector="using:IDevelop.Desktop.Inspector"
         xmlns:theme="using:IDevelop.Desktop.Theme">
 
@@ -79,17 +80,18 @@
     <Setter Property="Height" Value="14" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- The status, the actions, and the detail sit 8 px apart, and any of them may be gone. -->
-  <Style Selector="WrapPanel.headerState">
-    <Setter Property="Margin" Value="0,8,0,0" />
+  <!-- The status, the actions, and the detail sit apart, one row each. -->
+  <Style Selector="StackPanel.headerState">
+    <Setter Property="Margin" Value="0,6,0,0" />
+    <Setter Property="Spacing" Value="6" />
   </Style>
-  <Style Selector="WrapPanel.headerState > Border.headerPill">
-    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
-  </Style>
-  <Style Selector="Border.headerPill">
+  <!-- A status is a glyph and a word in every state, on the panel's own surface, so it never reads as a button. -->
+  <Style Selector="Border.pill.headerPill">
     <Setter Property="Height" Value="NaN" />
-    <Setter Property="MinHeight" Value="24" />
-    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="MinHeight" Value="18" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
   <!-- The action's view is open now: it stops being the next step and says so. -->
   <Style Selector="ItemsControl.headerActions Button.current">
@@ -129,14 +131,17 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-  <Style Selector="TextBlock.promptText">
-    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
+  <!-- A prompt reads as the agent's Markdown, at the panel's smaller sizes. -->
+  <Style Selector="conversation|MarkdownView.promptView">
+    <Setter Property="Spacing" Value="4" />
+  </Style>
+  <Style Selector="conversation|MarkdownView.promptView SelectableTextBlock.md">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="LineHeight" Value="18" />
-    <Setter Property="MaxLines" Value="3" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="Margin" Value="0" />
+  </Style>
+  <Style Selector="conversation|MarkdownView.promptView SelectableTextBlock.md.h1, conversation|MarkdownView.promptView SelectableTextBlock.md.h2, conversation|MarkdownView.promptView SelectableTextBlock.md.h3, conversation|MarkdownView.promptView SelectableTextBlock.md.h4">
+    <Setter Property="FontSize" Value="13" />
   </Style>
   <Style Selector="TextBox.code">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
@@ -147,9 +152,6 @@
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
-  <Style Selector="Border.templatePreview > TextBlock.promptText">
-    <Setter Property="MaxLines" Value="8" />
-  </Style>
   <Style Selector="SelectableTextBlock.promptWhole">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
     <Setter Property="FontSize" Value="12" />
@@ -158,7 +160,13 @@
     <Setter Property="MaxLines" Value="2" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
   </Style>
-  <Style Selector="Button.textLink">
+  <!-- The word in a row that the whole row opens, as a text link reads. -->
+  <Style Selector="TextBlock.linkWord">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+  <Style Selector="Button.textLink, ToggleButton.textLink">
     <Setter Property="Padding" Value="0" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Height" Value="16" />
@@ -167,7 +175,14 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
-  <Style Selector="Button.textLink:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.textLink:pressed /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="ToggleButton.textLink">
+    <Setter Property="Margin" Value="0,2,0,0" />
+  </Style>
+  <Style Selector="ToggleButton.textLink /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+  <Style Selector="Button.textLink:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.textLink:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.textLink:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.textLink:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.textLink:checked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
@@ -236,12 +251,12 @@
     <Setter Property="Height" Value="16" />
   </Style>
 
-  <!-- A section's header is a filled row, so groups read at a glance. Its chevron and title start on the rows' glyph and
+  <!-- A section's header is a thin row on a hairline, so groups read at a glance and leave room for the properties. Its chevron and title start on the rows' glyph and
        label columns, and its count ends at the action edge. Folded, its chevron points to the leading edge. -->
   <Style Selector="inspector|InspectorSection">
     <Setter Property="Template">
       <ControlTemplate>
-        <StackPanel Margin="0,0,0,8">
+        <StackPanel Margin="0,0,0,6">
           <Button Name="PART_Header" Classes="sectionHeader" AutomationProperties.Name="{TemplateBinding Title}">
             <Grid ColumnDefinitions="14,6,*,Auto">
               <PathIcon Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
@@ -277,11 +292,12 @@
   <Style Selector="Button.sectionHeader">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
+    <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
     <Setter Property="Padding" Value="4,0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
   <Style Selector="Button.sectionHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.sectionHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
@@ -338,8 +354,7 @@
             <ContentPresenter Content="{TemplateBinding Actions}" VerticalAlignment="Center"
                               IsVisible="{TemplateBinding Actions, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </StackPanel>
-          <!-- The arrow stands in the glyph's place, so a changed value keeps the panel's one right edge. Over a stacked value it
-               ends the label's line. -->
+          <!-- The arrow stands in the glyph's place in every row, so a changed value keeps the panel's one right edge. -->
           <Panel Name="PART_Revert" Height="{x:Static inspector:InspectorGrid.LineHeight}" VerticalAlignment="Top">
             <Button Classes="glyph revert" Margin="-5,0" HorizontalAlignment="Center"
                     Command="{TemplateBinding RevertCommand}" IsVisible="{TemplateBinding CanRevert}"
@@ -360,15 +375,11 @@
   <Style Selector="inspector|InspectorRow:full /template/ Border#PART_Row, inspector|InspectorRow:buttons /template/ Border#PART_Row">
     <Setter Property="Background" Value="Transparent" />
   </Style>
-  <Style Selector="inspector|InspectorRow:changed:not(:stacked) /template/ PathIcon#PART_Icon">
+  <Style Selector="inspector|InspectorRow:changed /template/ PathIcon#PART_Icon">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_Revert">
-    <Setter Property="Grid.Column" Value="4" />
     <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
-  </Style>
-  <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_Revert > Button">
-    <Setter Property="Margin" Value="0" />
   </Style>
   <!-- A value that differs from its default names itself in strong text beside its revert arrow. -->
   <Style Selector="inspector|InspectorRow:changed /template/ TextBlock#PART_Label">
@@ -482,8 +493,8 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
     <!-- Its text starts 8 px in and its chevron ends 10 px in, where a ComboBox draws them. With its 1 px border, its text
-         starts 5 px down and ends 5 px up, as in a ComboBox of a row. -->
-    <Setter Property="Padding" Value="7,4,9,4" />
+         starts 4 px down and ends 4 px up, as in a ComboBox of a row. -->
+    <Setter Property="Padding" Value="7,3,9,3" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
@@ -567,10 +578,13 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
   </Style>
-  <!-- Fluent pads a ComboBox 5 px above its text and 7 px below. On Windows, Inter's line at 13 px takes 18 px, so the box
-       was 30 px high and sat 1 px below its label. With 5 px above and below, it is one line high, as the skill picker is. -->
+  <Style Selector="inspector|InspectorRow TextBox:not(.multiline)">
+    <Setter Property="Padding" Value="8,3" />
+  </Style>
+  <!-- Fluent pads a ComboBox 5 px above its text and 7 px below. On Windows, Inter's line at 13 px takes 18 px. With 3 px above
+       and below and its border, it is one line high, as the skill picker is. -->
   <Style Selector="inspector|InspectorRow ComboBox">
-    <Setter Property="Padding" Value="8,5,0,5" />
+    <Setter Property="Padding" Value="8,3,0,3" />
     <Setter Property="MaxDropDownHeight" Value="320" />
   </Style>
   <!-- The closed box ends a long name in an ellipsis. Its list opens at the box's own width, over no label, and wraps each name
@@ -588,29 +602,19 @@
   <!-- An idle node's row in the overview takes a quiet glyph, so each state's row starts the same way. -->
   <Style Selector="inspector|InspectorRow PathIcon.stateIcon.state-idle">
     <Setter Property="IsVisible" Value="True" />
-    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
+    <Setter Property="Data" Value="{StaticResource IconIdle}" />
     <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
   </Style>
   <!-- A segment of a row keeps to the 28 px line and to its half of the value column. -->
   <Style Selector="inspector|InspectorRow Button.segment, inspector|InspectorRow RadioButton.segment">
     <Setter Property="Padding" Value="4" />
   </Style>
-  <!-- A long text field rests at four lines and scrolls inside, so it never pushes the agent's rows away. With the focus it
-       grows to twelve. -->
+  <!-- A long text field fits its text, and a FoldPanel around it rests it at six lines with a More control. -->
   <Style Selector="inspector|InspectorRow TextBox.multiline">
     <Setter Property="MinHeight" Value="52" />
-    <Setter Property="MaxHeight" Value="124" />
     <Setter Property="LineHeight" Value="18" />
     <Setter Property="Padding" Value="8,6" />
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
-  </Style>
-  <!-- The bar shows only while the person edits, and the text keeps clear of it. -->
-  <Style Selector="inspector|InspectorRow TextBox.multiline:focus">
-    <Setter Property="MaxHeight" Value="232" />
-    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
-  </Style>
-  <Style Selector="inspector|InspectorRow TextBox.multiline /template/ TextPresenter#PART_TextPresenter">
-    <Setter Property="Margin" Value="0,0,10,0" />
   </Style>
   <!-- A button that an action row widens keeps its label in the middle. -->
   <Style Selector="inspector|ActionRow > Button">
@@ -624,6 +628,9 @@
     <Setter Property="FontSize" Value="13" />
   </Style>
 
+  <Style Selector="Line.wireSwatch">
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
   <!-- A row that names another node: a click selects that node. Its text wraps in full, and the row's hover is its own. -->
   <Style Selector="Button.nodeLink">
     <Setter Property="HorizontalAlignment" Value="Stretch" />

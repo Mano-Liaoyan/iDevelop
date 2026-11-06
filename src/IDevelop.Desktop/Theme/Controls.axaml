@@ -120,7 +120,7 @@
   <Style Selector="Border.pill PathIcon">
     <Setter Property="Width" Value="12" />
     <Setter Property="Height" Value="12" />
-    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
+    <Setter Property="Data" Value="{StaticResource IconIdle}" />
   </Style>
   <Style Selector="Border.pill.running">
     <Setter Property="BorderBrush" Value="{DynamicResource StateRunningBrush}" />
@@ -373,8 +373,14 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
+  <!-- The chosen segment has an edge as well as a fill, so it reads in the dark theme, where the two fills lie close. -->
+  <Style Selector="RadioButton.segment /template/ Border#PART_Segment">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
   <Style Selector="RadioButton.segment:checked /template/ Border#PART_Segment">
     <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
   </Style>
 
   <Style Selector="ListBox.tasks, ListBox.results">
@@ -676,12 +682,19 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
   </Style>
-  <!-- A text box shows the ring on any focus, because it takes keys however it got the focus. -->
+  <!-- A text box's edge takes the accent on any focus, because it takes keys however it got the focus. Keyboard focus adds the
+       one ring, which Fluent's text box and picker themes turn off. -->
   <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BoxShadow" Value="{DynamicResource FocusRing}" />
+  </Style>
+  <Style Selector="TextBox, ComboBox">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="9" BorderBrush="{DynamicResource AccentBrush}" AdornerLayer.IsClipEnabled="False" />
+      </FocusAdornerTemplate>
+    </Setter>
   </Style>
   <!-- Fluent draws a placeholder at half opacity, about 1.6:1 on focus. It stays the whole muted text in every state. -->
   <Style Selector="TextBox:not(:disabled) /template/ TextBlock#PART_Watermark, TextBox:not(:disabled) /template/ TextBlock#PART_FloatingWatermark">
@@ -892,5 +905,8 @@
   </Style>
   <Style Selector=".compact :is(Control).compactOnly">
     <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector=".compact Button.primary">
+    <Setter Property="Padding" Value="8,0" />
   </Style>
 </Styles>

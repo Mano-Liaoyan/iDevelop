@@ -75,6 +75,16 @@
     { "key": "IconArrowDown", "asset": "Arrow Down", "file": "ic_fluent_arrow_down_16_regular.svg" },
     { "key": "IconThemeSystem", "asset": "Desktop", "file": "ic_fluent_desktop_16_regular.svg" },
     { "key": "IconThemeLight", "asset": "Weather Sunny", "file": "ic_fluent_weather_sunny_16_regular.svg" },
-    { "key": "IconThemeDark", "asset": "Weather Moon", "file": "ic_fluent_weather_moon_16_regular.svg" }
+    { "key": "IconThemeDark", "asset": "Weather Moon", "file": "ic_fluent_weather_moon_16_regular.svg" },
+    { "key": "IconBadgeDone", "asset": "Checkmark", "file": "ic_fluent_checkmark_16_filled.svg" },
+    { "key": "IconBadgeFailed", "asset": "Important", "file": "ic_fluent_important_16_filled.svg" },
+    { "key": "IconBadgeQuestion", "asset": "Question", "file": "ic_fluent_question_16_filled.svg" },
+    { "key": "IconBadgeReply", "asset": "Chat", "file": "ic_fluent_chat_16_filled.svg" },
+    { "key": "IconBadgeApproval", "asset": "Person", "file": "ic_fluent_person_16_filled.svg" },
+    { "key": "IconBadgePause", "asset": "Pause", "file": "ic_fluent_pause_16_filled.svg" },
+    { "key": "IconBadgeStale", "asset": "Arrow Sync", "file": "ic_fluent_arrow_sync_16_filled.svg" },
+    { "key": "IconBadgeConflict", "asset": "Link Dismiss", "file": "ic_fluent_link_dismiss_16_filled.svg" },
+    { "key": "IconIdle", "asset": "Circle", "file": "ic_fluent_circle_16_regular.svg" },
+    { "key": "IconExpandAll", "asset": "Arrow Expand All", "file": "ic_fluent_arrow_expand_all_16_regular.svg" }
   ]
 }

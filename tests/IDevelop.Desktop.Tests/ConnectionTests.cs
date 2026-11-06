@@ -96,9 +96,9 @@ public sealed class ConnectionTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData("ThemeLight", "#564ADE")]
-    [InlineData("ThemeDark", "#6D7CFF")]
-    public void A_connection_draws_in_its_source_kinds_stroke_and_a_context_connection_is_dashed(string theme, string stroke)
+    [InlineData("ThemeLight", "#90969C")]
+    [InlineData("ThemeDark", "#64635D")]
+    public void A_connection_at_rest_is_quiet_whatever_its_nodes_kinds_and_a_context_connection_is_dashed(string theme, string stroke)
     {
         // Review sits below Build, so the connection from Design to Review leaves the row before it reaches Build's input.
         var shell = Shell.Open(_temp.Seed(

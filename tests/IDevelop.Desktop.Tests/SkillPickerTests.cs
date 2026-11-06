@@ -251,16 +251,16 @@ public sealed class SkillPickerTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Antigravitys_picker_is_off_and_says_it_uses_all_of_its_skills()
+    public void Antigravity_shows_a_plain_value_and_says_it_uses_all_of_its_skills()
     {
         Install(_fakes, ClientId.Antigravity);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "low" })),
             _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.False(shell.Find<ToggleButton>("TaskSkills").IsEffectivelyEnabled);
-        Assert.Equal("All skills", Summary(shell));
-        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", shell.Find<TextBlock>("SkillsNote").Text);
+        Assert.False(shell.Find<ToggleButton>("TaskSkills").IsEffectivelyVisible);
+        Assert.Equal("All skills", shell.Find<TextBlock>("TaskSkillsValue").Text);
+        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue")));
         Assert.False(shell.Find<Control>("SkillList").IsEffectivelyVisible);
     }
 

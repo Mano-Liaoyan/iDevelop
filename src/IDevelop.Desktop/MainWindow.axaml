@@ -139,9 +139,7 @@
                               AutomationProperties.Name="Add node">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
-                          <Panel IsVisible="{Binding RunsNothing}">
-                            <TextBlock Classes="label" Text="Node" VerticalAlignment="Center" />
-                          </Panel>
+                          <TextBlock Classes="label" Text="Node" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                       <Button Classes="action glyph" Click="OnGenerate" IsVisible="{Binding ShowsGenerate}"
@@ -163,13 +161,10 @@
                                        Fill="{DynamicResource AccentBrush}" />
                             </Panel>
                           </Panel>
-                          <!-- A run's Stop All takes this word's width, and the tooltip keeps it. -->
-                          <Panel IsVisible="{Binding RunsNothing}">
-                            <TextBlock Classes="label" Text="{Binding GenerateLabel}" VerticalAlignment="Center" />
-                          </Panel>
+                          <TextBlock Classes="label" Text="{Binding GenerateLabel}" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
-                      <!-- While a node runs, the way out stands beside the button that started the run. -->
+                      <!-- While a node runs, the way out takes the place of the button that started the run. -->
                       <Button Classes="destructive" Command="{Binding StopAllCommand}" IsVisible="{Binding !RunsNothing}"
                               ToolTip.Tip="Stop All&#10;Stop every running node. Finished results stay."
                               AutomationProperties.AutomationId="StopAll"
@@ -181,16 +176,15 @@
                       </Button>
                       <!-- The workflow's one primary action. An empty workflow's primary action is on the canvas's Generate card. -->
                       <Button Classes.primary="{Binding CanStartRun}" Classes.action="{Binding !CanStartRun}" Command="{Binding RunWorkflowCommand}"
+                              IsVisible="{Binding RunsNothing}"
                               ToolTip.ShowOnDisabled="True"
                               ToolTip.Tip="{Binding RunWorkflowTip}"
                               AutomationProperties.AutomationId="RunWorkflow"
                               AutomationProperties.Name="Run Workflow">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" IsVisible="{Binding RunsNothing}" />
-                          <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
-                                    Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding !RunsNothing}" />
-                          <TextBlock Classes="wideOnly" Text="{Binding RunWorkflowLabel}" VerticalAlignment="Center" />
-                          <TextBlock Classes="compactOnly" Text="{Binding RunWorkflowShortLabel}" VerticalAlignment="Center" />
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
+                          <TextBlock Classes="wideOnly" Text="Run Workflow" VerticalAlignment="Center" />
+                          <TextBlock Classes="compactOnly" Text="All" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                     </StackPanel>

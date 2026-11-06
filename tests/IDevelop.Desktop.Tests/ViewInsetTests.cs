@@ -29,9 +29,9 @@ public sealed class ViewInsetTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(TestTasks.Design, "Design", 105, 90),
-            TaskAt(TestTasks.Build, "Build", 105, 900),
-            TaskAt(TestTasks.Review, "Review", 105, 1700),
-            TaskAt(Ship, "Ship", 105, 2500)));
+            TaskAt(TestTasks.Build, "Build", 105, 600),
+            TaskAt(TestTasks.Review, "Review", 105, 1100),
+            TaskAt(Ship, "Ship", 105, 1600)));
 
         shell.Click(shell.Find<Button>("FitToScreen"));
 

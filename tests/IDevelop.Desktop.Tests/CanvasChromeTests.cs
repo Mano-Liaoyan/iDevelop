@@ -275,9 +275,13 @@ public sealed class CanvasChromeTests : IDisposable
         shell.Render();
         shell.Click(shell.Find<Button>("FitToScreen"));
 
+        // A graph that does not fit at a readable zoom stops there, and part of it waits for a pan.
         var (top, bottom) = Rows(shell);
-        Assert.All(Cards(shell), card => Assert.True(card.Top >= top + margin - 0.5 && card.Bottom <= bottom - margin + 0.5,
-            $"The card at {card} is not {margin} px inside {top} and {bottom}."));
+        if (shell.Editor.ViewportZoom > CanvasChrome.ReadableZoom)
+        {
+            Assert.All(Cards(shell), card => Assert.True(card.Top >= top + margin - 0.5 && card.Bottom <= bottom - margin + 0.5,
+                $"The card at {card} is not {margin} px inside {top} and {bottom}."));
+        }
     }
 
     /// <summary>The lowest edge of the top row's controls and the highest edge of the bottom row's.</summary>
@@ -382,14 +386,12 @@ public sealed class CanvasChromeTests : IDisposable
             if (id == "RunWorkflow")
             {
                 // The workflow's primary action keeps a word on a compact canvas.
-                var workflow = shell.Window.ViewModel.Canvas!;
-                Assert.Equal(compact ? workflow.RunWorkflowShortLabel : workflow.RunWorkflowLabel, Assert.Single(labels));
+                Assert.Equal(compact ? "All" : "Run Workflow", Assert.Single(labels));
             }
-            else if (compact || !shell.Window.ViewModel.Canvas!.RunsNothing)
+            else if (compact)
             {
-                // A run's Stop All takes the label's width.
                 Assert.Empty(labels);
-                Assert.Equal(compact ? (32.0, 32.0) : (button.Bounds.Width, 32.0), (button.Bounds.Width, button.Bounds.Height));
+                Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
             }
             else
             {
@@ -420,9 +422,9 @@ public sealed class CanvasChromeTests : IDisposable
         AssertInsideAndApart(canvas, boxes, at, gap: 12);
         Assert.All(boxes, box => Assert.True(Math.Abs(box.Box.Bottom - (canvas.Bottom - CanvasChrome.Inset)) < 0.6, $"At {at}, {box.Id} ends at {box.Box.Bottom}, off {canvas.Bottom - 12}."));
 
-        // The bar holds its status, its progress, and whichever of its buttons show, its text whole.
+        // The bar holds its status, its chips, and whichever of its buttons show, its text whole.
         var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunProgress", "RunStatus", "RunStatusShort", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
+        var inside = new[] { "RunChips", "RunStatus", "RunStatusShort", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
         Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
         if (shell.ShowsAny("StopWorkflow"))
         {

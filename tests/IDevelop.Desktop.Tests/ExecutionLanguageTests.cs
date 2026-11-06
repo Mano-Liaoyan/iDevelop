@@ -45,15 +45,17 @@ public sealed class ExecutionLanguageTests
     [Fact]
     public void Feeding_is_the_heaviest_wire_and_a_wire_that_carries_nothing_is_the_lightest()
     {
-        Assert.Equal(3, WireFlows.Stroke(WireFlow.Feeding));
-        Assert.All(new[] { WireFlow.Delivered, WireFlow.Outdated, WireFlow.Ready }, flow => Assert.Equal(2, WireFlows.Stroke(flow)));
-        Assert.All(new[] { WireFlow.Context, WireFlow.Stopped, WireFlow.Idle }, flow => Assert.Equal(1.5, WireFlows.Stroke(flow)));
+        Assert.Equal(4, WireFlows.Stroke(WireFlow.Feeding));
+        Assert.Equal(2, WireFlows.Stroke(WireFlow.Delivered));
+        Assert.All(new[] { WireFlow.Outdated, WireFlow.Ready, WireFlow.Context, WireFlow.Stopped, WireFlow.Idle }, flow => Assert.Equal(1.5, WireFlows.Stroke(flow)));
     }
 
     [Theory]
     [InlineData(1.0, ZoomTier.Full)]
     [InlineData(0.84, ZoomTier.Full)]
-    [InlineData(0.83, ZoomTier.Compact)]
+    [InlineData(0.83, ZoomTier.Detail)]
+    [InlineData(0.6, ZoomTier.Detail)]
+    [InlineData(0.59, ZoomTier.Compact)]
     [InlineData(0.5, ZoomTier.Compact)]
     [InlineData(0.49, ZoomTier.Label)]
     [InlineData(0.385, ZoomTier.Label)]
@@ -64,8 +66,10 @@ public sealed class ExecutionLanguageTests
         Assert.Equal(tier, ZoomTiers.Next(ZoomTier.Full, zoom));
 
     [Theory]
-    [InlineData(ZoomTier.Compact, 0.85, ZoomTier.Compact)]
-    [InlineData(ZoomTier.Compact, 0.86, ZoomTier.Full)]
+    [InlineData(ZoomTier.Detail, 0.85, ZoomTier.Detail)]
+    [InlineData(ZoomTier.Detail, 0.86, ZoomTier.Full)]
+    [InlineData(ZoomTier.Compact, 0.61, ZoomTier.Compact)]
+    [InlineData(ZoomTier.Compact, 0.62, ZoomTier.Detail)]
     [InlineData(ZoomTier.Label, 0.51, ZoomTier.Label)]
     [InlineData(ZoomTier.Label, 0.52, ZoomTier.Compact)]
     [InlineData(ZoomTier.Title, 0.4, ZoomTier.Title)]
@@ -75,16 +79,16 @@ public sealed class ExecutionLanguageTests
     public void A_rising_zoom_enters_the_larger_tier_past_a_gap_so_a_zoom_near_a_threshold_does_not_flicker(ZoomTier current, double zoom, ZoomTier tier) =>
         Assert.Equal(tier, ZoomTiers.Next(current, zoom));
 
-    private static WireLanes.Wire Wire(object source, object target, double order, params (double X, double Y)[] points) =>
-        new([.. points.Select(point => new Point(point.X, point.Y))], source, target, order);
+    private static WireLanes.Wire Wire(double order, double targetOrder, params (double X, double Y)[] points) =>
+        new([.. points.Select(point => new Point(point.X, point.Y))], order, targetOrder);
 
     [Fact]
-    public void Wires_from_different_sources_to_different_targets_take_lanes_10_px_apart_in_source_order()
+    public void Wires_on_one_run_take_lanes_10_px_apart_in_source_order()
     {
         var routes = WireLanes.Spread(
         [
-            Wire("b", "x", 2, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire("a", "y", 1, (100, 50), (200, 50), (200, 150), (300, 150)),
+            Wire(2, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
+            Wire(1, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
         ], []);
 
         Assert.Equal(205, routes[0][1].X);
@@ -93,20 +97,20 @@ public sealed class ExecutionLanguageTests
     }
 
     [Fact]
-    public void Wires_from_one_output_or_into_one_input_stay_on_one_line()
+    public void Wires_from_one_output_or_into_one_input_keep_their_own_lanes_so_none_shares_a_trunk()
     {
         var (fanOut, fanIn) = (WireLanes.Spread(
         [
-            Wire("a", "x", 1, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire("a", "y", 1, (100, 0), (200, 0), (200, 150), (300, 150)),
+            Wire(1, 1, (100, 0), (200, 0), (200, 100), (300, 100)),
+            Wire(1, 2, (100, 0), (200, 0), (200, 150), (300, 150)),
         ], []), WireLanes.Spread(
         [
-            Wire("a", "x", 1, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire("b", "x", 2, (100, 50), (200, 50), (200, 100), (300, 100)),
+            Wire(1, 1, (100, 0), (200, 0), (200, 100), (300, 100)),
+            Wire(2, 1, (100, 50), (200, 50), (200, 100), (300, 100)),
         ], []));
 
-        Assert.All(fanOut, route => Assert.Equal(200, route[1].X));
-        Assert.All(fanIn, route => Assert.Equal(200, route[1].X));
+        Assert.Equal([195.0, 205.0], fanOut.Select(route => route[1].X));
+        Assert.Equal([195.0, 205.0], fanIn.Select(route => route[1].X));
     }
 
     [Fact]
@@ -114,8 +118,8 @@ public sealed class ExecutionLanguageTests
     {
         var routes = WireLanes.Spread(
         [
-            Wire("b", "x", 2, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire("a", "y", 1, (100, 50), (200, 50), (200, 150), (300, 150)),
+            Wire(2, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
+            Wire(1, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
         ], [new Rect(201, 20, 40, 40)]);
 
         Assert.Equal(200, routes[0][1].X);

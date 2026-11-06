@@ -3,7 +3,7 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>What a wire carries now. It sets the wire's weight, opacity, and motion. The hue stays the source kind's.</summary>
+/// <summary>What a wire carries now. It sets the wire's color, weight, and motion (ADR 0045).</summary>
 public enum WireFlow { Context, Feeding, Delivered, Outdated, Ready, Stopped, Idle }
 
 public static class WireFlows
@@ -53,8 +53,8 @@ public static class WireFlows
     /// <summary>The wire's stroke before emphasis and zoom.</summary>
     public static double Stroke(WireFlow flow) => flow switch
     {
-        WireFlow.Feeding => 3,
-        WireFlow.Delivered or WireFlow.Outdated or WireFlow.Ready => 2,
+        WireFlow.Feeding => 4,
+        WireFlow.Delivered => 2,
         _ => 1.5,
     };
 

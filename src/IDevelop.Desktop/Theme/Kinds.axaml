@@ -153,19 +153,27 @@
     <Setter Property="Foreground" Value="{DynamicResource KindReadOnlyAgentStrongBrush}" />
   </Style>
 
-  <!-- The order of loudness: Failed and Input required, then Running, then Stale, then Completed, then Idle. The ring takes the
-       state's color for every state, and the kind's hue stays in the band. -->
+  <!-- The order of loudness: Running, then Failed and what waits for the person, then Stale, then Completed, then Idle
+       (ADR 0045). Only Running moves. What waits for the person differs by hue, so a question, an approval, and an interruption
+       read apart without the badge. Red is only for failure. The ring takes the state's color for every state, and the kind's
+       hue stays in the band. -->
   <Style Selector="Border.stateStroke">
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
   </Style>
   <Style Selector="Border.stateStroke.state-running">
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderThickness" Value="3" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateRunningBrush}" />
   </Style>
   <Style Selector="Border.stateStroke.state-inputrequired">
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.stateStroke.state-inputrequired.why-approval">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateApprovalStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.stateStroke.state-inputrequired.why-interrupted">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateNeutralStrokeBrush}" />
   </Style>
   <Style Selector="Border.stateStroke.state-failed">
     <Setter Property="BorderThickness" Value="2" />
@@ -178,18 +186,25 @@
   <Style Selector="Rectangle.staleEdge">
     <Setter Property="IsVisible" Value="False" />
     <Setter Property="Stroke" Value="{DynamicResource StateWarningStrokeBrush}" />
-    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeDashArray" Value="4,3" />
+    <Setter Property="Opacity" Value="0.75" />
   </Style>
   <Style Selector="Rectangle.staleEdge.state-stale:not(.role-proposing)">
     <Setter Property="IsVisible" Value="True" />
   </Style>
 
   <Style Selector="Border.stateTint.state-running">
-    <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
+    <Setter Property="Background" Value="{DynamicResource StateSelected25Brush}" />
   </Style>
   <Style Selector="Border.stateTint.state-inputrequired">
     <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+  </Style>
+  <Style Selector="Border.stateTint.state-inputrequired.why-approval">
+    <Setter Property="Background" Value="{DynamicResource StateApproval10Brush}" />
+  </Style>
+  <Style Selector="Border.stateTint.state-inputrequired.why-interrupted">
+    <Setter Property="Background" Value="{DynamicResource StateNeutral10Brush}" />
   </Style>
   <Style Selector="Border.stateTint.state-failed">
     <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
@@ -207,6 +222,12 @@
   </Style>
   <Style Selector="Border.stateBlock.state-inputrequired">
     <Setter Property="Background" Value="{DynamicResource StateWaitingBrush}" />
+  </Style>
+  <Style Selector="Border.stateBlock.state-inputrequired.why-approval">
+    <Setter Property="Background" Value="{DynamicResource StateApprovalStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.stateBlock.state-inputrequired.why-interrupted">
+    <Setter Property="Background" Value="{DynamicResource StateNeutralStrokeBrush}" />
   </Style>
   <Style Selector="Border.stateBlock.state-failed">
     <Setter Property="Background" Value="{DynamicResource StateFailedBrush}" />
@@ -270,6 +291,75 @@
     <Setter Property="Data" Value="{StaticResource IconStateNeedsSetup}" />
   </Style>
 
+  <!-- A card's badge: one disc and one bold glyph for every state, so the states that need a person read as easily as the others.
+       The disc takes the state's color and the glyph stays the theme's contrast color on it. -->
+  <Style Selector="Ellipse.badgeDisc">
+    <Setter Property="Fill" Value="Transparent" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph">
+    <Setter Property="Foreground" Value="{DynamicResource OnStateBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-idle:not(.role-proposing)">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="Ellipse.badgeDisc.state-running">
+    <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-running">
+    <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
+  </Style>
+  <Style Selector="Ellipse.badgeDisc.state-completed">
+    <Setter Property="Fill" Value="{DynamicResource StateSuccessStrokeBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-completed">
+    <Setter Property="Data" Value="{StaticResource IconBadgeDone}" />
+  </Style>
+  <Style Selector="Ellipse.badgeDisc.state-failed">
+    <Setter Property="Fill" Value="{DynamicResource StateFailedStrokeBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-failed">
+    <Setter Property="Data" Value="{StaticResource IconBadgeFailed}" />
+  </Style>
+  <Style Selector="Ellipse.badgeDisc.state-stale">
+    <Setter Property="Fill" Value="{DynamicResource StateWarningStrokeBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-stale">
+    <Setter Property="Data" Value="{StaticResource IconBadgeStale}" />
+  </Style>
+  <Style Selector="Ellipse.badgeDisc.state-inputrequired">
+    <Setter Property="Fill" Value="{DynamicResource StateWaitingStrokeBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-inputrequired">
+    <Setter Property="Data" Value="{StaticResource IconBadgeQuestion}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-reply">
+    <Setter Property="Data" Value="{StaticResource IconBadgeReply}" />
+  </Style>
+  <Style Selector="Ellipse.badgeDisc.state-inputrequired.why-approval">
+    <Setter Property="Fill" Value="{DynamicResource StateApprovalStrokeBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-approval">
+    <Setter Property="Data" Value="{StaticResource IconBadgeApproval}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-conflict">
+    <Setter Property="Data" Value="{StaticResource IconBadgeConflict}" />
+  </Style>
+  <Style Selector="Ellipse.badgeDisc.state-inputrequired.why-interrupted">
+    <Setter Property="Fill" Value="{DynamicResource StateNeutralStrokeBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-interrupted">
+    <Setter Property="Data" Value="{StaticResource IconBadgePause}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-roundlimit">
+    <Setter Property="Data" Value="{StaticResource IconStateNeedsSetup}" />
+  </Style>
+  <Style Selector="Ellipse.badgeDisc.role-proposing">
+    <Setter Property="Fill" Value="{DynamicResource AccentStrokeBrush}" />
+  </Style>
+  <Style Selector="PathIcon.badgeGlyph.role-proposing">
+    <Setter Property="Data" Value="{StaticResource IconSparkle}" />
+  </Style>
+
   <!-- A planner with an open proposal takes the accent instead of its state, and does not pulse. -->
   <Style Selector="Border.stateStroke.role-proposing">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
@@ -283,7 +373,8 @@
     <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
 
-  <!-- A waiting node's ring and a running node's glow pulse. Tests read their classes, because their pixels depend on the time. -->
+  <!-- A running node's glow pulses and its glyph spins, and nothing else on the canvas moves. Tests read their classes, because
+       their pixels depend on the time. -->
   <Style Selector="Border.glow">
     <Setter Property="IsVisible" Value="False" />
   </Style>
@@ -291,7 +382,7 @@
     <Setter Property="IsVisible" Value="True" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
   </Style>
-  <Style Selector="Border.glow.state-running:not(.role-proposing), Border.stateStroke.state-inputrequired:not(.role-proposing)">
+  <Style Selector="Border.glow.state-running:not(.role-proposing)">
     <Style.Animations>
       <Animation Duration="0:0:1.6" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
         <KeyFrame Cue="0%">
@@ -303,7 +394,7 @@
       </Animation>
     </Style.Animations>
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-running:not(.role-proposing)">
+  <Style Selector="PathIcon.stateIcon.state-running:not(.role-proposing), PathIcon.badgeGlyph.state-running:not(.role-proposing)">
     <Style.Animations>
       <Animation Duration="0:0:1" IterationCount="Infinite">
         <KeyFrame Cue="0%">

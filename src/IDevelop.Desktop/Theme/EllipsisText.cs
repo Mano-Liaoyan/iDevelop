@@ -8,7 +8,9 @@ namespace IDevelop.Desktop.Theme;
 /// <summary>
 /// Wrapped text that keeps to <see cref="TextBlock.MaxLines"/> and ends in an ellipsis when it loses text. Avalonia's own
 /// trimming adds no ellipsis to text that its line limit cuts at a word's end, and it cuts a long last line short, so
-/// this control finds the longest start of <see cref="Whole"/> that fits, ellipsis included. It styles as a <see cref="TextBlock"/>.
+/// this control finds the longest start of <see cref="Whole"/> that fits, ellipsis included. When <see cref="KeepFrom"/> marks
+/// the part of the text that tells it from a similar one, the cut falls before that part, so the part stays in view. It
+/// styles as a <see cref="TextBlock"/>.
 /// </summary>
 public sealed class EllipsisText : TextBlock
 {
@@ -16,13 +18,22 @@ public sealed class EllipsisText : TextBlock
 
     public static readonly StyledProperty<string?> WholeProperty = AvaloniaProperty.Register<EllipsisText, string?>(nameof(Whole));
 
-    static EllipsisText() => AffectsMeasure<EllipsisText>(WholeProperty);
+    public static readonly StyledProperty<int> KeepFromProperty = AvaloniaProperty.Register<EllipsisText, int>(nameof(KeepFrom));
+
+    static EllipsisText() => AffectsMeasure<EllipsisText>(WholeProperty, KeepFromProperty);
 
     /// <summary>The whole text. <see cref="TextBlock.Text"/> holds what shows.</summary>
     public string? Whole
     {
         get => GetValue(WholeProperty);
         set => SetValue(WholeProperty, value);
+    }
+
+    /// <summary>Where the part of <see cref="Whole"/> that must stay in view starts, or 0 when only the start matters.</summary>
+    public int KeepFrom
+    {
+        get => GetValue(KeepFromProperty);
+        set => SetValue(KeepFromProperty, value);
     }
 
     protected override Type StyleKeyOverride => typeof(TextBlock);
@@ -58,14 +69,36 @@ public sealed class EllipsisText : TextBlock
             return whole;
         }
 
-        var (fits, fails) = (0, whole.Length);
+        if (KeepFrom > 0 && KeepFrom < whole.Length)
+        {
+            var kept = whole[KeepFrom..];
+            var shown = Longest(KeepFrom, length => whole[..length].TrimEnd() + Ellipsis + " " + kept, width);
+            if (shown > 0)
+            {
+                return whole[..shown].TrimEnd() + Ellipsis + " " + kept;
+            }
+
+            whole = Ellipsis + kept;
+            if (Fits(whole, width))
+            {
+                return whole;
+            }
+        }
+
+        return Cut(whole, Longest(whole.Length, length => Cut(whole, length), width));
+    }
+
+    // The most characters, under the limit, whose text fits. No text fits at 0.
+    private int Longest(int limit, Func<int, string> text, double width)
+    {
+        var (fits, fails) = (0, limit + 1);
         while (fails - fits > 1)
         {
             var middle = (fits + fails) / 2;
-            (fits, fails) = Fits(Cut(whole, middle), width) ? (middle, fails) : (fits, middle);
+            (fits, fails) = Fits(text(middle), width) ? (middle, fails) : (fits, middle);
         }
 
-        return Cut(whole, fits);
+        return fits;
     }
 
     private static string Cut(string whole, int length) => whole[..length].TrimEnd() + Ellipsis;

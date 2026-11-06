@@ -34,6 +34,16 @@ public sealed partial class TaskNodeViewModel
     /// </summary>
     public bool ShowsAgent => State == NodeState.Idle && Role == NodeRole.None;
 
+    /// <summary>Where the part of the title that tells this node from a similar one starts, which a cut title keeps in view.</summary>
+    public int TitleKeep
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
+
+    /// <summary>The status and the model on one line, for the zoomed out card.</summary>
+    public string CardLine => string.Join(" · ", new[] { ShowsAgent ? "Idle" : Subtitle, AgentModel }.Where(part => !string.IsNullOrEmpty(part)));
+
     /// <summary>The first line when it is not the client: the proposal, else the engine's state.</summary>
     public string Subtitle => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count) : StatusLabel;
 

@@ -61,7 +61,7 @@ public sealed class MinimapTests : IDisposable
         shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Failed", "the run fails");
 
         shell.WaitUntil(() => Fill(Item(shell, "Design")) == shell.Resource("StateFailedBrush"), "the minimap item turns red");
-        Assert.Equal(shell.Resource("SurfaceMutedBrush"), Fill(Item(shell, "Build")));
+        Assert.Equal(shell.Resource("TextFaintBrush"), Fill(Item(shell, "Build")));
     }
 
     [AvaloniaFact]

@@ -102,27 +102,20 @@ public sealed class WireRoutingTests : IDisposable
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency)));
         var canvas = shell.Window.ViewModel.Canvas!;
-        ConnectionViewModel? Clicked(Point point)
-        {
-            shell.Click(OnScreen(shell, point));
-            return canvas.SelectedConnection;
-        }
+        Point[] Plan() => [.. canvas.Connections.Single(wire => wire.Key == new ConnectionKey(Design, Review)).Route];
 
-        // Below Build, on the step the wire would take through it, and on the wire's own stub column.
-        Assert.Null(Clicked(new Point(550, 215)));
-        Assert.Equal((Design, Review), Clicked(new Point(396, 215)) is { } around ? (around.Key.From, around.Key.To) : default);
+        // The plan turns on the wire's own stub column, so it never runs through Build.
+        Assert.Equal(396, Plan()[1].X);
 
         shell.Drag(shell.Header(shell.Node("Build")), shell.Header(shell.Node("Build")) + new Vector(0, 330));
         Assert.True(canvas.Nodes.Single(node => node.Title == "Build").Location.Y > 330, "Build moved below the wire");
 
-        Assert.Equal((Design, Review), Clicked(new Point(550, 215)) is { } step ? (step.Key.From, step.Key.To) : default);
+        Assert.Equal(new Point((396 + 704) / 2.0, 122), Plan()[1]);
 
         shell.Press(Key.Z, RawInputModifiers.Control);
         Assert.Equal(new Point(420, 90), canvas.Nodes.Single(node => node.Title == "Build").Location);
-        shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.Null(Clicked(new Point(550, 215)));
-        Assert.Equal((Design, Review), Clicked(new Point(396, 215)) is { } aroundAgain ? (aroundAgain.Key.From, aroundAgain.Key.To) : default);
+        Assert.Equal(396, Plan()[1].X);
     }
 
     private static Rect Card(double x, double y) => new(x, y, 260, 64);
