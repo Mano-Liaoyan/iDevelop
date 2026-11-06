@@ -45,6 +45,9 @@ public partial class ConversationView : UserControl
     private bool _settleQueued;
     private double? _scrolledTo;
     private (int Entry, double Offset)? _anchor;
+    private bool _pressed;
+    private bool _restQueued;
+    private bool _movedDown;
 
     public ConversationView()
     {
@@ -64,6 +67,12 @@ public partial class ConversationView : UserControl
         Scroller.AddHandler(PointerMovedEvent, (_, e) => _userInput |= e.GetCurrentPoint(Scroller).Properties.IsLeftButtonPressed,
             RoutingStrategies.Tunnel, handledEventsToo: true);
         Scroller.AddHandler(KeyDownEvent, (_, _) => _userInput = true, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Scroller.AddHandler(PointerPressedEvent, (_, _) => _pressed = true, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Scroller.AddHandler(PointerReleasedEvent, (_, _) =>
+        {
+            _pressed = false;
+            QueueRest();
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
         Transcript.LayoutUpdated += OnTranscriptLaidOut;
         Transcript.AddHandler(KeyDownEvent, OnStepKey, RoutingStrategies.Bubble);
         Composer.AddHandler(KeyDownEvent, OnComposerDigit, RoutingStrategies.Tunnel);
@@ -199,14 +208,14 @@ public partial class ConversationView : UserControl
         {
             if (_follow)
             {
-                ScrollTo(Scroller.Extent.Height - Scroller.Viewport.Height);
+                ScrollTo(OnWholeLine(End));
             }
             else if (_anchor is { } anchor)
             {
                 if (Top(anchor.Entry) is { } top)
                 {
-                    var wanted = top + anchor.Offset;
-                    ScrollTo(wanted);
+                    // A scroll in progress rests on its own, in the way it went.
+                    ScrollTo(_pressed || _restQueued ? top + anchor.Offset : OnWholeLine(top + anchor.Offset));
                 }
                 else if (_model?.Items.Select(item => item.Id).ToList().IndexOf(anchor.Entry) is var index and >= 0)
                 {
@@ -216,13 +225,45 @@ public partial class ConversationView : UserControl
                 {
                     _follow = true;
                     _anchor = null;
-                    ScrollTo(Scroller.Extent.Height - Scroller.Viewport.Height);
+                    ScrollTo(OnWholeLine(End));
                 }
             }
         }
         finally
         {
             _restoring = false;
+        }
+    }
+
+    private double End => Scroller.Extent.Height - Scroller.Viewport.Height;
+
+    // The height at or above y where the view's top edge cuts no line. The space under the last row takes up the difference at the end.
+    private double OnWholeLine(double y) => Scroller.Content is Control content ? WholeLine.Rest(content, y, down: false) : y;
+
+    private void QueueRest()
+    {
+        if (!_restQueued)
+        {
+            _restQueued = true;
+            Dispatcher.UIThread.Post(Rest, DispatcherPriority.Background);
+        }
+    }
+
+    // A scroll that stops in a line moves on past it, in the way it went, so a small step still gets somewhere. A drag rests when it ends.
+    private void Rest()
+    {
+        _restQueued = false;
+        if (_pressed || _follow || Scroller.Content is not Control content)
+        {
+            return;
+        }
+
+        var wanted = Math.Min(WholeLine.Rest(content, Scroller.Offset.Y, _movedDown), End);
+        ScrollTo(OnWholeLine(wanted));
+        _anchor = TopEntry();
+        if (_model is not null)
+        {
+            _model.State.Anchor = _anchor;
         }
     }
 
@@ -255,6 +296,12 @@ public partial class ConversationView : UserControl
         if (_model is not null)
         {
             _model.State.Anchor = _anchor;
+        }
+
+        if (e.OffsetDelta.Y != 0)
+        {
+            _movedDown = e.OffsetDelta.Y > 0;
+            QueueRest();
         }
     }
 

@@ -97,13 +97,7 @@
     <Setter Property="Margin" Value="12,0,12,12" />
     <Setter Property="TextWrapping" Value="NoWrap" />
   </Style>
-  <!-- A long line scrolls, and its bar shows only under the pointer, so it never crowds a short block. -->
-  <Style Selector="Border.mdCode ScrollViewer /template/ ScrollBar">
-    <Setter Property="Opacity" Value="0" />
-  </Style>
-  <Style Selector="Border.mdCode:pointerover ScrollViewer /template/ ScrollBar">
-    <Setter Property="Opacity" Value="1" />
-  </Style>
+  <!-- A line longer than the block keeps its scroll bar in view, so the block says that the line goes on. A short block has none. -->
   <Style Selector="Button.mdLink">
     <Setter Property="Padding" Value="0" />
     <Setter Property="MinHeight" Value="0" />
@@ -215,17 +209,27 @@
   <Style Selector="Panel.row">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="MaxWidth" Value="808" />
-    <Setter Property="Margin" Value="24,0,24,16" />
+    <Setter Property="Margin" Value="24,0,14,16" />
   </Style>
   <Style Selector="Panel.row.tight">
-    <Setter Property="Margin" Value="24,0,24,4" />
+    <Setter Property="Margin" Value="24,0,14,4" />
+  </Style>
+  <Style Selector="Panel.row.afterSteps">
+    <Setter Property="Margin" Value="24,0,14,8" />
   </Style>
   <Style Selector="Grid.narrow Panel.row">
     <Setter Property="MaxWidth" Value="792" />
-    <Setter Property="Margin" Value="16,0,16,16" />
+    <Setter Property="Margin" Value="16,0,6,16" />
   </Style>
   <Style Selector="Grid.narrow Panel.row.tight">
-    <Setter Property="Margin" Value="16,0,16,4" />
+    <Setter Property="Margin" Value="16,0,6,4" />
+  </Style>
+  <Style Selector="Grid.narrow Panel.row.afterSteps">
+    <Setter Property="Margin" Value="16,0,6,8" />
+  </Style>
+  <!-- The transcript's scroll bar stops short of the panels' edge tabs, and a row's end stays on the composer's. -->
+  <Style Selector="ScrollViewer.transcript">
+    <Setter Property="Margin" Value="0,0,10,0" />
   </Style>
   <!-- A row that the attention card speaks for keeps one pixel, because the virtualizing list cannot settle on a row of no height. -->
   <Style Selector="Panel.row.held, Grid.narrow Panel.row.held">
@@ -503,6 +507,11 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
+  <!-- A wait for the person's words sits on the composer, whose focus line is the one outline. The header's tint names the state. -->
+  <Style Selector="Border.attentionCard.compact">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+  </Style>
   <Style Selector="Border.attentionCard.problem">
     <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
@@ -561,7 +570,7 @@
     <Setter Property="MinHeight" Value="36" />
   </Style>
   <Style Selector="StackPanel.attentionActions">
-    <Setter Property="Margin" Value="12,8,12,12" />
+    <Setter Property="Margin" Value="12,4,12,12" />
   </Style>
   <Style Selector="StackPanel.attentionActions.compact">
     <Setter Property="Margin" Value="8,4,6,4" />
@@ -646,10 +655,14 @@
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="Padding" Value="0" />
   </Style>
-  <!-- The composer sits at the window's bottom, so its tooltips open above it, clear of the pointer. -->
+  <!-- A tooltip in the composer's bar opens along the bar and down from its top, so it never covers the words being typed. -->
   <Style Selector="Grid.composerBar Button">
-    <Setter Property="ToolTip.Placement" Value="Top" />
-    <Setter Property="ToolTip.VerticalOffset" Value="-8" />
+    <Setter Property="ToolTip.Placement" Value="LeftEdgeAlignedTop" />
+    <Setter Property="ToolTip.HorizontalOffset" Value="-8" />
+  </Style>
+  <Style Selector="Grid.composerBar Button.modelChip, Grid.composerBar Button.terminal">
+    <Setter Property="ToolTip.Placement" Value="RightEdgeAlignedTop" />
+    <Setter Property="ToolTip.HorizontalOffset" Value="8" />
   </Style>
   <Style Selector="Grid.composerBar">
     <Setter Property="Height" Value="32" />

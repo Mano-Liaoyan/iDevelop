@@ -127,8 +127,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public string WorkingLabel => Node.IsAsking ? "Waiting for your answer" : Node.State == NodeState.Running && Node.StatusLabel != "Running" ? Node.StatusLabel : "Working";
 
-    /// <summary>The first line of what the agent did last.</summary>
-    public string? WorkingLine => Node.Latest?.Split('\n', 2)[0];
+    /// <summary>The first line of what the agent did last, unless the transcript's last row already says it.</summary>
+    public string? WorkingLine => Node.Latest?.Split('\n', 2)[0] is { } line && !(Items.LastOrDefault() is StepGroupItemViewModel steps && steps.LastLine == line) ? line : null;
 
     public AttentionCard Card => Node.IsAsking ? AttentionCard.Question : Node.EngineState switch
     {
@@ -178,17 +178,15 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _ => Node.StateDetail,
     };
 
-    /// <summary>How to answer a question that has no choices to press, what a reply's Approve would hand on, or null.</summary>
-    public string? CardHint => (Card == AttentionCard.Question && Node.Questions.Count == 0) || (Card == AttentionCard.Reply && HasOwnReason)
-        ? "Type your answer below. Ctrl+Enter sends."
-        : Card == AttentionCard.Reply ? ApproveHelp : null;
+    /// <summary>What a reply's Approve would hand on, or null. The composer under a question already says how to answer it.</summary>
+    public string? CardHint => Card == AttentionCard.Reply && !HasOwnReason ? ApproveHelp : null;
 
-    /// <summary>Approve's words: on a wait for a reply it takes the agent's message, and never the draft, so it says so.</summary>
-    public string ApproveLabel => Card == AttentionCard.Reply ? "Use agent's message" : "Approve";
+    /// <summary>Approve's words: on a wait for a reply it ends the node with the agent's message, and never the draft, so it says so.</summary>
+    public string ApproveLabel => Card == AttentionCard.Reply ? "Accept as result" : "Approve";
 
     /// <summary>What Approve hands on, and to which nodes.</summary>
     public string ApproveHelp => Card == AttentionCard.Reply
-        ? $"Reply below, or use the agent's message above as the result for {Recipients}."
+        ? $"Reply below, or complete the node with the agent's message above as the result for {Recipients}."
         : $"Makes the agent's last reply the result for {Recipients}.";
 
     // "A and B", "A, B, and 2 more", or the node itself when nothing reads it.
@@ -206,10 +204,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         : null;
 
     /// <summary>A reply's one action shares the header's line, so a short dock keeps it in view.</summary>
-    public bool IsCompactCard => Card == AttentionCard.Reply;
+    public bool IsCompactCard => Card == AttentionCard.Reply || (Card == AttentionCard.Question && Node.Questions.Count == 0);
 
     /// <summary>The card has words to read under its header.</summary>
-    public bool ShowsCardBody => CardBody is not null || CardOffered is not null || CardHint is not null || Node.IsAsking;
+    public bool ShowsCardBody => CardBody is not null || CardOffered is not null || CardHint is not null || Node.Questions.Count > 0 && Node.IsAsking;
 
     /// <summary>The person opened the note box of Send back.</summary>
     public bool IsSendBackOpen

@@ -65,11 +65,11 @@
                     AutomationProperties.AutomationId="ConversationRun"
                     AutomationProperties.Name="{Binding Canvas.BarSummary}">
           <Button Classes="ghost" Height="24" Command="{Binding Canvas.NextWaitingCommand}" IsVisible="{Binding Canvas.HasAttention}"
-                  ToolTip.Tip="Show the next node that waits for you or failed"
+                  ToolTip.Tip="{x:Static canvas:WorkflowCanvasView.NextHelp}"
                   AutomationProperties.AutomationId="ConversationNext"
                   AutomationProperties.Name="Next">
             <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock Text="Next" />
+              <TextBlock Text="{Binding Canvas.NextLabel}" />
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
             </StackPanel>
           </Button>
@@ -195,7 +195,7 @@
       </Border>
 
       <!-- What the node needs now. It holds the request, so the transcript's last marker gives way to it. -->
-      <Border x:Name="AttentionCard" Classes="attentionCard" Classes.problem="{Binding IsProblemCard}" Classes.warning="{Binding IsWarningCard}"
+      <Border x:Name="AttentionCard" Classes="attentionCard" Classes.compact="{Binding IsCompactCard}" Classes.problem="{Binding IsProblemCard}" Classes.warning="{Binding IsWarningCard}"
               IsVisible="{Binding ShowsCard}"
               AutomationProperties.AutomationId="ConversationAttention" AutomationProperties.Name="{Binding CardTitle}">
         <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,Auto">
@@ -353,7 +353,7 @@
                 </Flyout>
               </Button.Flyout>
             </Button>
-            <Button Grid.Column="1" Classes="ghost" Height="24" Command="{Binding Node.OpenInTerminalCommand}"
+            <Button Grid.Column="1" Classes="ghost terminal" Height="24" Command="{Binding Node.OpenInTerminalCommand}"
                     ToolTip.Tip="Copies the command that continues the session in a terminal"
                     AutomationProperties.AutomationId="ConversationTerminal" AutomationProperties.Name="Open in terminal">
               <StackPanel Orientation="Horizontal" Spacing="4">
@@ -396,7 +396,8 @@
     <Panel Grid.Row="2">
       <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
-        <StackPanel>
+        <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
+        <StackPanel Margin="0,0,0,12">
           <Button Classes="action" HorizontalAlignment="Center" Height="28" Margin="0,12,0,0"
                   Command="{Binding LoadEarlierCommand}" IsVisible="{Binding HasEarlier}"
                   AutomationProperties.AutomationId="LoadEarlier"
@@ -404,7 +405,13 @@
             <TextBlock Text="Load earlier messages" />
           </Button>
           <!-- What the person asked of the agent, which opens the conversation as a prompt opens a chat. -->
-          <Panel Classes="row taskTurn" IsVisible="{Binding ShowsTask}" AutomationProperties.AutomationId="ConversationTask">
+          <Panel Classes="row taskTurn" AutomationProperties.AutomationId="ConversationTask">
+            <Panel.IsVisible>
+              <MultiBinding Converter="{x:Static BoolConverters.And}">
+                <Binding Path="ShowsTask" />
+                <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
+              </MultiBinding>
+            </Panel.IsVisible>
             <Border Classes="taskTurn">
               <StackPanel>
                 <ToggleButton Classes="steps" IsChecked="{Binding IsTaskOpen}"
@@ -470,14 +477,24 @@
                       <TextBlock Classes="caption" Text="{Binding ResultNote}" TextWrapping="Wrap"
                                  AutomationProperties.AutomationId="ResultNote" />
                     </Border>
-                    <Border Classes="resultCard" IsVisible="{Binding Result, Converter={x:Static ObjectConverters.IsNotNull}}"
-                            AutomationProperties.AutomationId="ResultCard">
+                    <!-- With the inspector open it holds the result, so a card with nothing more to say gives way to it. -->
+                    <Border Classes="resultCard" AutomationProperties.AutomationId="ResultCard">
+                      <Border.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                          <Binding Path="Result.HasDetail" FallbackValue="False" />
+                          <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Result" Converter="{x:Static ObjectConverters.IsNotNull}" />
+                            <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
+                          </MultiBinding>
+                        </MultiBinding>
+                      </Border.IsVisible>
                       <!-- The message above the card is the result's whole report, so the card names it and says what it changed. -->
                       <StackPanel>
                         <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
                           <TextBlock Classes="resultHeading" Text="{Binding Result.Heading, FallbackValue={x:Null}}" AutomationProperties.AutomationId="ResultCardHeading" />
                           <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Result.Commit, FallbackValue={x:Null}}" />
                           <Button Grid.Column="3" Classes="ghost" Height="24" Click="OnShowResult"
+                                  IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=True}"
                                   ToolTip.Tip="Selects the node, whose Output section holds the result"
                                   AutomationProperties.AutomationId="ResultCardShow" AutomationProperties.Name="Show in inspector">
                             <TextBlock Text="Show in inspector" />
@@ -520,7 +537,7 @@
                 </Panel>
               </DataTemplate>
               <DataTemplate DataType="conversation:StepGroupItemViewModel">
-                <Panel Classes="row">
+                <Panel Classes="row afterSteps">
                   <StackPanel>
                     <ToggleButton Classes="steps" IsChecked="{Binding IsOpen}"
                                   AutomationProperties.AutomationId="ActivityGroup" AutomationProperties.Name="{Binding Summary}">

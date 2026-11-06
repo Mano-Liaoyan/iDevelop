@@ -294,15 +294,18 @@ public sealed class ConversationViewTests : IDisposable
         var text = container.GetVisualDescendants().OfType<SelectableTextBlock>().First(block => Shown(block).StartsWith("Read the edge", StringComparison.Ordinal));
         text.SelectionStart = 9;
         text.SelectionEnd = 19;
-        Assert.Equal((70, 12.0), (view.Anchor!.Value.Entry, Math.Round(view.Anchor.Value.Offset, 1)));
+        // The view rests on a whole line, so the place is a line's top in the entry.
+        var place = Math.Round(view.Anchor!.Value.Offset, 1);
+        Assert.Equal(70, view.Anchor.Value.Entry);
 
         model.LoadEarlierCommand.Execute(null);
         Render();
 
         Assert.Equal(0, Ids(model)[0]);
         var read = transcript.ContainerFromIndex(Ids(model).ToList().IndexOf(70))!;
-        Assert.Equal(-12.0, Math.Round(read.TranslatePoint(default, (Visual)scroller.Content!)!.Value.Y - scroller.Offset.Y, 1));
-        Assert.Equal((70, 12.0), (view.Anchor!.Value.Entry, Math.Round(view.Anchor.Value.Offset, 1)));
+        // The entry stays in place to a line, because a page before it can change the author line it starts with.
+        Assert.InRange(Math.Round(scroller.Offset.Y - read.TranslatePoint(default, (Visual)scroller.Content!)!.Value.Y, 1), place - 24, place);
+        Assert.Equal(70, view.Anchor!.Value.Entry);
         Assert.Equal("edge cases", text.SelectedText);
     }
 
@@ -324,5 +327,48 @@ public sealed class ConversationViewTests : IDisposable
         public Window Window => window;
 
         public void Dispose() => window.Close();
+    }
+
+    [AvaloniaFact]
+    public void A_view_at_rest_never_cuts_a_line_at_its_top_edge()
+    {
+        _conversation.Add([.. Enumerable.Range(0, 60).Select(i => new ConversationLine.Agent($"Message {i} with enough words to wrap across the transcript column, and then a few more words so that it runs onto its second line and a third."))]);
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        var scroller = view.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Scroller");
+        Render();
+        void Check()
+        {
+            var y = scroller.Offset.Y;
+            Assert.Equal(y, WholeLine.Rest((Control)scroller.Content!, y, down: false), 1);
+        }
+
+        Check();
+        foreach (var step in new[] { 37.0, 113.0, 251.0, 9.0 })
+        {
+            scroller.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Up });
+            scroller.Offset = scroller.Offset.WithY(scroller.Offset.Y - step);
+            Render();
+            Check();
+        }
+    }
+
+    [AvaloniaFact]
+    public void A_small_step_down_moves_past_the_line_so_arrows_keep_moving()
+    {
+        _conversation.Add([.. Enumerable.Range(0, 60).Select(i => new ConversationLine.Agent($"Message {i} with enough words to wrap across the transcript column, and then a few more words so that it runs onto its second line and a third."))]);
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        var scroller = view.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Scroller");
+        scroller.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Up });
+        scroller.Offset = scroller.Offset.WithY(scroller.Offset.Y - 400);
+        Render();
+        var start = scroller.Offset.Y;
+
+        scroller.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Down });
+        scroller.Offset = scroller.Offset.WithY(start + 4);
+        Render();
+
+        Assert.True(scroller.Offset.Y > start, $"The view stayed at {start}.");
     }
 }

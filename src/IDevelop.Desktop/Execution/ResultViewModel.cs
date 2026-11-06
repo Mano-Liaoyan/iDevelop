@@ -23,6 +23,9 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
 
     public string Report => ResultBlock.Prose(result.Report);
 
+    /// <summary>The card has more to say than the inspector's result: a commit.</summary>
+    public bool HasDetail => Commit is not null;
+
     /// <summary>"Commit 1a2b3c4" for a node that edits the project, or null.</summary>
     public string? Commit => result.Commit is { Length: >= 7 } commit ? $"Commit {commit[..7]}" : null;
 
