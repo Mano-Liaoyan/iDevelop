@@ -182,13 +182,6 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [Theory]
-    [InlineData("I can do both. Which do you want?", "Which do you want?")]
-    [InlineData("Should the window follow the `longer` one?\n\nI stopped here.", "Should the window follow the longer one?")]
-    [InlineData("All done.", null)]
-    public void The_card_holds_the_question_that_the_agent_ended_on(string reply, string? question) =>
-        Assert.Equal(question, ConversationViewModel.LastQuestion(reply));
-
-    [Theory]
     [InlineData(new double[] { 40, 300, 300 }, 340, 150)]
     [InlineData(new double[] { 40, 100 }, 400, double.PositiveInfinity)]
     public void A_row_takes_width_from_its_widest_children_first(double[] widths, double room, double cap) =>

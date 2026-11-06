@@ -138,14 +138,12 @@ public sealed class MarkdownViewTests
     }
 
     [AvaloniaFact]
-    public void A_long_code_span_wraps_after_its_separators_and_keeps_every_letter_of_each_word()
+    public void A_long_code_span_stands_as_its_own_block_and_the_text_reads_on()
     {
-        const string Span = "entry_id,account_id,tenant_id,posted_at,effective_at,currency,amount_minor,direction,source_system,source_reference,reconciliation_batch";
-        var (window, view) = Show($"`{Span}`");
-        var block = view.GetVisualDescendants().OfType<SelectableTextBlock>().Single();
-        Assert.Equal(Span, Shown(block).Replace("\u00AD", ""));
-        Assert.True(block.TextLayout.TextLines.Count > 1);
-        Assert.All(block.TextLayout.TextLines.Skip(1), line => Assert.Equal('\u00AD', Shown(block)[line.FirstTextSourceIndex - 1]));
+        const string Span = "entry_id,account_id,tenant_id,posted_at,effective_at,currency,amount_minor,direction,source_system";
+        var (window, view) = Show($"The header is `{Span}`, and it stays.");
+        var blocks = view.GetVisualDescendants().OfType<SelectableTextBlock>().Select(Shown).ToList();
+        Assert.Equal(["The header is ", Span, ", and it stays."], blocks);
         window.Close();
     }
 

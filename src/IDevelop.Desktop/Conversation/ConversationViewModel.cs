@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Text.RegularExpressions;
 using System.Windows.Input;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Execution;
@@ -25,11 +24,8 @@ public enum AttentionCard { None, Question, Reply, Approval, Conflict, Interrupt
 /// through one <see cref="IConversation"/>, writes through the node's commands, and keeps nothing the person typed; the
 /// node's <see cref="ConversationState"/> does. Closing it never stops the node.
 /// </summary>
-public sealed partial class ConversationViewModel : ObservableObject, IDisposable
+public sealed class ConversationViewModel : ObservableObject, IDisposable
 {
-    // A run of text that stops at no line break and no sentence's end before its question mark.
-    private static readonly Regex QuestionSentence = QuestionRegex();
-
     internal const int PageSize = 200;
 
     // How wide the view counts a chip when it decides how many fit. A chip that has room takes more.
@@ -80,6 +76,12 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
 
     /// <summary>The project and workflow the node belongs to, as the breadcrumb names them.</summary>
     public string Breadcrumb => $"{Target.Canvas.Project.Name} › {Target.Canvas.Name}";
+
+    /// <summary>The breadcrumb's tooltip, which adds what the workflow's bar says.</summary>
+    public string BreadcrumbTip => Canvas.ShowsBar ? $"{Breadcrumb}\n{Canvas.BarSummary}" : Breadcrumb;
+
+    /// <summary>The composer takes the keys when the conversation opens only while the node waits for the person's words.</summary>
+    internal bool WaitsForWords => Card is AttentionCard.Reply or AttentionCard.Question or AttentionCard.Interrupted;
 
     public string AgentName => Node.Definition.Execution?.Client is { } client ? ClientCatalog.Name(client) : "The agent";
 
@@ -159,7 +161,7 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
     public string CardTitle => Card switch
     {
         AttentionCard.Question => Node.Questions is [var only] ? only.Header : "Question",
-        AttentionCard.Reply => HasOwnReason ? "Question" : "Reply",
+        AttentionCard.Reply => HasOwnReason ? "Question" : "Waiting for your reply",
         AttentionCard.Approval => "Approval",
         AttentionCard.Conflict => "Conflict",
         AttentionCard.Interrupted => "Interrupted",
@@ -168,21 +170,35 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
         _ => "",
     };
 
-    /// <summary>What the card explains, or null. A question's rows say it. A wait on the agent's words holds the question it ended on.</summary>
+    /// <summary>What the card explains, or null. A question's rows say it, and a wait on the agent's words leaves them to the message above.</summary>
     public string? CardBody => Card switch
     {
-        AttentionCard.None => null,
-        AttentionCard.Question => Node.Questions.Count > 0 ? null : LastQuestion(Node.LastReply),
-        AttentionCard.Reply => HasOwnReason && Node.StateDetail?.Trim() != Node.LastReply?.Trim() ? Node.StateDetail : LastQuestion(Node.LastReply),
+        AttentionCard.None or AttentionCard.Question => null,
+        AttentionCard.Reply => HasOwnReason && Node.StateDetail?.Trim() != Node.LastReply?.Trim() ? Node.StateDetail : null,
         _ => Node.StateDetail,
     };
 
-    /// <summary>How to answer a question that has no choices to press, or null.</summary>
+    /// <summary>How to answer a question that has no choices to press, what a reply's Approve would hand on, or null.</summary>
     public string? CardHint => (Card == AttentionCard.Question && Node.Questions.Count == 0) || (Card == AttentionCard.Reply && HasOwnReason)
-        ? "Type your answer below. Ctrl+Enter sends." : null;
+        ? "Type your answer below. Ctrl+Enter sends."
+        : Card == AttentionCard.Reply ? ApproveHelp : null;
 
-    /// <summary>Approve's words: an alternative to a reply takes the reply as the result, so it says so.</summary>
-    public string ApproveLabel => Card == AttentionCard.Reply ? "Approve reply as result" : "Approve";
+    /// <summary>Approve's words: on a wait for a reply it takes the agent's message, and never the draft, so it says so.</summary>
+    public string ApproveLabel => Card == AttentionCard.Reply ? "Use agent's message" : "Approve";
+
+    /// <summary>What Approve hands on, and to which nodes.</summary>
+    public string ApproveHelp => Card == AttentionCard.Reply
+        ? $"Reply below, or use the agent's message above as the result for {Recipients}."
+        : $"Makes the agent's last reply the result for {Recipients}.";
+
+    // "A and B", "A, B, and 2 more", or the node itself when nothing reads it.
+    private string Recipients => Node.Outputs.Select(link => link.Node.Title).ToList() switch
+    {
+        [] => "this node",
+        [var one] => one,
+        [var one, var two] => $"{one} and {two}",
+        [var one, var two, .. var rest] => $"{one}, {two}, and {rest.Count} more",
+    };
 
     /// <summary>What an approval offers, which the last wait's marker holds, or null.</summary>
     public string? CardOffered => Card == AttentionCard.Approval
@@ -207,13 +223,13 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
 
     public IReadOnlyList<NodeLink> MoreInputs => [.. Node.Inputs.Skip(ShownCount(Node.Inputs.Count, _chipRoom))];
 
-    public IReadOnlyList<NodeLink> ShownOutputs => [.. Node.Outputs.Take(ShownCount(Node.Outputs.Count, OutputRoom))];
+    public IReadOnlyList<NodeLink> ShownOutputs => [.. Node.Outputs.Take(ShownCount(Node.Outputs.Count, _chipRoom))];
 
-    public IReadOnlyList<NodeLink> MoreOutputs => [.. Node.Outputs.Skip(ShownCount(Node.Outputs.Count, OutputRoom))];
+    public IReadOnlyList<NodeLink> MoreOutputs => [.. Node.Outputs.Skip(ShownCount(Node.Outputs.Count, _chipRoom))];
 
     public bool HasInputs => Node.Inputs.Count > 0;
 
-    public bool HasOutputs => Node.Outputs.Count > 0 || Result is not null;
+    public bool HasOutputs => Node.Outputs.Count > 0;
 
     public bool HasMoreInputs => MoreInputs.Count > 0;
 
@@ -225,9 +241,6 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
 
     public bool ShowsStrip => HasInputs || HasOutputs;
 
-    /// <summary>The node's newest result, on the strip's output side, or null.</summary>
-    public ResultViewModel? Result => Node.Results.FirstOrDefault();
-
     /// <summary>The first turn shows while the transcript reaches back to the start and the node has a task to show.</summary>
     public bool ShowsTask => !HasEarlier && Items.Count > 0 && TaskFields.Count > 0;
 
@@ -235,7 +248,7 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
     public IReadOnlyList<FieldViewModel> TaskFields => [.. Node.Fields.Where(entry => !string.IsNullOrWhiteSpace(entry.Text))];
 
     /// <summary>The task's first line, which shows while the first turn is folded.</summary>
-    public string? TaskPreview => TaskFields.FirstOrDefault()?.Text.Split('\n', 2)[0];
+    public string? TaskPreview => TaskFields.FirstOrDefault()?.Text.Split('\n', 2)[0] is { } line ? ResultViewModel.Plain(line) : null;
 
     /// <summary>The person opened the first turn.</summary>
     public bool IsTaskOpen
@@ -245,8 +258,6 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
     }
 
     private bool HasOwnReason => Node.EngineState is EngineState.InputRequired { Why: not EngineState.Reply };
-
-    private int OutputRoom => Math.Max(Result is null ? 1 : 0, _chipRoom - (Result is null ? 0 : 1));
 
     public bool HasEarlier => _start > 0;
 
@@ -299,10 +310,6 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
         choice.IsChosen = !choice.IsChosen;
         return true;
     }
-
-    // The last sentence of the agent's text that ends in a question mark, without Markdown's marks, or null.
-    internal static string? LastQuestion(string? text) => text is null ? null
-        : QuestionSentence.Matches(text.Replace("`", "").Replace("**", "")).LastOrDefault()?.Value.Trim();
 
     private static int ShownCount(int count, int room) => count <= room ? count : room;
 
@@ -454,6 +461,7 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
         {
             var result = left.FirstOrDefault(entry => entry.Report.Trim() == message.Text.Trim());
             message.Result = result;
+            result?.ReadChanges(Node.ReadChanges);
             left.Remove(result!);
         }
     }
@@ -523,23 +531,22 @@ public sealed partial class ConversationViewModel : ObservableObject, IDisposabl
                 break;
             case nameof(TaskNodeViewModel.Inputs) or nameof(TaskNodeViewModel.Outputs):
                 RaiseStrip();
+                OnPropertyChanged(nameof(CardHint));
+                OnPropertyChanged(nameof(ApproveHelp));
                 break;
         }
     }
-
-    [GeneratedRegex(@"[^.!?\n]+\?")]
-    private static partial Regex QuestionRegex();
 
     private static readonly string[] StateProperties =
     [
         nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
         nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
-        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody),
+        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody),
     ];
 
     private static readonly string[] StripProperties =
     [
-        nameof(Result), nameof(ShownInputs), nameof(MoreInputs), nameof(ShownOutputs), nameof(MoreOutputs), nameof(HasInputs), nameof(HasOutputs),
+        nameof(ShownInputs), nameof(MoreInputs), nameof(ShownOutputs), nameof(MoreOutputs), nameof(HasInputs), nameof(HasOutputs),
         nameof(HasMoreInputs), nameof(HasMoreOutputs), nameof(MoreInputsLabel), nameof(MoreOutputsLabel), nameof(ShowsStrip),
     ];
 }

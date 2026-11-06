@@ -40,6 +40,9 @@ public sealed class MarkdownView : StackPanel
     // run of its own, and the line breaker looks for a break only inside a run.
     private const char BreakHere = '\u00AD';
     private const int LongSpan = 24;
+
+    // A span this long takes a line or more by itself, so it leaves the paragraph.
+    private const int BlockSpan = 60;
     private static readonly char[] SpanBreaks = ['/', '\\', '_', '.', ',', ':', '=', '-'];
 
     public MarkdownView()
@@ -134,7 +137,7 @@ public sealed class MarkdownView : StackPanel
     private Control Block(Block block, string text) => block switch
     {
         HeadingBlock heading => Text(heading.Inline, $"h{Math.Min(heading.Level, 4)}"),
-        ParagraphBlock paragraph => Text(paragraph.Inline, null),
+        ParagraphBlock paragraph => Paragraph(paragraph.Inline),
         FencedCodeBlock fenced => Code(fenced.Lines.ToString(), fenced.Info),
         CodeBlock code => Code(code.Lines.ToString(), null),
         ListBlock list => List(list, text),
@@ -144,6 +147,47 @@ public sealed class MarkdownView : StackPanel
         ContainerBlock container => Container(container, text),
         _ => Plain(Source(text, block)),
     };
+
+    // A code span too long for a line stands as its own block between the paragraph's text, so it stays whole and the text reads on.
+    private Control Paragraph(ContainerInline? inline)
+    {
+        var parts = inline?.Where(child => child is CodeInline { Content.Length: >= BlockSpan }).ToList() ?? [];
+        if (parts.Count == 0)
+        {
+            return Text(inline, null);
+        }
+
+        var panel = new StackPanel { Spacing = 8 };
+        List<Markdig.Syntax.Inlines.Inline> run = [];
+        void Flush()
+        {
+            // The full stop after a span would stand alone under the block, so a run with no word of its own leaves with it.
+            if (run.Any(child => child is not LiteralInline literal || literal.Content.ToString().Any(char.IsLetterOrDigit)) && !run.All(child => child is LineBreakInline))
+            {
+                var text = Text(null, null);
+                run.ForEach(child => Add(text.Inlines!, child, text));
+                panel.Children.Add(text);
+            }
+
+            run.Clear();
+        }
+
+        foreach (var child in inline!)
+        {
+            if (child is CodeInline { Content.Length: >= BlockSpan } code)
+            {
+                Flush();
+                panel.Children.Add(Code(code.Content, null));
+            }
+            else
+            {
+                run.Add(child);
+            }
+        }
+
+        Flush();
+        return panel;
+    }
 
     private StackPanel Container(ContainerBlock container, string text)
     {

@@ -4,6 +4,7 @@
              xmlns:conversation="using:IDevelop.Desktop.Conversation"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
              xmlns:execution="using:IDevelop.Desktop.Execution"
+             xmlns:git="using:IDevelop.Git"
              xmlns:theme="using:IDevelop.Desktop.Theme"
              x:Class="IDevelop.Desktop.Conversation.ConversationView"
              x:DataType="conversation:ConversationViewModel"
@@ -44,14 +45,55 @@
   <Grid x:Name="Rows" RowDefinitions="Auto,Auto,*,Auto"
         Classes.docked="{Binding $parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=False}">
     <Border Classes="conversationHeader">
-      <!-- The status sits beside the title while the title keeps 160 px. The glyph buttons stay at the first line's end. -->
-      <StackPanel Spacing="2">
+      <!-- One line: the node and where it is, and the glyph buttons at its end. While the inspector shows the node, the inspector
+           holds its state and its neighbours, so the header leaves them out. The dock leaves the canvas and its bar in view, so
+           it leaves out the workflow's place and its actions too. -->
       <theme:SpillRow MinLeadWidth="186" Spacing="4" ItemsAlignment="Start" SpillIndent="28">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Top" Margin="0,0,0,0" />
-          <TextBlock Grid.Column="1" Classes="conversationTitle" Text="{Binding Node.Title}" ToolTip.Tip="{Binding Node.Title}"
-                     VerticalAlignment="Center" AutomationProperties.AutomationId="ConversationTitle" />
+          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Center" />
+          <theme:FairRow Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Classes="conversationTitle" Text="{Binding Node.Title}" ToolTip.Tip="{Binding Node.Title}"
+                       VerticalAlignment="Center" AutomationProperties.AutomationId="ConversationTitle" />
+            <TextBlock Classes="caption" VerticalAlignment="Center" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
+                       ToolTip.Tip="{Binding BreadcrumbTip}" AutomationProperties.AutomationId="ConversationBreadcrumb"
+                       AutomationProperties.HelpText="{Binding Canvas.BarSummary}" />
+          </theme:FairRow>
         </Grid>
+        <StackPanel theme:SpillRow.Pinned="True" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                    IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
+                    AutomationProperties.AutomationId="ConversationRun"
+                    AutomationProperties.Name="{Binding Canvas.BarSummary}">
+          <Button Classes="ghost" Height="24" Command="{Binding Canvas.NextWaitingCommand}" IsVisible="{Binding Canvas.HasAttention}"
+                  ToolTip.Tip="Show the next node that waits for you or failed"
+                  AutomationProperties.AutomationId="ConversationNext"
+                  AutomationProperties.Name="Next">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="Next" />
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
+            </StackPanel>
+          </Button>
+          <Button Classes="ghost" Height="24"
+                  Command="{Binding Canvas.MergeIntoBranchCommand}" IsVisible="{Binding Canvas.CanMergeIntoBranch}"
+                  ToolTip.Tip="Merge the end nodes' work into the branch you have checked out"
+                  AutomationProperties.AutomationId="ConversationMergeIntoBranch"
+                  AutomationProperties.Name="Merge into my branch">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="12" Height="12" />
+              <TextBlock Text="Merge into my branch" />
+            </StackPanel>
+          </Button>
+          <Button Classes="ghost" Height="24"
+                  Command="{Binding Canvas.StopAllCommand}" IsVisible="{Binding !!Canvas.RunningCount}"
+                  ToolTip.Tip="Stop every running node. Finished results stay."
+                  AutomationProperties.AutomationId="ConversationStopAll"
+                  AutomationProperties.Name="Stop All">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="12" Height="12" />
+              <TextBlock Text="Stop All" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
         <Button theme:SpillRow.Pinned="True" Classes="icon" ToolTip.Tip="{Binding Limitations}"
                 AutomationProperties.AutomationId="ClientLimitationsInfo"
                 AutomationProperties.Name="{Binding Limitations}">
@@ -81,8 +123,9 @@
                 AutomationProperties.Name="Close conversation">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
         </Button>
-        <!-- The node's state, as its card names it. -->
+        <!-- The node's state, as its card names it, while the inspector does not show it. -->
         <Border Classes="pill" VerticalAlignment="Center" theme:SpillRow.BesideOnly="True"
+                IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=False}"
                 Classes.running="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                 Classes.complete="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                 Classes.problem="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
@@ -94,56 +137,18 @@
           </StackPanel>
         </Border>
       </theme:SpillRow>
-      <!-- While the conversation takes the canvas's place, this line says where the node is and repeats what the canvas's bar says
-           of the workflow, with its Next, Stop All, and Merge into my branch (ADR 0017). The dock leaves the canvas and its bar in
-           view, so it shows nothing here. -->
-      <Border Classes="workflowStrip" IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
-              AutomationProperties.AutomationId="ConversationRun"
-              AutomationProperties.Name="{Binding Canvas.BarSummary}">
-        <theme:FairRow Spacing="8">
-          <TextBlock Classes="caption" VerticalAlignment="Center" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
-                     ToolTip.Tip="{Binding Breadcrumb}" AutomationProperties.AutomationId="ConversationBreadcrumb" />
-          <TextBlock Classes="caption" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                     IsVisible="{Binding Canvas.ShowsBar}"
-                     Text="{Binding Canvas.BarSummary}" ToolTip.Tip="{Binding Canvas.BarTip}"
-                     AutomationProperties.AutomationId="ConversationRunStatus" />
-          <Button theme:FairRow.End="True" theme:FairRow.Whole="True" Classes="ghost" Height="24" Command="{Binding Canvas.NextWaitingCommand}" IsVisible="{Binding Canvas.HasAttention}"
-                  ToolTip.Tip="Show the next node that waits for you or failed (Ctrl+J)"
-                  AutomationProperties.AutomationId="ConversationNext"
-                  AutomationProperties.Name="Next">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock Text="Next" />
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
-            </StackPanel>
-          </Button>
-          <Button theme:FairRow.End="True" theme:FairRow.Whole="True" Classes="ghost" Height="24"
-                  Command="{Binding Canvas.MergeIntoBranchCommand}" IsVisible="{Binding Canvas.CanMergeIntoBranch}"
-                  ToolTip.Tip="Merge the end nodes' work into the branch you have checked out"
-                  AutomationProperties.AutomationId="ConversationMergeIntoBranch"
-                  AutomationProperties.Name="Merge into my branch">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="12" Height="12" />
-              <TextBlock Text="Merge into my branch" />
-            </StackPanel>
-          </Button>
-          <Button theme:FairRow.End="True" theme:FairRow.Whole="True" Classes="ghost" Height="24"
-                  Command="{Binding Canvas.StopAllCommand}" IsVisible="{Binding !!Canvas.RunningCount}"
-                  ToolTip.Tip="Stop every running node. Finished results stay."
-                  AutomationProperties.AutomationId="ConversationStopAll"
-                  AutomationProperties.Name="Stop All">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="12" Height="12" />
-              <TextBlock Text="Stop All" />
-            </StackPanel>
-          </Button>
-        </theme:FairRow>
-      </Border>
-      </StackPanel>
     </Border>
 
-    <!-- What the node read and what it handed on. Each chip opens that node's conversation, so a person walks the graph from here. -->
-    <Border x:Name="Strip" Grid.Row="1" Classes="ioStrip" IsVisible="{Binding ShowsStrip}"
+    <!-- What the node read and which nodes read its result, while the inspector does not show them. Each chip opens that node's
+         conversation, so a person walks the graph from here. The result itself has its card in the transcript. -->
+    <Border x:Name="Strip" Grid.Row="1" Classes="ioStrip"
             AutomationProperties.AutomationId="ConversationStrip">
+      <Border.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="ShowsStrip" />
+          <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
+        </MultiBinding>
+      </Border.IsVisible>
       <theme:FairRow Spacing="12">
         <theme:FairRow Spacing="4" IsVisible="{Binding HasInputs}"
                        AutomationProperties.AutomationId="ConversationInputs">
@@ -159,16 +164,9 @@
             </Button.Flyout>
           </Button>
         </theme:FairRow>
-        <!-- The node's own result, and the nodes that read it. The two are different things, so each has its label. -->
         <theme:FairRow theme:FairRow.End="True" Spacing="4" IsVisible="{Binding HasOutputs}"
                        AutomationProperties.AutomationId="ConversationOutputs">
-          <TextBlock Classes="stripLabel" Text="Output" IsVisible="{Binding Result, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          <Button Classes="chip result" Command="{Binding Node.SelectCommand}" IsVisible="{Binding Result, Converter={x:Static ObjectConverters.IsNotNull}}"
-                  ToolTip.Tip="{Binding Result.Heading, FallbackValue={x:Null}}"
-                  AutomationProperties.AutomationId="ConversationResultChip" AutomationProperties.Name="{Binding Result.Heading, FallbackValue={x:Null}}">
-            <TextBlock Text="{Binding Result.ChipLabel, FallbackValue={x:Null}}" TextTrimming="CharacterEllipsis" />
-          </Button>
-          <TextBlock Classes="stripLabel" Text="Goes to" IsVisible="{Binding Node.HasOutputs}" />
+          <TextBlock Classes="stripLabel" Text="Goes to" />
           <ItemsControl ItemsSource="{Binding ShownOutputs}" ItemsPanel="{StaticResource ChipPanel}" ItemTemplate="{StaticResource NodeChip}" />
           <Button Classes="chip more" Content="{Binding MoreOutputsLabel}" IsVisible="{Binding HasMoreOutputs}"
                   ToolTip.Tip="The other nodes that read it"
@@ -302,7 +300,7 @@
               </Button>
               <Button Classes.primary="{Binding IsApprovalCard}" Classes.action="{Binding !IsApprovalCard}" Height="28"
                       Command="{Binding Node.ApproveCommand}" IsVisible="{Binding Node.ShowsApprove}"
-                      ToolTip.Tip="Makes the agent's last reply the node's result"
+                      ToolTip.Tip="{Binding ApproveHelp}"
                       AutomationProperties.AutomationId="ConversationApprove"
                       AutomationProperties.Name="Approve">
                 <TextBlock Text="{Binding ApproveLabel}" />
@@ -355,17 +353,13 @@
                 </Flyout>
               </Button.Flyout>
             </Button>
-            <Button Grid.Column="1" x:Name="ComposerMore" Classes="icon small" ToolTip.Tip="More actions"
-                    AutomationProperties.AutomationId="ConversationMore" AutomationProperties.Name="More">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
-              <Button.Flyout>
-                <MenuFlyout Placement="TopEdgeAlignedLeft">
-                  <MenuItem Header="Open in terminal" Command="{Binding Node.OpenInTerminalCommand}"
-                            ToolTip.Tip="Copies the command that continues the session in a terminal"
-                            AutomationProperties.AutomationId="ConversationTerminal"
-                            theme:MenuGlyph.Data="{StaticResource IconCopy}" />
-                </MenuFlyout>
-              </Button.Flyout>
+            <Button Grid.Column="1" Classes="ghost" Height="24" Command="{Binding Node.OpenInTerminalCommand}"
+                    ToolTip.Tip="Copies the command that continues the session in a terminal"
+                    AutomationProperties.AutomationId="ConversationTerminal" AutomationProperties.Name="Open in terminal">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCopy}" Width="12" Height="12" />
+                <TextBlock Text="Open in terminal" VerticalAlignment="Center" />
+              </StackPanel>
             </Button>
             <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
               <TextBlock Classes="keyHint" Text="Ctrl+Enter" VerticalAlignment="Center" Margin="0,0,4,0" IsVisible="{Binding HasDraft}"
@@ -400,7 +394,7 @@
     </StackPanel>
 
     <Panel Grid.Row="2">
-      <ScrollViewer x:Name="Scroller" Classes="transcript" HorizontalScrollBarVisibility="Disabled"
+      <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
         <StackPanel>
           <Button Classes="action" HorizontalAlignment="Center" Height="28" Margin="0,12,0,0"
@@ -478,16 +472,39 @@
                     </Border>
                     <Border Classes="resultCard" IsVisible="{Binding Result, Converter={x:Static ObjectConverters.IsNotNull}}"
                             AutomationProperties.AutomationId="ResultCard">
-                      <!-- The message above the card is the result's whole report, so the card names it and does not repeat it. -->
-                      <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
-                        <TextBlock Classes="resultHeading" Text="{Binding Result.Heading, FallbackValue={x:Null}}" AutomationProperties.AutomationId="ResultCardHeading" />
-                        <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Result.Commit, FallbackValue={x:Null}}" />
-                        <Button Grid.Column="3" Classes="ghost" Height="24" Click="OnShowResult"
-                                ToolTip.Tip="Selects the node, whose Output section holds the result"
-                                AutomationProperties.AutomationId="ResultCardShow" AutomationProperties.Name="Show in inspector">
-                          <TextBlock Text="Show in inspector" />
-                        </Button>
-                      </Grid>
+                      <!-- The message above the card is the result's whole report, so the card names it and says what it changed. -->
+                      <StackPanel>
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                          <TextBlock Classes="resultHeading" Text="{Binding Result.Heading, FallbackValue={x:Null}}" AutomationProperties.AutomationId="ResultCardHeading" />
+                          <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Result.Commit, FallbackValue={x:Null}}" />
+                          <Button Grid.Column="3" Classes="ghost" Height="24" Click="OnShowResult"
+                                  ToolTip.Tip="Selects the node, whose Output section holds the result"
+                                  AutomationProperties.AutomationId="ResultCardShow" AutomationProperties.Name="Show in inspector">
+                            <TextBlock Text="Show in inspector" />
+                          </Button>
+                        </Grid>
+                        <ToggleButton Classes="steps" IsChecked="{Binding Result.IsChangesOpen, FallbackValue=False}" IsVisible="{Binding Result.HasChanges, FallbackValue=False}"
+                                      AutomationProperties.AutomationId="ResultChanges" AutomationProperties.Name="{Binding Result.ChangeLabel, FallbackValue={x:Null}}">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Theme="{StaticResource Glyph}" />
+                            <TextBlock Text="{Binding Result.ChangeLabel, FallbackValue={x:Null}}" VerticalAlignment="Center" />
+                            <TextBlock Classes="lineCount added" Text="{Binding Result.Added, FallbackValue={x:Null}}" />
+                            <TextBlock Classes="lineCount deleted" Text="{Binding Result.Deleted, FallbackValue={x:Null}}" />
+                          </StackPanel>
+                        </ToggleButton>
+                        <ItemsControl ItemsSource="{Binding Result.Changes, FallbackValue={x:Null}}" IsVisible="{Binding Result.IsChangesOpen, FallbackValue=False}" Margin="18,2,0,0"
+                                      AutomationProperties.AutomationId="ResultFiles">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="git:FileChange">
+                              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Height="20">
+                                <TextBlock Classes="resultCommit" Text="{Binding Path}" TextTrimming="PrefixCharacterEllipsis" ToolTip.Tip="{Binding Path}" />
+                                <TextBlock Grid.Column="1" Classes="lineCount added" Text="{Binding Added, StringFormat='+{0}'}" />
+                                <TextBlock Grid.Column="2" Classes="lineCount deleted" Text="{Binding Deleted, StringFormat='−{0}'}" />
+                              </Grid>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
                     </Border>
                   </StackPanel>
                 </Panel>
@@ -507,10 +524,11 @@
                   <StackPanel>
                     <ToggleButton Classes="steps" IsChecked="{Binding IsOpen}"
                                   AutomationProperties.AutomationId="ActivityGroup" AutomationProperties.Name="{Binding Summary}">
-                      <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6">
+                      <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
                         <PathIcon Theme="{StaticResource Glyph}" />
                         <TextBlock Grid.Column="1" Text="{Binding CountLabel}" VerticalAlignment="Center" AutomationProperties.AutomationId="ActivityCount" />
-                        <TextBlock Grid.Column="2" Classes="stepLast" Text="{Binding LastLine}" IsVisible="{Binding !IsOpen}"
+                        <TextBlock Grid.Column="2" Classes="stepTool" Text="{Binding Last.Tool}" IsVisible="{Binding !IsOpen}" />
+                        <TextBlock Grid.Column="3" Classes="stepLast" Text="{Binding Last.Command}" IsVisible="{Binding !IsOpen}"
                                    ToolTip.Tip="{Binding LastLine}" AutomationProperties.AutomationId="ActivityLast" />
                       </Grid>
                     </ToggleButton>
@@ -518,8 +536,11 @@
                       <ItemsControl ItemsSource="{Binding Steps}">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate x:DataType="conversation:ActivityItemViewModel">
-                            <SelectableTextBlock Classes="activity" Text="{Binding Line}" ToolTip.Tip="{Binding Text}"
-                                                 AutomationProperties.AutomationId="Activity" />
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" ToolTip.Tip="{Binding Text}" Background="Transparent">
+                              <TextBlock Classes="stepTool" Text="{Binding Tool}" />
+                              <SelectableTextBlock Grid.Column="1" Classes="activity" Text="{Binding Command}"
+                                                   AutomationProperties.AutomationId="Activity" />
+                            </Grid>
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>

@@ -116,7 +116,7 @@ public sealed class ConversationTests
         shell.WaitForState("Say hi", NodeState.Completed);
 
         shell.Talk();
-        shell.ChooseMenu("ConversationMore", "ConversationTerminal");
+        shell.Click(shell.Find<Button>("ConversationTerminal"));
 
         shell.WaitUntil(() => shell.Status.StartsWith("Copied the command", StringComparison.Ordinal), "the command is copied");
         Assert.EndsWith("agy --conversation s-1", shell.Status);

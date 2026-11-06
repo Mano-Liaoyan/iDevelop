@@ -94,8 +94,15 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="SelectableTextBlock.mdCodeText">
-    <Setter Property="Margin" Value="12,0,12,8" />
+    <Setter Property="Margin" Value="12,0,12,12" />
     <Setter Property="TextWrapping" Value="NoWrap" />
+  </Style>
+  <!-- A long line scrolls, and its bar shows only under the pointer, so it never crowds a short block. -->
+  <Style Selector="Border.mdCode ScrollViewer /template/ ScrollBar">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="Border.mdCode:pointerover ScrollViewer /template/ ScrollBar">
+    <Setter Property="Opacity" Value="1" />
   </Style>
   <Style Selector="Button.mdLink">
     <Setter Property="Padding" Value="0" />
@@ -138,8 +145,8 @@
 
   <!-- The conversation view. Its columns are 760 wide at most, with 24 px at the sides, or 16 under 600. -->
   <Style Selector="Border.conversationHeader">
-    <Setter Property="Padding" Value="12,6,12,4" />
-    <Setter Property="MinHeight" Value="48" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="MinHeight" Value="44" />
     <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
@@ -162,10 +169,6 @@
     <Setter Property="LineHeight" Value="18" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  </Style>
-  <Style Selector="Border.workflowStrip">
-    <Setter Property="MinHeight" Value="24" />
-    <Setter Property="Padding" Value="28,0,0,0" />
   </Style>
   <Style Selector="Border.ioStrip">
     <Setter Property="Height" Value="28" />
@@ -201,11 +204,8 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="Button.chip.more, Button.chip.result">
+  <Style Selector="Button.chip.more">
     <Setter Property="MaxWidth" Value="160" />
-  </Style>
-  <Style Selector="Button.chip.result TextBlock">
-    <Setter Property="FontWeight" Value="Medium" />
   </Style>
   <Style Selector="Ellipse.status.warning">
     <Setter Property="Fill" Value="{DynamicResource StateWarningStrokeBrush}" />
@@ -261,10 +261,6 @@
     <Setter Property="LineHeight" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <!-- A line that scrolls up fades out before the strip's edge, so no line ends cut in half under it. -->
-  <Style Selector="ScrollViewer.transcript.scrolled /template/ ScrollContentPresenter#PART_ContentPresenter">
-    <Setter Property="OpacityMask" Value="{x:Static theme:EdgeFade.TopFade}" />
   </Style>
   <Style Selector="Border.message.subagent">
     <Setter Property="Margin" Value="0,0,0,0" />
@@ -331,13 +327,16 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="TextBlock.resultSummary">
-    <Setter Property="FontSize" Value="13" />
-    <Setter Property="LineHeight" Value="18" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="MaxLines" Value="3" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  <Style Selector="TextBlock.lineCount">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.lineCount.added">
+    <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.lineCount.deleted">
+    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
   </Style>
   <!-- A group of steps: one quiet row with a real chevron, which opens onto a list with a guide at its left. -->
   <Style Selector="ToggleButton.steps">
@@ -369,6 +368,12 @@
   </Style>
   <Style Selector="ToggleButton.steps:checked PathIcon">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+  </Style>
+  <Style Selector="TextBlock.stepTool">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
   <Style Selector="TextBlock.stepLast">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
@@ -618,6 +623,7 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="Padding" Value="1" />
   </Style>
   <!-- The composer's box draws no frame of its own inside the composer's frame. One line at rest, and six at most. -->
   <Style Selector="TextBox.composerBox">
@@ -634,9 +640,11 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BoxShadow" Value="none" />
   </Style>
-  <!-- The conversation opens with the focus here, so focus turns the frame to one quiet accent line and draws no ring. -->
+  <!-- The frame stays neutral until the composer has the keys, and then it takes the app's 2 px focus line. The padding keeps the text still. -->
   <Style Selector="Border.composer:focus-within">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="Padding" Value="0" />
   </Style>
   <!-- The composer sits at the window's bottom, so its tooltips open above it, clear of the pointer. -->
   <Style Selector="Grid.composerBar Button">

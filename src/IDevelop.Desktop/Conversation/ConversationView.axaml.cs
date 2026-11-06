@@ -145,13 +145,27 @@ public partial class ConversationView : UserControl
         }
     }
 
+    /// <summary>Puts the keys in the transcript, where Esc and the arrows still work and the composer waits for a click.</summary>
+    internal void FocusTranscript() => Scroller.Focus();
+
     /// <summary>Puts the keys in the composer.</summary>
     internal void FocusComposer() => Composer.Focus();
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        Dispatcher.UIThread.Post(() => Composer.Focus(), DispatcherPriority.Background);
+        // The composer shows the keys are there, so it takes them only while the node waits for the person's words.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_model?.WaitsForWords == true)
+            {
+                Composer.Focus();
+            }
+            else
+            {
+                FocusTranscript();
+            }
+        }, DispatcherPriority.Background);
     }
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -226,8 +240,6 @@ public partial class ConversationView : UserControl
     {
         var atEnd = Scroller.Offset.Y >= Scroller.Extent.Height - Scroller.Viewport.Height - EndSlack;
         JumpToLatest.IsVisible = !atEnd && _model is { Items.Count: > 0 };
-        // Text that scrolled away fades out at the top edge, so the strip above it never cuts a line in half.
-        Scroller.Classes.Set("scrolled", Scroller.Offset.Y > 1);
         var ours = _scrolledTo is { } target && Math.Abs(Scroller.Offset.Y - target) < 1;
         var layoutOnly = (e.ExtentDelta.Y != 0 || e.ViewportDelta.Y != 0) && !_userInput;
         _userInput = false;
@@ -325,5 +337,7 @@ public partial class ConversationView : UserControl
         {
             select.Execute(null);
         }
+
+        (TopLevel.GetTopLevel(this) as MainWindow)?.ViewModel.ShowInspector();
     }
 }

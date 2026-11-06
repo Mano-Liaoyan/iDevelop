@@ -61,12 +61,16 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
         CommitMovesCommand = new RelayCommand(CommitMoves);
         NextWaitingCommand = new RelayCommand(SelectNextAttention);
-        InitializeEngine(git ?? new Dictionary<string, string>());
+        GitEnvironment = git ?? new Dictionary<string, string>();
+        InitializeEngine(GitEnvironment);
         Document.Changed += (_, _) => Sync();
         Sync();
         InitializeHighlight();
         InitializeGenerate();
     }
+
+    /// <summary>The environment Git runs with for this workflow.</summary>
+    internal IReadOnlyDictionary<string, string> GitEnvironment { get; }
 
     public ObservableCollection<TaskNodeViewModel> Nodes { get; } = [];
 

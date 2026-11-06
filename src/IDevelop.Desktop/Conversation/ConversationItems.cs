@@ -99,6 +99,12 @@ public sealed class ActivityItemViewModel(int id, ConversationLine.Activity acti
 
     /// <summary>The first line, which the row shows. The tooltip holds all of it.</summary>
     public string Line => activity.Text.Split('\n', 2)[0];
+
+    /// <summary>The tool's name, the first word of the line.</summary>
+    public string Tool => Line.Split(' ', 2)[0];
+
+    /// <summary>What the tool ran, the rest of the line.</summary>
+    public string Command => Line.Split(' ', 2) is [_, var rest] ? rest : "";
 }
 
 /// <summary>A run of tool lines as one quiet row. Whether it is open is the view's state, and it starts closed.</summary>
@@ -122,6 +128,9 @@ public sealed class StepGroupItemViewModel : ConversationItemViewModel
     /// <summary>The last step's first line, which shows while the group is closed.</summary>
     public string LastLine => Steps[^1].Line;
 
+    /// <summary>The last step, whose tool and command show while the group is closed.</summary>
+    public ActivityItemViewModel Last => Steps[^1];
+
     /// <summary>The row's name for a screen reader.</summary>
     public string Summary => $"{CountLabel}. Last: {LastLine}";
 
@@ -130,6 +139,7 @@ public sealed class StepGroupItemViewModel : ConversationItemViewModel
         Steps.Add(step);
         OnPropertyChanged(nameof(CountLabel));
         OnPropertyChanged(nameof(LastLine));
+        OnPropertyChanged(nameof(Last));
         OnPropertyChanged(nameof(Summary));
     }
 }

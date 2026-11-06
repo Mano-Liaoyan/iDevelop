@@ -37,18 +37,14 @@ public sealed class ConversationLayoutTests
 
             var header = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationTitle"), "conversationHeader"));
             AssertWholeAndApart(shell, at, header.Intersect(view), 12, 4,
-                ("Title", shell.Find<Control>("ConversationTitle")), ("Status", Shell.Around(shell.Find<TextBlock>("ConversationStatus"), "pill")),
+                ("Title", shell.Find<Control>("ConversationTitle")), ("Next", shell.Find<Control>("ConversationNext")), ("Stop", shell.Find<Control>("ConversationStopAll")),
                 ("Layout", shell.Find<Control>("ConversationLayout")), ("Close", shell.Find<Control>("CloseConversation")));
             Assert.Equal(header.Right - 12, shell.Bounds(shell.Find<Control>("CloseConversation")).Right, 0.5);
-
-            var strip = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationRunStatus"), "workflowStrip"));
-            AssertWholeAndApart(shell, at, strip.Intersect(view), 0, 4,
-                ("Next", shell.Find<Control>("ConversationNext")), ("Stop", shell.Find<Control>("ConversationStopAll")));
 
             var composer = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer"));
             Assert.True(view.Contains(composer), $"At {at}, the composer at {composer} leaves the view at {view}.");
             AssertWholeAndApart(shell, at, composer, 8, 4,
-                ("Model", shell.Find<Control>("ConversationModel")), ("More", shell.Find<Control>("ConversationMore")), ("Send", shell.Find<Control>("ConversationSend")));
+                ("Model", shell.Find<Control>("ConversationModel")), ("Terminal", shell.Find<Control>("ConversationTerminal")), ("Send", shell.Find<Control>("ConversationSend")));
             // The composer's row ends at its own padding, and the card over it holds what the person can do.
             var card = shell.Bounds(shell.Find<Control>("ConversationAttention"));
             Assert.True(view.Contains(card) && card.Bottom <= composer.Top, $"At {at}, the card at {card} leaves the view, or meets the composer at {composer}.");
@@ -68,7 +64,7 @@ public sealed class ConversationLayoutTests
         {
             window.IsConversationDocked = docked;
             shell.Render();
-            Assert.Equal((AttentionCard.Reply, "Reply", true), (model.Card, model.CardTitle, model.IsCompactCard));
+            Assert.Equal((AttentionCard.Reply, "Waiting for your reply", true), (model.Card, model.CardTitle, model.IsCompactCard));
             Assert.Equal("Reply to Antigravity CLI", model.Watermark);
             var card = shell.Bounds(shell.Find<Control>("ConversationAttention"));
             var composer = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer"));

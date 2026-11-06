@@ -13,6 +13,13 @@ public sealed partial class TaskNodeViewModel
     /// <summary>A wait for the person, or a failure. Opening the conversation leaves it.</summary>
     public Attention? Attention => Attention.Of(_engineState);
 
+    /// <summary>The name of the node's agent client, or null while it has none.</summary>
+    public string? AgentClientName => Definition.Execution?.Client is { } client ? IDevelop.Clients.ClientCatalog.Name(client) : null;
+
+    /// <summary>The files a commit of this node changed.</summary>
+    internal System.Collections.Immutable.ImmutableArray<IDevelop.Git.FileChange> ReadChanges(string commit) =>
+        IDevelop.Git.CommitChanges.Read(_canvas.Project.Folder, commit, _canvas.GitEnvironment);
+
     public bool HasAttention => Attention is not null;
 
     public string? AttentionLabel => Attention?.Label;
