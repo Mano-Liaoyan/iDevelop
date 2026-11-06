@@ -12,10 +12,8 @@ namespace IDevelop.Desktop.Sidebar;
 /// </summary>
 public sealed class ActivityViewModel : ObservableObject
 {
-    /// <summary>The rows a list shows before Show all, and at the smallest windows.</summary>
-    public const int NormalLimit = 3;
-
-    public const int SmallLimit = 2;
+    /// <summary>The rows a list shows before Show all.</summary>
+    public const int NormalLimit = 4;
 
     private readonly Func<IReadOnlyList<ProjectViewModel>> _projects;
     private readonly Action<TaskNodeViewModel> _open;
@@ -49,15 +47,14 @@ public sealed class ActivityViewModel : ObservableObject
 
     public bool HasFailed => FailedCount > 0;
 
-    public int Limit
+    /// <summary>How many rows the list shows before Show all.</summary>
+    internal int Limit
     {
         get;
         set
         {
-            if (SetProperty(ref field, value))
-            {
-                ShowRows();
-            }
+            field = value;
+            ShowRows();
         }
     } = NormalLimit;
 
@@ -154,22 +151,21 @@ public sealed class ActivityViewModel : ObservableObject
         _ => null,
     };
 
-    /// <summary>The first <paramref name="limit"/> rows, whose last gives way to the first that failed, so the short list keeps a failure in view.</summary>
-    internal static List<T> Shortened<T>(IReadOnlyList<T> rows, int limit, Func<T, bool> failed) where T : class
+    /// <summary>
+    /// A short list of <paramref name="limit"/> rows, in list order: the first row of each need, so that no kind of need hides
+    /// behind Show all, and then the rows that follow. The first failure always stays in view.
+    /// </summary>
+    internal static List<T> Shortened<T, TNeed>(IReadOnlyList<T> rows, int limit, Func<T, TNeed> need, Func<T, bool> failed)
     {
-        var shown = rows.Take(limit).ToList();
-        if (shown.Count > 0 && !shown.Any(failed) && rows.FirstOrDefault(failed) is { } first)
-        {
-            shown[^1] = first;
-        }
-
-        return shown;
+        var failure = rows.Index().Where(row => failed(row.Item)).Select(row => row.Index).Take(1);
+        var firsts = rows.Index().DistinctBy(row => need(row.Item)).Select(row => row.Index);
+        return [.. failure.Union(firsts).Union(Enumerable.Range(0, rows.Count)).Take(limit).Order().Select(index => rows[index])];
     }
 
     // The rows that stay keep their controls, so a keyboard focus on one survives a change to another.
     private void ShowRows()
     {
-        var shown = IsShowingAll ? _ordered : Shortened(_ordered, Limit, row => row.Node.State == NodeState.Failed);
+        var shown = IsShowingAll ? _ordered : Shortened(_ordered, Limit, row => (row.Node.State, row.Node.WaitReason), row => row.Node.State == NodeState.Failed);
         if (!Rows.SequenceEqual(shown))
         {
             foreach (var row in Rows.Except(shown).ToList())
@@ -227,6 +223,9 @@ public sealed class ActivityRow : ObservableObject
         }
     } = "";
 
+    /// <summary>The node's workflow, which the row's second line shows.</summary>
+    public string Workflow => Node.Canvas.Name;
+
     /// <summary>The node's workflow, after its project's name while several projects are open.</summary>
     public string Place
     {
@@ -236,6 +235,7 @@ public sealed class ActivityRow : ObservableObject
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(Detail));
+                OnPropertyChanged(nameof(Workflow));
             }
         }
     } = "";
@@ -254,6 +254,6 @@ public sealed class ActivityRow : ObservableObject
         _ => node.StatusLabel,
     };
 
-    private static string? OneLine(string? text) =>
+    internal static string? OneLine(string? text) =>
         text?.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault();
 }

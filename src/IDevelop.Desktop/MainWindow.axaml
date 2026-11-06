@@ -240,11 +240,6 @@
               Background="{DynamicResource AppTopbarBrush}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border80Brush}"
               IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
               PointerPressed="OnTitleBandPressed" />
-      <Panel>
-        <TextBlock Text="Open a project to inspect its nodes." HorizontalAlignment="Center" VerticalAlignment="Center"
-                   FontSize="13" LineHeight="18" Foreground="{DynamicResource TextMutedBrush}"
-                   IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}"
-                   AutomationProperties.AutomationId="InspectorEmpty" />
         <!-- The inspector scrolls its own sections, so its header and filter stay in place. -->
         <ContentControl Content="{Binding Canvas}">
           <ContentControl.DataTemplates>
@@ -253,11 +248,11 @@
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>
-      </Panel>
     </DockPanel>
 
-    <!-- A tab on each panel's edge hides the panel, and stays at the window's edge to bring it back. -->
-    <Button Grid.Column="1" Classes="panelEdge" ZIndex="1" HorizontalAlignment="Center" Margin="{Binding IsSidebarOpen, Converter={x:Static local:MainWindow.LeftEdge}}"
+    <!-- A tab on each panel's edge hides the panel, and stays at the window's edge to bring it back. It sits wholly on the
+         canvas's side of the seam, so a panel's scroll bar never runs under it. With no project the inspector has no tab. -->
+    <Button Grid.Column="1" Classes="panelEdge" ZIndex="1" HorizontalAlignment="Center" Margin="6,0,-6,0"
             Command="{Binding ToggleSidebarCommand}" ToolTip.Tip="{Binding SidebarToggleLabel, StringFormat='{}{0} (Ctrl+B)'}"
             AutomationProperties.AutomationId="ToggleSidebar" AutomationProperties.Name="{Binding SidebarToggleLabel}">
       <Panel>
@@ -265,7 +260,7 @@
         <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" IsVisible="{Binding !IsSidebarOpen}" />
       </Panel>
     </Button>
-    <Button Grid.Column="3" Classes="panelEdge" ZIndex="1" HorizontalAlignment="Center" Margin="{Binding IsInspectorOpen, Converter={x:Static local:MainWindow.RightEdge}}"
+    <Button Grid.Column="3" Classes="panelEdge" ZIndex="1" HorizontalAlignment="Center" Margin="-6,0,6,0" IsVisible="{Binding HasProjects}"
             Command="{Binding ToggleInspectorCommand}" ToolTip.Tip="{Binding InspectorToggleLabel, StringFormat='{}{0} (Ctrl+Alt+B)'}"
             AutomationProperties.AutomationId="ToggleInspector" AutomationProperties.Name="{Binding InspectorToggleLabel}">
       <Panel>

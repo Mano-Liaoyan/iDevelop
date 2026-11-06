@@ -43,8 +43,26 @@ public sealed partial class WorkflowCanvasViewModel
         return order;
     }
 
+    /// <summary>Each task's step: 1 with nothing before it, otherwise one after the last task it depends on. A cycle's tasks keep no step of their own.</summary>
+    internal static IReadOnlyDictionary<TaskId, int> Steps(Workflow workflow)
+    {
+        var before = workflow.Connections.Where(connection => connection.Value.Blocks()).Select(connection => connection.Key).ToLookup(key => key.To, key => key.From);
+        var steps = new Dictionary<TaskId, int>();
+        foreach (var id in ReadingOrder(workflow))
+        {
+            steps[id] = before[id].Select(from => steps.GetValueOrDefault(from)).DefaultIfEmpty(0).Max() + 1;
+        }
+
+        return steps;
+    }
+
     private void ArrangeOutline()
     {
+        foreach (var (id, step) in Steps(Workflow))
+        {
+            _nodes[id].Step = step;
+        }
+
         List<TaskNodeViewModel> order = [.. ReadingOrder(Workflow).Select(id => _nodes[id])];
         if (Outline.SequenceEqual(order))
         {

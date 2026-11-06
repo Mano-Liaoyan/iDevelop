@@ -90,7 +90,8 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal("iDevelop", shell.Window.Title);
         Assert.False(shell.ShowsAny("AddTask"));
         Assert.Equal([false, true], new[] { "Save", "CanvasOpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
-        Assert.Equal(["Open a project to inspect its nodes."], Shell.Texts(shell.Find<Control>("Inspector")));
+        Assert.False(shell.Find<Control>("Inspector").IsEffectivelyVisible);
+        Assert.False(shell.Find<Button>("ToggleInspector").IsEffectivelyVisible);
 
         shell.Window.ViewModel.Open(_temp.Create("plan"));
         shell.Render();
@@ -100,7 +101,7 @@ public sealed class MainWindowTests : IDisposable
             [
                 "Workflow", "0 nodes", "Select a node to edit it.", "Library",
                 "Built-in", "Implement", "Plan", "Architect", "Review", "Approval", "Merge",
-                "No project or personal blueprints yet. Derive one to add it.",
+                "No project or personal blueprints yet. Derive one.",
                 "Reload Libraries",
             ],
             Shell.Texts(shell.Find<Control>("Inspector")));

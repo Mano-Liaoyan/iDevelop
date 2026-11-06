@@ -44,12 +44,18 @@ public sealed class ActivityTests : IDisposable
     }
 
     [Fact]
-    public void The_short_list_keeps_a_failure_in_view_behind_what_waits()
+    public void The_short_list_shows_each_need_before_a_second_row_of_any_need()
     {
-        Assert.Equal(["w1", "f1"], Sidebar.ActivityViewModel.Shortened(["w1", "w2", "w3", "f1", "f2"], 2, row => row[0] == 'f'));
-        Assert.Equal(["w1", "f1"], Sidebar.ActivityViewModel.Shortened(["w1", "f1", "f2"], 2, row => row[0] == 'f'));
-        Assert.Equal(["w1", "w2"], Sidebar.ActivityViewModel.Shortened(["w1", "w2", "w3"], 2, _ => false));
+        static bool Failed(string row) => row[0] == 'f';
+        Assert.Equal(["r1", "q1", "f1"], Sidebar.ActivityViewModel.Shortened(["r1", "r2", "q1", "q2", "f1"], 3, row => row[0], Failed));
+        Assert.Equal(["r1", "r2", "f1"], Sidebar.ActivityViewModel.Shortened(["r1", "r2", "r3", "f1"], 3, row => row[0], Failed));
+        Assert.Equal(["r1", "r2"], Sidebar.ActivityViewModel.Shortened(["r1", "r2", "r3"], 2, _ => 'r', Failed));
+        Assert.Equal(["r1", "f1"], Sidebar.ActivityViewModel.Shortened(["r1", "q1", "a1", "f1"], 2, row => row[0], Failed));
     }
+
+    [Fact]
+    public void A_running_node_s_line_is_its_last_line_of_text() =>
+        Assert.Equal(("Bash dotnet test", null), (Sidebar.ActivityRow.OneLine("Reading\n\nBash dotnet test\n"), Sidebar.ActivityRow.OneLine(null)));
 
     private Shell OpenWaiting(int waiting)
     {

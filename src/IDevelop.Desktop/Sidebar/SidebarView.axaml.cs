@@ -17,9 +17,6 @@ namespace IDevelop.Desktop.Sidebar;
 /// </summary>
 public partial class SidebarView : UserControl
 {
-    // At or below this window height Activity shows fewer rows, and it never takes more than half of the panel.
-    private const double SmallHeight = 700;
-
     // What the pinned project and workflow cover at the tree's top edge, and the room at the bottom, so a row never sits on an edge.
     private const double TreeTopRoom = 60;
 
@@ -34,14 +31,8 @@ public partial class SidebarView : UserControl
         // A click anywhere else leaves Find, as it leaves any floating list. A result takes no focus, so a click on one stays here.
         FindBox.LostFocus += (_, _) => ViewModel.Find.Clear();
         AddHandler(KeyDownEvent, OnRowKeyDown, RoutingStrategies.Tunnel);
-        Rows.SizeChanged += (_, e) =>
-        {
-            ActivityScroller.MaxHeight = e.NewSize.Height / 2;
-            if (DataContext is MainWindowViewModel view)
-            {
-                view.Activity.Limit = e.NewSize.Height <= SmallHeight ? ActivityViewModel.SmallLimit : ActivityViewModel.NormalLimit;
-            }
-        };
+        // Activity never takes more than half of the panel.
+        Rows.SizeChanged += (_, e) => ActivityScroller.MaxHeight = e.NewSize.Height / 2;
     }
 
     private MainWindow? Window => TopLevel.GetTopLevel(this) as MainWindow;
@@ -349,16 +340,6 @@ public partial class SidebarView : UserControl
     private void OnNewWorkflow(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is ProjectViewModel project && ViewModel.NewWorkflow(project) is { } canvas)
-        {
-            Window?.UpdateLayout();
-            this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();
-        }
-    }
-
-    private void OnNewWorkflowHere(object? sender, RoutedEventArgs e)
-    {
-        var view = ViewModel;
-        if ((view.Projects.FirstOrDefault(project => project.IsCurrent) ?? view.Projects.FirstOrDefault()) is { } project && view.NewWorkflow(project) is { } canvas)
         {
             Window?.UpdateLayout();
             this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();

@@ -58,11 +58,11 @@ public sealed class MainWindowViewModel : ObservableObject
         ToggleConversationLayoutCommand = new RelayCommand(() => IsConversationDocked = !IsConversationDocked);
         Activity = new ActivityViewModel(() => Projects, Attend);
         Find = new FindViewModel(() => Projects, Choose);
-        Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProjects));
+        Projects.CollectionChanged += (_, _) => RaiseProjects();
         Recent.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecent));
         ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
         ToggleInspectorCommand = new RelayCommand(() => ChooseInspector(!IsInspectorOpen));
-        Unopened.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasProjects));
+        Unopened.CollectionChanged += (_, _) => RaiseProjects();
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
 
@@ -112,8 +112,12 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>The inspector is open: as the person last chose, or else while the window has room for it.</summary>
-    public bool IsInspectorOpen => _inspectorChoice ?? !IsNarrow;
+    /// <summary>The inspector is open: as the person last chose, or else while the window has room for it. With no project it has nothing to show.</summary>
+    private const int ShownListLimit = 12;
+
+    private WorkflowCanvasViewModel? _openedForShow;
+
+    public bool IsInspectorOpen => HasProjects && (_inspectorChoice ?? !IsNarrow);
 
     public string SidebarToggleLabel => IsSidebarOpen ? "Hide the left panel" : "Show the left panel";
 
@@ -268,7 +272,21 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         Show(canvas);
+        OpenShownNodes(canvas);
         Persist();
+    }
+
+    // The shown workflow lists its nodes, unless a long list would push the other projects out of view. The list that opened
+    // this way closes again when another workflow takes its place.
+    private void OpenShownNodes(WorkflowCanvasViewModel canvas)
+    {
+        if (_openedForShow is { } opened && opened != canvas)
+        {
+            opened.IsExpanded = false;
+        }
+
+        _openedForShow = !canvas.IsExpanded && canvas.Nodes.Count is > 0 and <= ShownListLimit ? canvas : null;
+        canvas.IsExpanded |= _openedForShow is not null;
     }
 
     /// <summary>Shows the node's workflow and selects the node, as a choice from outside its canvas.</summary>
@@ -301,6 +319,12 @@ public sealed class MainWindowViewModel : ObservableObject
     private void ChooseInspector(bool open)
     {
         _inspectorChoice = open;
+        RaiseInspector();
+    }
+
+    private void RaiseProjects()
+    {
+        OnPropertyChanged(nameof(HasProjects));
         RaiseInspector();
     }
 
@@ -501,6 +525,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if ((selected ?? canvases.FirstOrDefault()) is { } shown)
             {
                 Select(shown);
+                OpenShownNodes(shown);
             }
         }
         finally

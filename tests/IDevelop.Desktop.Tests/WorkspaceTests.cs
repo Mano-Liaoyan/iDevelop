@@ -86,7 +86,7 @@ public sealed class WorkspaceTests : IDisposable
         Shell.ById<Button>(shell.ProjectItem(project), automationId).Single();
 
     [AvaloniaFact]
-    public void Two_projects_list_their_workflows_collapsed_and_choosing_a_workflow_shows_it_without_expanding_it()
+    public void Choosing_a_workflow_shows_it_and_lists_its_nodes_and_the_list_closes_when_another_takes_its_place()
     {
         var (shell, _, _) = OpenBoth();
 
@@ -96,26 +96,21 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(
             ["0/2", "0/1", "0/2", "0/1"],
             new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }.Select(row => shell.WorkflowText(row.Item1, row.Item2, "WorkflowSummary")));
-        Assert.DoesNotContain(new[] { "alpha", "beta" }.SelectMany(project => new[] { "Build", "Release" }.Select(workflow => (project, workflow))),
-            row => shell.WorkflowTasks(row.project, row.workflow).IsEffectivelyVisible);
+        Assert.True(shell.WorkflowTasks("beta", "Build").IsEffectivelyVisible);
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
         Assert.Equal(("alpha", "Release"), shell.Breadcrumb());
         Assert.Equal("alpha - iDevelop: Ship", Shown(shell));
-        Assert.False(shell.WorkflowTasks("alpha", "Release").IsEffectivelyVisible);
-
-        shell.Click(shell.WorkflowExpand("alpha", "Release"));
-
         Assert.Equal(["Ship"], Shell.Texts(shell.WorkflowTasks("alpha", "Release")));
-        Assert.False(shell.WorkflowTasks("beta", "Release").IsEffectivelyVisible);
+        Assert.False(shell.WorkflowTasks("beta", "Build").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
     public void Choosing_a_task_row_of_another_workflow_shows_that_workflow_and_selects_the_task()
     {
         var (shell, _, _) = OpenBoth();
-        shell.Click(shell.WorkflowExpand("alpha", "Build"));
+        shell.OpenNodes("alpha", "Build");
 
         shell.Click(shell.TaskRow("alpha", "Build", "Implement"));
 
@@ -128,7 +123,7 @@ public sealed class WorkspaceTests : IDisposable
     public void A_workflow_that_is_not_shown_keeps_its_task_selection_without_the_selected_look()
     {
         var (shell, _, _) = OpenBoth();
-        shell.Click(shell.WorkflowExpand("alpha", "Build"));
+        shell.OpenNodes("alpha", "Build");
         shell.Click(shell.TaskRow("alpha", "Build", "Implement"));
         Color? RowFill() => (shell.TaskRow("alpha", "Build", "Implement").GetVisualDescendants().OfType<ContentPresenter>().First().Background as ISolidColorBrush)?.Color;
         var selected = RowFill();
@@ -387,7 +382,7 @@ public sealed class WorkspaceTests : IDisposable
     public void The_next_start_reopens_the_open_projects_with_the_shown_workflow_and_the_expanded_rows()
     {
         var (shell, alpha, beta) = OpenBoth();
-        shell.Click(shell.WorkflowExpand("alpha", "Release"));
+        shell.OpenNodes("alpha", "Release");
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         shell.Window.Close();
         shell.Render();

@@ -243,6 +243,12 @@
   <Style Selector="PathIcon.stateIcon.state-idle">
     <Setter Property="IsVisible" Value="False" />
   </Style>
+  <!-- Every node's row has a state glyph, also while the node waits its turn, so an empty slot never reads as a gap. -->
+  <Style Selector="ListBox.tasks PathIcon.stateIcon.state-idle">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Data" Value="{StaticResource IconIdle}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
   <Style Selector="PathIcon.stateIcon.state-running">
     <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
   </Style>

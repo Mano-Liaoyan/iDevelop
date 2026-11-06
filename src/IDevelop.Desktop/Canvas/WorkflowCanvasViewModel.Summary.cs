@@ -1,3 +1,4 @@
+using IDevelop.Desktop.Sidebar;
 using IDevelop.Desktop.Theme;
 
 namespace IDevelop.Desktop.Canvas;
@@ -41,6 +42,9 @@ public sealed partial class WorkflowCanvasViewModel
 
     public bool HasRowFacts => RowFacts.Count > 0;
 
+    /// <summary>What the first running node does now, in one line, or null while none runs. The row shows it under the name.</summary>
+    public string? RowActivity => Outline.FirstOrDefault(node => node.State == NodeState.Running) is { } node ? ActivityRow.OneLine(node.Latest) : null;
+
     /// <summary>The list shows a node of this workflow as selected, so the workflow's row keeps only its edge bar.</summary>
     public bool ShowsNodeSelection => IsExpanded && SelectedNode is not null;
 
@@ -51,6 +55,7 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(RowProgress));
         OnPropertyChanged(nameof(RowFacts));
         OnPropertyChanged(nameof(HasRowFacts));
+        OnPropertyChanged(nameof(RowActivity));
         OnPropertyChanged(nameof(Summary));
     }
 }

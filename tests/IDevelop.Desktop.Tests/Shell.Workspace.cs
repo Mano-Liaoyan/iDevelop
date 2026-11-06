@@ -29,11 +29,20 @@ internal sealed partial class Shell
     public bool WorkflowShows(string project, string workflow, string automationId) =>
         ById<Control>(WorkflowItem(project, workflow).Item, automationId).Single().IsEffectivelyVisible;
 
-    /// <summary>Expands the shown workflow's row, so its tasks are listed as before workflows had rows of their own.</summary>
+    /// <summary>Expands the shown workflow's row where a long list stayed closed, so its tasks are listed.</summary>
     public void ShowTasks()
     {
         var canvas = Window.ViewModel.Canvas ?? throw new InvalidOperationException("No workflow is shown.");
-        Click(WorkflowExpand(canvas.Project.Name, canvas.Name));
+        OpenNodes(canvas.Project.Name, canvas.Name);
+    }
+
+    /// <summary>Expands the workflow's row unless it is open.</summary>
+    public void OpenNodes(string project, string workflow)
+    {
+        if (WorkflowExpand(project, workflow).IsChecked != true)
+        {
+            Click(WorkflowExpand(project, workflow));
+        }
     }
 
     /// <summary>Sets the sidebar's width, as dragging the splitter after it does, within its 240 to 400 px range.</summary>

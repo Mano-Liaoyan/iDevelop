@@ -68,10 +68,12 @@ public sealed class ProgressRing : Control
         var radius = (Math.Min(Bounds.Width, Bounds.Height) - Stroke) / 2;
         var line = new Pen(Brush("StateNeutralStrokeBrush"), Stroke);
         var share = (double)counts.Completed / counts.Total;
+        context.DrawEllipse(null, new Pen(Brush("Border100Brush"), Stroke), center, radius, radius);
         context.DrawEllipse(null, new Pen(Brush("StateNeutral10Brush"), Stroke), center, radius, radius);
         if (share >= 1)
         {
-            context.DrawEllipse(null, line, center, radius, radius);
+            // A whole ring is done, so it takes the complete color, as a completed node's check does.
+            context.DrawEllipse(null, new Pen(Brush("StateSuccessStrongBrush"), Stroke), center, radius, radius);
         }
         else if (share > 0)
         {

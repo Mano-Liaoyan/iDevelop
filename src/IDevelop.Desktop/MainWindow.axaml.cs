@@ -63,7 +63,7 @@ public partial class MainWindow : Window
         Columns.SizeChanged += (_, e) =>
         {
             ViewModel.IsNarrow = e.NewSize.Width < PanelWidths.NarrowWindow;
-            LimitPanels();
+            ShowPanels();
         };
         Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
         Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
@@ -75,14 +75,6 @@ public partial class MainWindow : Window
         MainArea.SizeChanged += (_, _) => LimitDock();
         DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
     }
-
-    // A tab sits over the canvas's bottom band, clear of the splitter's middle, where a person drags it.
-    private const double TabLift = 0;
-
-    /// <summary>The left panel's tab sits at the window's edge while the panel is closed.</summary>
-    public static readonly IValueConverter LeftEdge = new FuncValueConverter<bool, Thickness>(open => open ? new Thickness(-6, 0, -6, TabLift) : new Thickness(6, 0, -6, TabLift));
-
-    public static readonly IValueConverter RightEdge = new FuncValueConverter<bool, Thickness>(open => open ? new Thickness(-6, 0, -6, TabLift) : new Thickness(-6, 0, 6, TabLift));
 
     // The largest widths the sidebar's and the inspector's columns declare for themselves, and the widths and least widths they
     // go back to when they open.
@@ -137,7 +129,7 @@ public partial class MainWindow : Window
         }
 
         var (sidebarMax, inspectorMax) = Columns.Bounds.Width < PanelWidths.NarrowWindow ? (sidebar.MinWidth, inspector.MinWidth) : PanelWidths.Limits(room,
-            new(sidebar.Width.Value, sidebar.MinWidth, ViewModel.IsSidebarOpen ? _sidebarMax : 0), new(inspector.Width.Value, inspector.MinWidth, ViewModel.IsInspectorOpen ? _inspectorMax : 0));
+            new(sidebar.Width.Value, sidebar.MinWidth, ViewModel.IsSidebarOpen ? _sidebarMax : sidebar.MinWidth), new(inspector.Width.Value, inspector.MinWidth, ViewModel.IsInspectorOpen ? _inspectorMax : inspector.MinWidth));
         sidebar.MaxWidth = sidebarMax;
         inspector.MaxWidth = inspectorMax;
     }

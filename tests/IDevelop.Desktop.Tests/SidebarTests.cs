@@ -37,15 +37,23 @@ public sealed class SidebarTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_node_s_step_is_one_after_the_last_node_it_depends_on()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
+            TaskAt(Review, "Review", 705, 90),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+
+        Assert.Equal([1, 2, 1], new[] { "Design", "Build", "Review" }.Select(title => shell.Window.ViewModel.Canvas!.Outline.Single(node => node.Title == title).Step));
+    }
+
+    [AvaloniaFact]
     public void The_sidebar_lists_the_open_project_with_its_workflow_and_task_count_and_its_tasks_once_expanded()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90), TaskAt(Review, "Review", 405, 300)));
         Assert.Equal([("seed", ["Workflow"])], shell.Tree());
         Assert.Equal("0/3", shell.Find<TextBlock>("WorkflowSummary").Text);
-        Assert.False(shell.Find<ListBox>("SidebarTasks").IsEffectivelyVisible);
-
-        shell.ShowTasks();
-
         Assert.True(shell.Find<ListBox>("SidebarTasks").IsEffectivelyVisible);
         Assert.Equal(["Design", "Build", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
 
@@ -161,8 +169,8 @@ public sealed class SidebarTests : IDisposable
     {
         var shell = SelectBuildOnTheCanvasAndPanItAway();
         shell.Find<TextBox>("FindBox").Focus();
-        // New Workflow, Open Folder, the project's row, its New Workflow and Close Project, the workflow's row, then its selected task.
-        for (var stop = 0; stop < 7; stop++)
+        // Open Folder, the project's row, its New Workflow and Close Project, the workflow's row, then its selected task.
+        for (var stop = 0; stop < 6; stop++)
         {
             shell.Press(Key.Tab);
         }
@@ -249,7 +257,7 @@ public sealed class SidebarTests : IDisposable
         }
 
         Assert.Equal(
-            ["NewWorkflowHere", "OpenFolder", "ProjectExpand", "NewWorkflow", "CloseProject", "WorkflowRow", "Design", "AgentsStatus", "ThemeSystem", "ThemeLight", "ThemeDark"],
-            Enumerable.Range(0, 11).Select(_ => Tab()));
+            ["OpenFolder", "ProjectExpand", "NewWorkflow", "CloseProject", "WorkflowRow", "Design", "AgentsStatus", "ThemeSystem", "ThemeLight", "ThemeDark"],
+            Enumerable.Range(0, 10).Select(_ => Tab()));
     }
 }

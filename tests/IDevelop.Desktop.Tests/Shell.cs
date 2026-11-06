@@ -254,7 +254,7 @@ internal sealed partial class Shell
 
     /// <summary>The visible, non-empty texts of the visual and everything in it, in visual order.</summary>
     public static string[] Texts(Visual visual) =>
-        [.. visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text!)];
+        [.. visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text) && !text.Classes.Contains("rowStep")).Select(text => text.Text!)];
 
     public static string TextOf(Visual visual) => string.Join(" ", Texts(visual));
 

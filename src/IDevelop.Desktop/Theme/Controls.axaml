@@ -399,11 +399,6 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
-  <Style Selector="ListBox.tasks PathIcon.stateIcon.state-idle">
-    <Setter Property="IsVisible" Value="True" />
-    <Setter Property="Data" Value="{StaticResource IconIdle}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
-  </Style>
   <Style Selector="ListBox.tasks ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.tasks ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
@@ -424,8 +419,9 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- Find's list floats from under its box, as wide as the box. -->
+  <!-- Find's list floats from under its box, over the tree and the canvas. -->
   <Style Selector="Border.findPalette">
+    <Setter Property="Width" Value="440" />
     <Setter Property="MaxHeight" Value="420" />
     <Setter Property="Padding" Value="4" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
@@ -457,6 +453,23 @@
   <Style Selector="TextBlock.rowName.nodeName">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="LineHeight" Value="16" />
+  </Style>
+  <!-- A workflow is the tree's middle level: plain weight under its semibold project, and strong only while it is shown. -->
+  <Style Selector="TextBlock.rowName.workflowName">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBlock.rowName.workflowName.shown">
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <!-- A node's step in the dependency order: a quiet number on the name's first line. -->
+  <Style Selector="TextBlock.rowStep">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="TextBlock.rowName.strong">
     <Setter Property="FontWeight" Value="Medium" />
@@ -588,6 +601,9 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Background" Value="Transparent" />
   </Style>
+  <Style Selector="Button.stickyRow.projectHead">
+    <Setter Property="Padding" Value="34,0,16,0" />
+  </Style>
   <Style Selector="Button.stickyRow.workflowHead">
     <Setter Property="Padding" Value="46,0,16,0" />
   </Style>
@@ -632,8 +648,8 @@
        its chevron, which draws over the row's left end. -->
   <Style Selector="Button.activity">
     <Setter Property="Height" Value="NaN" />
-    <Setter Property="MinHeight" Value="44" />
-    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="8,3" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
@@ -696,6 +712,11 @@
   <Style Selector="ToggleButton.chevron:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chevron:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chevron:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <!-- A pinned row's chevron folds what the row names, on the row's 28 px line. -->
+  <Style Selector="ToggleButton.stickyChevron">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
   <!-- A workflow row's chevron: a 20 px column as tall as the row, under the project's letter, with its glyph on the first line. -->
   <Style Selector="ToggleButton.workflowChevron">
@@ -796,7 +817,7 @@
        The chosen entry takes the quiet selected fill, and hover the one hover fill. -->
   <Style Selector="ComboBox:dropdownopen /template/ Border#PopupBorder">
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
     <Setter Property="Padding" Value="4" />

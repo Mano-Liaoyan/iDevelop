@@ -146,10 +146,10 @@ public sealed class SidebarLayoutTests : IDisposable
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, LongTask, "Ship");
         var shell = Shell.Open(reports);
-        shell.Click(shell.WorkflowExpand(Reports, ReleaseNotes));
+        shell.OpenNodes(Reports, ReleaseNotes);
         shell.SizeSidebar(width);
         var rows = new[] { LongTask, "Ship" }.Select(title => shell.TaskRow(Reports, ReleaseNotes, title)).ToArray();
-        var titles = rows.Select(row => row.GetVisualDescendants().OfType<TextBlock>().Single()).ToArray();
+        var titles = rows.Select(row => row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"))).ToArray();
 
         Assert.All(titles, title => AssertWhole(shell, title));
         Assert.True(titles[0].TextLayout.TextLines.Count > 1, $"The long title fits on one line at {width} px, so nothing here wraps.");
@@ -160,7 +160,7 @@ public sealed class SidebarLayoutTests : IDisposable
 
     private static string TaskCentres(ListBoxItem row)
     {
-        var title = row.GetVisualDescendants().OfType<TextBlock>().Single();
+        var title = row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"));
         var line = FirstLine(title);
         return $"first line {line - Top(row):0.#}, glyph {Centre(row.GetVisualDescendants().OfType<KindTile>().First()) - line:0.#}";
     }
@@ -230,17 +230,32 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.False(Of<Control>(row.GetVisualParent()!, "WorkflowProgress").IsEffectivelyVisible);
     }
 
+    [Theory]
+    [InlineData("Backfill 2023-Q4", "Backfill 2023-\u2060Q4")]
+    [InlineData("Plain name", "Plain name")]
+    public void A_hyphenated_token_stays_on_one_line(string name, string shown) => Assert.Equal(shown, Theme.NameBreaks.Keep(name));
+
+    [AvaloniaFact]
+    public void A_long_workflow_stays_closed_when_it_is_shown_so_the_other_projects_stay_in_view()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 13).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+
+        Assert.False(shell.WorkflowExpand(Reports, ReleaseNotes).IsChecked);
+    }
+
     [AvaloniaFact]
     public void A_node_s_name_reads_one_size_under_its_workflow_s()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, "Ship");
         var shell = Shell.Open(reports);
-        shell.Click(shell.WorkflowExpand(Reports, ReleaseNotes));
+        shell.OpenNodes(Reports, ReleaseNotes);
         shell.Render();
 
         var workflow = shell.WorkflowRow(Reports, ReleaseNotes).GetVisualDescendants().OfType<TextBlock>().First();
-        var node = shell.TaskRow(Reports, ReleaseNotes, "Ship").GetVisualDescendants().OfType<TextBlock>().Single();
+        var node = shell.TaskRow(Reports, ReleaseNotes, "Ship").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"));
         Assert.True(node.FontSize < workflow.FontSize, $"A node's name is {node.FontSize} and its workflow's is {workflow.FontSize}.");
     }
 
@@ -250,20 +265,20 @@ public sealed class SidebarLayoutTests : IDisposable
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
-        shell.Click(shell.WorkflowExpand(Reports, ReleaseNotes));
+        shell.OpenNodes(Reports, ReleaseNotes);
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();
         T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
         var tree = Named<ScrollViewer>("Tree");
-        var (top, foot, pinned) = (Named<Border>("TreeTopCover"), Named<Border>("TreeFootCover"), Named<Button>("StickyWorkflow"));
+        var (top, foot, pinned) = (Named<Border>("TreeTopCover"), Named<Border>("TreeFootCover"), Named<Panel>("StickyWorkflow"));
 
         foreach (var offset in new[] { 0.0, 53, 171, 299, 433 })
         {
             tree.Offset = tree.Offset.WithY(offset);
             shell.Render();
             var height = tree.Viewport.Height;
-            var head = pinned.IsVisible ? 56 : Named<Button>("StickyProject").IsVisible ? 28 : 0;
+            var head = pinned.IsVisible ? 56 : Named<Panel>("StickyProject").IsVisible ? 28 : 0;
             foreach (var row in tree.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible))
             {
                 var at = row.TranslatePoint(default, tree)!.Value.Y;
