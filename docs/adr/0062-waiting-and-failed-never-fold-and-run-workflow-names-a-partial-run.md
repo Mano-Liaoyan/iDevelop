@@ -13,10 +13,10 @@ Round 15 of the review found that the run bar and the left tree folded running, 
 - **Run bar place.** The run bar sits right after the zoom controls at every width.
 - **Breadcrumb.** The project's name gives up its width before the workflow's.
 - **Shown workflow.** While a node of the shown workflow holds the selection, the workflow row keeps no fill and takes a 2 px accent line on its leading edge.
-- **One node name.** Beside an open inspector, the full conversation's header shows only the node's place, because the inspector names the node. The docked conversation keeps its name.
+- **One node name.** Beside an open inspector, the full conversation's header shows only the node's place, because the inspector names the node. The docked conversation keeps its name. ADR 0063 withdraws this: the header names the node in every layout.
 - **Conversation input.** The folded task names its first source node: "From Plan the rollout +1".
 - **Far model line.** A zoomed out card falls back from "Gemini 3.8" to "Gemini 3" before "Gemini". ADR 0063 withdraws this: a card shows the inspector's model name and ends it in an ellipsis.
-- **Inspector.** Each section header has a hairline across the panel above it. The pinned header shows a title in up to two lines.
+- **Inspector.** Each section header has a hairline across the panel above it. The pinned header shows a title in up to two lines (three since ADR 0063).
 
 ## Considered options
 

@@ -705,10 +705,11 @@
   <Style Selector="Button.barTight">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightView Button.barTight">
+  <!-- On its own row the run bar leaves the zoom controls their row, so they come back from the overflow menu. -->
+  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightView:not(.ownRow) Button.barTight">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightView :is(Control).barRoomy">
+  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightView:not(.ownRow) :is(Control).barRoomy">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Border.barRule">
@@ -729,7 +730,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="FontWeight" Value="Normal" />
   </Style>
-  <Style Selector=":is(Control).tightFollow Panel.barFollow">
+  <Style Selector=":is(Control).tightFollow:not(.ownRow) Panel.barFollow, :is(Control).tightOwnRow Panel.barFollow">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Button.bar, ToggleButton.bar">

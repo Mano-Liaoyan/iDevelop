@@ -134,6 +134,13 @@ public sealed partial class TaskNodeViewModel
     /// <summary>What this node hands on now, in plain words, or null before a first result.</summary>
     public string? HandsOn => _results.Count > 0 ? _results[0].PlainSummary : null;
 
+    /// <summary>
+    /// The folded Output section's line: the latest result's heading and commit, such as "Result 1 · Current · Commit acc31d9",
+    /// or "No result yet".
+    /// </summary>
+    public string OutputSummary => _results.Count == 0 ? "No result yet"
+        : string.Join(" · ", new[] { _results[0].Heading, _results[0].Commit }.OfType<string>());
+
     public bool HasResults => _history.Count > 0;
 
     /// <summary>The node's latest result, or null.</summary>
@@ -251,6 +258,7 @@ public sealed partial class TaskNodeViewModel
             current: index == _history.Count - 1 && State == NodeState.Completed)).Reverse()];
         _findings = Verdict is { } verdict ? [.. verdict.Findings.Select(finding => new FindingViewModel(finding))] : [];
         OnPropertyChanged(nameof(Results));
+        OnPropertyChanged(nameof(OutputSummary));
         OnPropertyChanged(nameof(HandsOn));
         OnPropertyChanged(nameof(Findings));
     }

@@ -60,12 +60,12 @@
                     ToolTip.Tip="{Binding Activity.FoldLabel}"
                     AutomationProperties.AutomationId="ActivityFold"
                     AutomationProperties.Name="{Binding Activity.FoldLabel}">
-        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
+        <Grid ColumnDefinitions="Auto,Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="6">
           <TextBlock Classes="section" Text="Activity" VerticalAlignment="Center" />
           <PathIcon Grid.Column="1" Theme="{StaticResource Glyph}" Width="12" Height="12" />
-          <!-- Waiting and failed say their state in words, so nobody needs a tooltip to see that nodes wait for them. The others
-               keep their badge and number. A narrow panel wraps the counts rather than cut them. -->
-          <WrapPanel Grid.Column="2" Grid.ColumnSpan="2" HorizontalAlignment="Right" VerticalAlignment="Center" ItemSpacing="8" LineSpacing="2">
+          <!-- Every count says its state in words, as the run bar and the workflow rows do (ADR 0063). The counts take their own
+               line under the heading and wrap from its left edge, so the heading stays in one place. -->
+          <WrapPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,4,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" ItemSpacing="10" LineSpacing="2">
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasWaiting}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting for you'}"
                         AutomationProperties.AutomationId="ActivityWaiting">
@@ -82,13 +82,13 @@
                         ToolTip.Tip="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}"
                         AutomationProperties.AutomationId="ActivityInterrupted">
               <theme:StateBadge State="InputRequired" Why="Interrupted" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.InterruptedCount}" />
+              <TextBlock Classes="caption" Text="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasRunning}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.RunningCount, StringFormat='{}{0} running'}"
                         AutomationProperties.AutomationId="ActivityRunning">
               <theme:StateBadge State="Running" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.RunningCount}" />
+              <TextBlock Classes="caption" Text="{Binding Activity.RunningCount, StringFormat='{}{0} running'}" />
             </StackPanel>
           </WrapPanel>
         </Grid>

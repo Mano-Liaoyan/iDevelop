@@ -698,8 +698,10 @@
   <Style Selector="Button.nav.workflow.selected.holdsNode:not(:pointerover) /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
   </Style>
+  <!-- The line is straight: a rounded corner would bend a one-sided edge into a bracket. -->
   <Style Selector="Button.nav.workflow.selected.holdsNode /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="BorderThickness" Value="2,0,0,0" />
+    <Setter Property="CornerRadius" Value="0" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
 

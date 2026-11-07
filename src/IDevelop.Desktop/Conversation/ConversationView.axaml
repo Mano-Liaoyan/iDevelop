@@ -50,25 +50,11 @@
            it leaves out the workflow's place and its actions too. -->
       <theme:SpillRow MinLeadWidth="186" Spacing="4" ItemsAlignment="Start" SpillIndent="28">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-          <!-- The node's name shows once: the inspector beside a full conversation names it, so the header keeps only the node's place. -->
-          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Top">
-            <theme:KindTile.IsVisible>
-              <MultiBinding Converter="{x:Static BoolConverters.Or}">
-                <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
-                <Binding Path="$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="False" />
-              </MultiBinding>
-            </theme:KindTile.IsVisible>
-          </theme:KindTile>
+          <!-- The header names the node in every layout, so the conversation says whose it is without the inspector (ADR 0063). -->
+          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Top" />
           <StackPanel Grid.Column="1" VerticalAlignment="Center">
             <theme:EllipsisText Classes="conversationTitle" Whole="{Binding Node.Title}" ToolTip.Tip="{Binding Node.Title}"
-                                AutomationProperties.AutomationId="ConversationTitle">
-              <theme:EllipsisText.IsVisible>
-                <MultiBinding Converter="{x:Static BoolConverters.Or}">
-                  <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
-                  <Binding Path="$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="False" />
-                </MultiBinding>
-              </theme:EllipsisText.IsVisible>
-            </theme:EllipsisText>
+                                AutomationProperties.AutomationId="ConversationTitle" />
             <TextBlock Classes="caption" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
                        ToolTip.Tip="{Binding BreadcrumbTip}" AutomationProperties.AutomationId="ConversationBreadcrumb"
@@ -416,12 +402,15 @@
                   <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
                     <PathIcon Theme="{StaticResource Glyph}" />
                     <TextBlock Grid.Column="1" Classes="taskLabel" Text="Task" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2" Text="{Binding TaskPreview}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                               IsVisible="{Binding !IsTaskOpen}" AutomationProperties.AutomationId="ConversationTaskPreview" />
-                    <!-- Where the agent's input came from: the first earlier node by name. Opening the task names them all. -->
-                    <TextBlock Grid.Column="3" Classes="caption" Text="{Binding TaskInputCount}" VerticalAlignment="Center" Margin="0,0,10,0" MaxWidth="240" TextTrimming="CharacterEllipsis"
-                               IsVisible="{Binding ShowsTaskInputCount}" ToolTip.Tip="{Binding TaskInputLine}"
-                               AutomationProperties.AutomationId="ConversationTaskInputCount" />
+                    <!-- The task leads: it wraps to two lines before it ends in an ellipsis. -->
+                    <theme:EllipsisText Grid.Column="2" Whole="{Binding TaskPreview}" MaxLines="2" TextWrapping="Wrap" VerticalAlignment="Center"
+                                        IsVisible="{Binding !IsTaskOpen}" AutomationProperties.AutomationId="ConversationTaskPreview" />
+                    <!-- Where the agent's input came from: the first earlier node by name, as a muted part after a divider. Opening the task names them all. -->
+                    <Border Grid.Column="3" Classes="taskSource" VerticalAlignment="Center" Margin="0,0,10,0" IsVisible="{Binding ShowsTaskInputCount}">
+                      <TextBlock Classes="caption" Text="{Binding TaskInputCount}" MaxWidth="160" TextTrimming="CharacterEllipsis"
+                                 ToolTip.Tip="{Binding TaskInputLine}"
+                                 AutomationProperties.AutomationId="ConversationTaskInputCount" />
+                    </Border>
                   </Grid>
                 </ToggleButton>
                 <TextBlock Classes="caption" Text="{Binding TaskInputLine}" IsVisible="{Binding ShowsTaskInputLine}" TextWrapping="Wrap" Margin="24,2,8,0"

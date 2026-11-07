@@ -198,7 +198,7 @@
     <!-- The bottom band: the zoom controls at the left and the workflow's run at the centre. It has a canvas's width, and the
          code-behind marks the view compact or short. -->
     <Border Classes="canvasBand bottom" Grid.Row="1" Grid.ColumnSpan="2" IsVisible="{Binding !IsEmpty}">
-    <canvas:CanvasBottomBar x:Name="BottomBar" VerticalAlignment="Center" Margin="8,8">
+    <canvas:CanvasBottomBar x:Name="BottomBar" VerticalAlignment="Center" Margin="8,7,8,8">
       <StackPanel x:Name="ZoomPanel" Orientation="Horizontal" canvas:CanvasBottomBar.Slot="Leading"
                   AutomationProperties.AutomationId="ZoomPanel">
         <Button Classes="icon zoom barSpare" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
@@ -333,7 +333,7 @@
             </StackPanel>
             <!-- How far the work went, every group in its words, and what Run Workflow runs. A bar on its own row wraps them. -->
             <WrapPanel VerticalAlignment="Center" ItemSpacing="10" LineSpacing="4">
-              <TextBlock Classes="barText" Text="{Binding BarProgress}" MinHeight="28" AutomationProperties.AutomationId="RunStatus" />
+              <TextBlock Classes="barText" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
               <ItemsControl Classes="barChips" ItemsSource="{Binding BarChips}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunChips">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -341,7 +341,7 @@
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
               </ItemsControl>
-              <TextBlock Classes="barText barScope" Text="{Binding RunScope}" MinHeight="28" IsVisible="{Binding RunScope, Converter={x:Static ObjectConverters.IsNotNull}}"
+              <TextBlock Classes="barText barScope" Text="{Binding RunScope}" IsVisible="{Binding RunScope, Converter={x:Static ObjectConverters.IsNotNull}}"
                          AutomationProperties.AutomationId="RunScopeLine" />
             </WrapPanel>
           </DockPanel>

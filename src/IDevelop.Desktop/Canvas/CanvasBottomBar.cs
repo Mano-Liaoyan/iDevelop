@@ -10,7 +10,8 @@ namespace IDevelop.Desktop.Canvas;
 /// <see cref="CanvasChrome.Spacing"/> from the zoom controls, and it never gets wider than the room left, so it never covers them.
 /// A bar that needs more than its width takes the tightView class, whose styles move the view's own controls to the overflow
 /// menu, then the tightFollow class, whose styles move Follow to the overflow menu, and then the ownRow class: the run bar takes
-/// a row of its own across the whole canvas above the zoom controls, and wraps its groups to a second line when they still do
+/// a row of its own across the whole canvas above the zoom controls, which take back their view controls and Follow. Last the
+/// tightOwnRow class moves Follow to the overflow menu again, and the bar wraps its groups to a second line when they still do
 /// not fit. No group loses its words (ADR 0063). The run bar measures at its whole width, so a change in its text reaches this panel.
 /// </summary>
 public sealed class CanvasBottomBar : Panel
@@ -24,9 +25,11 @@ public sealed class CanvasBottomBar : Panel
     public static void SetSlot(Control control, ChromeSlot value) => control.SetValue(SlotProperty, value);
 
     // Each step gives the run bar less to show. The first step is no class.
-    private static readonly string[] Steps = ["tightView", "tightFollow", OwnRow];
+    private static readonly string[] Steps = ["tightView", "tightFollow", OwnRow, "tightOwnRow"];
 
     private const string OwnRow = "ownRow";
+
+    private static readonly int OwnRowStep = Array.IndexOf(Steps, OwnRow);
 
     /// <summary>The room between the run bar's own row and the zoom controls' row.</summary>
     private const double RowGap = 8;
@@ -84,18 +87,32 @@ public sealed class CanvasBottomBar : Panel
             Measure();
         }
 
-        double Wanted() => center.DesiredSize.Width + (leading?.DesiredSize.Width ?? 0);
-        double Room() => Math.Max(0, Bar.Room(width, leading, trailing).Right - Bar.Room(width, leading, trailing).Left) + (leading?.DesiredSize.Width ?? 0);
+        // Beside the zoom controls the bar wants its width and theirs. On its own row it wants its width on one line, and its room is the canvas's.
+        double Wanted()
+        {
+            if (!IsOwnRow)
+            {
+                return center.DesiredSize.Width + (leading?.DesiredSize.Width ?? 0);
+            }
+
+            center.Measure(infinite);
+            var natural = center.DesiredSize.Width;
+            center.Measure(new Size(width, double.PositiveInfinity));
+            return natural;
+        }
+
+        double Room(int step) => step > OwnRowStep ? width
+            : Math.Max(0, Bar.Room(width, leading, trailing).Right - Bar.Room(width, leading, trailing).Left) + (leading?.DesiredSize.Width ?? 0);
 
         Measure();
-        while (_step > 0 && Room() >= _wanted[_step - 1])
+        while (_step > 0 && Room(_step - 1) >= _wanted[_step - 1])
         {
             _step--;
             Classes.Set(Steps[_step], false);
             Remeasure();
         }
 
-        while (_step < Steps.Length && Wanted() > Room())
+        while (_step < Steps.Length && Wanted() > Room(_step))
         {
             _wanted[_step] = Wanted();
             Classes.Set(Steps[_step], true);

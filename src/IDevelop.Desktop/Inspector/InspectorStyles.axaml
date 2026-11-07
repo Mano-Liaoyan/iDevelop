@@ -272,6 +272,9 @@
               <PathIcon Grid.Column="2" Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
               <TextBlock Classes="sectionTitle" Text="{TemplateBinding Title}"
                          AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
+              <!-- A folded section says what it holds in one muted line after its chevron. -->
+              <TextBlock Grid.Column="3" Name="PART_Summary" Classes="sectionSummary" Text="{TemplateBinding Summary}" IsVisible="False" Margin="6,0,8,0"
+                         AutomationProperties.AutomationId="SectionSummary" />
               <!-- The count's drawing ends where the glyphs' drawing ends, whatever its last character keeps clear. -->
               <inspector:InkAlignedText Grid.Column="4" Classes="sectionBadge" Text="{TemplateBinding Badge}"
                                         Margin="{x:Static inspector:InspectorGrid.GlyphInkMargin}" ToolTip.Tip="Values that differ from the blueprint's defaults" />
@@ -330,6 +333,15 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="inspector|InspectorSection:folded /template/ TextBlock#PART_Summary">
+    <Setter Property="IsVisible" Value="{Binding $parent[inspector:InspectorSection].Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+  </Style>
+  <Style Selector="TextBlock.sectionSummary">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
   </Style>
   <Style Selector="TextBlock.sectionBadge">
     <Setter Property="FontSize" Value="12" />

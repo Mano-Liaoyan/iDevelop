@@ -67,9 +67,12 @@ public sealed class CardIdentityTests
         var canvas = shell.Window.ViewModel.Canvas!;
         Assert.Contains("run every node", canvas.RunWorkflowTip);
         Assert.Null(canvas.RunScope);
+        Assert.Equal("No result yet", shell.NodeModel("A").OutputSummary);
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Completed");
+        // The folded Output section names the latest result.
+        Assert.StartsWith("Result 1 · Current", shell.NodeModel("A").OutputSummary);
 
         Assert.Contains("run 1 of 2 nodes", canvas.RunWorkflowTip);
         // The button keeps its one name, and the run bar says in a plain line that the run is partial.

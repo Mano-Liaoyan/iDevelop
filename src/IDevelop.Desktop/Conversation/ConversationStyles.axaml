@@ -830,4 +830,10 @@
   <Style Selector="Button.attention:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.attention:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
+  <!-- The task's source sits after a hairline, so it never reads as part of the task's sentence. -->
+  <Style Selector="Border.taskSource">
+    <Setter Property="BorderThickness" Value="1,0,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Padding" Value="8,0,0,0" />
+  </Style>
 </Styles>

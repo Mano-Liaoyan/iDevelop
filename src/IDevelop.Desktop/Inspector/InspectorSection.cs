@@ -28,6 +28,9 @@ public sealed class InspectorSection : InspectorPart
     /// <summary>The section rests folded for now, whatever the person chose for its key, until the person opens it here.</summary>
     public static readonly StyledProperty<bool> RestsFoldedProperty = AvaloniaProperty.Register<InspectorSection, bool>(nameof(RestsFolded));
 
+    /// <summary>A one-line summary that the header shows while the section is folded, such as the latest result.</summary>
+    public static readonly StyledProperty<string?> SummaryProperty = AvaloniaProperty.Register<InspectorSection, string?>(nameof(Summary));
+
     public static readonly DirectProperty<InspectorSection, string> BadgeProperty =
         AvaloniaProperty.RegisterDirect<InspectorSection, string>(nameof(Badge), section => section.Badge);
 
@@ -57,6 +60,12 @@ public sealed class InspectorSection : InspectorPart
     {
         get => GetValue(RestsFoldedProperty);
         set => SetValue(RestsFoldedProperty, value);
+    }
+
+    public string? Summary
+    {
+        get => GetValue(SummaryProperty);
+        set => SetValue(SummaryProperty, value);
     }
 
     public int Changes
