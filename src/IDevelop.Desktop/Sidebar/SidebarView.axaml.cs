@@ -200,6 +200,14 @@ public partial class SidebarView : UserControl
         e.Container.Classes.Set("groupRow", header);
         KeyboardNavigation.SetIsTabStop(e.Container, !header);
         AutomationProperties.SetAutomationId(e.Container, header ? "NodeGroup" : null);
+        if (header)
+        {
+            e.Container[!AutomationProperties.NameProperty] = new Avalonia.Data.Binding(nameof(NodeGroup.ToggleLabel));
+        }
+        else
+        {
+            e.Container.ClearValue(AutomationProperties.NameProperty);
+        }
     }
 
     private static void OnGroupPressed(object? sender, PointerPressedEventArgs e)

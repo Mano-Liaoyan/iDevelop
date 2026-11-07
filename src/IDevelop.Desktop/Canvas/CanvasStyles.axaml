@@ -158,10 +158,10 @@
   </Style>
   <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="22,4,8,0" />
+    <Setter Property="Margin" Value="22,6,8,0" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="FontSize" Value="28" />
-    <Setter Property="LineHeight" Value="29" />
+    <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
   <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
@@ -220,8 +220,9 @@
     <Setter Property="Margin" Value="23,62,52,0" />
   </Style>
   <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom. A model name that does not fit on one
-       line wraps to a second line, which still ends above a three-line title (ADR 0064). -->
+       line wraps to a second line, and the title then keeps two lines (ADR 0064). -->
   <Style Selector=":is(Control).tier-label DockPanel.farLine">
+    <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="32" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
     <Setter Property="Margin" Value="22,0,58,4" />
@@ -296,11 +297,10 @@
   </Style>
   <Style Selector=":is(Control).tier-label TextBlock.farAgent">
     <Setter Property="FontSize" Value="28" />
-    <Setter Property="LineHeight" Value="29" />
+    <Setter Property="LineHeight" Value="31" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="MaxLines" Value="2" />
     <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Margin" Value="0,1,0,0" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farAgent">
     <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />

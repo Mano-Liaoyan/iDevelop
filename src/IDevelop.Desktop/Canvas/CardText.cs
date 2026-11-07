@@ -42,4 +42,12 @@ public static class CardText
         ClientId.Antigravity => "Gemini",
         _ => null,
     };
+
+    /// <summary>
+    /// A zoomed out title's line limit beside the agent's line, from its height and its text size: two lines when the model's name
+    /// wraps to a second line, so the title ends above it, and otherwise the tier's own limit.
+    /// </summary>
+    public static readonly Avalonia.Data.Converters.IMultiValueConverter TitleLinesBesideAgent =
+        new Avalonia.Data.Converters.FuncMultiValueConverter<double, object?>(values =>
+            values.ToArray() is [var height, var size] && size > 0 && height > 1.6 * size ? 2 : Avalonia.AvaloniaProperty.UnsetValue);
 }

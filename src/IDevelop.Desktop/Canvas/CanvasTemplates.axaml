@@ -135,7 +135,14 @@
             <!-- The zoomed out card's title. A hyphenated token such as 2023-Q4 stays on one line, and a long title ends in an ellipsis
                  at its end only. The name tag shows the selected card's whole title (ADR 0064). -->
             <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" IsHitTestVisible="False"
-                                AutomationProperties.AccessibilityView="Raw" />
+                                AutomationProperties.AccessibilityView="Raw">
+              <theme:EllipsisText.MaxLines>
+                <MultiBinding Converter="{x:Static canvas:CardText.TitleLinesBesideAgent}">
+                  <Binding ElementName="FarAgent" Path="Bounds.Height" />
+                  <Binding ElementName="FarAgent" Path="FontSize" />
+                </MultiBinding>
+              </theme:EllipsisText.MaxLines>
+            </theme:EllipsisText>
             <Border Classes="cardBlock stateBlock" CornerRadius="{StaticResource RadiusLg}" IsHitTestVisible="False"
                     theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
           </Panel>
@@ -155,7 +162,7 @@
             <TextBlock Text="{Binding ClientMark}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        AutomationProperties.AutomationId="CardClientMark" />
           </Border>
-          <TextBlock Classes="farAgent" Text="{Binding CardLine}" TextTrimming="CharacterEllipsis" theme:StyleClass.State="{Binding State}"
+          <TextBlock x:Name="FarAgent" Classes="farAgent" Text="{Binding CardLine}" TextTrimming="CharacterEllipsis" theme:StyleClass.State="{Binding State}"
                               AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
         </DockPanel>
         <!-- While the node needs the person, the zoomed out badge acts as the full card's does, because Fit rests at this form. -->
