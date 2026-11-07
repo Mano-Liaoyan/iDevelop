@@ -15,4 +15,4 @@ Round 7 of the UI review found port labels that overprinted, an Inspector tab ov
 - **Counts.** A tight row or run bar gives each state its badge and count, and its tooltip the words, so no state hides behind "+2". One wait reason keeps its own word in a row and in the bar.
 - **Left area.** Activity's second line says where the node is, workflow first, because the badge says why it is listed. Rows scroll directly under the pinned rows. The tree uses the same state badge as Activity. With no project open, only the canvas offers Open folder.
 - **State words.** One state has one word: the inspector's header says what a waiting node waits for, the Overview says Completed, and the sections and the tree show the one state badge.
-- **Composer.** A short transcript starts at the top of the conversation in every state.
+- **Composer.** While the inspector is open the composer has no model chip, because one model needs one place. A short transcript starts at the top of the conversation in every state.
