@@ -186,7 +186,7 @@
     <Setter Property="FontSize" Value="14" />
     <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
     <Setter Property="MaxLines" Value="2" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
@@ -305,6 +305,14 @@
     <Setter Property="BorderThickness" Value="2,0,0,0" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
   </Style>
+  <!-- The message that the node waits on wears the waiting state, so a question never reads as narration. -->
+  <Style Selector="Border.message.asking">
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+  </Style>
   <Style Selector="Border.message.person">
     <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="Padding" Value="12,8" />
@@ -345,6 +353,9 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.author.asking">
+    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
   </Style>
   <!-- While the inspector shows the model and its pickers, the composer has no chip, because one model needs one place. -->
   <Style Selector="Border.resultNote">

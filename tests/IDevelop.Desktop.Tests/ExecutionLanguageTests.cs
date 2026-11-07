@@ -140,6 +140,21 @@ public sealed class ExecutionLanguageTests
         Assert.True(layout.TextLines.Count <= lines);
     }
 
+    [AvaloniaTheory]
+    [InlineData("Aggregate hourly usage")]
+    [InlineData("Add the usage_events schema for every tenant")]
+    public void A_title_never_breaks_inside_a_word(string title)
+    {
+        var text = new EllipsisText { Whole = title, MaxLines = 3, TextWrapping = TextWrapping.WrapWithOverflow, FontSize = 44 };
+
+        text.Measure(new Size(180, double.PositiveInfinity));
+
+        using var layout = new TextLayout(text.Text, Typeface.Default, 44, null, textWrapping: TextWrapping.WrapWithOverflow, maxWidth: 180);
+        Assert.All(layout.TextLines, line => Assert.True(line.Width <= 180.5, $"A line takes {line.Width} px."));
+        Assert.Equal(text.Text, string.Concat(layout.TextLines.Select(line => text.Text!.Substring(line.FirstTextSourceIndex, line.Length))));
+        Assert.True(layout.TextLines.Count <= 3);
+    }
+
     [AvaloniaFact]
     public void A_title_that_fits_shows_whole()
     {

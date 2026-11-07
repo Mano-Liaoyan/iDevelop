@@ -316,7 +316,7 @@
           </TextBox>
           <Grid Classes="composerBar" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="4">
             <Button x:Name="ModelChip" Classes="modelChip"
-                    IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=True}" ToolTip.Tip="{Binding ModelChip, StringFormat='Change the model and effort: {0}'}"
+                    ToolTip.Tip="{Binding ModelChip, StringFormat='Change the model and effort: {0}'}"
                     AutomationProperties.AutomationId="ConversationModel" AutomationProperties.Name="{Binding ModelChip, StringFormat='Agent: {0}'}">
               <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" Width="12" Height="12" />
@@ -452,12 +452,12 @@
               <DataTemplate DataType="conversation:MessageItemViewModel">
                 <Panel Classes="row" Classes.tight="{Binding IsBeforeSteps}">
                   <StackPanel Spacing="4">
-                    <TextBlock Classes="author" Text="{Binding AuthorLabel}" IsVisible="{Binding ShowsAuthor}"
+                    <TextBlock Classes="author" Classes.asking="{Binding IsAsking}" Text="{Binding AuthorLine}" IsVisible="{Binding ShowsAuthor}"
                                AutomationProperties.AutomationId="MessageAuthor" />
                     <Grid ColumnDefinitions="*,4*">
                       <Border Grid.Column="{Binding IsPerson, Converter={x:Static conversation:ConversationView.MessageColumn}}"
                               Grid.ColumnSpan="{Binding IsPerson, Converter={x:Static conversation:ConversationView.MessageColumnSpan}}"
-                              Classes="message" Classes.person="{Binding IsPerson}" Classes.subagent="{Binding IsSubagent}"
+                              Classes="message" Classes.person="{Binding IsPerson}" Classes.subagent="{Binding IsSubagent}" Classes.asking="{Binding IsAsking}"
                               AutomationProperties.AutomationId="Message"
                               AutomationProperties.Name="{Binding AuthorLabel}">
                         <conversation:MarkdownView Markdown="{Binding Text}" />

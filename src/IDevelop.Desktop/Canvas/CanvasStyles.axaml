@@ -172,7 +172,7 @@
     <Setter Property="LineHeight" Value="21" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="MaxLines" Value="2" />
-    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
@@ -188,12 +188,12 @@
     <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
-  <!-- The smallest cards give the title the whole card, because its words tell one node from the next. The inspector and the tooltip name the model. -->
+  <!-- The smallest cards with text keep two title lines and the agent's line, because a node is an agent wherever its words read. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
     <Setter Property="Margin" Value="20,6,16,0" />
     <Setter Property="FontSize" Value="44" />
     <Setter Property="LineHeight" Value="48" />
-    <Setter Property="MaxLines" Value="3" />
+    <Setter Property="MaxLines" Value="2" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
   <!-- A ghost keeps a card's form at each zoom: its three lines close up, and far out only its title shows, as large as a card's. -->
@@ -221,7 +221,7 @@
     <Setter Property="MinHeight" Value="146" />
     <Setter Property="Margin" Value="0,0,0,-82" />
   </Style>
-  <!-- Under a zoom of 0.36 the card keeps three title lines, in the height a saved layout's rows leave. -->
+  <!-- Under a zoom of 0.36 the card keeps its lines in the height a saved layout's rows leave. -->
   <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardBody">
     <Setter Property="MinHeight" Value="158" />
     <Setter Property="Margin" Value="0,0,0,-94" />
@@ -245,8 +245,9 @@
     <Setter Property="Height" Value="34" />
     <Setter Property="Margin" Value="18,102,58,0" />
   </Style>
-  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) DockPanel.farLine">
-    <Setter Property="IsVisible" Value="False" />
+  <Style Selector=":is(Control).tier-title DockPanel.farLine">
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Margin" Value="20,106,62,0" />
   </Style>
   <Style Selector="theme|KindTile.farTile">
     <Setter Property="TileSize" Value="20" />
@@ -284,11 +285,11 @@
     <Setter Property="FontSize" Value="22" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient">
-    <Setter Property="MinWidth" Value="34" />
-    <Setter Property="Height" Value="36" />
+    <Setter Property="MinWidth" Value="38" />
+    <Setter Property="Height" Value="40" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="30" />
+    <Setter Property="FontSize" Value="36" />
   </Style>
   <Style Selector="TextBlock.farAgent">
     <Setter Property="FontSize" Value="17" />
@@ -304,7 +305,7 @@
     <Setter Property="FontSize" Value="28" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farAgent">
-    <Setter Property="FontSize" Value="34" />
+    <Setter Property="FontSize" Value="44" />
   </Style>
   <Style Selector="TextBlock.farAgent.state-running">
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
@@ -328,11 +329,10 @@
     <Setter Property="Height" Value="32" />
     <Setter Property="Margin" Value="0,103,18,0" />
   </Style>
-  <!-- The title takes the whole card here, so the badge wears the card's corner, as the Block tier's does. -->
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
-    <Setter Property="Width" Value="34" />
-    <Setter Property="Height" Value="34" />
-    <Setter Property="Margin" Value="0,142,-10,0" />
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Margin" Value="0,108,18,0" />
   </Style>
   <Style Selector=":is(Control).tier-block Panel.stateBadge">
     <Setter Property="Width" Value="80" />
@@ -454,7 +454,7 @@
     <Setter Property="LineHeight" Value="17" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="MaxLines" Value="2" />
-    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>

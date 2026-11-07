@@ -117,7 +117,9 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         : Node.Definition.Execution?.Client is { } client ? $"Message {ClientCatalog.Name(client)}" : "Message the agent";
 
     /// <summary>The composer's model chip: the model and level, or the agent's name while it has no model.</summary>
-    public string ModelChip => Node.AgentModel is { Length: > 0 } model ? model : Node.AgentClient;
+    public string ModelChip => Node.AgentModel is { Length: > 0 } model
+        ? Node.Picker.SelectedReasoning?.Label is { Length: > 0 } effort ? $"{model} · {effort}" : model
+        : Node.AgentClient;
 
     /// <summary>A node that has run no turn has nothing to read yet, so the transcript offers its Run.</summary>
     public bool ShowsEmpty => Node.State == NodeState.Idle && Items.Count == 0;
@@ -482,6 +484,14 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
                 || Card == AttentionCard.Failed && marker.Kind == MarkerKind.Failed
                 || Node.State == NodeState.Completed && marker.Kind == MarkerKind.Completed
                 || Card == AttentionCard.Conflict && marker.Kind == MarkerKind.Conflict);
+        }
+
+        var asking = Card == AttentionCard.Reply && !ShowsCard
+            ? Items.OfType<MessageItemViewModel>().LastOrDefault(message => message is { IsAgent: true, IsSubagent: false })
+            : null;
+        foreach (var message in Items.OfType<MessageItemViewModel>())
+        {
+            message.IsAsking = message == asking;
         }
 
         ShowResults();

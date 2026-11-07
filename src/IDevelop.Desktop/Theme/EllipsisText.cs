@@ -10,8 +10,8 @@ namespace IDevelop.Desktop.Theme;
 /// trimming adds no ellipsis to text that its line limit cuts at a word's end, and it cuts a long last line short, so
 /// this control finds the longest start of <see cref="Whole"/> that fits, ellipsis included. When <see cref="KeepFrom"/> marks
 /// the part of the text that tells it from a similar one and that part fits after a start of the text, the cut falls before
-/// that part, so the part stays in view. The text always starts with its own first word and is cut in one place only. It
-/// styles as a <see cref="TextBlock"/>.
+/// that part, so the part stays in view. The text always starts with its own first word and is cut in one place only. Under
+/// <see cref="TextWrapping.WrapWithOverflow"/> no word breaks across lines. It styles as a <see cref="TextBlock"/>.
 /// </summary>
 public sealed class EllipsisText : TextBlock
 {
@@ -135,10 +135,13 @@ public sealed class EllipsisText : TextBlock
     // A sentence's own period would read as a fourth dot.
     private static string Cut(string whole, int length) => whole[..length].TrimEnd().TrimEnd('.') + Ellipsis;
 
+    // A title never breaks inside a word: a word wider than a line ends in the ellipsis.
+    private bool Keeps => TextWrapping == TextWrapping.WrapWithOverflow;
+
     private bool Fits(string text, double width)
     {
         using var layout = new TextLayout(text, new Typeface(FontFamily, FontStyle, FontWeight, FontStretch), FontSize, Foreground,
-            textWrapping: TextWrapping.Wrap, maxWidth: Math.Max(1, width), lineHeight: LineHeight);
-        return layout.TextLines.Count <= MaxLines;
+            textWrapping: Keeps ? TextWrapping.WrapWithOverflow : TextWrapping.Wrap, maxWidth: Math.Max(1, width), lineHeight: LineHeight);
+        return layout.TextLines.Count <= MaxLines && (!Keeps || layout.TextLines.All(line => line.Width <= width + 0.5));
     }
 }

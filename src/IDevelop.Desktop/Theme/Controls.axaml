@@ -412,7 +412,7 @@
   </Style>
   <Style Selector="TextBlock.nodeName">
     <Setter Property="MaxLines" Value="2" />
-    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
   </Style>
   <!-- A workflow that is not shown keeps its node selection for when it is shown again, without a selected look. -->
   <Style Selector="ListBox.tasks.hidden ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">

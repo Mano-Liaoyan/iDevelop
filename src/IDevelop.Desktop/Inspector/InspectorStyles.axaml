@@ -35,7 +35,7 @@
     <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Margin" Value="6,0" />
   </Style>

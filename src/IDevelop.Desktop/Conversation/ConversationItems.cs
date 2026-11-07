@@ -52,9 +52,26 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     /// <summary>The first agent line after a person's message or a marker names its author, and a subagent's line always does.</summary>
     public bool ShowsAuthor
     {
-        get => _showsAuthor;
+        get => _showsAuthor || IsAsking;
         internal set => SetProperty(ref _showsAuthor, value);
     }
+
+    /// <summary>The node waits for the person's reply to this message, so it reads as a question and not as narration.</summary>
+    public bool IsAsking
+    {
+        get;
+        internal set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowsAuthor));
+                OnPropertyChanged(nameof(AuthorLine));
+            }
+        }
+    }
+
+    /// <summary>The line over the message.</summary>
+    public string AuthorLine => IsAsking ? $"{AuthorLabel} · Waiting for your reply" : AuthorLabel;
 
     /// <summary>The node's result that this message reported, which shows as a card under it, or null.</summary>
     public ResultViewModel? Result

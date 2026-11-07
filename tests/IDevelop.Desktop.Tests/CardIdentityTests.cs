@@ -93,6 +93,10 @@ public sealed class CardIdentityTests
 
         Assert.Equal((AttentionCard.Reply, false, false), (model.Card, model.ShowsCard, model.ShowsCardApprove));
         Assert.True(model.WaitsForWords);
+        var question = Assert.Single(model.Items.OfType<Conversation.MessageItemViewModel>(), message => message.IsAsking);
+        Assert.True(question.ShowsAuthor);
+        Assert.EndsWith("Waiting for your reply", question.AuthorLine);
+        Assert.True(shell.Find<Avalonia.Controls.Control>("ConversationModel").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
