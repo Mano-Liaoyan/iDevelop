@@ -296,8 +296,8 @@
                                   </ContextMenu>
                                 </Button.ContextMenu>
                                 <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="4">
-                                  <TextBlock Classes="rowName workflowName" Classes.shown="{Binding IsSelected}" Text="{Binding Name}"
-                                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                  <!-- A workflow's name shows in full at every panel width, so a long one wraps. -->
+                                  <TextBlock Classes="rowName workflowName" Classes.shown="{Binding IsSelected}" Text="{Binding Name}" TextWrapping="Wrap"
                                              AutomationProperties.AutomationId="WorkflowName" />
                                   <Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Top" Margin="0,6,0,0" Fill="{DynamicResource AccentBrush}"
                                            IsVisible="{Binding HasUnsavedChanges}" AutomationProperties.AutomationId="WorkflowUnsaved" />
@@ -352,7 +352,7 @@
                                 </ListBox.ItemsPanel>
                                 <ListBox.ItemTemplate>
                                   <DataTemplate DataType="canvas:TaskNodeViewModel">
-                                    <!-- A name takes one line, so rows keep one height and a long list stays in view. The tooltip holds all of it. -->
+                                    <!-- A name takes at most two lines, so a long list stays in view. The tooltip holds all of it. -->
                                     <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">
                                       <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
                                       <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title}"

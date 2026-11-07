@@ -1,6 +1,6 @@
 # One count on every surface, one line for each left row, and a running node fills its band
 
-Every surface now gives one number for one group of nodes. Each row of the left tree takes one line. Run Workflow keeps its words at every width and has no count. A running node fills its title band. This changes the name rule of issue #108 and of ADR 0046, and it replaces the Run Workflow reach of ADR 0052.
+Every surface now gives one number for one group of nodes. A workflow name in the left tree shows in full, and a node row takes at most two lines. Run Workflow keeps its words at every width and has no count. A running node fills its title band. This keeps the workflow name rule of issue #108 and of ADR 0046, caps node rows at two lines, and replaces the Run Workflow reach of ADR 0052.
 
 Round 6 of the review found that the left row said 3 waiting while the run bar said 2, that a node with a long name took four lines, that the run control lost its name beside a fraction that looked like progress, that a running card looked like a selected card, and that the cards at Fit cut their titles in an eight-node workflow.
 
@@ -14,7 +14,7 @@ Round 6 of the review found that the left row said 3 waiting while the run bar s
 - **Selection.** The ring sits outside the card, so a state's edge stays whole inside it.
 - **Fit.** A fit keeps 8 px clear of the editor's edges and not 24 px, and it counts the height that the cards draw at the zoom. From 36% a far card takes three title lines, so an eight-node workflow reads its titles at 1280 by 800. Saved positions do not change.
 - **Wires.** A detour takes the middle of the gap that the drawn cards leave. A curve keeps 14 canvas units from a card's top and bottom where a shorter reach allows it.
-- **Left rows.** A workflow or node name takes one line, also while selected, and is cut at its end. The row's tooltip holds all of it. A project name still wraps. A folded workflow row adds one line with the two most urgent groups and a "+N" chip, each with a quiet dot. An open workflow's node rows show the states one by one, so its row has no such line. The row no longer shows the running node's command, because Activity and the conversation show it.
+- **Left rows.** A workflow name shows in full and wraps at every panel width. A node row takes at most two lines, also while selected, and ends in an ellipsis. Its tooltip holds the whole name. A project name still wraps. A folded workflow row adds one line with the two most urgent groups and a "+N" chip, each with a quiet dot. An open workflow's node rows show the states one by one, so its row has no such line. The row no longer shows the running node's command, because Activity and the conversation show it.
 - **Activity.** Rows use the card's badge, and the short list shows three rows. A row's second line says where the node is, with the project while several are open. The reason takes the state's color, so Approval has one color.
 - **Heading position.** Activity and Projects start at one left edge, and Activity's chevron follows its word.
 - **Empty left area.** It shows a heading, one sentence, and Open folder.
@@ -22,12 +22,14 @@ Round 6 of the review found that the left row said 3 waiting while the run bar s
 
 ## Considered options
 
-- **Keeping the name rule of issue #108.** A long name took four lines and broke the row rhythm in the panel that exists to scan nodes. The tooltip keeps the whole name, and Find searches it.
+- **One line for every left row.** It breaks issue #108: the owner asked for workflow names in full.
+- **Node names in full.** A long name took four lines in the panel that exists to scan nodes. Two lines hold most of a name, the tooltip keeps all of it, and Find searches it.
 - **Keeping interrupted in waiting.** The run bar already held it apart, and the difference is what a person acts on.
 - **Taking a blue ring for a running node and a new color for selection.** The tokens are pinned, and a ring is still a ring. A filled band differs in form, so it also reads at a low zoom.
 - **Disabling Run Workflow when nothing can run.** The command stays as it is, so behavior does not change. Only its look says that nothing waits for it.
 
 ## Consequences
 
-- The owner's request for every name in full (issue #108) no longer holds for workflow and node rows. This is the owner's to reverse.
+- A long workflow name makes its row taller, so workflow rows differ in height. Issue #108 asks for this.
+- A node name over two lines loses its end in the row. This is the owner's to reverse.
 - The third title line takes 22 canvas units from each row gap at the far tier, so a wire passes closer to the cards there. An Arrange command would give more room, and the owner has not chosen one.
