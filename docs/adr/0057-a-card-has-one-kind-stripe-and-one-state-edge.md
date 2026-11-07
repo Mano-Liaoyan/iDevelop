@@ -22,7 +22,6 @@ Round 9 of the UI review found too many color layers on a card, a running card t
 - **Run bar.** The progress and Next keep their words. A tight bar first moves the view controls to the overflow menu, and then gives each group its badge and count. This replaces the order of ADR 0056.
 - **Inspector order.** The sections keep one order in every state: Output, Task, Agent, Input, Goes to. Output rests folded beside an open conversation, which shows the result. This replaces the order of ADR 0055.
 - **Inspector sections.** A section's title starts at its rows' left edge, and its chevron follows the word. A long title takes up to four lines. A skill list wraps in its field.
-- **Status glyph.** The inspector's header uses the state badge.
 - **Failed card.** Change model is the primary action when the failure names credit, balance, quota, billing, or another model. Otherwise Retry is primary.
 - **Conversation header.** The title takes one line in medium weight, and its tooltip holds the whole title. This replaces the two lines of ADR 0054.
 - **Left rows.** A node row takes one line, also while selected. Its tooltip and the inspector hold the name. A workflow name still shows in full. This replaces the two lines of ADR 0053.
