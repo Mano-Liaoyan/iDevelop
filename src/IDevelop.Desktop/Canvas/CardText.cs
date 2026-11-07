@@ -42,9 +42,4 @@ public static class CardText
         ClientId.Antigravity => "Gemini",
         _ => null,
     };
-
-    /// <summary>The agent's line, from its height and its text size, wraps the model's name to a second line.</summary>
-    public static readonly Avalonia.Data.Converters.IMultiValueConverter AgentWraps =
-        new Avalonia.Data.Converters.FuncMultiValueConverter<double, bool>(values =>
-            values.ToArray() is [var height, var size] && size > 0 && height > 1.6 * size);
 }

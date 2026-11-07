@@ -164,10 +164,6 @@
     <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
-  <!-- A model's name that wraps takes the room of the title's third line (ADR 0064). -->
-  <Style Selector=":is(Control).tier-label TextBlock.farTitle.agentWraps">
-    <Setter Property="MaxLines" Value="2" />
-  </Style>
   <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
        text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
@@ -223,8 +219,8 @@
     <Setter Property="Height" Value="28" />
     <Setter Property="Margin" Value="23,62,52,0" />
   </Style>
-  <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom. A model name that does not fit on one
-       line wraps to a second line, and the title then keeps two lines (ADR 0064). -->
+  <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom. It keeps one line: a model name that
+       does not fit ends in an ellipsis, so every card's title keeps the same three lines (ADR 0065). -->
   <Style Selector=":is(Control).tier-label DockPanel.farLine">
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="32" />
@@ -302,8 +298,7 @@
   <Style Selector=":is(Control).tier-label TextBlock.farAgent">
     <Setter Property="FontSize" Value="28" />
     <Setter Property="LineHeight" Value="31" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farAgent">

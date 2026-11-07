@@ -12,6 +12,7 @@ Round 18 of the review found that Fit stopped at 90% on the 50-node workflow and
 - **Ports.** The pointer over a port shows a small label beside it, outside its card, with the port's meaning, such as "Input: Design". The pointer over a wire shows the wire's description at its output port. No label is static. The label replaces the port's and the wire's tooltips.
 - **Left tree.** A group with more than 8 nodes starts folded, except "Needs you", which always starts open. Its header keeps its count. This replaces ADR 0064's rule that only "Done" folds, above 5 nodes.
 - **Short inspector.** Under 700 px of inspector height, the header shows the title in one line, the state, and the actions. The state's sentence, such as "Closed mid-turn. Continue resumes the session.", moves to the state's tooltip.
+- **Card agent line.** At the Label tier the client's letters and the model keep one line, and a model name that does not fit ends in an ellipsis, so every card's title keeps three lines. This withdraws ADR 0064's wrapped model name.
 - **Output.** A folded Output section shows the first line of the latest result's summary. A result without a report keeps its heading and commit.
 
 ## Considered options
