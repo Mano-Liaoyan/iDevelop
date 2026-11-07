@@ -91,8 +91,8 @@ public sealed class CanvasTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        // The line is 1.5 px wide and starts 1 px outside the card, so this pixel is on its straight top edge.
-        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -1));
+        // The line is 2 px wide and ends 1 px outside the card, so this pixel is on its straight top edge.
+        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -2));
         Assert.NotEqual(Color.Parse("#0088FF"), Ring());
 
         shell.Click(shell.Header(shell.Node("Design")));

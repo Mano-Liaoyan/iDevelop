@@ -43,11 +43,11 @@ internal static class WireCurve
     /// <summary>How far a curve reaches along the runs on each side of a turn, in the order it tries them.</summary>
     private static readonly double[] Reaches = [double.PositiveInfinity, 120, 60, 30];
 
-    private const int Samples = 16;
+    private const int Samples = 32;
 
-    // A card's body inside its container's 10 px port gutters, less 1 px, so a wire may leave its own port, and a little past
-    // its top and bottom, so a curve that passes a card keeps clear of it.
-    private static readonly Thickness Gutter = new(11, -8);
+    // A card's body inside its container's 10 px port gutters, less 1 px, so a wire may leave its own port, and past its top and
+    // bottom by a wire's clear space, so a curve never runs along a card's edge where a small bend avoids it.
+    private static readonly Thickness Gutter = new(11, -14);
 
     /// <summary>A wire's two ends and how far each aims off its port's row.</summary>
     public readonly record struct Ends(object Source, object Target, double SourceRow, double TargetRow);

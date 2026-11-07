@@ -28,7 +28,7 @@ internal static class WireRouting
     private static readonly Thickness WideClearance = new(40, 56);
 
     // A wire that goes straight past a card keeps this far from its top and bottom edges, or it reads as the card's own wire.
-    private static readonly Thickness PassClearance = new(0, 10);
+    private static readonly Thickness PassClearance = new(0, 14);
 
     // How much longer a wide detour may run than a close one, so it never goes around a whole group of cards for clearance.
     private const double WideDetour = 100;

@@ -256,11 +256,11 @@ public sealed class CanvasChromeTests : IDisposable
         return lines;
     }
 
-    /// <summary>A fit keeps the cards 24 px inside the editor between the two bands.</summary>
+    /// <summary>A fit keeps the cards 8 px inside the editor between the two bands.</summary>
     [AvaloniaTheory]
-    [InlineData(1600, 600, 280, false, 24)]
-    [InlineData(900, 700, 320, true, 24)]
-    [InlineData(900, 600, 320, true, 24)]
+    [InlineData(1600, 600, 280, false, 8)]
+    [InlineData(900, 700, 320, true, 8)]
+    [InlineData(900, 600, 320, true, 8)]
     public void Fit_to_view_keeps_the_cards_inside_the_editor_between_the_bands(double width, double height, double inspector, bool docked, double margin)
     {
         using var f = FanOut.Fixture();
@@ -458,8 +458,8 @@ public sealed class CanvasChromeTests : IDisposable
             var labels = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
             if (id == "RunWorkflow")
             {
-                // The workflow's primary action has one name, which a compact canvas leaves to its tooltip.
-                Assert.Equal(!compact, labels.Contains("Run Workflow"));
+                // The workflow's primary action keeps its words at every width.
+                Assert.Contains("Run Workflow", labels);
             }
             else
             {

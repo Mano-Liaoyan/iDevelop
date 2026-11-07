@@ -411,11 +411,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.nodeName">
-    <Setter Property="MaxLines" Value="2" />
-  </Style>
-  <!-- The selected node shows its whole name. -->
-  <Style Selector="ListBox.tasks:not(.hidden) ListBoxItem:selected TextBlock.nodeName">
-    <Setter Property="MaxLines" Value="0" />
+    <Setter Property="MaxLines" Value="1" />
   </Style>
   <!-- A workflow that is not shown keeps its node selection for when it is shown again, without a selected look. -->
   <Style Selector="ListBox.tasks.hidden ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
@@ -443,7 +439,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
 
-  <!-- A row's name wraps in full rather than ending in an ellipsis. Its first line sits on the row's first line. -->
+  <!-- A name's type. A row of the left tree or of Activity cuts its name to one line, and the row's tooltip holds all of it. -->
   <Style Selector="TextBlock.rowName">
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="FontSize" Value="13" />
@@ -639,11 +635,17 @@
   <Style Selector="ToggleButton.sectionFold:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.sectionFold:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
-  <Style Selector="ToggleButton.sectionFold PathIcon:not(.stateIcon)">
+  <Style Selector="ToggleButton.sectionFold PathIcon:not(.stateIcon):not(.badgeGlyph)">
     <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
   </Style>
-  <Style Selector="ToggleButton.sectionFold:checked PathIcon:not(.stateIcon)">
+  <Style Selector="ToggleButton.sectionFold:checked PathIcon:not(.stateIcon):not(.badgeGlyph)">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+  </Style>
+  <Style Selector="TextBlock.caption.reason.why-approval">
+    <Setter Property="Foreground" Value="{DynamicResource StateApprovalStrokeBrush}" />
+  </Style>
+  <Style Selector="TextBlock.caption.reason.why-interrupted">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="TextBlock.caption.reason.state-failed">
     <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
@@ -689,6 +691,16 @@
   <!-- The selected node's row holds the selected fill, and its workflow keeps a quiet one. -->
   <Style Selector="Button.nav.workflow.selected.holdsNode /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+
+  <!-- The shown workflow's mark stays apart from the grey of a hover. -->
+  <Style Selector="Border.rowMark">
+    <Setter Property="Width" Value="3" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Margin" Value="0,6" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
 
   <!-- UI Automation reads which workflow the window shows from its row's status. -->

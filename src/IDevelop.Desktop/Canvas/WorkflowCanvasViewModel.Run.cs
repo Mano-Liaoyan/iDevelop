@@ -55,8 +55,11 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>No node runs, so Run Workflow is the bar's primary action. While one runs, Stop Workflow takes its place.</summary>
     public bool RunsNothing => RunningCount == 0;
 
-    /// <summary>A graph exists and no node runs, so Run Workflow takes the primary look.</summary>
-    public bool CanStartRun => !IsEmpty && RunsNothing;
+    /// <summary>How many nodes Run Workflow would start. A node that needs the person keeps its turn, so it does not count.</summary>
+    public int RunWork => Nodes.Count(node => node.State is NodeState.Idle or NodeState.Stale or NodeState.Failed);
+
+    /// <summary>Run Workflow has work to start, so it takes the primary look. With none it keeps its words in a quiet look, and its tooltip says why.</summary>
+    public bool CanStartRun => !IsEmpty && RunsNothing && RunWork > 0;
 
     /// <summary>The toolbar offers Generate while the canvas's own Generate card does not. A plan in progress or under review keeps it, because it reports that state.</summary>
     public bool ShowsGenerate => !IsEmpty || IsPlanning || IsReviewing;
@@ -74,7 +77,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>A node waits for the person or failed, so the bar offers Next.</summary>
     public bool HasAttention => Nodes.Any(NeedsAttention);
 
-    /// <summary>"5 of 9 complete · 1 running · 3 waiting · 1 failed", with the parts that are not zero.</summary>
+    /// <summary>"5/9 done · 1 running · 3 waiting · 1 interrupted · 1 failed", with the parts that are not zero.</summary>
     public string BarSummary
     {
         get
@@ -82,19 +85,20 @@ public sealed partial class WorkflowCanvasViewModel
             var counts = Counts;
             return string.Join(" · ", new[]
             {
-                counts.Completed > 0 ? $"{counts.Completed} of {counts.Total} complete" : null,
+                counts.Completed > 0 ? BarProgress : null,
                 counts.Running > 0 ? $"{counts.Running} running" : null,
                 counts.Waiting > 0 ? $"{counts.Waiting} waiting" : null,
+                counts.Interrupted > 0 ? $"{counts.Interrupted} interrupted" : null,
                 counts.Failed > 0 ? $"{counts.Failed} failed" : null,
             }.OfType<string>());
         }
     }
 
-    /// <summary>How far the run went: "5 of 9 complete". The chips after it hold the other states.</summary>
-    public string BarProgress => $"{Counts.Completed} of {Counts.Total} complete";
+    /// <summary>How far the work went, in the one format of every bar width: "5/9 done". The chips after it hold the other states.</summary>
+    public string BarProgress => $"{Counts.Completed}/{Counts.Total} done";
 
-    /// <summary>What the band says with no run: "9 nodes", and how many completed.</summary>
-    public string BarIdle => (Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes") + (Counts.Completed > 0 ? $" · {Counts.Completed} complete" : "");
+    /// <summary>What the band says with no run: "9 nodes", or how far the work went.</summary>
+    public string BarIdle => Counts.Completed > 0 ? BarProgress : Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes";
 
     /// <summary>
     /// One chip for each group of nodes that the bar names, in the order of what needs the person first. Each reason to wait is
@@ -135,7 +139,7 @@ public sealed partial class WorkflowCanvasViewModel
     }
 
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
-    public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Failed > 0 ? "Next failed" : "Next interrupted";
+    public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Interrupted > 0 && Counts.Failed == 0 ? "Next interrupted" : "Next failed";
 
     public StatusTone BarTone => RunningCount > 0 ? StatusTone.Running : HasAttention ? StatusTone.Waiting : StatusTone.Complete;
 
@@ -143,15 +147,13 @@ public sealed partial class WorkflowCanvasViewModel
     public string? BarActivity => RunningCount == 0 ? null
         : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
 
-    /// <summary>The progress on a short bar: "5/9 done".</summary>
-    public string BarShort => $"{Counts.Completed}/{Counts.Total} done";
-
     /// <summary>The whole bar on a narrow canvas, without its chips: "5/9 done · 3 waiting · 1 failed".</summary>
     public string BarBrief => string.Join(" · ", new[]
     {
-        BarShort,
+        BarProgress,
         Counts.Failed > 0 ? $"{Counts.Failed} failed" : null,
         Counts.Waiting > 0 ? $"{Counts.Waiting} waiting" : null,
+        Counts.Interrupted > 0 ? $"{Counts.Interrupted} interrupted" : null,
     }.OfType<string>());
 
     /// <summary>The bar's tooltip: the whole summary, then the running nodes' titles.</summary>
@@ -176,23 +178,13 @@ public sealed partial class WorkflowCanvasViewModel
 
     public string FollowLabel => IsFollowing ? "Stop following running nodes" : "Follow running nodes";
 
-    /// <summary>
-    /// How much of the workflow Run Workflow would run, as "3 of 9 nodes", beside its name. Null when it would run every node,
-    /// which its name already says. A node that needs the person keeps its turn, so it does not count.
-    /// </summary>
-    public string? RunScope
+    /// <summary>The tooltip of Run Workflow: what it runs, or why nothing can run.</summary>
+    public string RunWorkflowTip => (Nodes.Count, RunWork) switch
     {
-        get
-        {
-            var runs = Nodes.Count(node => node.State is NodeState.Idle or NodeState.Stale or NodeState.Failed);
-            return runs == Nodes.Count ? null : $"{runs} of {Nodes.Count}";
-        }
-    }
-
-    /// <summary>The tooltip of Run Workflow, which says why an empty workflow cannot run.</summary>
-    public string RunWorkflowTip => Nodes.Count > 0
-        ? $"Run Workflow\n{CanvasKeys.Hint(CanvasKeys.RunWorkflow)}: run every node that has no current result, along its dependencies. Nodes with a current result keep it"
-        : "Run Workflow\nAdd a node first. An empty workflow has nothing to run.";
+        (0, _) => "Run Workflow\nAdd a node first. An empty workflow has nothing to run.",
+        (_, 0) => "Run Workflow\nNothing to run. Each node has a current result or waits for you.",
+        var (total, runs) => $"Run Workflow\n{CanvasKeys.Hint(CanvasKeys.RunWorkflow)}: run {(runs == total ? "every node" : $"{runs} of {total} nodes")} along the dependencies. Nodes with a current result keep it.",
+    };
 
     private static bool NeedsAttention(TaskNodeViewModel node) => node.IsWaiting || node.State == NodeState.Failed;
 
@@ -267,11 +259,11 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(BarGroups));
-        OnPropertyChanged(nameof(RunScope));
+        OnPropertyChanged(nameof(RunWork));
+        OnPropertyChanged(nameof(CanStartRun));
         OnPropertyChanged(nameof(HasAttention));
         OnPropertyChanged(nameof(BarTone));
         OnPropertyChanged(nameof(BarActivity));
-        OnPropertyChanged(nameof(BarShort));
         OnPropertyChanged(nameof(BarTip));
         OnPropertyChanged(nameof(RunWorkflowTip));
         OnSummaryChanged();

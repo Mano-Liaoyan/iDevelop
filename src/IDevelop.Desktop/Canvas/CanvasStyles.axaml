@@ -6,11 +6,12 @@
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:theme="using:IDevelop.Desktop.Theme">
-  <!-- One accent line on the card's edge says selected, as the app's accent does everywhere, and it leaves the state's own edge
-       visible inside it. The keyboard's ring, the app's one focus ring, sits outside it while the canvas has the keyboard's focus. -->
+  <!-- One accent line outside the card says selected, as the app's accent does everywhere, and it leaves the state's own edge
+       whole inside it. The keyboard's ring, the app's one focus ring, sits outside it while the canvas has the keyboard's focus.
+       A running node never looks like this: its title band fills with color (Kinds.axaml and runBand below). -->
   <Style Selector="Border.ring">
-    <Setter Property="Margin" Value="9,-1" />
-    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="Margin" Value="7,-3" />
+    <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
@@ -20,7 +21,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="Border.keyRing">
-    <Setter Property="Margin" Value="7,-3" />
+    <Setter Property="Margin" Value="4,-6" />
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
@@ -52,13 +53,21 @@
   <Style Selector="Border.cardBand">
     <Setter Property="CornerRadius" Value="10,10,0,0" />
   </Style>
+  <!-- A running node is the loudest thing on the canvas at any zoom: its title band fills with color, which no selection, focus, or
+       other state does, and its title takes the color's contrast. -->
+  <Style Selector="Border.runBand">
+    <Setter Property="Background" Value="{DynamicResource AccentStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.cardTitle.running, TextBlock.farTitle.running">
+    <Setter Property="Foreground" Value="{DynamicResource OnStateBrush}" />
+  </Style>
   <!-- The pointer over a card lifts its surface and strengthens its edge. -->
   <Style Selector="Border.cardHover">
     <Setter Property="Background" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="Opacity" Value="0" />
   </Style>
   <Style Selector="nodify|ItemContainer:pointerover Border.cardHover">
-    <Setter Property="Opacity" Value="0.08" />
+    <Setter Property="Opacity" Value="0.1" />
   </Style>
   <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
@@ -146,7 +155,7 @@
     <Setter Property="Height" Value="60" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.farBand">
-    <Setter Property="Height" Value="78" />
+    <Setter Property="Height" Value="100" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farBand">
     <Setter Property="Height" Value="112" />
@@ -170,9 +179,12 @@
     <Setter Property="FontSize" Value="20" />
     <Setter Property="LineHeight" Value="26" />
   </Style>
+  <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
+    <Setter Property="Margin" Value="16,0,16,0" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="LineHeight" Value="31" />
+    <Setter Property="MaxLines" Value="3" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
     <Setter Property="Margin" Value="20,4,12,0" />
@@ -201,8 +213,8 @@
     <Setter Property="Margin" Value="0,0,0,-34" />
   </Style>
   <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardBody">
-    <Setter Property="MinHeight" Value="124" />
-    <Setter Property="Margin" Value="0,0,0,-60" />
+    <Setter Property="MinHeight" Value="146" />
+    <Setter Property="Margin" Value="0,0,0,-82" />
   </Style>
   <!-- Under a zoom of 0.36 the card keeps its title's two lines and its last line, in the height a saved layout's rows leave. -->
   <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardBody">
@@ -214,7 +226,7 @@
   </Style>
   <!-- The largest text keeps a text line's room from the card's edges too. -->
   <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardHead">
-    <Setter Property="Height" Value="82" />
+    <Setter Property="Height" Value="104" />
   </Style>
   <Style Selector="DockPanel.farLine">
     <Setter Property="Margin" Value="20,62,48,0" />
@@ -226,7 +238,7 @@
   </Style>
   <Style Selector=":is(Control).tier-label DockPanel.farLine">
     <Setter Property="Height" Value="34" />
-    <Setter Property="Margin" Value="18,80,58,0" />
+    <Setter Property="Margin" Value="18,102,58,0" />
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="40" />
@@ -309,7 +321,7 @@
   <Style Selector=":is(Control).tier-label Panel.stateBadge">
     <Setter Property="Width" Value="32" />
     <Setter Property="Height" Value="32" />
-    <Setter Property="Margin" Value="0,81,18,0" />
+    <Setter Property="Margin" Value="0,103,18,0" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
     <Setter Property="Width" Value="34" />
@@ -365,24 +377,27 @@
   </Style>
   <!-- A selection line and a focus ring keep their weight on screen as the cards shrink. -->
   <Style Selector=":is(Control).tier-detail Border.ring, :is(Control).tier-compact Border.ring">
-    <Setter Property="BorderThickness" Value="2" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Border.ring">
-    <Setter Property="BorderThickness" Value="3" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
-    <Setter Property="BorderThickness" Value="6" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail Border.keyRing, :is(Control).tier-compact Border.keyRing">
     <Setter Property="Margin" Value="6,-4" />
     <Setter Property="BorderThickness" Value="3" />
   </Style>
-  <Style Selector=":is(Control).tier-label Border.keyRing">
+  <Style Selector=":is(Control).tier-label Border.ring">
+    <Setter Property="Margin" Value="3,-7" />
+    <Setter Property="BorderThickness" Value="5" />
+  </Style>
+  <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
+    <Setter Property="Margin" Value="-2,-12" />
+    <Setter Property="BorderThickness" Value="9" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Border.keyRing, :is(Control).tier-compact Border.keyRing">
     <Setter Property="Margin" Value="2,-8" />
+    <Setter Property="BorderThickness" Value="3" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Border.keyRing">
+    <Setter Property="Margin" Value="-4,-14" />
     <Setter Property="BorderThickness" Value="5" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.keyRing, :is(Control).tier-block Border.keyRing">
-    <Setter Property="Margin" Value="-4,-14" />
+    <Setter Property="Margin" Value="-14,-24" />
     <Setter Property="BorderThickness" Value="10" />
   </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
@@ -638,15 +653,11 @@
   <Style Selector="Button.zoomValue">
     <Setter Property="Width" Value="40" />
   </Style>
-  <!-- The focus ring's 2 px inside the canvas's edge, so no panel covers it. It is the canvas's only frame. -->
+  <!-- A thin, quiet line inside the canvas's edge, so no panel covers it and it never reads as a mode. The card's own ring says the rest. -->
   <Style Selector="Border.canvasFocus">
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-  </Style>
-  <!-- Run Workflow's reach, quieter than its name. -->
-  <Style Selector="TextBlock.runScope">
-    <Setter Property="FontWeight" Value="Regular" />
-    <Setter Property="Opacity" Value="0.85" />
+    <Setter Property="Opacity" Value="0.5" />
   </Style>
   <Style Selector="Button.zoomValue TextBlock">
     <Setter Property="FontSize" Value="12" />
@@ -664,14 +675,14 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <!-- A view control leaves the bar for the overflow menu only on a narrow canvas. -->
+  <!-- A view control leaves the bar for the overflow menu only when the run's words need its room. -->
   <Style Selector="Button.barTight, TextBlock.chipShort">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightChips TextBlock.chipShort:not(.urgent)">
+  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightView Button.barTight, :is(Control).tightChips TextBlock.chipShort:not(.urgent)">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightChips TextBlock.chipLong:not(.urgent)">
+  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightView :is(Control).barRoomy, :is(Control).tightChips TextBlock.chipLong:not(.urgent)">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Border.barRule">
@@ -681,13 +692,13 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <Style Selector="TextBlock.barShort, TextBlock.barBrief">
+  <Style Selector="TextBlock.barBrief">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).shortBar TextBlock.barShort, :is(Control).narrowBar TextBlock.barBrief">
+  <Style Selector=":is(Control).narrowBar TextBlock.barBrief">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).shortBar TextBlock.barLong, :is(Control).narrowBar TextBlock.barShort">
+  <Style Selector=":is(Control).narrowBar TextBlock.barLong">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- A bar with too little room for each reason to wait sums them. A tight bar then keeps only the counts. -->
@@ -700,7 +711,7 @@
   <Style Selector=":is(Control).narrowBar ItemsControl.barChips">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).shortBar TextBlock.followLabel">
+  <Style Selector=":is(Control).tightChips TextBlock.followLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Button.bar, ToggleButton.bar">

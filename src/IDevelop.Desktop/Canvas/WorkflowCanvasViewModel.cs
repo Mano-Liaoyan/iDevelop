@@ -190,6 +190,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(ExpandLabel));
                 OnPropertyChanged(nameof(ShowsNodeSelection));
+                OnPropertyChanged(nameof(ShowsRowChips));
             }
         }
     }

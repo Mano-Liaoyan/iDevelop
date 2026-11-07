@@ -156,13 +156,13 @@
                               ToolTip.Tip="{Binding GenerateLabel, StringFormat='{}{0}&#10;Describe what to build, and a planner proposes the tasks'}"
                               AutomationProperties.AutomationId="GenerateWorkflow"
                               AutomationProperties.Name="{Binding GenerateLabel}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
+                        <StackPanel Orientation="Horizontal">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
                           <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
                                     Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding IsPlanning}" />
                           <!-- An open proposal shows a dot before its label, or on the glyph when the label hides. -->
                           <Panel Classes="wideOnly" VerticalAlignment="Center">
-                            <Ellipse Width="8" Height="8" Margin="4,0" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}" />
+                            <Ellipse Width="8" Height="8" Margin="10,0,4,0" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}" />
                           </Panel>
                           <Panel Classes="compactOnly" VerticalAlignment="Center">
                             <Panel IsVisible="{Binding IsReviewing}">
@@ -181,10 +181,11 @@
                               AutomationProperties.Name="Stop Workflow">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                          <TextBlock Classes="wideOnly" Text="Stop Workflow" VerticalAlignment="Center" />
+                          <TextBlock Text="Stop Workflow" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
-                      <!-- The workflow's one primary action. An empty workflow's primary action is on the canvas's Generate card. -->
+                      <!-- The workflow's one primary action, which keeps its words at every width, so the breadcrumb gives up its width first. With nothing to run
+                           it takes the quiet look, and its tooltip says why. An empty workflow's primary action is on the canvas's Generate card. -->
                       <Button Classes.primary="{Binding CanStartRun}" Classes.action="{Binding !CanStartRun}" Command="{Binding RunWorkflowCommand}"
                               IsVisible="{Binding RunsNothing}"
                               ToolTip.ShowOnDisabled="True"
@@ -194,11 +195,7 @@
                               AutomationProperties.Name="Run Workflow">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-                          <TextBlock Classes="wideOnly" Text="Run Workflow" VerticalAlignment="Center" />
-                          <!-- What the run takes when some nodes keep their current results. It stays when the name hides. -->
-                          <TextBlock Classes="runScope" Text="{Binding RunScope}" VerticalAlignment="Center"
-                                     IsVisible="{Binding RunScope, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                     AutomationProperties.AutomationId="RunScope" />
+                          <TextBlock Text="Run Workflow" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                     </StackPanel>

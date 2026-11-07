@@ -61,31 +61,31 @@
                     AutomationProperties.AutomationId="ActivityFold"
                     AutomationProperties.Name="{Binding Activity.FoldLabel}">
         <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
-          <PathIcon Theme="{StaticResource Glyph}" Width="12" Height="12" />
-          <TextBlock Grid.Column="1" Classes="section" Text="Activity" VerticalAlignment="Center" />
+          <TextBlock Classes="section" Text="Activity" VerticalAlignment="Center" />
+          <PathIcon Grid.Column="1" Theme="{StaticResource Glyph}" Width="12" Height="12" />
           <StackPanel Grid.Column="3" Classes="counts" VerticalAlignment="Center">
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasWaiting}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting for you'}"
                         AutomationProperties.AutomationId="ActivityWaiting">
-              <PathIcon Classes="stateIcon state-inputrequired" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+              <theme:StateBadge State="InputRequired" Why="Question" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.WaitingCount}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasInterrupted}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}"
                         AutomationProperties.AutomationId="ActivityInterrupted">
-              <PathIcon Classes="stateIcon state-inputrequired why-interrupted" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+              <theme:StateBadge State="InputRequired" Why="Interrupted" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.InterruptedCount}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasFailed}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}"
                         AutomationProperties.AutomationId="ActivityFailed">
-              <PathIcon Classes="stateIcon state-failed" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+              <theme:StateBadge State="Failed" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.FailedCount}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasRunning}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.RunningCount, StringFormat='{}{0} running'}"
                         AutomationProperties.AutomationId="ActivityRunning">
-              <PathIcon Classes="stateIcon state-running spin" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+              <theme:StateBadge State="Running" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.RunningCount}" />
             </StackPanel>
           </StackPanel>
@@ -104,21 +104,20 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="sidebar:ActivityRow">
                 <Button Classes="activity" Classes.selected="{Binding Node.IsConversationShown}" Command="{Binding OpenCommand}"
-                        ToolTip.Tip="{Binding Detail}"
+                        ToolTip.Tip="{Binding Tip}"
                         AutomationProperties.AutomationId="ActivityRow"
                         AutomationProperties.Name="{Binding Node.Title}"
                         AutomationProperties.HelpText="{Binding Detail}">
                   <Grid ColumnDefinitions="16,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
-                    <PathIcon Classes="stateIcon" Classes.spin="{Binding Node.IsRunningNow}" Theme="{StaticResource Glyph}" Margin="0,1,0,0" VerticalAlignment="Top"
-                              theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Why="{Binding Node.WaitReason}" />
-                    <TextBlock Grid.Column="1" Classes="rowName strong" Text="{Binding Node.Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" />
-                    <!-- One line: the reason in its state's color, a dot, and the workflow in the rest, cut at its end. The tooltip holds the project too. -->
+                    <theme:StateBadge Margin="0,1,0,0" VerticalAlignment="Top" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
+                    <TextBlock Grid.Column="1" Classes="rowName" Text="{Binding Node.Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                    <!-- One line: the reason in its state's color, a dot, and where the node is in the rest, cut at its end. -->
                     <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="4"
                           AutomationProperties.AutomationId="ActivityDetail" AutomationProperties.Name="{Binding Detail}">
-                      <TextBlock Classes="caption reason" theme:StyleClass.State="{Binding Node.State}" Text="{Binding Reason}" MaxWidth="120" TextTrimming="CharacterEllipsis"
+                      <TextBlock Classes="caption reason" theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Why="{Binding Node.WaitReason}" Text="{Binding Reason}" MaxWidth="120" TextTrimming="CharacterEllipsis"
                                  AutomationProperties.AutomationId="ActivityReason" />
                       <TextBlock Grid.Column="1" Classes="caption" Text="·" />
-                      <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Workflow}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Place}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                     </Grid>
                   </Grid>
                 </Button>
@@ -141,9 +140,16 @@
 
     <!-- Nothing is open: the canvas holds Open folder, and this panel the folders the person closed. -->
     <StackPanel Grid.Row="3" Margin="16,12" Spacing="8" IsVisible="{Binding !HasProjects}">
-      <TextBlock Classes="caption" Text="No project open" AutomationProperties.AutomationId="NoProject" />
-      <TextBlock Classes="caption" Text="Folders you close show here." TextWrapping="Wrap" IsVisible="{Binding !HasRecent}"
+      <TextBlock Classes="rowName strong" Text="No project open" AutomationProperties.AutomationId="NoProject" />
+      <TextBlock Classes="caption" Text="Open a folder to list its workflows here." TextWrapping="Wrap" IsVisible="{Binding !HasRecent}"
                  AutomationProperties.AutomationId="NoRecent" />
+      <Button Classes="action" HorizontalAlignment="Left" Click="OnOpenFolder"
+              AutomationProperties.AutomationId="SidebarOpenFolder" AutomationProperties.Name="Open folder">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
+          <TextBlock Text="Open folder" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
       <TextBlock Classes="section" Text="Recent" Margin="0,8,0,0" IsVisible="{Binding HasRecent}" />
       <ItemsControl ItemsSource="{Binding Recent}" IsVisible="{Binding HasRecent}" Margin="-8,0"
                     AutomationProperties.AutomationId="RecentProjects" AutomationProperties.Name="Recent projects">
@@ -170,7 +176,7 @@
         </Button>
       </Grid>
       <!-- Each project lists its workflows, and each workflow lists its nodes, one size smaller, while its row is expanded. The
-           shown workflow is the selected row. A workflow's name wraps in full, and a node's name takes two lines until it is selected. The scroll bar draws in
+           shown workflow is the selected row. A name takes one line and is cut at its end, and its tooltip holds all of it. The scroll bar draws in
            the gutter at the rows' end, so every row keeps one right edge. -->
       <Panel Grid.Row="1">
       <ScrollViewer x:Name="Tree" Classes="quietBar" Margin="8,0,0,0" HorizontalScrollBarVisibility="Disabled"
@@ -207,7 +213,7 @@
                                       ToolTip.Tip="{Binding RunningLabel}"
                                       AutomationProperties.AutomationId="ProjectRunning"
                                       AutomationProperties.Name="{Binding RunningLabel}">
-                            <PathIcon Classes="stateIcon state-running spin" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+                            <theme:StateBadge State="Running" Width="14" Height="14" />
                             <TextBlock Classes="caption" Text="{Binding RunningCount}" />
                           </StackPanel>
                           <StackPanel Classes="count" IsVisible="{Binding HasFailed}"
@@ -215,7 +221,7 @@
                                       ToolTip.Tip="{Binding FailedLabel}"
                                       AutomationProperties.AutomationId="ProjectFailed"
                                       AutomationProperties.Name="{Binding FailedLabel}">
-                            <PathIcon Classes="stateIcon state-failed" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+                            <theme:StateBadge State="Failed" Width="14" Height="14" />
                             <TextBlock Classes="caption" Text="{Binding FailedCount}" />
                           </StackPanel>
                           <StackPanel Classes="count" IsVisible="{Binding IsWaiting}"
@@ -223,7 +229,7 @@
                                       ToolTip.Tip="{Binding WaitingLabel}"
                                       AutomationProperties.AutomationId="ProjectWaiting"
                                       AutomationProperties.Name="{Binding WaitingLabel}">
-                            <PathIcon Classes="stateIcon state-inputrequired" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+                            <theme:StateBadge State="InputRequired" Why="Question" Width="14" Height="14" />
                             <TextBlock Classes="caption" Text="{Binding WaitingCount}" />
                           </StackPanel>
                           <StackPanel Classes="count" IsVisible="{Binding HasInterrupted}"
@@ -231,7 +237,7 @@
                                       ToolTip.Tip="{Binding InterruptedLabel}"
                                       AutomationProperties.AutomationId="ProjectInterrupted"
                                       AutomationProperties.Name="{Binding InterruptedLabel}">
-                            <PathIcon Classes="stateIcon state-inputrequired why-interrupted" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+                            <theme:StateBadge State="InputRequired" Why="Interrupted" Width="14" Height="14" />
                             <TextBlock Classes="caption" Text="{Binding InterruptedCount}" />
                           </StackPanel>
                         </StackPanel>
@@ -271,13 +277,13 @@
                         <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
                           <StackPanel Spacing="2">
                             <Panel>
-                              <!-- The name, and at the row's end how far the work went. Under them, in glyphs and words,
-                                   what failed, waits, runs, or is stale. The tooltip holds the sum. -->
+                              <!-- One line for the name, and at its end how far the work went. A folded row adds one line with the most
+                                   urgent groups, and the tree rows of an open one show the rest. The tooltip holds the sum. -->
                               <Button Classes="nav workflow" Classes.selected="{Binding IsSelected}" Classes.holdsNode="{Binding ShowsNodeSelection}" HorizontalContentAlignment="Stretch"
                                       IsVisible="{Binding !IsRenamingWorkflow}"
                                       Click="OnWorkflowClick"
                                       KeyDown="OnWorkflowKeyDown"
-                                      ToolTip.Tip="{Binding Summary}"
+                                      ToolTip.Tip="{Binding RowTip}"
                                       AutomationProperties.AutomationId="WorkflowRow"
                                       AutomationProperties.Name="{Binding Name}"
                                       AutomationProperties.HelpText="{Binding Summary}">
@@ -289,32 +295,26 @@
                                               AutomationProperties.Name="Rename" theme:MenuGlyph.Data="{StaticResource IconRename}" />
                                   </ContextMenu>
                                 </Button.ContextMenu>
-                                <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="4">
-                                  <TextBlock Classes="rowName workflowName" Classes.shown="{Binding IsSelected}" Text="{Binding Name, Converter={x:Static theme:NameBreaks.KeepTokens}}"
+                                <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="4">
+                                  <TextBlock Classes="rowName workflowName" Classes.shown="{Binding IsSelected}" Text="{Binding Name}"
+                                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                                              AutomationProperties.AutomationId="WorkflowName" />
-                                  <!-- While a node runs, the row says what it does now. -->
-                                  <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Classes="caption" Text="{Binding RowActivity}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                             IsVisible="{Binding RowActivity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                             AutomationProperties.AutomationId="WorkflowActivity" />
                                   <Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Top" Margin="0,6,0,0" Fill="{DynamicResource AccentBrush}"
                                            IsVisible="{Binding HasUnsavedChanges}" AutomationProperties.AutomationId="WorkflowUnsaved" />
                                   <TextBlock Grid.Column="2" Classes="caption" Text="{Binding RowProgress}" VerticalAlignment="Top" Margin="0,1,0,0"
                                              AutomationProperties.AutomationId="WorkflowSummary" />
-                                  <ItemsControl Grid.Row="1" Grid.ColumnSpan="3" Margin="0,2,0,0" ItemsSource="{Binding RowChips}" IsVisible="{Binding HasRowChips}"
+                                  <ItemsControl Grid.Row="1" Grid.ColumnSpan="3" Margin="0,2,0,0" ItemsSource="{Binding RowChips}" IsVisible="{Binding ShowsRowChips}"
                                                 AutomationProperties.AutomationId="WorkflowAlert">
                                     <ItemsControl.ItemsPanel>
                                       <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="2" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8" />
                                       </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                       <DataTemplate DataType="canvas:StateChip">
                                         <StackPanel Orientation="Horizontal" Spacing="4" AutomationProperties.Name="{Binding Label}">
-                                          <Panel Width="14" Height="14" VerticalAlignment="Center">
-                                            <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-                                            <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="9" Height="9"
-                                                      theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-                                          </Panel>
+                                          <Ellipse Classes="badgeDisc" Width="7" Height="7" VerticalAlignment="Center"
+                                                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
                                           <TextBlock Classes="caption" Text="{Binding Label}" VerticalAlignment="Center" />
                                         </StackPanel>
                                       </DataTemplate>
@@ -322,6 +322,8 @@
                                   </ItemsControl>
                                 </Grid>
                               </Button>
+                              <!-- The shown workflow's mark, which a hover's fill never takes. -->
+                              <Border Classes="rowMark" IsVisible="{Binding IsSelected}" />
                               <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="38,2,4,2"
                                                      AutomationProperties.AutomationId="WorkflowNameBox"
                                                      AutomationProperties.Name="Workflow name" />
@@ -350,10 +352,10 @@
                                 </ListBox.ItemsPanel>
                                 <ListBox.ItemTemplate>
                                   <DataTemplate DataType="canvas:TaskNodeViewModel">
-                                    <!-- A name takes two lines, so rows keep a steady height and a long list stays in view. The tooltip and the selected row hold all of it. -->
+                                    <!-- A name takes one line, so rows keep one height and a long list stays in view. The tooltip holds all of it. -->
                                     <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">
                                       <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
-                                      <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}"
+                                      <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title}"
                                                           AutomationProperties.AutomationId="NodeRowName" />
                                       <PathIcon Grid.Column="2" Classes="stateIcon" Classes.spin="{Binding IsRunningNow}" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Top" Margin="0,2,0,0"
                                                 theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding WaitReason}"
@@ -451,9 +453,11 @@
     <!-- Find's results take the panel under the box, over Activity and the tree, down to the footer. A name wraps in full. -->
     <Panel Grid.Row="2" Grid.RowSpan="2" IsVisible="{Binding Find.IsActive}">
       <Border Classes="findPalette" AutomationProperties.AutomationId="FindPalette">
-        <Grid RowDefinitions="Auto,*,Auto">
-          <TextBlock Classes="caption" Text="{Binding Find.ResultsLabel}" Margin="8,4,8,4" IsVisible="{Binding Find.HasResults}"
-                     AutomationProperties.AutomationId="FindCount" />
+        <Grid RowDefinitions="Auto,*">
+          <Grid ColumnDefinitions="*,Auto" Margin="8,4,8,4" IsVisible="{Binding Find.HasResults}">
+            <TextBlock Classes="caption" Text="{Binding Find.ResultsLabel}" AutomationProperties.AutomationId="FindCount" />
+            <TextBlock Grid.Column="1" Classes="caption" Text="Enter opens. Esc closes." AutomationProperties.AutomationId="FindKeys" />
+          </Grid>
           <ListBox x:Name="FindResults" Grid.Row="1" Classes="results"
                    ItemsSource="{Binding Find.Results}"
                    SelectedIndex="{Binding Find.Index, Mode=TwoWay}"
@@ -484,8 +488,6 @@
           </ListBox>
           <TextBlock Classes="caption" Text="No node or workflow matches" Margin="8,8" IsVisible="{Binding Find.HasNoMatch}"
                      AutomationProperties.AutomationId="FindNoMatch" />
-          <TextBlock Grid.Row="2" Classes="caption" Text="Enter opens. Esc closes." Margin="8,4" IsVisible="{Binding Find.HasResults}"
-                     AutomationProperties.AutomationId="FindKeys" />
         </Grid>
       </Border>
     </Panel>

@@ -18,6 +18,9 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>How far a fitted view keeps its cards from the editor's edges.</summary>
     private const double CardMargin = 24;
 
+    // What a fit keeps clear at the editor's edges. The cards take the rest, because the zoom decides how much of a title reads.
+    private const double FitMargin = 8;
+
     /// <summary>How far apart the canvas's dots lie, in canvas units.</summary>
     private const double DotPitch = 24;
 
@@ -174,10 +177,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     }
 
     // The part of the editor where a view keeps its cards. A small docked canvas has no room for the margin.
-    private Rect Room()
+    private Rect Room(double margin = CardMargin)
     {
         var whole = new Rect(Editor.Bounds.Size);
-        var room = whole.Deflate(CardMargin);
+        var room = whole.Deflate(margin);
         return room.Width < MinFitRoom || room.Height < MinFitRoom ? whole : room;
     }
 
@@ -200,7 +203,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
-    private Rect Extent() => Cards().Aggregate((union, card) => union.Union(card));
+    // The cards as they draw at this zoom, so a fit leaves room for a zoomed out card's lower lines.
+    private Rect Extent()
+    {
+        var reach = _viewModel is { } canvas ? ZoomTiers.CardReach(canvas.Tier) : 0;
+        return Cards().Aggregate((union, card) => union.Union(card)).Inflate(new Thickness(0, 0, 0, reach));
+    }
 
     // The selected node, else a running node, else a node that needs the person, else the graph's start.
     private Point FocusPoint()
@@ -218,7 +226,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             return;
         }
 
-        var room = Room();
+        var room = Room(FitMargin);
         Editor.ViewportZoom = CanvasChrome.FitZoom(extent, room);
         Editor.ViewportLocation = CanvasChrome.ViewOn(extent, room, Editor.ViewportZoom, focus);
         if (_viewModel is { } canvas)
@@ -413,6 +421,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private void OnZoomOut(object? sender, RoutedEventArgs e) => EditorCommands.ZoomOut.Execute(null, Editor);
 
     private void OnFitToScreen(object? sender, RoutedEventArgs e) => FitToView();
+
+    private void OnMinimapMenu(object? sender, RoutedEventArgs e) => MinimapToggle.IsChecked = MinimapToggle.IsChecked != true;
 
     private void OnZoomActual(object? sender, RoutedEventArgs e) => ZoomToActual();
 

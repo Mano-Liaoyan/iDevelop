@@ -195,7 +195,7 @@
                 AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
         </Button>
-        <Button Classes="icon zoom barRoomy" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
+        <Button Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
                 AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
         </Button>
@@ -203,7 +203,7 @@
                 AutomationProperties.AutomationId="ZoomValue" AutomationProperties.Name="Reset the zoom">
           <TextBlock Text="{Binding ZoomLabel}" AutomationProperties.AutomationId="ZoomLabel" />
         </Button>
-        <Button Classes="icon zoom barRoomy" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
+        <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
                 AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
         </Button>
@@ -220,16 +220,16 @@
                       AutomationProperties.AutomationId="ShowMinimap" AutomationProperties.Name="Show the minimap">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMinimap}" />
         </ToggleButton>
-        <!-- A narrow bar keeps its view controls here. The minimap needs more room than a narrow canvas has. -->
+        <!-- A tight bar keeps its view controls here, so the run's words keep their room. Zoom stays in the bar. -->
         <Button Classes="icon zoom barTight" ToolTip.Tip="More view controls"
                 AutomationProperties.AutomationId="ZoomMore" AutomationProperties.Name="More view controls">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
           <Button.Flyout>
             <MenuFlyout Placement="TopEdgeAlignedLeft">
-              <MenuItem Header="Zoom out" Click="OnZoomOut" AutomationProperties.AutomationId="ZoomOutMenu" theme:MenuGlyph.Data="{StaticResource IconZoomOut}" />
-              <MenuItem Header="Zoom in" Click="OnZoomIn" AutomationProperties.AutomationId="ZoomInMenu" theme:MenuGlyph.Data="{StaticResource IconZoomIn}" />
               <MenuItem Header="{Binding ExpandCardsLabel}" Command="{Binding ExpandCardsCommand}" AutomationProperties.AutomationId="ExpandAllMenu"
                         theme:MenuGlyph.Data="{StaticResource IconExpandAll}" />
+              <MenuItem Header="Minimap" Click="OnMinimapMenu" AutomationProperties.AutomationId="MinimapMenu"
+                        theme:MenuGlyph.Data="{StaticResource IconMinimap}" />
             </MenuFlyout>
           </Button.Flyout>
         </Button>
@@ -285,7 +285,6 @@
             <DockPanel VerticalAlignment="Center">
               <Panel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0">
                 <TextBlock Classes="barText barLong" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
-                <TextBlock Classes="barText barShort" Text="{Binding BarShort}" ToolTip.Tip="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatusShort" />
                 <TextBlock Classes="barText barBrief" Text="{Binding BarBrief}" AutomationProperties.AutomationId="RunStatusBrief" />
               </Panel>
               <Panel VerticalAlignment="Center">

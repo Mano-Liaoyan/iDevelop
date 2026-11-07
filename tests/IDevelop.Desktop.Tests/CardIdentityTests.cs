@@ -38,18 +38,21 @@ public sealed class CardIdentityTests
     }
 
     [AvaloniaFact]
-    public void Run_Workflow_names_its_reach_only_while_a_node_keeps_its_result()
+    public void Run_Workflow_says_its_reach_in_its_tooltip_and_goes_quiet_with_nothing_to_run()
     {
-        using var f = new NodeFixture(Task(A, "A", 105), Task(B, "B", 405));
+        using var f = new NodeFixture(Task(A, "A", 105));
         f.Install(Reply("s-1", "Done."));
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
-        Assert.Null(canvas.RunScope);
+        Assert.Contains("run every node", canvas.RunWorkflowTip);
+        Assert.True(canvas.CanStartRun);
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Completed");
 
-        Assert.Equal("1 of 2", canvas.RunScope);
+        Assert.Equal(0, canvas.RunWork);
+        Assert.False(canvas.CanStartRun);
+        Assert.Contains("Nothing to run", canvas.RunWorkflowTip);
     }
 
     [AvaloniaFact]

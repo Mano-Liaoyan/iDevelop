@@ -33,10 +33,13 @@
                   AutomationProperties.Name="Generate Workflow…">
             <TextBlock Text="Generate Workflow…" />
           </Button>
-          <Button Classes="ghost" HorizontalAlignment="Center" Height="28" Click="OnAddNode"
+          <Button Classes="action" HorizontalAlignment="Center" Click="OnAddNode"
                   ToolTip.Tip="Add one node by hand (N)"
                   AutomationProperties.AutomationId="EmptyAddNode" AutomationProperties.Name="Add a node">
-            <TextBlock Text="Add a node" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Add a node" VerticalAlignment="Center" />
+              <TextBlock Classes="keyHint" Text="N" VerticalAlignment="Center" />
+            </StackPanel>
           </Button>
         </StackPanel>
       </Panel>

@@ -32,10 +32,9 @@ public sealed class RunBarTests
         shell.WaitForCard("A", "Failed");
 
         Assert.True(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal("0 of 1 complete", shell.Text("RunStatus"));
+        Assert.Equal("0/1 done", shell.Text("RunStatus"));
         Assert.Equal("1 failed", shell.Window.ViewModel.Canvas!.BarSummary);
         Assert.Equal("1 failed", Assert.Single(shell.Window.ViewModel.Canvas!.BarChips).Label);
-        Assert.Equal("0/1 done", shell.Window.ViewModel.Canvas!.BarShort);
         Assert.True(shell.Find<Button>("NextWaiting").IsEffectivelyVisible);
     }
 

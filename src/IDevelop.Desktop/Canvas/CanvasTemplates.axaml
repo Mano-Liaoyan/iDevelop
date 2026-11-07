@@ -66,6 +66,7 @@
                 theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
         <!-- The zoomed out card's stripe runs its whole height, and its band holds its title. -->
         <Border Classes="cardFar farBand cardBand kindTint" Margin="10,0" VerticalAlignment="Top" theme:StyleClass.Kind="{Binding Kind}" IsHitTestVisible="False" />
+        <Border Classes="cardFar farBand cardBand runBand" Margin="10,0" VerticalAlignment="Top" IsVisible="{Binding IsRunningNow}" IsHitTestVisible="False" />
         <Border Classes="cardEdgeClip" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" ClipToBounds="True" IsHitTestVisible="False">
           <Border Classes="cardEdge kindTile" theme:StyleClass.Kind="{Binding Kind}" />
         </Border>
@@ -73,13 +74,14 @@
           <Panel Classes="cardHead">
             <Grid Classes="cardFull" RowDefinitions="42,22,*">
               <Border Classes="cardBand kindTint" theme:StyleClass.Kind="{Binding Kind}" IsHitTestVisible="False" />
+              <Border Classes="cardBand runBand" IsVisible="{Binding IsRunningNow}" IsHitTestVisible="False" />
               <Grid Margin="8,0" ColumnDefinitions="16,*,Auto,16" ColumnSpacing="6">
                 <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" KeepsBadge="True" TileSize="16" VerticalAlignment="Center"
                                 AutomationProperties.AutomationId="CardKind"
                                 AutomationProperties.HelpText="{Binding KindHelp}" />
                 <!-- The row keeps the title's height while the rename box replaces the title. -->
                 <Panel Grid.Column="1" MinHeight="18" VerticalAlignment="Center">
-                  <theme:EllipsisText Classes="cardTitle" Whole="{Binding Title}" KeepFrom="{Binding TitleKeep}"
+                  <theme:EllipsisText Classes="cardTitle" Classes.running="{Binding IsRunningNow}" Whole="{Binding Title}" KeepFrom="{Binding TitleKeep}"
                                       IsVisible="{Binding !IsRenaming}"
                                       AutomationProperties.AutomationId="CardTitle" />
                   <canvas:CardTitleBox Classes="cardTitle" IsVisible="{Binding IsRenaming}"
@@ -137,7 +139,7 @@
               </Grid>
             </Grid>
             <!-- The zoomed out card's title. -->
-            <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title}" KeepFrom="{Binding TitleKeep}" IsHitTestVisible="False"
+            <theme:EllipsisText Classes="cardFar farTitle" Classes.running="{Binding IsRunningNow}" Whole="{Binding Title}" KeepFrom="{Binding TitleKeep}" IsHitTestVisible="False"
                                 AutomationProperties.AccessibilityView="Raw" />
             <Border Classes="cardBlock stateBlock" CornerRadius="{StaticResource RadiusLg}" IsHitTestVisible="False"
                     theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />

@@ -13,7 +13,7 @@ namespace IDevelop.Desktop.Sidebar;
 public sealed class ActivityViewModel : ObservableObject
 {
     /// <summary>The rows a list shows before Show all.</summary>
-    public const int NormalLimit = 4;
+    public const int NormalLimit = 3;
 
     private readonly Func<IReadOnlyList<ProjectViewModel>> _projects;
     private readonly Action<TaskNodeViewModel> _open;
@@ -268,14 +268,15 @@ public sealed class ActivityRow : ObservableObject
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(Detail));
+                OnPropertyChanged(nameof(Tip));
             }
         }
     } = "";
 
-    /// <summary>The node's workflow, which the row's second line shows.</summary>
-    public string Workflow => Node.Canvas.Name;
+    /// <summary>The row's tooltip: the whole title, which the row may cut, then the detail.</summary>
+    public string Tip => $"{Node.Title}\n{Detail}";
 
-    /// <summary>The node's workflow, after its project's name while several projects are open.</summary>
+    /// <summary>The node's workflow, after its project's name while several projects are open, which the row's second line shows.</summary>
     public string Place
     {
         get;
@@ -284,7 +285,7 @@ public sealed class ActivityRow : ObservableObject
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(Detail));
-                OnPropertyChanged(nameof(Workflow));
+                OnPropertyChanged(nameof(Tip));
             }
         }
     } = "";

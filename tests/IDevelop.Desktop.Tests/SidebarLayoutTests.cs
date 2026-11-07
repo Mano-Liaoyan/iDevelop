@@ -80,20 +80,15 @@ public sealed class SidebarLayoutTests : IDisposable
     [InlineData(240)]
     [InlineData(320)]
     [InlineData(400)]
-    public void Project_and_workflow_names_show_in_full_at_every_sidebar_width(double width)
+    public void A_project_s_name_shows_in_full_and_a_workflow_s_takes_one_line_with_its_tooltip_at_every_sidebar_width(double width)
     {
         var shell = OpenBoth();
         shell.SizeSidebar(width);
 
-        var names = new[]
-        {
-            shell.ProjectName(Reports), shell.WorkflowName(Reports, ReleaseNotes), shell.WorkflowName(Reports, Quarterly),
-            shell.ProjectName(Onboarding), shell.WorkflowName(Onboarding, "Workflow"),
-        };
-
-        Assert.All(names, name => AssertWhole(shell, name));
-        Assert.All([shell.WorkflowName(Reports, Quarterly), shell.ProjectName(Onboarding)],
-            name => Assert.True(name.TextLayout.TextLines.Count > 1, $"\"{name.Text}\" fits on one line at {width} px, so nothing here wraps."));
+        Assert.All([shell.ProjectName(Reports), shell.ProjectName(Onboarding)], name => AssertWhole(shell, name));
+        Assert.True(shell.ProjectName(Onboarding).TextLayout.TextLines.Count > 1, $"The project's name fits on one line at {width} px, so nothing here wraps.");
+        Assert.Single(shell.WorkflowName(Reports, Quarterly).TextLayout.TextLines);
+        Assert.StartsWith($"{Quarterly}\n", ((Canvas.WorkflowCanvasViewModel)shell.WorkflowRow(Reports, Quarterly).DataContext!).RowTip);
     }
 
     [AvaloniaFact]
@@ -141,7 +136,7 @@ public sealed class SidebarLayoutTests : IDisposable
     [AvaloniaTheory]
     [InlineData(240)]
     [InlineData(400)]
-    public void Task_titles_show_in_full_with_their_tile_on_the_first_line(double width)
+    public void Task_titles_take_one_line_with_their_tile_on_it(double width)
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, LongTask, "Ship");
@@ -151,11 +146,9 @@ public sealed class SidebarLayoutTests : IDisposable
         var rows = new[] { LongTask, "Ship" }.Select(title => shell.TaskRow(Reports, ReleaseNotes, title)).ToArray();
         var titles = rows.Select(row => row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"))).ToArray();
 
-        Assert.All(titles, title => AssertWhole(shell, title));
-        Assert.True(titles[0].TextLayout.TextLines.Count > 1, $"The long title fits on one line at {width} px, so nothing here wraps.");
-        // Each row centres its glyph on its title's first line, 12 px into the row, the middle of a one-line row's 24 px.
-        Assert.Equal(["first line 12, glyph 0", "first line 12, glyph 0, row 24"],
-            rows.Select((row, index) => TaskCentres(row) + (index == 1 ? $", row {row.Bounds.Height:0.#}" : "")));
+        Assert.All(titles, title => Assert.Single(title.TextLayout.TextLines));
+        // Each row centres its glyph on its title's line, 12 px into the row, the middle of the row's 24 px.
+        Assert.All(rows, row => Assert.Equal("first line 12, glyph 0, row 24", $"{TaskCentres(row)}, row {row.Bounds.Height:0.#}"));
     }
 
     private static string TaskCentres(ListBoxItem row)
@@ -223,6 +216,10 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.AddNode();
         shell.Render();
 
+        // The node rows of an open workflow say its states one by one, so only a folded row says them.
+        Assert.False(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
+        ((Canvas.WorkflowCanvasViewModel)row.DataContext!).IsExpanded = false;
+        shell.Render();
         Assert.True(row.Bounds.Height > 28, "The state takes no line of its own.");
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
@@ -290,7 +287,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_node_s_name_takes_two_lines_with_a_tooltip_until_it_is_selected()
+    public void A_node_s_name_takes_one_line_with_a_tooltip_also_while_it_is_selected()
     {
         const string Long = "Backfill the ledger partition for every tenant that opened an account before the migration began and keep it online";
         var reports = _temp.Create(Reports);
@@ -303,13 +300,13 @@ public sealed class SidebarLayoutTests : IDisposable
         var node = view.Canvas!.Outline.Single(item => item.Title == Long);
 
         Assert.EndsWith("…", name.Text);
-        Assert.Equal(2, name.TextLayout.TextLines.Count);
+        Assert.Single(name.TextLayout.TextLines);
         Assert.Equal(Long, ToolTip.GetTip(name.GetVisualParent<Grid>()!));
 
         view.Canvas.Inspect(node);
         shell.Render();
 
-        Assert.DoesNotContain("…", name.Text);
+        Assert.Single(name.TextLayout.TextLines);
     }
 
     [AvaloniaFact]

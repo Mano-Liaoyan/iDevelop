@@ -1,4 +1,3 @@
-using IDevelop.Desktop.Sidebar;
 using IDevelop.Desktop.Theme;
 
 namespace IDevelop.Desktop.Canvas;
@@ -6,6 +5,8 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>What the left area's workflow row says about the workflow's run. All of it is read from the nodes' states.</summary>
 public sealed partial class WorkflowCanvasViewModel
 {
+    private const int RowChipLimit = 3;
+
     /// <summary>How many nodes are in each state.</summary>
     public StateCounts Counts => new(
         Nodes.Count(node => node.State == NodeState.Completed), Nodes.Count(node => node.State == NodeState.Running), WaitingCount,
@@ -17,13 +18,30 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>How far the work went, at the row's end. The chips under the name hold the other states.</summary>
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
 
-    /// <summary>What the row says under the name: the run bar's groups, so the row and the bar give one number for one group.</summary>
-    public IReadOnlyList<StateChip> RowChips => BarGroups;
+    /// <summary>
+    /// What a folded row says under the name in one line: the run bar's groups, most urgent first, so the row and the bar give
+    /// one number for one group. Past <see cref="RowChipLimit"/> groups, one "+2" stands for the rest, and the row's tooltip names them.
+    /// </summary>
+    public IReadOnlyList<StateChip> RowChips
+    {
+        get
+        {
+            var groups = BarGroups;
+            if (groups.Count <= RowChipLimit)
+            {
+                return groups;
+            }
 
-    public bool HasRowChips => RowChips.Count > 0;
+            var rest = groups.Skip(RowChipLimit - 1).ToList();
+            return [.. groups.Take(RowChipLimit - 1), new StateChip(NodeState.Idle, WaitReason.None, rest.Sum(chip => chip.Count), $"+{rest.Count}", string.Join(", ", rest.Select(chip => chip.Label)))];
+        }
+    }
 
-    /// <summary>What the first running node does now, in one line, or null while none runs. The row shows it under the name.</summary>
-    public string? RowActivity => Outline.FirstOrDefault(node => node.State == NodeState.Running) is { } node ? ActivityRow.OneLine(node.Latest) : null;
+    /// <summary>A folded row says its groups. The node rows of an open workflow show the same states one by one.</summary>
+    public bool ShowsRowChips => !IsExpanded && BarGroups.Count > 0;
+
+    /// <summary>The workflow row's tooltip: the whole name, which the row may cut, and the whole sum.</summary>
+    public string RowTip => $"{Name}\n{Summary}";
 
     /// <summary>The list shows a node of this workflow as selected, so the workflow's row keeps a quiet fill.</summary>
     public bool ShowsNodeSelection => IsExpanded && SelectedNode is not null;
@@ -33,9 +51,9 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(Counts));
         OnPropertyChanged(nameof(RowProgress));
         OnPropertyChanged(nameof(RowChips));
-        OnPropertyChanged(nameof(HasRowChips));
-        OnPropertyChanged(nameof(RowActivity));
+        OnPropertyChanged(nameof(ShowsRowChips));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(RowTip));
     }
 }
 
