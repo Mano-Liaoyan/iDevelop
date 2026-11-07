@@ -405,9 +405,10 @@
                     <!-- The task leads: it wraps to two lines before it ends in an ellipsis. -->
                     <theme:EllipsisText Grid.Column="2" Whole="{Binding TaskPreview}" MaxLines="2" TextWrapping="Wrap" VerticalAlignment="Center"
                                         IsVisible="{Binding !IsTaskOpen}" AutomationProperties.AutomationId="ConversationTaskPreview" />
-                    <!-- Where the agent's input came from: the first earlier node by name, as a muted part after a divider. Opening the task names them all. -->
+                    <!-- Where the agent's input came from: the first earlier node by its full name, as a muted part after a divider, which
+                         wraps rather than cuts the name (ADR 0064). Opening the task names them all. -->
                     <Border Grid.Column="3" Classes="taskSource" VerticalAlignment="Center" Margin="0,0,10,0" IsVisible="{Binding ShowsTaskInputCount}">
-                      <TextBlock Classes="caption" Text="{Binding TaskInputCount}" MaxWidth="160" TextTrimming="CharacterEllipsis"
+                      <TextBlock Classes="caption" Text="{Binding TaskInputCount}" MaxWidth="180" TextWrapping="Wrap"
                                  ToolTip.Tip="{Binding TaskInputLine}"
                                  AutomationProperties.AutomationId="ConversationTaskInputCount" />
                     </Border>

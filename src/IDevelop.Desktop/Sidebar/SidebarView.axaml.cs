@@ -298,8 +298,7 @@ public partial class SidebarView : UserControl
 
     private static Control? ParentRow(IReadOnlyList<Control> rows, int at) => rows[at] switch
     {
-        ListBoxItem { DataContext: TaskNodeViewModel node } => rows.Take(at).LastOrDefault(row => row.DataContext is NodeGroup group && group.Kind == NodeGroup.Of(node))
-            ?? rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == node.Canvas),
+        ListBoxItem { DataContext: TaskNodeViewModel node } => rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == node.Canvas),
         ListBoxItem { DataContext: NodeGroup } item => item.FindAncestorOfType<ListBox>()?.DataContext is WorkflowCanvasViewModel canvas
             ? rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == canvas) : rows[at],
         Button { DataContext: WorkflowCanvasViewModel canvas } => rows.Take(at).LastOrDefault(row => row.DataContext == canvas.Project),

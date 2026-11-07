@@ -132,8 +132,9 @@
                 </ToggleButton>
               </Grid>
             </Grid>
-            <!-- The zoomed out card's title. -->
-            <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title}" KeepFrom="{Binding TitleKeep}" IsHitTestVisible="False"
+            <!-- The zoomed out card's title. A hyphenated token such as 2023-Q4 stays on one line, and a long title ends in an ellipsis
+                 at its end only. The name tag shows the selected card's whole title (ADR 0064). -->
+            <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" IsHitTestVisible="False"
                                 AutomationProperties.AccessibilityView="Raw" />
             <Border Classes="cardBlock stateBlock" CornerRadius="{StaticResource RadiusLg}" IsHitTestVisible="False"
                     theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />

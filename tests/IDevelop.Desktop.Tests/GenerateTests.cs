@@ -240,7 +240,7 @@ public sealed class GenerateTests : IDisposable
         shell.WaitUntil(() => node.State == NodeState.Completed, "the planner is done");
         Assert.Equal("Added 3 tasks.", shell.Status);
         shell.ShowTasks();
-        Assert.Equal(["Export API", "Export button", "Export tests"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")).Skip(1));
+        Assert.Equal(["Export API", "Export button", "Export tests"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")).Skip(2).Take(3));
 
         var workflow = canvas.Workflow;
         var added = workflow.Tasks.Values.Where(task => task.Id != planner).ToDictionary(task => task.Title);

@@ -103,7 +103,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal(("alpha", "Release"), shell.Breadcrumb());
         Assert.Equal("alpha - iDevelop: Ship", Shown(shell));
-        Assert.Equal(["Ship"], Shell.Texts(shell.WorkflowTasks("alpha", "Release")));
+        Assert.Equal(["Not started", "1", "Ship"], Shell.Texts(shell.WorkflowTasks("alpha", "Release")));
         Assert.False(shell.WorkflowTasks("beta", "Build").IsEffectivelyVisible);
     }
 
@@ -405,7 +405,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], reopened.Tree());
         Assert.Equal(("alpha", "Release"), reopened.Breadcrumb());
-        Assert.Equal(["Ship"], Shell.Texts(reopened.WorkflowTasks("alpha", "Release")));
+        Assert.Equal(["Not started", "1", "Ship"], Shell.Texts(reopened.WorkflowTasks("alpha", "Release")));
         Assert.Equal([false, false, false], new[] { ("alpha", "Build"), ("beta", "Build"), ("beta", "Release") }
             .Select(row => reopened.WorkflowTasks(row.Item1, row.Item2).IsEffectivelyVisible));
         Assert.Null(reopened.Window.ViewModel.Status);

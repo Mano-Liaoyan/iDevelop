@@ -51,7 +51,7 @@ public sealed class UndoTests : IDisposable
 
         shell.Press(Key.Z, RawInputModifiers.Control);
 
-        Assert.Equal(["Design", "Build", "Review"], shell.Find<ListBox>("SidebarTasks").Items.Cast<TaskNodeViewModel>().Select(node => node.Title));
+        Assert.Equal(["Design", "Build", "Review"], shell.Find<ListBox>("SidebarTasks").Items.OfType<TaskNodeViewModel>().Select(node => node.Title));
         Assert.Equal(
             [("Build", "Review", ConnectionKind.Dependency), ("Design", "Build", ConnectionKind.Dependency), ("Design", "Review", ConnectionKind.Context)],
             shell.Drawn());
