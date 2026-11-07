@@ -11,8 +11,8 @@ namespace IDevelop.Desktop.Conversation;
 /// </summary>
 public sealed class CodeText : SelectableTextBlock
 {
-    /// <summary>How far a continued line sits past the indent of its source line.</summary>
-    private const string Continuation = "    ";
+    /// <summary>The mark that starts a continued line, past the indent of its source line, so a wrap never reads as a new source line.</summary>
+    private const string Continuation = "  ↪ ";
 
     private const string Probe = "0000000000";
 

@@ -3,6 +3,12 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>A group of nodes in the run bar: their state's badge, how many there are in words, and what its tooltip adds.</summary>
 public sealed record StateChip(NodeState State, WaitReason Why, int Count, string Label, string Tip)
 {
+    /// <summary>A workflow row with many groups gives each one its badge and count, so no group hides behind "+2".</summary>
+    public bool IsCounted { get; init; }
+
+    /// <summary>What a workflow row shows beside the badge.</summary>
+    public string RowText => IsCounted ? Count.ToString() : Label;
+
     /// <summary>The nodes need the person, so a tight bar keeps this chip.</summary>
     public bool IsUrgent => State == NodeState.Failed || State == NodeState.InputRequired && Why != WaitReason.Interrupted;
 

@@ -108,8 +108,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         : Node.State == NodeState.Running ? "Your message waits for this turn to end. Stop and send ends the turn first."
         : null;
 
-    /// <summary>Send's tooltip. The key's hint sits beside the button, so the tooltip only says what is not plain, and it says nothing while Send is plain.</summary>
-    public string? SendHelp => ComposerHint;
+    /// <summary>Send's tooltip: its name and key, and then what Send does while that is not plain.</summary>
+    public string SendHelp => ComposerHint is { } hint ? $"Send (Ctrl+Enter)\n{hint}" : "Send (Ctrl+Enter)";
 
     /// <summary>The composer's placeholder, which says what a message does now.</summary>
     public string Watermark => Node.IsAsking ? "Answer in your own words"
@@ -129,9 +129,6 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     /// <summary>The first line of what the agent did last, unless the transcript's last row already says it.</summary>
     public string? WorkingLine => Node.Latest?.Split('\n', 2)[0] is { } line && !(Items.LastOrDefault() is StepGroupItemViewModel steps && steps.LastLine == line) ? line : null;
-
-    /// <summary>A short transcript sits on the composer while the node needs the person, so what it says stays beside the answer.</summary>
-    public bool SitsOnComposer => WaitsForWords || ShowsCard;
 
     public AttentionCard Card => Node.IsAsking ? AttentionCard.Question : Node.EngineState switch
     {
@@ -407,7 +404,6 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CardHint));
         OnPropertyChanged(nameof(ShowsCardBody));
         OnPropertyChanged(nameof(ShowsCard));
-        OnPropertyChanged(nameof(SitsOnComposer));
         _loadEarlier.NotifyCanExecuteChanged();
     }
 
@@ -591,7 +587,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(IsReplyCard), nameof(ShowsCardApprove),
         nameof(ShowsComposerStop), nameof(ShowsSend), nameof(ShowsStopAndSend), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
         nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
-        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody), nameof(WaitsForWords), nameof(SitsOnComposer),
+        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody), nameof(WaitsForWords),
     ];
 
     private static readonly string[] StripProperties =

@@ -165,9 +165,9 @@
                 Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
                 Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
                   <StackPanel>
-                    <inspector:ClampedText x:Name="DetailText" Classes="detail clamped" Text="{Binding StateDetail}" ToolTip.Tip="{Binding StateDetail}"
+                    <theme:EllipsisText x:Name="DetailText" Classes="detail clamped" Whole="{Binding StateDetail}" ToolTip.Tip="{Binding StateDetail}"
                                            AutomationProperties.AutomationId="RunTaskDetail" />
-                    <Button Classes="textLink" Content="More" IsVisible="{Binding #DetailText.IsClamped}"
+                    <Button Classes="textLink" Content="Show all" IsVisible="{Binding #DetailText.IsCut}"
                             AutomationProperties.AutomationId="RunTaskDetailMore" AutomationProperties.Name="Show the whole text">
                       <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedLeft">
@@ -179,9 +179,9 @@
                 </Border>
                 <Border Classes="detailRule warning" IsVisible="{Binding RunRefusal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                   <StackPanel>
-                    <inspector:ClampedText x:Name="RefusalText" Classes="detail clamped" Text="{Binding RunRefusal}" ToolTip.Tip="{Binding RunRefusal}"
+                    <theme:EllipsisText x:Name="RefusalText" Classes="detail clamped" Whole="{Binding RunRefusal}" ToolTip.Tip="{Binding RunRefusal}"
                                            AutomationProperties.AutomationId="StartProblem" />
-                    <Button Classes="textLink" Content="More" IsVisible="{Binding #RefusalText.IsClamped}"
+                    <Button Classes="textLink" Content="Show all" IsVisible="{Binding #RefusalText.IsCut}"
                             AutomationProperties.AutomationId="StartProblemMore" AutomationProperties.Name="Show the whole text">
                       <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedLeft">
@@ -239,8 +239,8 @@
             </ContentControl.Content>
             <ContentControl.DataTemplates>
               <DataTemplate DataType="canvas:TaskNodeViewModel">
-                <!-- A node with a result leads with its Output, and its Agent follows, so the state, the result, and the model share the first screen.
-                     A node with no result leads with its Agent. Input and Task keep their places. -->
+                <!-- The sections keep one order in every state, as Godot's and Blender's do, so a field never moves when a node's state changes:
+                     what the node is asked, who does it, what it reads, and what it hands on. The header says the state. -->
                 <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                   <inspector:InspectorSection Key="Proposal" Title="Proposal" IsShown="{Binding Proposal, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <StackPanel>
@@ -412,7 +412,7 @@
                   </inspector:InspectorSection>
 
                   <!-- What the node hands on: its results, newest first, a review's findings, and the nodes that read them. -->
-                  <inspector:InspectorSection Grid.Row="{Binding HasNoOutput, Converter={x:Static inspector:InspectorConverters.OutputRow}}" Key="Output" Title="Output">
+                  <inspector:InspectorSection Grid.Row="4" Key="Output" Title="Output">
                     <StackPanel>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasNoOutput}">
                         <TextBlock Classes="note" Text="No result yet."
@@ -438,9 +438,9 @@
                                                IsVisible="{Binding Commit, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                   </Grid>
                                   <StackPanel Spacing="2">
-                                    <inspector:ClampedText x:Name="ResultText" Classes="detail resultSummary" Text="{Binding PlainSummary}" TextTrimming="CharacterEllipsis"
+                                    <theme:EllipsisText x:Name="ResultText" Classes="detail resultSummary" Whole="{Binding PlainSummary}"
                                                            AutomationProperties.AutomationId="ResultSummary" />
-                                    <TextBlock Classes="linkWord" Text="More" IsVisible="{Binding #ResultText.IsClamped}"
+                                    <TextBlock Classes="linkWord" Text="Show all" IsVisible="{Binding #ResultText.IsCut}"
                                                AutomationProperties.AutomationId="ResultMore" />
                                   </StackPanel>
                                 </StackPanel>
@@ -547,7 +547,7 @@
                   </inspector:InspectorSection>
 
                   <!-- The open conversation holds the task, so this section rests folded beside it, and a click opens it to edit. -->
-                  <inspector:InspectorSection Grid.Row="4" Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
+                  <inspector:InspectorSection Grid.Row="1" Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
                     <ItemsControl ItemsSource="{Binding Fields}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="canvas:FieldViewModel">
@@ -583,7 +583,7 @@
                     </ItemsControl>
                   </inspector:InspectorSection>
 
-                  <inspector:InspectorSection Grid.Row="{Binding HasNoOutput, Converter={x:Static inspector:InspectorConverters.AgentRow}}" Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
+                  <inspector:InspectorSection Grid.Row="2" Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
                                               Changes="{Binding AgentChanges}" IsShown="{Binding HasAgent}">
                     <StackPanel>
                       <inspector:InspectorRow Label="Client" Info="{Binding PermissionNote}" InfoName="{Binding PermissionSummary}" InfoId="PermissionNote"

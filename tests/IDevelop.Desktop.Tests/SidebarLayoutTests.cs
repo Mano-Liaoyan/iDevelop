@@ -227,7 +227,7 @@ public sealed class SidebarLayoutTests : IDisposable
         // The progress keeps the row's end in every state, and the state is in words under the name.
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
-        Assert.Equal(canvas.RowChips.Select(chip => chip.Label), Of<Control>(row.GetVisualParent()!, "WorkflowAlert").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
+        Assert.Equal(canvas.RowChips.Select(chip => chip.RowText), Of<Control>(row.GetVisualParent()!, "WorkflowAlert").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
     }
 
     [Theory]
@@ -288,7 +288,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_node_s_name_takes_two_lines_with_a_tooltip_also_while_it_is_selected()
+    public void A_node_s_name_takes_two_lines_with_a_tooltip_and_all_of_it_while_it_is_selected()
     {
         const string Long = "Backfill the ledger partition for every tenant that opened an account before the migration began and keep it online";
         var reports = _temp.Create(Reports);
@@ -307,7 +307,7 @@ public sealed class SidebarLayoutTests : IDisposable
         view.Canvas.Inspect(node);
         shell.Render();
 
-        Assert.Equal(2, name.TextLayout.TextLines.Count);
+        Assert.Equal(Long, name.Text?.Replace("\u2060", "", StringComparison.Ordinal));
     }
 
     [AvaloniaFact]

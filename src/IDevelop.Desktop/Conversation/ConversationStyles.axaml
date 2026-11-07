@@ -344,9 +344,6 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <!-- A short transcript sits on the composer while the node needs the person, so what it says stays beside the answer. -->
-  <Style Selector="StackPanel.nearComposer">
-    <Setter Property="VerticalAlignment" Value="Bottom" />
-  </Style>
   <!-- While the inspector shows the model and its pickers, the composer's chip only names them. -->
   <Style Selector="Button.modelChip.readOnly">
     <Setter Property="IsHitTestVisible" Value="False" />

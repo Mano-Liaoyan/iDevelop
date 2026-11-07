@@ -187,12 +187,18 @@
                       <!-- The workflow's one primary action, which keeps its words at every width, so the breadcrumb gives up its width first. With nothing to run
                            it takes the quiet look, and its tooltip says why. An empty workflow's primary action is on the canvas's Generate card. -->
                       <Button Classes.primary="{Binding CanStartRun}" Classes.action="{Binding !CanStartRun}" Command="{Binding RunWorkflowCommand}"
-                              IsVisible="{Binding RunsNothing}"
                               ToolTip.ShowOnDisabled="True"
                               ToolTip.Placement="BottomEdgeAlignedRight"
                               ToolTip.Tip="{Binding RunWorkflowTip}"
                               AutomationProperties.AutomationId="RunWorkflow"
                               AutomationProperties.Name="Run Workflow">
+                        <Button.IsVisible>
+                          <!-- While the inspector edits a blueprint, its Save is the one primary action. -->
+                          <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="RunsNothing" />
+                            <Binding Path="Blueprints.Editor" Converter="{x:Static ObjectConverters.IsNull}" />
+                          </MultiBinding>
+                        </Button.IsVisible>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
                           <TextBlock Text="Run Workflow" VerticalAlignment="Center" />

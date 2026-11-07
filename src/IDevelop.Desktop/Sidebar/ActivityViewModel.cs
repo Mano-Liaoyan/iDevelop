@@ -256,7 +256,7 @@ public sealed class ActivityRow : ObservableObject
 
     public ICommand OpenCommand { get; }
 
-    /// <summary>"Question · Payment webhook hardening · Claude Code", with the project's name before the workflow's while several projects are open.</summary>
+    /// <summary>"Question · Payment webhook hardening · Claude Code", with the project's name after the workflow's while several projects are open.</summary>
     public string Detail => string.Join(" · ", new[] { Reason, Place, Node.AgentClientName }.OfType<string>());
 
     /// <summary>Why the node is listed, in the state's own word.</summary>
@@ -276,7 +276,7 @@ public sealed class ActivityRow : ObservableObject
     /// <summary>The row's tooltip: the whole title, which the row may cut, then the detail.</summary>
     public string Tip => $"{Node.Title}\n{Detail}";
 
-    /// <summary>The node's workflow, after its project's name while several projects are open, which the row's second line shows.</summary>
+    /// <summary>The node's workflow, and its project's name after it while several projects are open, so a cut takes the project first.</summary>
     public string Place
     {
         get;
@@ -293,7 +293,7 @@ public sealed class ActivityRow : ObservableObject
     internal void Read(bool showsProject)
     {
         Reason = ReasonOf(Node);
-        Place = showsProject ? $"{Node.Canvas.Project.Name} › {Node.Canvas.Name}" : Node.Canvas.Name;
+        Place = showsProject ? $"{Node.Canvas.Name} · {Node.Canvas.Project.Name}" : Node.Canvas.Name;
     }
 
     // "Input required · Question" names the reason after the state, which the glyph already shows.

@@ -448,6 +448,9 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <!-- A node's name reads one size under its workflow's, so the tree's levels show at a glance. -->
+  <Style Selector="ListBoxItem:selected TextBlock.rowName.nodeName">
+    <Setter Property="MaxLines" Value="0" />
+  </Style>
   <Style Selector="TextBlock.rowName.nodeName">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="LineHeight" Value="16" />

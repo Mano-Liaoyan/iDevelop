@@ -155,7 +155,7 @@
     <Setter Property="Height" Value="100" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farBand">
-    <Setter Property="Height" Value="112" />
+    <Setter Property="Height" Value="158" />
   </Style>
   <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.farBand.cardFar, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.farBand.cardFar, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.farBand.cardFar">
     <Setter Property="IsVisible" Value="True" />
@@ -178,15 +178,19 @@
   </Style>
   <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="16,0,16,0" />
+    <Setter Property="Margin" Value="16,6,16,0" />
+    <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
+  <!-- The smallest cards give the title the whole card, because its words tell one node from the next. The inspector and the tooltip name the model. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="20,4,12,0" />
+    <Setter Property="Margin" Value="20,6,44,0" />
     <Setter Property="FontSize" Value="44" />
-    <Setter Property="LineHeight" Value="52" />
+    <Setter Property="LineHeight" Value="48" />
+    <Setter Property="MaxLines" Value="3" />
+    <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
   <!-- A ghost keeps a card's form at each zoom: its three lines close up, and far out only its title shows, as large as a card's. -->
   <Style Selector="TextBlock.ghostFar">
@@ -213,13 +217,13 @@
     <Setter Property="MinHeight" Value="146" />
     <Setter Property="Margin" Value="0,0,0,-82" />
   </Style>
-  <!-- Under a zoom of 0.36 the card keeps its title's two lines and its last line, in the height a saved layout's rows leave. -->
+  <!-- Under a zoom of 0.36 the card keeps three title lines, in the height a saved layout's rows leave. -->
   <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardBody">
     <Setter Property="MinHeight" Value="158" />
     <Setter Property="Margin" Value="0,0,0,-94" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardHead">
-    <Setter Property="Height" Value="112" />
+    <Setter Property="Height" Value="158" />
   </Style>
   <!-- The largest text keeps a text line's room from the card's edges too. -->
   <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardHead">
@@ -237,9 +241,8 @@
     <Setter Property="Height" Value="34" />
     <Setter Property="Margin" Value="18,102,58,0" />
   </Style>
-  <Style Selector=":is(Control).tier-title DockPanel.farLine">
-    <Setter Property="Height" Value="40" />
-    <Setter Property="Margin" Value="20,114,52,0" />
+  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) DockPanel.farLine">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="theme|KindTile.farTile">
     <Setter Property="TileSize" Value="20" />

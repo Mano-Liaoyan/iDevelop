@@ -143,15 +143,15 @@ public sealed class MarkdownViewTests
         const string Span = "entry_id,account_id,tenant_id,posted_at,effective_at,currency,amount_minor,direction,source_system";
         var (window, view) = Show($"The header is `{Span}`, and it stays.");
         var blocks = view.GetVisualDescendants().OfType<SelectableTextBlock>().Select(Shown).ToList();
-        Assert.Equal(["The header is ", Span, ", and it stays."], blocks.Select(block => block is ", and it stays." or "The header is " ? block : block?.Replace("\u00AD", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal)));
+        Assert.Equal(["The header is ", Span, ", and it stays."], blocks.Select(block => block is ", and it stays." or "The header is " ? block : block?.Replace("\u00AD", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal).Replace("↪", "", StringComparison.Ordinal)));
         window.Close();
     }
 
     [Theory]
     [InlineData("short", 20, "short")]
-    [InlineData("    call(first, second, third)", 20, "    call(first,\n        second,\n        third)")]
-    [InlineData("abcdefghijkl", 8, "abcdefgh\n    ijkl")]
-    public void A_long_code_line_continues_past_its_own_indent(string source, int columns, string shown) =>
+    [InlineData("    call(first, second, third)", 20, "    call(first,\n      ↪ second,\n      ↪ third)")]
+    [InlineData("abcdefghijkl", 8, "abcdefgh\n  ↪ ijkl")]
+    public void A_long_code_line_continues_with_a_mark_past_its_own_indent(string source, int columns, string shown) =>
         Assert.Equal(shown, Conversation.CodeText.Wrapped(source, columns));
 
     [AvaloniaFact]

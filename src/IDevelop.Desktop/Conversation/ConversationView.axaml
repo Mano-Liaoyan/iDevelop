@@ -365,7 +365,7 @@
               </Button.Flyout>
             </Button>
             <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
-              <TextBlock Classes="keyHint" Text="Ctrl+Enter to send" VerticalAlignment="Center" Margin="0,0,4,0"
+              <TextBlock Classes="keyHint" Text="Ctrl+Enter to send" VerticalAlignment="Center" Margin="0,0,4,0" IsVisible="{Binding !ShowsComposerStop}"
                          AutomationProperties.AutomationId="ComposerKeyHint" />
               <!-- A draft during a turn waits for the turn's end unless the person ends the turn first. -->
               <Button Classes="ghost" Height="24" Command="{Binding Node.StopAndSendCommand}" IsVisible="{Binding ShowsStopAndSend}"
@@ -395,7 +395,7 @@
       <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
         <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
-        <StackPanel Margin="0,0,0,12" Classes.nearComposer="{Binding SitsOnComposer}">
+        <StackPanel Margin="0,0,0,12">
           <Button Classes="action" HorizontalAlignment="Center" Height="28" Margin="0,12,0,0"
                   Command="{Binding LoadEarlierCommand}" IsVisible="{Binding HasEarlier}"
                   AutomationProperties.AutomationId="LoadEarlier"

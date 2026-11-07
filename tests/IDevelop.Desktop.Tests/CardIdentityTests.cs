@@ -114,21 +114,21 @@ public sealed class CardIdentityTests
     }
 
     [AvaloniaFact]
-    public void A_node_with_no_result_leads_with_its_Agent_and_one_with_a_result_with_its_Output()
+    public void The_inspector_keeps_one_section_order_in_every_state()
     {
         using var f = new NodeFixture(Task(A, "A", 105));
         f.Install(Reply("s-1", "Done."));
         var shell = f.Open();
         shell.Click(shell.Header(shell.Node("A")));
         shell.Render();
-        Assert.True(shell.Bounds(shell.Section("Agent")).Top < shell.Bounds(shell.Section("Output")).Top);
+        string[] Order() => [.. new[] { "Agent", "Input", "Output" }.OrderBy(section => shell.Bounds(shell.Section(section)).Top)];
+        Assert.Equal(["Agent", "Input", "Output"], Order());
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Completed");
         shell.Render();
 
-        Assert.True(shell.Bounds(shell.Section("Output")).Top < shell.Bounds(shell.Section("Agent")).Top);
-        Assert.True(shell.Bounds(shell.Section("Agent")).Top < shell.Bounds(shell.Section("Input")).Top);
+        Assert.Equal(["Agent", "Input", "Output"], Order());
     }
 
     [AvaloniaFact]

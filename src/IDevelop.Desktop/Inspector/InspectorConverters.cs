@@ -17,12 +17,6 @@ public static class InspectorConverters
     /// <summary>A field of several lines takes its own line under its label, and a field of one line sits beside it.</summary>
     public static readonly IValueConverter StackedWhen = new FuncValueConverter<bool, RowLayout>(stacked => stacked ? RowLayout.Stacked : RowLayout.Columns);
 
-    /// <summary>The Output section's row: after the Agent section while the node has no output, and before it otherwise.</summary>
-    public static readonly IValueConverter OutputRow = new FuncValueConverter<bool, int>(noOutput => noOutput ? 2 : 1);
-
-    /// <summary>The Agent section's row: first while the node has no output, and after the Output section otherwise.</summary>
-    public static readonly IValueConverter AgentRow = new FuncValueConverter<bool, int>(noOutput => noOutput ? 1 : 2);
-
     public static readonly IValueConverter Icon = new FuncValueConverter<string?, Geometry?>(key =>
         key is not null && Application.Current!.TryGetResource(key, null, out var geometry) ? geometry as Geometry : null);
 

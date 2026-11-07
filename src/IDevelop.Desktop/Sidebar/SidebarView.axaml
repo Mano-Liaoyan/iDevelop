@@ -111,14 +111,9 @@
                   <Grid ColumnDefinitions="16,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
                     <theme:StateBadge Margin="0,1,0,0" VerticalAlignment="Top" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
                     <TextBlock Grid.Column="1" Classes="rowName" Text="{Binding Node.Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                    <!-- One line: the reason in its state's color, a dot, and where the node is in the rest, cut at its end. -->
-                    <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="4"
-                          AutomationProperties.AutomationId="ActivityDetail" AutomationProperties.Name="{Binding Detail}">
-                      <TextBlock Classes="caption reason" theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Why="{Binding Node.WaitReason}" Text="{Binding Reason}" MaxWidth="120" TextTrimming="CharacterEllipsis"
-                                 AutomationProperties.AutomationId="ActivityReason" />
-                      <TextBlock Grid.Column="1" Classes="caption" Text="·" />
-                      <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Place}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                    </Grid>
+                    <!-- The second line says where the node is, and the badge says why it is listed. -->
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Place}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               AutomationProperties.AutomationId="ActivityDetail" AutomationProperties.Name="{Binding Detail}" />
                   </Grid>
                 </Button>
               </DataTemplate>
@@ -315,7 +310,7 @@
                                         <StackPanel Orientation="Horizontal" Spacing="4" AutomationProperties.Name="{Binding Label}">
                                           <Ellipse Classes="badgeDisc" Width="7" Height="7" VerticalAlignment="Center"
                                                    theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-                                          <TextBlock Classes="caption" Text="{Binding Label}" VerticalAlignment="Center" />
+                                          <TextBlock Classes="caption" Text="{Binding RowText}" ToolTip.Tip="{Binding Label}" VerticalAlignment="Center" />
                                         </StackPanel>
                                       </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -352,7 +347,7 @@
                                 </ListBox.ItemsPanel>
                                 <ListBox.ItemTemplate>
                                   <DataTemplate DataType="canvas:TaskNodeViewModel">
-                                    <!-- A name takes at most two lines, so a long list stays in view. The tooltip holds all of it. -->
+                                    <!-- A name takes at most two lines, so a long list stays in view, and the selected node shows its whole name. -->
                                     <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">
                                       <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
                                       <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title}"

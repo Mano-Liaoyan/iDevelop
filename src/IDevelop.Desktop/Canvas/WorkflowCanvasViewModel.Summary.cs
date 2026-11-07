@@ -5,7 +5,7 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>What the left area's workflow row says about the workflow's run. All of it is read from the nodes' states.</summary>
 public sealed partial class WorkflowCanvasViewModel
 {
-    private const int RowChipLimit = 3;
+    private const int RowChipLimit = 2;
 
     /// <summary>How many nodes are in each state.</summary>
     public StateCounts Counts => new(
@@ -20,22 +20,10 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>
     /// What a folded row says under the name in one line: the run bar's groups, most urgent first, so the row and the bar give
-    /// one number for one group. Past <see cref="RowChipLimit"/> groups, one "+2" stands for the rest, and the row's tooltip names them.
+    /// one number for one group. Past <see cref="RowChipLimit"/> groups, each keeps its badge and its count, and its tooltip has its words.
     /// </summary>
-    public IReadOnlyList<StateChip> RowChips
-    {
-        get
-        {
-            var groups = BarGroups;
-            if (groups.Count <= RowChipLimit)
-            {
-                return groups;
-            }
-
-            var rest = groups.Skip(RowChipLimit - 1).ToList();
-            return [.. groups.Take(RowChipLimit - 1), StateChip.Rest(rest)];
-        }
-    }
+    public IReadOnlyList<StateChip> RowChips =>
+        BarGroups.Count <= RowChipLimit ? BarGroups : [.. BarGroups.Select(chip => chip with { IsCounted = true })];
 
     /// <summary>A folded row says its groups. The node rows of an open workflow show the same states one by one.</summary>
     public bool ShowsRowChips => !IsExpanded && BarGroups.Count > 0;
