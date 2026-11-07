@@ -78,7 +78,8 @@ public sealed class EllipsisText : TextBlock
 
         var size = base.MeasureOverride(availableSize);
         IsCut = Text != Whole && !string.IsNullOrEmpty(Whole);
-        return size;
+        // A text's natural width keeps the slack that Fits takes off, so a parent that gives it back that width sees it whole.
+        return double.IsFinite(availableSize.Width) || MaxLines == 0 ? size : size.WithWidth(size.Width + Slack);
     }
 
     private string Clamp(string whole, double width)

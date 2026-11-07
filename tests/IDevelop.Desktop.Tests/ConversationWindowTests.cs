@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Theme;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
@@ -175,6 +176,25 @@ public sealed class ConversationWindowTests : IDisposable
         shell.Render();
 
         Assert.True(shell.Find<TextBox>("ConversationComposer").IsFocused);
+    }
+
+    [AvaloniaFact]
+    public void The_docked_header_shows_a_title_whole_while_the_row_has_room()
+    {
+        const string title = "Route poison events to the DLQ";
+        var shell = Shell.Open(Project(TaskAt(TestTasks.Design, title, 105, 90, CodexHigh, "Draft it.")));
+        shell.Click(shell.Header(shell.Node(title)));
+        Shell.Invoke(shell.InView<Button>("OpenConversation"));
+        shell.Render();
+        if (!shell.Window.ViewModel.IsConversationDocked)
+        {
+            Shell.Invoke(shell.Find<Button>("ConversationLayout"));
+            shell.Render();
+        }
+
+        // The title is measured at its natural width, and the cut keeps a pixel of slack, so the row gives that pixel back.
+        var shown = shell.Find<EllipsisText>("ConversationTitle");
+        Assert.Equal(title, shown.Text);
     }
 
     [AvaloniaFact]
