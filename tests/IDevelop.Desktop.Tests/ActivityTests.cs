@@ -181,6 +181,24 @@ public sealed class ActivityTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void An_Activity_row_names_its_project_and_workflow_while_several_projects_are_open()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Run(shell);
+        var view = shell.Window.ViewModel;
+        var other = _temp.Create("beta");
+        WorkflowDocument.Create(other, "Docs").Save();
+        view.Open(other);
+        shell.Render();
+        shell.WaitUntil(() => view.Activity.Rows.All(row => row.ProjectLine is not null), "the rows name their project");
+
+        var project = view.Projects.Single(item => item.Folder != other).Name;
+        Assert.All(view.Activity.Rows, row => Assert.Equal($"{project} · Workflow", row.ProjectLine));
+        Assert.Contains(Shell.ById<TextBlock>(shell.Window, "ActivityProject"), text => text.IsEffectivelyVisible && text.Text == $"{project} · Workflow");
+    }
+
+    [AvaloniaFact]
     public void Activity_lists_who_waits_before_who_runs_and_a_row_opens_the_conversation_with_the_composer_focused()
     {
         using var f = FanOut.Fixture();
@@ -189,6 +207,9 @@ public sealed class ActivityTests : IDisposable
         var view = shell.Window.ViewModel;
 
         Assert.Equal(["Write docs · Reply · Workflow", "Build the API · Running · Workflow"], view.Activity.Rows.Select(row => $"{row.Node.Title} · {row.Reason} · {row.Place}"));
+        // With one project open, a row needs no project line.
+        Assert.All(view.Activity.Rows, row => Assert.Null(row.ProjectLine));
+        Assert.DoesNotContain(Shell.ById<TextBlock>(shell.Window, "ActivityProject"), text => text.IsEffectivelyVisible);
         Assert.True(shell.Find<ItemsControl>("Activity").IsEffectivelyVisible);
         Assert.Equal("1 of 3 · 1 running · 1 waiting", view.Canvas!.Summary);
         Assert.Equal(1, view.Projects[0].WaitingCount);

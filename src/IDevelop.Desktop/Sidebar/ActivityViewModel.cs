@@ -298,10 +298,21 @@ public sealed class ActivityRow : ObservableObject
         }
     } = "";
 
+    /// <summary>
+    /// "harbor-api · Payment webhook hardening" under the title while several projects are open, so a person knows the project
+    /// before opening the row, or null with one project open.
+    /// </summary>
+    public string? ProjectLine
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
     internal void Read(bool showsProject)
     {
         Reason = ReasonOf(Node);
         Place = showsProject ? $"{Node.Canvas.Name} · {Node.Canvas.Project.Name}" : Node.Canvas.Name;
+        ProjectLine = showsProject ? $"{Node.Canvas.Project.Name} · {Node.Canvas.Name}" : null;
     }
 
     // "Input required · Question" names the reason after the state, which the glyph already shows.

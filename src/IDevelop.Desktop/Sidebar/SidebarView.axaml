@@ -111,10 +111,14 @@
                         AutomationProperties.AutomationId="ActivityRow"
                         AutomationProperties.Name="{Binding Node.Title}"
                         AutomationProperties.HelpText="{Binding Detail}">
-                  <!-- One line: the badge says why the node is listed, and the tooltip says where it is. -->
-                  <Grid ColumnDefinitions="16,*" ColumnSpacing="8">
+                  <!-- The badge says why the node is listed. While several projects are open, a quiet line under the title names the
+                       project and the workflow. The tooltip says all of it. -->
+                  <Grid ColumnDefinitions="16,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
                     <theme:StateBadge VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
                     <TextBlock Grid.Column="1" Classes="rowName" Text="{Binding Node.Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding ProjectLine}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding ProjectLine, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               AutomationProperties.AutomationId="ActivityProject" />
                   </Grid>
                 </Button>
               </DataTemplate>
