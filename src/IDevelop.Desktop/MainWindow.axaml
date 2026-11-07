@@ -186,7 +186,7 @@
                         </StackPanel>
                       </Button>
                       <!-- The workflow's one primary action, which keeps its words and its width in every state, so the breadcrumb gives up its width first.
-                           Its words say when it runs only part of the workflow ("Run 3 of 9"), and its tooltip says why, or why nothing can run. Run and Stop share one width, so a run does not cut the breadcrumb. The run bar says how far the workflow is. An empty workflow's primary action is on the canvas's Generate card. -->
+                           It always reads "Run Workflow". The run bar says when it runs only part of the workflow, and its tooltip says why, or why nothing can run. Run and Stop share one width, so a run does not cut the breadcrumb. The run bar says how far the workflow is. An empty workflow's primary action is on the canvas's Generate card. -->
                       <Button Classes="primary runSlot" Command="{Binding RunWorkflowCommand}"
                               ToolTip.ShowOnDisabled="True"
                               ToolTip.Placement="BottomEdgeAlignedRight"
@@ -202,7 +202,7 @@
                         </Button.IsVisible>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-                          <TextBlock Text="{Binding RunWorkflowLabel}" VerticalAlignment="Center" AutomationProperties.AutomationId="RunWorkflowLabel" />
+                          <TextBlock Text="Run Workflow" VerticalAlignment="Center" AutomationProperties.AutomationId="RunWorkflowLabel" />
                         </StackPanel>
                       </Button>
                     </StackPanel>

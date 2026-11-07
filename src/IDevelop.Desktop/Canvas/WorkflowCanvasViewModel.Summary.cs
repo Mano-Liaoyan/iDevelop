@@ -17,11 +17,10 @@ public sealed partial class WorkflowCanvasViewModel
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
 
     /// <summary>
-    /// What a folded row says under the name: the run bar's groups, most urgent first, so the row and the bar give one number for
-    /// one group. Two groups keep their words. Past two, waiting and failed keep their words and each other group shows its badge and
-    /// number, so no group is hidden.
+    /// What a folded row says under the name: the run bar's groups, most urgent first and each in its words, so the row and the
+    /// bar give one number for one group. The row wraps its groups rather than shorten them (ADR 0063).
     /// </summary>
-    public IReadOnlyList<StateChip> RowChips => BarChips.Count <= 2 ? BarChips : StateChip.Shorten(BarChips, _ => true);
+    public IReadOnlyList<StateChip> RowChips => BarChips;
 
     /// <summary>A folded row says its groups. The node rows of an open workflow show the same states one by one.</summary>
     public bool ShowsRowChips => !IsExpanded && BarChips.Count > 0;

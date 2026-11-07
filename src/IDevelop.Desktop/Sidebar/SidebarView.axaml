@@ -323,7 +323,7 @@
                                       <DataTemplate DataType="canvas:StateChip">
                                         <StackPanel Orientation="Horizontal" Spacing="4" AutomationProperties.Name="{Binding Label}">
                                           <theme:StateBadge Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" />
-                                          <TextBlock Classes="caption" Text="{Binding RowText}" ToolTip.Tip="{Binding Tip}" VerticalAlignment="Center" />
+                                          <TextBlock Classes="caption" Text="{Binding Label}" ToolTip.Tip="{Binding Tip}" VerticalAlignment="Center" />
                                         </StackPanel>
                                       </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -343,8 +343,10 @@
                             </Panel>
                             <Border IsVisible="{Binding IsExpanded}"
                                     Margin="24,0,0,0" Padding="2,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border100Brush}">
+                              <StackPanel>
+                              <!-- A workflow of more than 12 nodes lists first the nodes that need the person, then the rest up to 12 rows. -->
                               <ListBox Classes="tasks" Classes.hidden="{Binding !IsSelected}"
-                                       ItemsSource="{Binding Outline}"
+                                       ItemsSource="{Binding TreeRows}"
                                        SelectedItem="{Binding SelectedNode}"
                                        SelectionChanged="OnSidebarSelectionChanged"
                                        Tapped="OnSidebarTapped"
@@ -372,6 +374,11 @@
                                   </DataTemplate>
                                 </ListBox.ItemTemplate>
                               </ListBox>
+                              <Button Classes="nav" Margin="0,2,0,0" Command="{Binding ToggleAllRowsCommand}" IsVisible="{Binding HasFoldedRows}"
+                                      AutomationProperties.AutomationId="ShowAllNodes" AutomationProperties.Name="{Binding ShowAllLabel}">
+                                <TextBlock Classes="caption" Text="{Binding ShowAllLabel}" Margin="19,0,0,0" />
+                              </Button>
+                              </StackPanel>
                             </Border>
                           </StackPanel>
                         </DataTemplate>

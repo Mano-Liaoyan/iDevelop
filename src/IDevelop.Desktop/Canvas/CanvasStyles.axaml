@@ -158,7 +158,7 @@
   </Style>
   <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="28,6,14,0" />
+    <Setter Property="Margin" Value="22,6,8,0" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="LineHeight" Value="31" />
@@ -223,7 +223,7 @@
   <Style Selector=":is(Control).tier-label DockPanel.farLine">
     <Setter Property="Height" Value="34" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="28,0,58,6" />
+    <Setter Property="Margin" Value="22,0,58,6" />
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="44" />
@@ -363,12 +363,12 @@
     <Setter Property="Margin" Value="1,-9" />
     <Setter Property="BorderThickness" Value="9" />
   </Style>
-  <!-- The pointer over a card lifts it and draws a half-strength accent line of two screen pixels outside its edge at each zoom, which reads on both themes, so
-       hover never reads as the interrupted state's grey edge, and only the selection draws the full accent ring. -->
+  <!-- The pointer over a card draws a neutral line of two screen pixels outside its edge, with the selection's gap, at each zoom.
+       Accent is for selection and focus only, so hover never reads as a selection, and the gap keeps it apart from a state's edge. -->
   <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderThickness" Value="2" />
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="Opacity" Value="0.65" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Opacity" Value="0.7" />
   </Style>
   <Style Selector=":is(Control).tier-detail nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-compact nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderThickness" Value="3.2" />
@@ -718,30 +718,18 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <!-- Every chip says its group in words. A tight bar shows a quiet group (stale) as its badge and number, and the tightest bar
-       shows every group except waiting and failed so. No group is hidden, and waiting and failed always keep their words. -->
-  <Style Selector="ItemsControl.barLeastChips, ItemsControl.barTightestChips">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).leastChips ItemsControl.barReasons, :is(Control).tightChips Panel.barProgress, :is(Control).tightChips Button.barSpare, :is(Control).tightNext TextBlock.nextLabel">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).leastChips:not(.tightChips) ItemsControl.barLeastChips, :is(Control).tightChips ItemsControl.barTightestChips">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
+  <!-- Every chip says its group in words at every width (ADR 0063). A tight bar takes its own row and wraps instead. -->
   <Style Selector="ItemsControl.barChips ContentPresenter > StackPanel">
     <Setter Property="Spacing" Value="4" />
+    <Setter Property="MinHeight" Value="28" />
   </Style>
-  <Style Selector="ItemsControl.barLeastChips ItemsPresenter > StackPanel, ItemsControl.barTightestChips ItemsPresenter > StackPanel">
-    <Setter Property="Spacing" Value="6" />
-  </Style>
-  <Style Selector=":is(Control).foldZoom Button.zoomStep, :is(Control).foldNext Panel.barNext">
-    <Setter Property="IsVisible" Value="False" />
+  <!-- What Run Workflow runs, in plain muted words. On the bar's own row a narrow canvas wraps it. -->
+  <Style Selector="TextBlock.barScope">
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="FontWeight" Value="Normal" />
   </Style>
   <Style Selector=":is(Control).tightFollow Panel.barFollow">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).tightChips TextBlock.followLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Button.bar, ToggleButton.bar">
@@ -773,7 +761,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
   <Style Selector="Border.canvasBand.bottom">
-    <Setter Property="Height" Value="44" />
+    <Setter Property="MinHeight" Value="44" />
     <Setter Property="BorderThickness" Value="0,1,0,0" />
   </Style>
   <Style Selector="Border.canvasDock">

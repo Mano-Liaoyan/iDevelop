@@ -90,6 +90,12 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         get;
         set
         {
+            // The tree's list needs the node's row before it takes the selection, or it would let the selection go.
+            if (value is not null && !TreeRows.Contains(value))
+            {
+                ArrangeTreeRows(value);
+            }
+
             if (SetProperty(ref field, value))
             {
                 if (value is not null)
@@ -97,6 +103,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
                     SelectedConnections.Clear();
                 }
 
+                ArrangeTreeRows();
                 OnPropertyChanged(nameof(Inspected));
                 OnPropertyChanged(nameof(ShowsNodeSelection));
             }

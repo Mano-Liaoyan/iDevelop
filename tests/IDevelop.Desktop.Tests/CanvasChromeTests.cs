@@ -129,13 +129,9 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
         Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], canvas.BarChips.Select(chip => chip.Label));
-        // A tight bar hides no group: only a quiet group shortens, and the tightest bar shortens every group but waiting and
-        // failed to its badge and number. Waiting and failed always keep their words, and each tooltip names its group.
-        Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], canvas.BarLeast.Select(chip => chip.RowText));
-        Assert.Equal("1 question, 1 reply", canvas.BarLeast[1].Tip);
-        Assert.Equal(["1 failed", "2 waiting", "2"], canvas.BarTightest.Select(chip => chip.RowText));
-        Assert.Equal("2 interrupted", canvas.BarTightest[2].Tip);
-        Assert.Equal(canvas.BarTightest, canvas.RowChips);
+        // Every group keeps its words in the bar and in the folded row, and the waiting chip's tooltip names its reasons.
+        Assert.Equal("1 question, 1 reply", canvas.BarChips[1].Tip);
+        Assert.Equal(canvas.BarChips, canvas.RowChips);
 
         void Sweep()
         {
@@ -152,8 +148,9 @@ public sealed class CanvasChromeTests : IDisposable
 
         Sweep();
 
-        // A bar with room takes no step it does not need: it sums only the reasons to wait, and it keeps the rest.
-        Resize(shell, 1280, 800, 320);
+        // A bar with room takes no step it does not need: it sums only the reasons to wait, and it keeps the rest. The line that
+        // says what Run Workflow runs takes its room too.
+        Resize(shell, 1600, 800, 320);
         Assert.True(shell.ShowsAny("FitToScreen"), "Fit left a bar with room.");
         Assert.True(shell.ShowsAny("RunStatus"), "The progress left a bar with room.");
         Assert.True(shell.ShowsAny("ShowMinimap"), "The view controls left a bar with room.");
@@ -533,8 +530,8 @@ public sealed class CanvasChromeTests : IDisposable
             var labels = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
             if (id == "RunWorkflow")
             {
-                // The workflow's primary action keeps its words at every width, and they say when it runs only part of the workflow.
-                Assert.Contains(shell.Window.ViewModel.Canvas!.RunWorkflowLabel, labels);
+                // The workflow's primary action keeps its one name at every width.
+                Assert.Contains("Run Workflow", labels);
             }
             else if (compact)
             {
@@ -555,14 +552,16 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     /// <summary>
-    /// The zoom controls and the workflow's run bar sit in the bottom band, under the editor and at least 12 px apart, with their
-    /// text whole.
+    /// The zoom controls and the workflow's run bar sit in the bottom band, under the editor and at least 12 px apart side by side,
+    /// or 8 px apart when the bar takes its own row, with their text whole.
     /// </summary>
     private static void AssertBottomRow(Shell shell, string at)
     {
         var canvas = shell.Bounds(shell.Window.CanvasArea);
         var boxes = new[] { "ZoomPanel", "WorkflowRunBar" }.Select(id => (Id: id, Box: shell.Bounds(shell.Find<Control>(id)))).ToArray();
-        AssertInsideAndApart(canvas, boxes, at, gap: 12);
+        // Beside the zoom controls the bar keeps 12 px from them. On its own row above them it keeps 8 px.
+        var ownRow = boxes[1].Box.Bottom <= boxes[0].Box.Top + 0.5;
+        AssertInsideAndApart(canvas, boxes, at, gap: ownRow ? 8 : 12);
         Assert.All(boxes, box => Assert.True(box.Box.Top >= shell.Bounds(shell.Editor).Bottom, $"At {at}, {box.Id} at {box.Box} is not under the editor."));
 
         // The bar holds its status, its chips, and whichever of its buttons show, its text whole.
@@ -577,9 +576,10 @@ public sealed class CanvasChromeTests : IDisposable
             Assert.Equal(canvas.Width >= CanvasChrome.CompactWidth, shell.Find<Button>("StopWorkflow").GetVisualDescendants().OfType<TextBlock>().Single().IsEffectivelyVisible);
         }
 
-        Assert.Empty(bar.GetVisualDescendants().OfType<TextBlock>()
+        var cut = bar.GetVisualDescendants().OfType<TextBlock>()
             .Where(text => text.IsEffectivelyVisible && (Trimmed(text) || text.TextLayout.Width > text.Bounds.Width + 0.5))
-            .Select(text => $"At {at}, \"{text.Text}\" is cut short."));
+            .Select(text => $"\"{text.Text}\" is {text.Bounds.Width} px wide and needs {text.TextLayout.Width}").ToList();
+        Assert.True(cut.Count == 0, $"At {at}: {string.Join("; ", cut)}.");
     }
 
     private static void AssertInsideAndApart(Rect canvas, (string Id, Rect Box)[] boxes, string at, double gap = 8)

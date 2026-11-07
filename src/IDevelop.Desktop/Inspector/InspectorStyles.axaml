@@ -595,13 +595,14 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
+  <!-- Hover brings a neutral 1 px edge and a stronger fill, as the skill picker has. Focus draws the accent edge. -->
   <Style Selector="inspector|InspectorRow ComboBox:pointerover /template/ Border#Background, inspector|InspectorRow ComboBox:pressed /template/ Border#Background">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:pointerover /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />

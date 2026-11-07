@@ -116,7 +116,7 @@
               <Grid Grid.Row="1" Margin="10,0,8,0" ColumnDefinitions="Auto,*,Auto,12">
                 <TextBlock Classes="cardAgent" Text="{Binding CardClient}" TextTrimming="CharacterEllipsis" MaxWidth="96" ToolTip.Tip="{Binding AgentClient}"
                            AutomationProperties.AutomationId="CardAgent" />
-                <canvas:FittingText Grid.Column="1" Classes="cardModel" Choices="{Binding ModelLines}" TextTrimming="CharacterEllipsis"
+                <TextBlock Grid.Column="1" Classes="cardModel" Text="{Binding CardModel}" TextTrimming="CharacterEllipsis"
                                     IsVisible="{Binding HasModel}" ToolTip.Tip="{Binding AgentModel}"
                                     AutomationProperties.AutomationId="CardModel" />
                 <TextBlock Grid.Column="2" Classes="cardStatus" Text="{Binding CardStatus}" Margin="6,0,6,0"
@@ -154,7 +154,7 @@
             <TextBlock Text="{Binding ClientMark}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        AutomationProperties.AutomationId="CardClientMark" />
           </Border>
-          <canvas:FittingText Classes="farAgent" Choices="{Binding CardLines}" TextTrimming="CharacterEllipsis" theme:StyleClass.State="{Binding State}"
+          <TextBlock Classes="farAgent" Text="{Binding CardLine}" TextTrimming="CharacterEllipsis" theme:StyleClass.State="{Binding State}"
                               AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
         </DockPanel>
         <!-- While the node needs the person, the zoomed out badge acts as the full card's does, because Fit rests at this form. -->
@@ -208,7 +208,7 @@
         <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
       </Panel>
-      <TextBlock Classes="barText" Text="{Binding RowText}" />
+      <TextBlock Classes="barText" Text="{Binding Label}" />
     </StackPanel>
   </DataTemplate>
 

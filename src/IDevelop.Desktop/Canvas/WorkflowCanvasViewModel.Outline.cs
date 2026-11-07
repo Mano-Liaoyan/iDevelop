@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Windows.Input;
+using IDevelop.Desktop.Mvvm;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
@@ -43,10 +45,73 @@ public sealed partial class WorkflowCanvasViewModel
         return order;
     }
 
+    /// <summary>A workflow with more nodes than this lists the ones that need the person first and folds the rest after this many rows.</summary>
+    public const int TreeRowLimit = 12;
+
+    /// <summary>
+    /// The node rows of the left tree. A workflow of up to <see cref="TreeRowLimit"/> nodes lists all of them in reading order.
+    /// A larger one lists first the nodes that need the person or run (waiting, failed, interrupted, running), then the rest up
+    /// to <see cref="TreeRowLimit"/> rows, each part in reading order, until the person asks for every row. The selected node
+    /// always has its row.
+    /// </summary>
+    public ObservableCollection<TaskNodeViewModel> TreeRows { get; } = [];
+
+    /// <summary>The left tree lists every node of a large workflow.</summary>
+    public bool ShowsAllRows
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowAllLabel));
+                ArrangeTreeRows();
+            }
+        }
+    }
+
+    /// <summary>The workflow has more nodes than the tree lists at first, so the tree offers a row that lists them all.</summary>
+    public bool HasFoldedRows => Outline.Count > TreeRowLimit;
+
+    /// <summary>"Show all 50 nodes", or "Show fewer nodes" while the tree lists them all.</summary>
+    public string ShowAllLabel => ShowsAllRows ? "Show fewer nodes" : $"Show all {Outline.Count} nodes";
+
+    public ICommand ToggleAllRowsCommand => field ??= new RelayCommand(() => ShowsAllRows = !ShowsAllRows);
+
+    /// <summary>The node needs the person or runs, so a large workflow's tree lists it first.</summary>
+    private static bool LeadsTree(TaskNodeViewModel node) => node.IsWaiting || node.State is NodeState.Failed or NodeState.Running;
+
+    /// <summary>The tree's rows in their order, with a row for each node in <paramref name="keep"/>.</summary>
+    internal static IReadOnlyList<TaskNodeViewModel> TreeOrder(IReadOnlyList<TaskNodeViewModel> outline, bool all, params TaskNodeViewModel?[] keep)
+    {
+        if (all || outline.Count <= TreeRowLimit)
+        {
+            return outline;
+        }
+
+        var first = outline.Where(LeadsTree).ToList();
+        var rest = outline.Where(node => !LeadsTree(node)).ToList();
+        var shown = rest.Take(Math.Max(0, TreeRowLimit - first.Count)).ToHashSet();
+        return [.. first, .. rest.Where(node => shown.Contains(node) || keep.Contains(node))];
+    }
+
+    /// <summary>Lists the tree's rows again, with a row for <paramref name="keep"/> too, which is about to be selected.</summary>
+    private void ArrangeTreeRows(TaskNodeViewModel? keep = null)
+    {
+        Arrange(TreeRows, TreeOrder(Outline, ShowsAllRows, SelectedNode, keep));
+        OnPropertyChanged(nameof(HasFoldedRows));
+        OnPropertyChanged(nameof(ShowAllLabel));
+    }
+
     private void ArrangeOutline()
     {
-        List<TaskNodeViewModel> order = [.. ReadingOrder(Workflow).Select(id => _nodes[id])];
-        if (Outline.SequenceEqual(order))
+        Arrange(Outline, [.. ReadingOrder(Workflow).Select(id => _nodes[id])]);
+        ArrangeTreeRows();
+    }
+
+    private void Arrange(ObservableCollection<TaskNodeViewModel> rows, IReadOnlyList<TaskNodeViewModel> order)
+    {
+        if (rows.SequenceEqual(order))
         {
             return;
         }
@@ -54,16 +119,16 @@ public sealed partial class WorkflowCanvasViewModel
         // A list forgets its selection when the selected row leaves it, even to come straight back, and tells the canvas.
         // So the selected row stays, and the other rows take their places around it.
         var stays = SelectedNode is { } selected && order.Contains(selected) ? selected : null;
-        foreach (var row in Outline.Where(row => row != stays).ToList())
+        foreach (var row in rows.Where(row => row != stays).ToList())
         {
-            Outline.Remove(row);
+            rows.Remove(row);
         }
 
         for (var index = 0; index < order.Count; index++)
         {
             if (order[index] != stays)
             {
-                Outline.Insert(index, order[index]);
+                rows.Insert(index, order[index]);
             }
         }
     }

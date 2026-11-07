@@ -228,7 +228,7 @@ public sealed class SidebarLayoutTests : IDisposable
         // The progress keeps the row's end in every state, and the state is in words under the name.
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
-        Assert.Equal(canvas.RowChips.Select(chip => chip.RowText), Of<Control>(row.GetVisualParent()!, "WorkflowAlert").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
+        Assert.Equal(canvas.RowChips.Select(chip => chip.Label), Of<Control>(row.GetVisualParent()!, "WorkflowAlert").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
     }
 
     [Theory]
@@ -333,6 +333,8 @@ public sealed class SidebarLayoutTests : IDisposable
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
         shell.OpenNodes(Reports, ReleaseNotes);
+        // The tree lists every row of the large workflow, so it scrolls.
+        shell.Window.ViewModel.Canvas!.ShowsAllRows = true;
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();
@@ -364,6 +366,8 @@ public sealed class SidebarLayoutTests : IDisposable
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
         shell.OpenNodes(Reports, ReleaseNotes);
+        // The tree lists every row of the large workflow, so it scrolls.
+        shell.Window.ViewModel.Canvas!.ShowsAllRows = true;
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();

@@ -103,6 +103,13 @@ public sealed partial class WorkflowCanvasViewModel
     public string BarIdle => Counts.Completed > 0 ? BarProgress : Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes";
 
     /// <summary>
+    /// What Run Workflow runs when that is only part of the workflow: "Runs 3 nodes without a current result", in the run bar,
+    /// so the button keeps its one name. Null while a node runs, and when Run Workflow runs every node or nothing.
+    /// </summary>
+    public string? RunScope => RunningCount > 0 || RunWork == 0 || RunWork == Nodes.Count ? null
+        : RunWork == 1 ? "Runs 1 node without a current result" : $"Runs {RunWork} nodes without a current result";
+
+    /// <summary>
     /// One chip for each group of nodes that the bar names, in the order of what needs the person first. What waits for the person is
     /// one group under one word, and its tooltip names the reasons. Interrupted stays its own, because it waits for nobody's word.
     /// </summary>
@@ -125,14 +132,6 @@ public sealed partial class WorkflowCanvasViewModel
                 .OfType<StateChip>().ToList();
         }
     }
-
-    /// <summary>
-    /// The chips of a tight bar: each group keeps its words, but a quiet group (stale) shows only its badge and number.
-    /// </summary>
-    public IReadOnlyList<StateChip> BarLeast => StateChip.Shorten(BarChips, chip => chip.IsQuiet);
-
-    /// <summary>The chips of the tightest bar: waiting and failed keep their words, and every other group shows its badge and number.</summary>
-    public IReadOnlyList<StateChip> BarTightest => StateChip.Shorten(BarChips, _ => true);
 
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
     public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Interrupted > 0 && Counts.Failed == 0 ? "Next interrupted" : "Next failed";
@@ -164,12 +163,6 @@ public sealed partial class WorkflowCanvasViewModel
     }
 
     public string FollowLabel => IsFollowing ? "Stop following running nodes" : "Follow running nodes";
-
-    /// <summary>
-    /// The words on Run Workflow: "Run Workflow" when it runs every node or nothing, and "Run 3 of 9" when nodes with a current
-    /// result keep it, so the button says that it runs only part of the workflow.
-    /// </summary>
-    public string RunWorkflowLabel => RunWork > 0 && RunWork < Nodes.Count ? $"Run {RunWork} of {Nodes.Count}" : "Run Workflow";
 
     /// <summary>The tooltip of Run Workflow: what it runs, or why nothing can run.</summary>
     public string RunWorkflowTip => (Nodes.Count, RunWork) switch
@@ -241,6 +234,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         _running = running;
         RunningCount = running.Count;
+        ArrangeTreeRows();
         CanMergeIntoBranch = Engine.CanMergeIntoBranch;
         IsRunning = RunningCount > 0;
         OnWaitingChanged();
@@ -250,8 +244,6 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarIdle));
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
-        OnPropertyChanged(nameof(BarLeast));
-        OnPropertyChanged(nameof(BarTightest));
         OnPropertyChanged(nameof(RunWork));
         OnPropertyChanged(nameof(CanStartRun));
         OnPropertyChanged(nameof(HasAttention));
@@ -259,7 +251,7 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarActivity));
         OnPropertyChanged(nameof(BarTip));
         OnPropertyChanged(nameof(RunWorkflowTip));
-        OnPropertyChanged(nameof(RunWorkflowLabel));
+        OnPropertyChanged(nameof(RunScope));
         OnSummaryChanged();
         _runWorkflow?.NotifyCanExecuteChanged();
         _stopAll?.NotifyCanExecuteChanged();

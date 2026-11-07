@@ -26,13 +26,14 @@ public sealed class CardIdentityTests
         f.Install(Reply("s-1", "Which file?"));
         var shell = f.Open();
         var node = shell.NodeModel("A");
-        var lines = node.CardLines;
+        var lines = node.CardLine;
         var mark = node.ClientMark;
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Reply");
 
-        Assert.Equal(lines, node.CardLines);
+        Assert.Equal(lines, node.CardLine);
+        Assert.Equal(node.Picker.SelectedModel?.Label ?? node.CardModel, node.CardModel);
         Assert.Equal("AG", mark);
         Assert.Equal(mark, node.ClientMark);
         Assert.Equal("Antigravity", node.CardClient);
@@ -52,6 +53,7 @@ public sealed class CardIdentityTests
         shell.WaitForCard("A", "Completed");
 
         Assert.Equal(0, canvas.RunWork);
+        Assert.Null(canvas.RunScope);
         Assert.False(canvas.CanStartRun);
         Assert.Contains("Nothing to run", canvas.RunWorkflowTip);
     }
@@ -64,11 +66,15 @@ public sealed class CardIdentityTests
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
         Assert.Contains("run every node", canvas.RunWorkflowTip);
+        Assert.Null(canvas.RunScope);
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Completed");
 
         Assert.Contains("run 1 of 2 nodes", canvas.RunWorkflowTip);
+        // The button keeps its one name, and the run bar says in a plain line that the run is partial.
+        Assert.Equal("Runs 1 node without a current result", canvas.RunScope);
+        Assert.True(shell.ShowsAny("RunScopeIdle"));
     }
 
     [AvaloniaFact]
@@ -167,12 +173,4 @@ public sealed class CardIdentityTests
     [InlineData(" kept", DiffLineKind.Context)]
     public void A_diff_line_says_what_it_is(string text, DiffLineKind kind) => Assert.Equal(kind, DiffLine.Of(text).Kind);
 
-    [Theory]
-    [InlineData("Sonnet 5.5", "Sonnet 5.5|Sonnet 5|Sonnet")]
-    [InlineData("GPT-6.1 Terra", "GPT-6.1 Terra|GPT-6.1|GPT-6")]
-    public void A_far_card_falls_back_to_the_model_family(string model, string lines)
-    {
-        var shown = CardText.FarLines(CardText.ModelLines(model, model));
-        Assert.Equal(lines.Split('|').Distinct().Order(), shown.Order());
-    }
 }

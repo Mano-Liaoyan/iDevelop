@@ -1,3 +1,5 @@
+using IDevelop.Desktop.Execution;
+
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>What the node's card shows: its kind tile, its title, and its two lines under it. Its peek and its details show the rest.</summary>
@@ -34,20 +36,17 @@ public sealed partial class TaskNodeViewModel
         internal set => SetProperty(ref field, value);
     }
 
-    /// <summary>The model and level without the maker's name, which the client's name says, so they fit a card's line.</summary>
-    public string AgentBrief => AgentModel.StartsWith("Claude ", StringComparison.Ordinal) ? AgentModel["Claude ".Length..] : AgentModel;
-
     /// <summary>
-    /// The card's model line, the fullest first: the model and level, without the maker's name, then the model, then the part of
-    /// its name that tells its version, so a short line reads "Gemini 4" and not a cut name. The peek and the inspector hold the rest.
+    /// The card's model text: the model's name as the inspector's Model field shows it, so a card always names the model the
+    /// person picked. A narrow card ends it in an ellipsis and never drops a version (ADR 0063). Its tooltip adds the level.
     /// </summary>
-    public IReadOnlyList<string> ModelLines => CardText.ModelLines(AgentModel, AgentBrief);
+    public string CardModel => RunText.AgentNames(_task.Execution, Status).Model ?? "";
 
     /// <summary>
     /// The zoomed out card's last line: the model in every state, or the type of a node with no agent. State never takes the
     /// agent's place, and the badge at the line's end shows the state.
     /// </summary>
-    public IReadOnlyList<string> CardLines => AgentModel.Length == 0 ? [TypeName] : CardText.FarLines(ModelLines);
+    public string CardLine => AgentModel.Length == 0 ? TypeName : CardModel;
 
     /// <summary>The node names a model, which the card's last line shows after its client.</summary>
     public bool HasModel => AgentModel.Length > 0;

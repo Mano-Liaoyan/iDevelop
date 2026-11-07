@@ -7,13 +7,11 @@ namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
 /// Lays out the band along the canvas's bottom edge: the zoom controls at the left and the run bar after them, at
-/// <see cref="CanvasChrome.Spacing"/> from the zoom controls at every width, and it never gets wider than the room left, so it never covers them. A bar that needs more than its width takes
-/// the tightView class, whose styles move the view's own controls to the overflow menu, then the tightFollow class, whose styles
-/// move Follow to the overflow menu, so the states keep their names before a view setting does, then the leastChips class, whose styles
-/// show a quiet group as its badge and number and move Fit to the overflow menu, then the tightChips class, whose styles show
-/// every group except waiting and failed as its badge and number and give the chips the progress's room, and then the tightNext class, whose styles leave
-/// Next its glyph, then the foldZoom class, whose styles move Zoom in and Zoom out to the overflow menu, and then the foldNext class, whose styles move Next to the overflow menu, so no chip is cut. The run bar always measures at its whole width, so
-/// a change in its text reaches this panel.
+/// <see cref="CanvasChrome.Spacing"/> from the zoom controls, and it never gets wider than the room left, so it never covers them.
+/// A bar that needs more than its width takes the tightView class, whose styles move the view's own controls to the overflow
+/// menu, then the tightFollow class, whose styles move Follow to the overflow menu, and then the ownRow class: the run bar takes
+/// a row of its own across the whole canvas above the zoom controls, and wraps its groups to a second line when they still do
+/// not fit. No group loses its words (ADR 0063). The run bar measures at its whole width, so a change in its text reaches this panel.
 /// </summary>
 public sealed class CanvasBottomBar : Panel
 {
@@ -26,7 +24,12 @@ public sealed class CanvasBottomBar : Panel
     public static void SetSlot(Control control, ChromeSlot value) => control.SetValue(SlotProperty, value);
 
     // Each step gives the run bar less to show. The first step is no class.
-    private static readonly string[] Steps = ["tightView", "tightFollow", "leastChips", "tightChips", "tightNext", "foldZoom", "foldNext"];
+    private static readonly string[] Steps = ["tightView", "tightFollow", OwnRow];
+
+    private const string OwnRow = "ownRow";
+
+    /// <summary>The room between the run bar's own row and the zoom controls' row.</summary>
+    private const double RowGap = 8;
 
     // The steps the bar has taken, and the width it wanted before each one, which it takes that step back at.
     private readonly double[] _wanted = new double[Steps.Length];
@@ -50,7 +53,10 @@ public sealed class CanvasBottomBar : Panel
             Fit(center, leading, trailing, availableSize.Width);
         }
 
-        var height = new[] { leading, center, trailing }.Max(child => child?.DesiredSize.Height ?? 0);
+        var row = new[] { leading, trailing }.Max(child => child?.DesiredSize.Height ?? 0);
+        var height = center is null ? row
+            : IsOwnRow ? row + RowGap + center.DesiredSize.Height
+            : Math.Max(row, center.DesiredSize.Height);
         var width = double.IsInfinity(availableSize.Width)
             ? (leading?.DesiredSize.Width ?? 0) + (center?.DesiredSize.Width ?? 0) + (trailing?.DesiredSize.Width ?? 0) + 2 * CanvasChrome.Spacing
             : availableSize.Width;
@@ -63,7 +69,7 @@ public sealed class CanvasBottomBar : Panel
         void Measure()
         {
             leading?.Measure(infinite);
-            center.Measure(infinite);
+            center.Measure(IsOwnRow ? new Size(width, double.PositiveInfinity) : infinite);
         }
 
         // A class reaches controls deep in the run bar, and a control tells only its parent that it changed, so the bar asks each
@@ -104,7 +110,12 @@ public sealed class CanvasBottomBar : Panel
         var (left, right) = Bar.Room(finalSize.Width, leading, trailing);
         Bottom(leading, 0, finalSize.Height);
         Bottom(trailing, finalSize.Width - (trailing?.DesiredSize.Width ?? 0), finalSize.Height);
-        if (center is not null)
+        if (center is not null && IsOwnRow)
+        {
+            // The run bar's own row spans the canvas above the zoom controls.
+            center.Arrange(new Rect(0, 0, finalSize.Width, center.DesiredSize.Height));
+        }
+        else if (center is not null)
         {
             // The run bar sits right after the zoom controls at every width, so it never moves as the canvas grows.
             var width = Math.Min(center.DesiredSize.Width, Math.Max(0, right - left));
@@ -113,6 +124,8 @@ public sealed class CanvasBottomBar : Panel
 
         return finalSize;
     }
+
+    private bool IsOwnRow => Classes.Contains(OwnRow);
 
     private (Control? Leading, Control? Center, Control? Trailing) Parts()
     {

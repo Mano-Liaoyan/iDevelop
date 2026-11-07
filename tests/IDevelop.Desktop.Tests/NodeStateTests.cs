@@ -57,11 +57,4 @@ public sealed class NodeStateTests
         Assert.Contains("Continue resumes the session. Retry starts a new attempt.", NodeStates.Detail(new EngineState.InputRequired(EngineState.Interrupted)));
         Assert.Contains("Run it again", NodeStates.Detail(new EngineState.Stale()));
     }
-
-    [Theory]
-    [InlineData("Claude Opus 5.5 · high", "Opus 5.5 · high", "Claude Opus 5.5 · high|Opus 5.5 · high|Opus 5.5")]
-    [InlineData("Gemini 4 Antigravity · max", "Gemini 4 Antigravity · max", "Gemini 4 Antigravity · max|Gemini 4 Antigravity|Gemini 4")]
-    [InlineData("GPT-6.1 Terra", "GPT-6.1 Terra", "GPT-6.1 Terra|GPT-6.1")]
-    public void A_card_shortens_a_model_to_the_words_that_name_its_version(string full, string brief, string lines) =>
-        Assert.Equal(lines.Split('|'), CardText.ModelLines(full, brief));
 }
