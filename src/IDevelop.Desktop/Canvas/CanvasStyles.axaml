@@ -233,7 +233,7 @@
   <Style Selector=":is(Control).tier-label DockPanel.farLine">
     <Setter Property="Height" Value="34" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="18,0,58,-80" />
+    <Setter Property="Margin" Value="18,0,58,10" />
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="44" />
@@ -318,7 +318,7 @@
     <Setter Property="Width" Value="32" />
     <Setter Property="Height" Value="32" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="0,0,18,-79" />
+    <Setter Property="Margin" Value="0,0,18,11" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
     <Setter Property="Width" Value="36" />

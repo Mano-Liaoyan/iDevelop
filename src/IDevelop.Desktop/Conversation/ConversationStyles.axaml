@@ -443,11 +443,13 @@
   <Style Selector="ToggleButton.steps:checked PathIcon">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
   </Style>
+  <!-- The tool leads a step's line in the body's color, and the count and the command stay muted, so the action reads first. -->
   <Style Selector="TextBlock.stepTool">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="LineHeight" Value="18" />
-    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="TextBlock.stepLast">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
