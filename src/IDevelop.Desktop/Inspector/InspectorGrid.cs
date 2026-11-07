@@ -15,7 +15,7 @@ public sealed class InspectorGrid : Grid
     public const double LabelWidth = 84;
 
     /// <summary>The widest a value's box grows. In a wider panel the label column takes the rest, so a box never stretches.</summary>
-    public const double MaxValueWidth = 320;
+    public const double MaxValueWidth = 380;
 
     /// <summary>A 24 px glyph button, such as a revert arrow, in the trailing column of a stacked row.</summary>
     public const double TrailWidth = 24;
