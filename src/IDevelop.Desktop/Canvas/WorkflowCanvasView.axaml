@@ -288,47 +288,26 @@
                 <TextBlock Classes="barText barBrief" Text="{Binding BarBrief}" AutomationProperties.AutomationId="RunStatusBrief" />
               </Panel>
               <Panel VerticalAlignment="Center">
-                <ItemsControl Classes="barChips barReasons" ItemsSource="{Binding BarChips}" AutomationProperties.AutomationId="RunChips">
+                <ItemsControl Classes="barChips barReasons" ItemsSource="{Binding BarChips}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunChips">
                   <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="6" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="canvas:StateChip">
-                    <StackPanel Orientation="Horizontal" Spacing="4" Background="Transparent" ToolTip.Tip="{Binding Tip}"
-                                AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
-                      <Panel Width="16" Height="16" VerticalAlignment="Center">
-                        <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-                        <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
-                                  theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-                      </Panel>
-                      <TextBlock Classes="barText chipLong" Classes.urgent="{Binding IsUrgent}" Text="{Binding Label}" />
-                      <TextBlock Classes="barText chipShort" Classes.urgent="{Binding IsUrgent}" Text="{Binding Short}" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
                 </ItemsControl>
-                <ItemsControl Classes="barChips barGroups" ItemsSource="{Binding BarGroups}" AutomationProperties.AutomationId="RunGroups">
+                <ItemsControl Classes="barChips barGroups" ItemsSource="{Binding BarGroups}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunGroups">
                   <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="6" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="canvas:StateChip">
-                    <StackPanel Orientation="Horizontal" Spacing="4" Background="Transparent" ToolTip.Tip="{Binding Tip}"
-                                AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
-                      <Panel Width="16" Height="16" VerticalAlignment="Center">
-                        <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-                        <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
-                                  theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-                      </Panel>
-                      <TextBlock Classes="barText chipLong" Classes.urgent="{Binding IsUrgent}" Text="{Binding Label}" />
-                      <TextBlock Classes="barText chipShort" Classes.urgent="{Binding IsUrgent}" Text="{Binding Short}" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <ItemsControl Classes="barChips barTightChips" ItemsSource="{Binding BarTight}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunTightChips">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
                 </ItemsControl>
               </Panel>
             </DockPanel>

@@ -138,6 +138,17 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
+    /// <summary>The chips of a tight bar: the groups that need the person, and one chip for the rest, whose tooltip names them.</summary>
+    public IReadOnlyList<StateChip> BarTight
+    {
+        get
+        {
+            var groups = BarGroups;
+            var rest = groups.Where(chip => !chip.IsUrgent).ToList();
+            return rest.Count < 2 ? groups : [.. groups.Where(chip => chip.IsUrgent), StateChip.Rest(rest)];
+        }
+    }
+
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
     public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Interrupted > 0 && Counts.Failed == 0 ? "Next interrupted" : "Next failed";
 
@@ -259,6 +270,7 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(BarGroups));
+        OnPropertyChanged(nameof(BarTight));
         OnPropertyChanged(nameof(RunWork));
         OnPropertyChanged(nameof(CanStartRun));
         OnPropertyChanged(nameof(HasAttention));

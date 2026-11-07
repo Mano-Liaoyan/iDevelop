@@ -54,12 +54,9 @@
     <Setter Property="CornerRadius" Value="10,10,0,0" />
   </Style>
   <!-- A running node is the loudest thing on the canvas at any zoom: its title band fills with color, which no selection, focus, or
-       other state does, and its title takes the color's contrast. -->
+       other state does, and its title takes the color's contrast. The title's rule comes after the other title rules. -->
   <Style Selector="Border.runBand">
     <Setter Property="Background" Value="{DynamicResource AccentStrongBrush}" />
-  </Style>
-  <Style Selector="TextBlock.cardTitle.running, TextBlock.farTitle.running">
-    <Setter Property="Foreground" Value="{DynamicResource OnStateBrush}" />
   </Style>
   <!-- The pointer over a card lifts its surface and strengthens its edge. -->
   <Style Selector="Border.cardHover">
@@ -659,6 +656,9 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Opacity" Value="0.5" />
   </Style>
+  <Style Selector="TextBlock.cardTitle.running, TextBlock.farTitle.running">
+    <Setter Property="Foreground" Value="{DynamicResource OnStateBrush}" />
+  </Style>
   <Style Selector="Button.zoomValue TextBlock">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Medium" />
@@ -676,13 +676,13 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <!-- A view control leaves the bar for the overflow menu only when the run's words need its room. -->
-  <Style Selector="Button.barTight, TextBlock.chipShort">
+  <Style Selector="Button.barTight">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightView Button.barTight, :is(Control).tightChips TextBlock.chipShort:not(.urgent)">
+  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightView Button.barTight">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightView :is(Control).barRoomy, :is(Control).tightChips TextBlock.chipLong:not(.urgent)">
+  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightView :is(Control).barRoomy">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Border.barRule">
@@ -701,11 +701,17 @@
   <Style Selector=":is(Control).narrowBar TextBlock.barLong">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <!-- A bar with too little room for each reason to wait sums them. A tight bar then keeps only the counts. -->
-  <Style Selector="ItemsControl.barGroups, :is(Control).groupChips ItemsControl.barChips.barReasons">
+  <!-- A bar with too little room for each reason to wait sums them. A tight bar then names what needs the person and sums the rest in words. -->
+  <Style Selector="ItemsControl.barGroups, ItemsControl.barTightChips, :is(Control).groupChips ItemsControl.barChips.barReasons">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).groupChips ItemsControl.barGroups">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector=":is(Control).tightChips ItemsControl.barGroups">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).tightChips ItemsControl.barTightChips">
     <Setter Property="IsVisible" Value="True" />
   </Style>
   <Style Selector=":is(Control).narrowBar ItemsControl.barChips">

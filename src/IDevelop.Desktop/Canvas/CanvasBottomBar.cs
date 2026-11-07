@@ -8,8 +8,8 @@ namespace IDevelop.Desktop.Canvas;
 /// centres on the canvas and moves aside only as far as it must to keep <see cref="CanvasChrome.Spacing"/> from the zoom
 /// controls, and it never gets wider than the room left, so it never covers them. A bar that needs more than its width takes
 /// the groupChips class, whose styles sum the reasons to wait, then the tightView class, whose styles move the view's own
-/// controls to the overflow menu, and then the tightChips class, whose styles leave the chips that need nobody their counts,
-/// so no word is cut.
+/// controls to the overflow menu, and then the tightChips class, whose styles name what needs the person and sum the rest in
+/// words, so no word is cut.
 /// </summary>
 public sealed class CanvasBottomBar : Panel
 {

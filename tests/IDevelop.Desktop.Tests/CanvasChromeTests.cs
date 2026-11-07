@@ -90,7 +90,7 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_run_bar_that_lacks_room_for_its_words_shows_its_counts_and_cuts_no_word()
+    public void A_run_bar_that_lacks_room_for_its_words_sums_the_rest_and_cuts_no_word()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
@@ -488,7 +488,7 @@ public sealed class CanvasChromeTests : IDisposable
 
         // The bar holds its status, its chips, and whichever of its buttons show, its text whole.
         var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunChips", "RunStatus", "RunStatusShort", "RunStatusBrief", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
+        var inside = new[] { "RunChips", "RunStatus", "RunStatusBrief", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
         Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
         if (shell.ShowsAny("StopWorkflow"))
         {

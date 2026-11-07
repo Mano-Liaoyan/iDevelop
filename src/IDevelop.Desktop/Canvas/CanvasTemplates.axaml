@@ -200,6 +200,19 @@
     </Panel>
   </DataTemplate>
 
+  <!-- A group of the run bar: its state's badge and its words. The group of the rest has no state, so it has only its words. -->
+  <DataTemplate x:Key="BarChipTemplate" DataType="canvas:StateChip">
+    <StackPanel Orientation="Horizontal" Spacing="4" Background="Transparent" ToolTip.Tip="{Binding Tip}"
+                AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
+      <Panel Width="16" Height="16" VerticalAlignment="Center" IsVisible="{Binding !IsRest}">
+        <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
+        <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
+                  theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
+      </Panel>
+      <TextBlock Classes="barText" Text="{Binding Label}" />
+    </StackPanel>
+  </DataTemplate>
+
   <DataTemplate x:Key="ConnectionTemplate" DataType="canvas:ConnectionViewModel">
     <canvas:RoutedConnection Classes="wire" Source="{Binding From.Output.Anchor}"
                              Target="{Binding To.Input.Anchor}"

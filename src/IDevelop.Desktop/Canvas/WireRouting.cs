@@ -23,9 +23,11 @@ internal static class WireRouting
     // detour can still pass between them.
     private static readonly double Clearance = (WorkflowCanvasViewModel.TaskFootprint.Height - WorkflowCanvasViewModel.TaskCardHeight) / 2;
 
-    // How far a detour keeps from a card where the layout has room: most of a saved layout's 80 px gap between columns and
-    // of its 126 px gap between rows, so lanes meet near the gaps' middles.
-    private static readonly Thickness WideClearance = new(40, 56);
+    // How far a detour keeps from a card where the layout has room: half of a saved layout's 80 px gap between columns, and
+    // near half of its 126 px gap between rows less what the cards draw under their boxes, so a lane takes the gap's middle.
+    private const double WideColumns = 40;
+
+    private const double RowGap = 126;
 
     // A wire that goes straight past a card keeps this far from its top and bottom edges, or it reads as the card's own wire.
     private static readonly Thickness PassClearance = new(0, 14);
@@ -54,7 +56,7 @@ internal static class WireRouting
             return step;
         }
 
-        var wideRows = new Thickness(WideClearance.Left, Math.Max(Clearance, WideClearance.Top - reach / 2));
+        var wideRows = new Thickness(WideColumns, Math.Max(Clearance, (RowGap - reach) / 2 - 1));
         var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance)), Detour(start, end, cards, wideRows));
         return wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour) ? clear : close ?? step;
     }

@@ -33,7 +33,7 @@ public sealed partial class WorkflowCanvasViewModel
             }
 
             var rest = groups.Skip(RowChipLimit - 1).ToList();
-            return [.. groups.Take(RowChipLimit - 1), new StateChip(NodeState.Idle, WaitReason.None, rest.Sum(chip => chip.Count), $"+{rest.Count}", string.Join(", ", rest.Select(chip => chip.Label)))];
+            return [.. groups.Take(RowChipLimit - 1), StateChip.Rest(rest)];
         }
     }
 

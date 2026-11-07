@@ -55,7 +55,7 @@ public sealed class WireRoutingTests : IDisposable
         // A column pitch of 340 and a row pitch of 190, as a saved layout has.
         var route = WireRouting.Route(new Point(370, 122), new Point(810, 122), [Card(120, 90), Card(460, 90), Card(800, 90)]);
 
-        Assert.Equal<Point>([new Point(396, 122), new Point(396, 210), new Point(784, 210), new Point(784, 122)], route);
+        Assert.Equal<Point>([new Point(396, 122), new Point(396, 216), new Point(784, 216), new Point(784, 122)], route);
     }
 
     [Fact]
