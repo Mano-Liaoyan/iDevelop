@@ -23,7 +23,7 @@ Round 12 of the review found that reading a node's output took a click on the ca
 
 - A fit of a large workflow shows part of the graph. The minimap and the run bar's counts show the rest.
 - In a narrow window the left panel shows only its tab while a node's inspector is open. The person opens it with one click, which closes that inspector.
-- A panel that opens, closes, or is dragged fits the graph again when a card that showed whole is cut, and keeps the selected card in view.
+- A panel that opens or closes keeps the selected card in view.
 
 ## Amendment (round 13)
 

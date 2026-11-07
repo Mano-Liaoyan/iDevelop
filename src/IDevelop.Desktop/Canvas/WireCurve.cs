@@ -56,7 +56,8 @@ internal static class WireCurve
     public readonly record struct Ends(object Source, object Target, double SourceRow, double TargetRow);
 
     /// <summary>How far each wire aims off its row at its source and at its target, in the order given.</summary>
-    public static (double Exit, double Entry)[] Fans(IReadOnlyList<Ends> wires)
+    /// <param name="scale">How much thicker wires draw at the zoom tier, which opens the fans as much, so they stay apart on screen.</param>
+    public static (double Exit, double Entry)[] Fans(IReadOnlyList<Ends> wires, double scale = 1)
     {
         var fans = new (double Exit, double Entry)[wires.Count];
         foreach (var port in Enumerable.Range(0, wires.Count).GroupBy(wire => wires[wire].Source).Where(port => port.Count() > 1))
@@ -64,7 +65,7 @@ internal static class WireCurve
             var order = port.OrderBy(wire => wires[wire].TargetRow).ToList();
             for (var rank = 0; rank < order.Count; rank++)
             {
-                fans[order[rank]].Exit = Offset(rank, order.Count);
+                fans[order[rank]].Exit = Offset(rank, order.Count) * scale;
             }
         }
 
@@ -73,7 +74,7 @@ internal static class WireCurve
             var order = port.OrderBy(wire => wires[wire].SourceRow).ToList();
             for (var rank = 0; rank < order.Count; rank++)
             {
-                fans[order[rank]].Entry = Offset(rank, order.Count);
+                fans[order[rank]].Entry = Offset(rank, order.Count) * scale;
             }
         }
 

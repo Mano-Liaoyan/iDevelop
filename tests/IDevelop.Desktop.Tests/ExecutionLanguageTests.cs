@@ -96,6 +96,20 @@ public sealed class ExecutionLanguageTests
     }
 
     [Fact]
+    public void Lanes_and_fans_widen_as_much_as_the_tier_thickens_the_wires_so_they_stay_apart_on_screen()
+    {
+        var routes = WireLanes.Spread(
+        [
+            Wire(2, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
+            Wire(1, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
+        ], [], scale: 2);
+        var ends = new[] { new WireCurve.Ends("a", "b", 0, 0), new WireCurve.Ends("a", "c", 0, 50) };
+
+        Assert.Equal([222.0, 178.0], routes.Select(route => route[1].X));
+        Assert.Equal(WireCurve.Fans(ends).Select(fan => fan.Exit * 2), WireCurve.Fans(ends, 2).Select(fan => fan.Exit));
+    }
+
+    [Fact]
     public void Wires_from_one_output_or_into_one_input_keep_their_own_lanes_so_none_shares_a_trunk()
     {
         var (fanOut, fanIn) = (WireLanes.Spread(

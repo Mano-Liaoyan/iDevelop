@@ -5,7 +5,7 @@ namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
 /// Moves apart the wires that share a run, so a person can trace each one. Every wire on a run takes its own lane, 22 px from
-/// the next, in order of its source position and then its target position, so no wires share a trunk (ADR 0045). A wire's
+/// the next at the Full tier and farther apart where wires draw thicker, in order of its source position and then its target position, so no wires share a trunk (ADR 0045). A wire's
 /// ends stay on its ports' rows. A wire that its lane would take through a card stays where it was.
 /// </summary>
 internal static class WireLanes
@@ -22,11 +22,12 @@ internal static class WireLanes
     private readonly record struct Run(int Wire, int First, double Line, double Start, double End);
 
     /// <summary>Each wire's route, in the order given.</summary>
-    public static ImmutableArray<Point>[] Spread(IReadOnlyList<Wire> wires, IReadOnlyList<Rect> cards)
+    /// <param name="scale">How much thicker wires draw at the zoom tier, which widens the lanes as much, so they stay apart on screen.</param>
+    public static ImmutableArray<Point>[] Spread(IReadOnlyList<Wire> wires, IReadOnlyList<Rect> cards, double scale = 1)
     {
         var moves = wires.Select(wire => new Vector[wire.Route.Length]).ToArray();
-        Separate(wires, moves, vertical: true);
-        Separate(wires, moves, vertical: false);
+        Separate(wires, moves, vertical: true, Lane * scale);
+        Separate(wires, moves, vertical: false, Lane * scale);
         return [.. wires.Select((wire, index) =>
         {
             var moved = wire.Route.Select((point, at) => point + moves[index][at]).ToImmutableArray();
@@ -34,15 +35,15 @@ internal static class WireLanes
         })];
     }
 
-    private static void Separate(IReadOnlyList<Wire> wires, Vector[][] moves, bool vertical)
+    private static void Separate(IReadOnlyList<Wire> wires, Vector[][] moves, bool vertical, double lane)
     {
         var runs = wires.SelectMany((wire, index) => Runs(wire.Route, index, vertical)).OrderBy(run => run.Line).ThenBy(run => run.Start).ToList();
-        foreach (var shared in Shared(runs))
+        foreach (var shared in Shared(runs, lane))
         {
             var lanes = shared.Select(run => run.Wire).Distinct().OrderBy(wire => wires[wire].Order).ThenBy(wire => wires[wire].TargetOrder).ToList();
             foreach (var run in shared)
             {
-                var offset = (lanes.IndexOf(run.Wire) - (lanes.Count - 1) / 2.0) * Lane;
+                var offset = (lanes.IndexOf(run.Wire) - (lanes.Count - 1) / 2.0) * lane;
                 var move = vertical ? new Vector(offset, 0) : new Vector(0, offset);
                 moves[run.Wire][run.First] += move;
                 moves[run.Wire][run.First + 1] += move;
@@ -68,13 +69,13 @@ internal static class WireLanes
     }
 
     // Runs on one line whose lengths overlap. The runs arrive by line and then by start.
-    private static IEnumerable<List<Run>> Shared(List<Run> runs)
+    private static IEnumerable<List<Run>> Shared(List<Run> runs, double lane)
     {
         var group = new List<Run>();
         var end = double.NegativeInfinity;
         foreach (var run in runs)
         {
-            if (group.Count > 0 && (Math.Abs(run.Line - group[0].Line) >= Lane || run.Start >= end - Tolerance))
+            if (group.Count > 0 && (Math.Abs(run.Line - group[0].Line) >= lane || run.Start >= end - Tolerance))
             {
                 yield return group;
                 group = [];

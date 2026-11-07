@@ -34,8 +34,7 @@
     <!-- The left area has no fill of its own. The window's color shows through it. -->
     <sidebar:SidebarView x:Name="Sidebar" ZIndex="2" IsVisible="{Binding IsSidebarShown}" />
 
-    <GridSplitter Grid.Column="1" Width="8" Margin="-3.5,0" ZIndex="1" IsVisible="{Binding IsSidebarShown}"
-                  DragStarted="OnPanelDragStarted" DragCompleted="OnPanelDragCompleted" />
+    <GridSplitter Grid.Column="1" Width="8" Margin="-3.5,0" ZIndex="1" IsVisible="{Binding IsSidebarShown}" />
 
     <Border Grid.Column="2" ClipToBounds="True" Background="{DynamicResource AppShellBrush}">
       <DockPanel>
@@ -240,8 +239,7 @@
       </DockPanel>
     </Border>
 
-    <GridSplitter Grid.Column="3" Width="8" Margin="-3.5,0" ZIndex="1" IsVisible="{Binding IsInspectorShown}"
-                  DragStarted="OnPanelDragStarted" DragCompleted="OnPanelDragCompleted" />
+    <GridSplitter Grid.Column="3" Width="8" Margin="-3.5,0" ZIndex="1" IsVisible="{Binding IsInspectorShown}" />
 
     <!-- In a window too narrow for both panels, a selected node's inspector takes its column at its least width and the left
          panel folds to its tab, so nothing lies over the canvas (ADR 0059). -->

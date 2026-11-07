@@ -88,18 +88,10 @@ public partial class MainWindow : Window
     // The width of a closed panel's seam, which holds the panel's tab.
     private const double ClosedSeam = 19;
 
-    // The cards that showed whole before a panel's splitter moved.
-    private Rect[] _shownBeforeDrag = [];
-
-    private void OnPanelDragStarted(object? sender, VectorEventArgs e) => _shownBeforeDrag = CanvasView?.CardsInView() ?? [];
-
-    private void OnPanelDragCompleted(object? sender, VectorEventArgs e) => RefitAfterPanels(_shownBeforeDrag);
-
-    // A panel that took width from the canvas fits the graph again when a card that showed whole is cut, and keeps the selected
-    // card in view, as the dock does.
-    private void RefitAfterPanels(IReadOnlyCollection<Rect> shown) => Dispatcher.UIThread.Post(() =>
+    // A panel that opens or closes keeps the selected card in view. A fitted view fits again by itself, and a view the person
+    // moved otherwise stays.
+    private void KeepSelectionInView() => Dispatcher.UIThread.Post(() =>
     {
-        CanvasView?.FitIfCut(shown);
         if (ViewModel.Canvas?.SelectedNode is { } node)
         {
             CanvasView?.BringIntoViewIfHidden(node);
@@ -116,7 +108,7 @@ public partial class MainWindow : Window
         if (shown != _panelsShown)
         {
             _panelsShown = shown;
-            RefitAfterPanels(CanvasView?.CardsInView() ?? []);
+            KeepSelectionInView();
         }
 
         Columns.ColumnDefinitions[1].Width = new GridLength(ViewModel.IsSidebarShown ? 1 : ClosedSeam);

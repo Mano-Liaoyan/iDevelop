@@ -31,8 +31,9 @@ public sealed partial class WorkflowCanvasViewModel
         }
 
         Rect[] cards = [.. Nodes.Select(node => node.DrawnRect)];
-        var routes = WireLanes.Spread([.. Connections.Select(connection => connection.Lane)], cards);
-        var fans = WireCurve.Fans([.. Connections.Select(connection => connection.Ends)]);
+        var scale = ZoomTiers.WireScale(Tier);
+        var routes = WireLanes.Spread([.. Connections.Select(connection => connection.Lane)], cards, scale);
+        var fans = WireCurve.Fans([.. Connections.Select(connection => connection.Ends)], scale);
         for (var wire = 0; wire < routes.Length; wire++)
         {
             Connections[wire].ShowRoute(routes[wire], fans[wire], cards);
