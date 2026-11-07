@@ -10,6 +10,8 @@ Round 17 of the review found that a large workflow showed only 12 of its nodes u
 - **Card model at a fit.** The card keeps its width, because a wider card would touch its neighbor at the 300-unit column step that new nodes and saved layouts use. At the Label tier, where a fit rests, a model name that does not fit on one line wraps to a second line at a space. The title then keeps two lines, so it ends above the model name, and a cut title shows whole in the name tag when the card is selected.
 - **Name tag.** At the Label and Title tiers, when the selected card's title ends in an ellipsis, the name tag shows the whole title in up to 260 px, wrapped. It stands under the card, over it, right of it, or left of it: the first place where it covers no other card. At the Block tier it still names the selected card. This extends ADR 0060's tag.
 - **Zoomed out titles.** A zoomed out card's title is cut at its end only, and a hyphenated token such as "2023-Q4" stays on one line. This withdraws ADR 0062's cut in the shared words for the zoomed out card. The full card keeps it.
+- **Run bar.** The bar no longer adds "Runs 3 nodes without a current result". Run Workflow's tooltip already says what it runs, so the bar keeps one row on a wide canvas and one fewer under a docked conversation. This withdraws ADR 0063's muted line.
+- **Hover and wires.** The pointer over a card draws a neutral line half the weight of the selection line. A wire that a selection dims keeps 80% of its opacity, so it stays traceable on the dark canvas.
 - **Task strip.** The "From" part after the hairline shows the first input node's whole name and wraps to more lines rather than cut it.
 
 ## Considered options

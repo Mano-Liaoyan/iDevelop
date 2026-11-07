@@ -146,7 +146,6 @@ public sealed partial class WorkflowCanvasViewModel
             OnPropertyChanged(nameof(CanStartRun));
             OnPropertyChanged(nameof(ShowsGenerate));
             OnPropertyChanged(nameof(RunWorkflowTip));
-            OnPropertyChanged(nameof(RunScope));
             ShowGenerateProgress();
         };
     }

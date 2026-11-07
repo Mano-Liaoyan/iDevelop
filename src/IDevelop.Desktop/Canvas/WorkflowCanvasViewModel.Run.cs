@@ -103,13 +103,6 @@ public sealed partial class WorkflowCanvasViewModel
     public string BarIdle => Counts.Completed > 0 ? BarProgress : Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes";
 
     /// <summary>
-    /// What Run Workflow runs when that is only part of the workflow: "Runs 3 nodes without a current result", in the run bar,
-    /// so the button keeps its one name. Null while a node runs, and when Run Workflow runs every node or nothing.
-    /// </summary>
-    public string? RunScope => RunningCount > 0 || RunWork == 0 || RunWork == Nodes.Count ? null
-        : RunWork == 1 ? "Runs 1 node without a current result" : $"Runs {RunWork} nodes without a current result";
-
-    /// <summary>
     /// One chip for each group of nodes that the bar names, in the order of what needs the person first. What waits for the person is
     /// one group under one word, and its tooltip names the reasons. Interrupted stays its own, because it waits for nobody's word.
     /// </summary>
@@ -251,7 +244,6 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarActivity));
         OnPropertyChanged(nameof(BarTip));
         OnPropertyChanged(nameof(RunWorkflowTip));
-        OnPropertyChanged(nameof(RunScope));
         OnSummaryChanged();
         _runWorkflow?.NotifyCanExecuteChanged();
         _stopAll?.NotifyCanExecuteChanged();

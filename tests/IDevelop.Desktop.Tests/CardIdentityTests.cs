@@ -54,7 +54,6 @@ public sealed class CardIdentityTests
         shell.WaitForCard("A", "Completed");
 
         Assert.Equal(0, canvas.RunWork);
-        Assert.Null(canvas.RunScope);
         Assert.False(canvas.CanStartRun);
         Assert.Contains("Nothing to run", canvas.RunWorkflowTip);
     }
@@ -67,7 +66,6 @@ public sealed class CardIdentityTests
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
         Assert.Contains("run every node", canvas.RunWorkflowTip);
-        Assert.Null(canvas.RunScope);
         Assert.Equal("No result yet", shell.NodeModel("A").OutputSummary);
 
         shell.RunNode("A");
@@ -76,9 +74,8 @@ public sealed class CardIdentityTests
         Assert.StartsWith("Result 1 · Current", shell.NodeModel("A").OutputSummary);
 
         Assert.Contains("run 1 of 2 nodes", canvas.RunWorkflowTip);
-        // The button keeps its one name, and the run bar says in a plain line that the run is partial.
-        Assert.Equal("Runs 1 node without a current result", canvas.RunScope);
-        Assert.True(shell.ShowsAny("RunScopeIdle"));
+        // The button keeps its one name, and only its tooltip says that the run is partial (ADR 0064).
+        Assert.False(shell.ShowsAny("RunScopeIdle"));
     }
 
     [AvaloniaFact]
