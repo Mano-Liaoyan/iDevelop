@@ -148,6 +148,14 @@ public sealed class CanvasChromeTests : IDisposable
 
         Sweep();
 
+        // A bar with room takes no step it does not need: it sums only the reasons to wait, and it keeps the rest.
+        Resize(shell, 1280, 800, 320);
+        Assert.True(shell.ShowsAny("FitToScreen"), "Fit left a bar with room.");
+        Assert.True(shell.ShowsAny("RunStatus"), "The progress left a bar with room.");
+        Assert.True(shell.ShowsAny("ShowMinimap"), "The view controls left a bar with room.");
+        Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], shell.Find<Control>("RunGroups").GetVisualDescendants().OfType<Control>()
+            .Where(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "RunChip").Select(AutomationProperties.GetName));
+
         // Another workflow's chips reach the bar with no change to the canvas's width.
         Resize(shell, 1180, 800, 320);
         shell.Window.ViewModel.NewWorkflow(shell.Window.ViewModel.Projects[0]);

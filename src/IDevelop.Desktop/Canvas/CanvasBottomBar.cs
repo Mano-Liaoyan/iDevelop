@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.VisualTree;
 
 namespace IDevelop.Desktop.Canvas;
 
@@ -64,6 +66,18 @@ public sealed class CanvasBottomBar : Panel
             center.Measure(infinite);
         }
 
+        // A class reaches controls deep in the run bar, and a control tells only its parent that it changed, so the bar asks each
+        // one again. Without this the bar reads its old width, takes a step it does not need, and keeps it.
+        void Remeasure()
+        {
+            foreach (var control in center.GetVisualDescendants().OfType<Layoutable>().Append(center))
+            {
+                control.InvalidateMeasure();
+            }
+
+            Measure();
+        }
+
         double Wanted() => center.DesiredSize.Width + (leading?.DesiredSize.Width ?? 0);
         double Room() => Math.Max(0, Bar.Room(width, leading, trailing).Right - Bar.Room(width, leading, trailing).Left) + (leading?.DesiredSize.Width ?? 0);
 
@@ -72,7 +86,7 @@ public sealed class CanvasBottomBar : Panel
         {
             _step--;
             Classes.Set(Steps[_step], false);
-            Measure();
+            Remeasure();
         }
 
         while (_step < Steps.Length && Wanted() > Room())
@@ -80,7 +94,7 @@ public sealed class CanvasBottomBar : Panel
             _wanted[_step] = Wanted();
             Classes.Set(Steps[_step], true);
             _step++;
-            Measure();
+            Remeasure();
         }
     }
 
