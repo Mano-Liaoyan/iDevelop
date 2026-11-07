@@ -64,7 +64,7 @@ public partial class SidebarView : UserControl
     internal void FocusFind()
     {
         _beforeFind = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
-        ViewModel.IsSidebarOpen = true;
+        ViewModel.ShowSidebar();
         Window?.UpdateLayout();
         FindBox.Focus();
         FindBox.SelectAll();

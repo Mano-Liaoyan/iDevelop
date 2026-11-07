@@ -190,13 +190,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         Dispatcher.UIThread.Post(() => BringIntoViewIfHidden(node), DispatcherPriority.Background);
     }
 
-    /// <summary>The width at the editor's right edge that a panel lies over, as the narrow window's inspector does, so a view keeps its cards clear of it.</summary>
-    internal double RightCover { get; set; }
-
     // The part of the editor where a view keeps its cards. A small docked canvas has no room for the margin.
     private Rect Room(double margin = CardMargin)
     {
-        var whole = new Rect(Editor.Bounds.Size).Deflate(new Thickness(0, 0, Math.Min(RightCover, Math.Max(0, Editor.Bounds.Width - 2 * MinFitRoom)), 0));
+        var whole = new Rect(Editor.Bounds.Size);
         var room = whole.Deflate(margin);
         return room.Width < MinFitRoom || room.Height < MinFitRoom ? whole : room;
     }

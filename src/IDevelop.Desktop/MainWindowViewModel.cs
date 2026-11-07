@@ -30,8 +30,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private bool? _inspectorChoice;
 
-    // The node whose overlay the person closed, so the overlay stays closed until another node is selected.
-    private TaskNodeViewModel? _overlayClosedFor;
+    // The node whose swapped-in inspector the person closed, so it stays closed until another node is selected.
+    private TaskNodeViewModel? _swapClosedFor;
 
     private readonly RelayCommand _save;
     private readonly RelayCommand _undo;
@@ -66,7 +66,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Find = new FindViewModel(() => Projects, Choose);
         Projects.CollectionChanged += (_, _) => RaiseProjects();
         Recent.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecent));
-        ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
+        ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         ToggleInspectorCommand = new RelayCommand(ToggleInspector);
         Unopened.CollectionChanged += (_, _) => RaiseProjects();
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
@@ -99,10 +99,13 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref field, value))
             {
-                OnPropertyChanged(nameof(SidebarToggleLabel));
+                RaiseInspector();
             }
         }
     } = true;
+
+    /// <summary>The left panel shows: the person keeps it open, and a narrow window has not folded it for a selected node's inspector.</summary>
+    public bool IsSidebarShown => IsSidebarOpen && !IsInspectorSwapped;
 
     /// <summary>The window is too narrow to keep the inspector open beside the canvas, unless the person opens it.</summary>
     internal bool IsNarrow
@@ -122,16 +125,17 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool IsInspectorOpen => HasProjects && (_inspectorChoice ?? !IsNarrow);
 
     /// <summary>
-    /// The window is too narrow for the inspector's column, so a selected node's inspector lies over the canvas's edge instead, and
-    /// its edge tab closes it. A choice the person made with the tab, and an open conversation, keep it off (ADR 0059).
+    /// The window is too narrow for both panels, so a selected node's inspector takes its column at its least width and the left
+    /// panel folds to its tab. Either tab gives the room back to the left panel. A choice the person made with the inspector's
+    /// tab, and an open conversation, keep the swap off (ADR 0059).
     /// </summary>
-    public bool IsInspectorOverlay => HasProjects && IsNarrow && _inspectorChoice is null && Conversation is null
-        && Canvas?.SelectedNode is { } node && node != _overlayClosedFor;
+    public bool IsInspectorSwapped => HasProjects && IsNarrow && _inspectorChoice is null && Conversation is null
+        && Canvas?.SelectedNode is { } node && node != _swapClosedFor;
 
-    /// <summary>The inspector shows, in its column or over the canvas.</summary>
-    public bool IsInspectorShown => IsInspectorOpen || IsInspectorOverlay;
+    /// <summary>The inspector shows in its column.</summary>
+    public bool IsInspectorShown => IsInspectorOpen || IsInspectorSwapped;
 
-    public string SidebarToggleLabel => IsSidebarOpen ? "Hide the left panel" : "Show the left panel";
+    public string SidebarToggleLabel => IsSidebarShown ? "Hide the left panel" : "Show the left panel";
 
     public string InspectorToggleLabel => IsInspectorShown ? "Hide the inspector" : "Show the inspector";
 
@@ -179,9 +183,9 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(WorkflowCanvasViewModel.SelectedNode))
         {
-            if (Canvas?.SelectedNode != _overlayClosedFor)
+            if (Canvas?.SelectedNode != _swapClosedFor)
             {
-                _overlayClosedFor = null;
+                _swapClosedFor = null;
             }
 
             RaiseInspector();
@@ -358,17 +362,39 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Opens the inspector for what the person asked to see in it.</summary>
     internal void ShowInspector() => ChooseInspector(true);
 
-    // The tab closes an overlay for its node and leaves the person's choice as it was.
+    // Either tab ends a swap for its node, which gives the room back to the left panel, and leaves the person's choices as they were.
     private void ToggleInspector()
     {
-        if (IsInspectorOverlay)
+        if (IsInspectorSwapped)
         {
-            _overlayClosedFor = Canvas?.SelectedNode;
+            _swapClosedFor = Canvas?.SelectedNode;
             RaiseInspector();
         }
         else
         {
             ChooseInspector(!IsInspectorOpen);
+        }
+    }
+
+    /// <summary>Shows the left panel, which ends a swap that folded it.</summary>
+    internal void ShowSidebar()
+    {
+        if (!IsSidebarShown)
+        {
+            ToggleSidebar();
+        }
+    }
+
+    private void ToggleSidebar()
+    {
+        if (IsSidebarOpen && IsInspectorSwapped)
+        {
+            _swapClosedFor = Canvas?.SelectedNode;
+            RaiseInspector();
+        }
+        else
+        {
+            IsSidebarOpen = !IsSidebarOpen;
         }
     }
 
@@ -387,9 +413,11 @@ public sealed class MainWindowViewModel : ObservableObject
     private void RaiseInspector()
     {
         OnPropertyChanged(nameof(IsInspectorOpen));
-        OnPropertyChanged(nameof(IsInspectorOverlay));
+        OnPropertyChanged(nameof(IsInspectorSwapped));
         OnPropertyChanged(nameof(IsInspectorShown));
+        OnPropertyChanged(nameof(IsSidebarShown));
         OnPropertyChanged(nameof(InspectorToggleLabel));
+        OnPropertyChanged(nameof(SidebarToggleLabel));
     }
 
     private void Remember(string folder)

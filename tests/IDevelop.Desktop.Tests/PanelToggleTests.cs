@@ -60,23 +60,28 @@ public sealed class PanelToggleTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_narrow_window_lays_a_selected_nodes_inspector_over_the_canvas_until_its_tab_closes_it()
+    public void A_narrow_window_folds_the_left_panel_for_a_selected_nodes_inspector_until_a_tab_gives_the_room_back()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90), TaskAt(TestTasks.Build, "Build", 405, 90)));
         var view = shell.Window.ViewModel;
         view.IsNarrow = true;
-        Assert.False(view.IsInspectorShown);
+        Assert.Equal((false, true), (view.IsInspectorShown, view.IsSidebarShown));
 
         shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Equal((false, true), (view.IsInspectorOpen, view.IsInspectorOverlay));
-        Assert.Equal(0, Columns(shell)[4].ActualWidth);
+        Assert.Equal((false, true, false), (view.IsInspectorOpen, view.IsInspectorShown, view.IsSidebarShown));
+        shell.Window.UpdateLayout();
+        Assert.Equal(0, Columns(shell)[0].ActualWidth);
+        Assert.True(Columns(shell)[4].ActualWidth > 0);
         Assert.True(shell.Find<TextBox>("TaskTitle").IsEffectivelyVisible);
 
         shell.Click(shell.Find<Button>("ToggleInspector"));
-        Assert.False(view.IsInspectorShown);
+        Assert.Equal((false, true), (view.IsInspectorShown, view.IsSidebarShown));
 
         shell.Click(shell.Header(shell.Node("Build")));
-        Assert.True(view.IsInspectorOverlay);
+        Assert.Equal((true, false), (view.IsInspectorShown, view.IsSidebarShown));
+
+        shell.Click(shell.Find<Button>("ToggleSidebar"));
+        Assert.Equal((false, true, true), (view.IsInspectorShown, view.IsSidebarShown, view.IsSidebarOpen));
     }
 
     [Fact]

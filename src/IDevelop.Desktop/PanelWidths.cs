@@ -16,9 +16,6 @@ internal static class PanelWidths
     /// <summary>Below this window width both panels take their minimum widths, 240 and 280, so the canvas keeps the room.</summary>
     public const double NarrowWindow = 1000;
 
-    /// <summary>The width of the inspector that lies over the canvas's edge in a narrow window: its column's least width.</summary>
-    public const double OverlayInspectorWidth = 280;
-
     /// <summary>The largest width each panel may show now, as limits for its column, which the splitters also keep to.</summary>
     /// <param name="room">The window's width less the splitters and <see cref="CanvasMinWidth"/>.</param>
     /// <param name="sidebar">The sidebar's chosen width and its own limits.</param>

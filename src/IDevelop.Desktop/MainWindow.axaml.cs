@@ -52,14 +52,9 @@ public partial class MainWindow : Window
                 _docked = !_docked;
                 SizeDock();
             }
-            else if (e.PropertyName is nameof(MainWindowViewModel.IsSidebarOpen) or nameof(MainWindowViewModel.IsInspectorOpen))
+            else if (e.PropertyName is nameof(MainWindowViewModel.IsSidebarShown) or nameof(MainWindowViewModel.IsInspectorShown))
             {
                 ShowPanels();
-            }
-            else if (e.PropertyName == nameof(MainWindowViewModel.IsInspectorOverlay))
-            {
-                // A new workflow's canvas view lays out first.
-                Dispatcher.UIThread.Post(CoverCanvas, DispatcherPriority.Background);
             }
         };
         _sidebarMax = Columns.ColumnDefinitions[0].MaxWidth;
@@ -93,25 +88,54 @@ public partial class MainWindow : Window
     // The width of a closed panel's seam, which holds the panel's tab.
     private const double ClosedSeam = 19;
 
+    // The cards that showed whole before a panel's splitter moved.
+    private Rect[] _shownBeforeDrag = [];
+
+    private void OnPanelDragStarted(object? sender, VectorEventArgs e) => _shownBeforeDrag = CanvasView?.CardsInView() ?? [];
+
+    private void OnPanelDragCompleted(object? sender, VectorEventArgs e) => RefitAfterPanels(_shownBeforeDrag);
+
+    // A panel that took width from the canvas fits the graph again when a card that showed whole is cut, and keeps the selected
+    // card in view, as the dock does.
+    private void RefitAfterPanels(IReadOnlyCollection<Rect> shown) => Dispatcher.UIThread.Post(() =>
+    {
+        CanvasView?.FitIfCut(shown);
+        if (ViewModel.Canvas?.SelectedNode is { } node)
+        {
+            CanvasView?.BringIntoViewIfHidden(node);
+        }
+    }, DispatcherPriority.Background);
+
+    // The panels' shown state as the columns last laid it out.
+    private (bool Sidebar, bool Inspector) _panelsShown = (true, true);
+
     // A closed panel's column takes no width, and its seam takes the tab's, so the canvas ends where the tab begins.
     private void ShowPanels()
     {
-        Columns.ColumnDefinitions[1].Width = new GridLength(ViewModel.IsSidebarOpen ? 1 : ClosedSeam);
-        Columns.ColumnDefinitions[3].Width = new GridLength(ViewModel.IsInspectorOpen || !ViewModel.HasProjects ? 1 : ClosedSeam);
-        Fold(Columns.ColumnDefinitions[0], ViewModel.IsSidebarOpen, ref _sidebarWidth, _sidebarMin, _sidebarMax);
-        Fold(Columns.ColumnDefinitions[4], ViewModel.IsInspectorOpen, ref _inspectorWidth, _inspectorMin, _inspectorMax);
+        var shown = (ViewModel.IsSidebarShown, ViewModel.IsInspectorShown);
+        if (shown != _panelsShown)
+        {
+            _panelsShown = shown;
+            RefitAfterPanels(CanvasView?.CardsInView() ?? []);
+        }
+
+        Columns.ColumnDefinitions[1].Width = new GridLength(ViewModel.IsSidebarShown ? 1 : ClosedSeam);
+        Columns.ColumnDefinitions[3].Width = new GridLength(ViewModel.IsInspectorShown || !ViewModel.HasProjects ? 1 : ClosedSeam);
+        Fold(Columns.ColumnDefinitions[0], ViewModel.IsSidebarShown, ref _sidebarWidth, _sidebarMin, _sidebarMax);
+        Fold(Columns.ColumnDefinitions[4], ViewModel.IsInspectorShown, ref _inspectorWidth, _inspectorMin, _inspectorMax);
         LimitPanels();
     }
 
     private static void Fold(ColumnDefinition column, bool open, ref double width, double min, double max)
     {
-        if (open && column.MaxWidth == 0)
+        // A closed column keeps no least width. Its largest width can change while it is closed, as the other panel folds.
+        if (open && column.MinWidth == 0)
         {
             column.MaxWidth = max;
             column.MinWidth = min;
             column.Width = new GridLength(width);
         }
-        else if (!open && column.MaxWidth != 0)
+        else if (!open && column.MinWidth != 0)
         {
             width = column.Width.Value;
             column.MinWidth = 0;
@@ -139,7 +163,7 @@ public partial class MainWindow : Window
         }
 
         var (sidebarMax, inspectorMax) = Columns.Bounds.Width < PanelWidths.NarrowWindow ? (sidebar.MinWidth, inspector.MinWidth) : PanelWidths.Limits(room,
-            new(sidebar.Width.Value, sidebar.MinWidth, ViewModel.IsSidebarOpen ? _sidebarMax : sidebar.MinWidth), new(inspector.Width.Value, inspector.MinWidth, ViewModel.IsInspectorOpen ? _inspectorMax : inspector.MinWidth));
+            new(sidebar.Width.Value, sidebar.MinWidth, ViewModel.IsSidebarShown ? _sidebarMax : sidebar.MinWidth), new(inspector.Width.Value, inspector.MinWidth, ViewModel.IsInspectorShown ? _inspectorMax : inspector.MinWidth));
         sidebar.MaxWidth = sidebarMax;
         inspector.MaxWidth = inspectorMax;
     }
@@ -378,7 +402,7 @@ public partial class MainWindow : Window
         var conversation = ShownConversation;
         IEnumerable<(Control Region, Action Enter)> Regions()
         {
-            if (ViewModel.IsSidebarOpen)
+            if (ViewModel.IsSidebarShown)
             {
                 yield return (Sidebar, Sidebar.FocusFirst);
             }
@@ -440,21 +464,6 @@ public partial class MainWindow : Window
         if (sender is Button button)
         {
             CanvasView?.OpenAddInView(button.TranslatePoint(new Point(0, button.Bounds.Height + 4), this) ?? default);
-        }
-    }
-
-    // The overlay inspector covers the canvas's right edge, so the selected card moves out from under it.
-    private void CoverCanvas()
-    {
-        if (CanvasView is not { } canvas)
-        {
-            return;
-        }
-
-        canvas.RightCover = ViewModel.IsInspectorOverlay ? PanelWidths.OverlayInspectorWidth : 0;
-        if (ViewModel.IsInspectorOverlay && ViewModel.Canvas?.SelectedNode is { } node)
-        {
-            canvas.BringIntoViewIfHidden(node);
         }
     }
 
