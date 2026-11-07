@@ -322,12 +322,12 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal($"labels at 12, values at {Math.Max(116, width - 332)}", Columns(shell));
+        Assert.Equal($"labels at 12, values at {Math.Max(116, width - 392)}", Columns(shell));
 
         shell.Click(shell.ConnectionInto("Build"));
 
         Assert.Equal(["From", "To", "Kind"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal($"labels at 32, values at {Math.Max(116, width - 332)}", Columns(shell));
+        Assert.Equal($"labels at 32, values at {Math.Max(116, width - 392)}", Columns(shell));
     }
 
     [AvaloniaTheory]

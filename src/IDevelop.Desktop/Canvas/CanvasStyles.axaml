@@ -228,7 +228,7 @@
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="44" />
-    <Setter Property="Margin" Value="22,112,54,0" />
+    <Setter Property="Margin" Value="22,112,62,0" />
   </Style>
   <Style Selector="theme|KindTile.farTile">
     <Setter Property="TileSize" Value="20" />

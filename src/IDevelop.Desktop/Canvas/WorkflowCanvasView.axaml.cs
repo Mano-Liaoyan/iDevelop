@@ -322,7 +322,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         ShowAdd();
     }
 
-    // The tag stands over the bar in screen pixels, and under it where the canvas's top edge leaves no room.
+    // The tag stands under the bar in screen pixels, clear of its badge, and over it where the canvas's bottom edge leaves no room.
     private void ShowNameTag()
     {
         var node = _viewModel is { Tier: ZoomTier.Block, SelectedNodes.Count: 1 } canvas ? canvas.SelectedNode : null;
@@ -337,8 +337,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         var at = (node.DisplayLocation - Editor.ViewportLocation) * zoom;
         NameTag.Measure(Size.Infinity);
         var width = NameTag.DesiredSize.Width - NameTag.Margin.Left;
-        var top = at.Y - NameTag.Height - 2;
-        var y = top >= NameTagInset ? top : at.Y + WorkflowCanvasViewModel.TaskCardHeight * zoom + 2;
+        var below = at.Y + WorkflowCanvasViewModel.TaskCardHeight * zoom + 3;
+        var y = below + NameTag.Height <= Editor.Bounds.Height - NameTagInset ? below : at.Y - NameTag.Height - 8;
         NameTag.Margin = new Thickness(Math.Max(NameTagInset, Math.Min(at.X, Editor.Bounds.Width - width - NameTagInset)), y, 0, 0);
     }
 

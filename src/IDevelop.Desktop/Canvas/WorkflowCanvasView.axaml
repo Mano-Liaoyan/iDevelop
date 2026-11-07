@@ -150,7 +150,7 @@
     <Border x:Name="CanvasFocus" Classes="canvasFocus" IsHitTestVisible="False" IsVisible="False"
             AutomationProperties.AutomationId="CanvasFocus" />
 
-    <!-- Bars have no words at this zoom, so the one selected node keeps its name over its bar. -->
+    <!-- Bars have no words at this zoom, so the one selected node keeps its name beside its bar. -->
     <Border x:Name="NameTag" Classes="nameTag" IsHitTestVisible="False" IsVisible="False"
             AutomationProperties.AutomationId="CanvasNameTag">
       <TextBlock x:Name="NameTagText" TextTrimming="CharacterEllipsis" />

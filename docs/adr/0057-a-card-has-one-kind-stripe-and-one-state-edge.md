@@ -12,7 +12,7 @@ Round 9 of the UI review found too many color layers on a card, a running card t
 - **Hover.** A card keeps its surface under the pointer and draws one thin accent line.
 - **Stale.** A stale edge and badge are quieter than failed and waiting.
 - **Zoomed out cards.** The Title tier's card widens 32 canvas units into the gap at its right. A title then keeps more words at the size that stays readable. The title has medium weight. A one-word model falls back to its major version, so "GPT-6" shows with no ellipsis.
-- **Name tag.** At the Block tier the one selected node shows its name in a tag over its bar. The tag has a screen size and stays in the canvas.
+- **Name tag.** At the Block tier the one selected node shows its name in a tag under its bar. The tag has a screen size and stays in the canvas.
 - **Fit.** A fit keeps 16 px clear of the editor's edges. This replaces the 8 px of ADR 0053.
 - **Wires.** A wire is 2 units wide, and a feeding wire 2.5. Lanes stand 22 units apart. A wire's tooltip adds the first line of the result that it carries.
 - **Canvas focus.** The canvas's focus line is one thin, quiet line. This replaces the two-pixel ring of ADR 0056.
