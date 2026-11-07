@@ -532,7 +532,7 @@
     <Setter Property="RenderTransform" Value="none" />
   </Style>
   <Style Selector="ToggleButton.picker:pointerover /template/ Border#Box">
-    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="ToggleButton.picker:checked /template/ Border#Box, ToggleButton.picker:focus-visible /template/ Border#Box">
     <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />

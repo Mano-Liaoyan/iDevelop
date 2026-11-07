@@ -316,7 +316,7 @@
           </TextBox>
           <Grid Classes="composerBar" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="4">
             <Button x:Name="ModelChip" Classes="modelChip"
-                    Classes.readOnly="{Binding $parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=False}" ToolTip.Tip="{Binding ModelChip, StringFormat='Change the model and effort: {0}'}"
+                    IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=True}" ToolTip.Tip="{Binding ModelChip, StringFormat='Change the model and effort: {0}'}"
                     AutomationProperties.AutomationId="ConversationModel" AutomationProperties.Name="{Binding ModelChip, StringFormat='Agent: {0}'}">
               <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" Width="12" Height="12" />
@@ -392,7 +392,7 @@
     </StackPanel>
 
     <Panel Grid.Row="2">
-      <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled"
+      <ScrollViewer x:Name="Scroller" Classes="transcript quietBar" Focusable="True" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
         <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
         <StackPanel Margin="0,0,0,12">
@@ -414,7 +414,7 @@
                     <TextBlock Grid.Column="2" Text="{Binding TaskPreview}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                IsVisible="{Binding !IsTaskOpen}" AutomationProperties.AutomationId="ConversationTaskPreview" />
                     <!-- What the agent read from earlier nodes. Opening the task names them. -->
-                    <TextBlock Grid.Column="3" Classes="caption" Text="{Binding TaskInputCount}" VerticalAlignment="Center"
+                    <TextBlock Grid.Column="3" Classes="caption" Text="{Binding TaskInputCount}" VerticalAlignment="Center" Margin="0,0,10,0"
                                IsVisible="{Binding ShowsTaskInputCount}" ToolTip.Tip="{Binding TaskInputLine}"
                                AutomationProperties.AutomationId="ConversationTaskInputCount" />
                   </Grid>

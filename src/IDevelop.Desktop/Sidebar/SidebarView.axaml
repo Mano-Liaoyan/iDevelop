@@ -136,15 +136,6 @@
     <!-- Nothing is open: the canvas holds Open folder, and this panel the folders the person closed. -->
     <StackPanel Grid.Row="3" Margin="16,12" Spacing="8" IsVisible="{Binding !HasProjects}">
       <TextBlock Classes="rowName strong" Text="No project open" AutomationProperties.AutomationId="NoProject" />
-      <TextBlock Classes="caption" Text="Open a folder to list its workflows here." TextWrapping="Wrap" IsVisible="{Binding !HasRecent}"
-                 AutomationProperties.AutomationId="NoRecent" />
-      <Button Classes="action" HorizontalAlignment="Left" Click="OnOpenFolder"
-              AutomationProperties.AutomationId="SidebarOpenFolder" AutomationProperties.Name="Open folder">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
-          <TextBlock Text="Open folder" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
       <TextBlock Classes="section" Text="Recent" Margin="0,8,0,0" IsVisible="{Binding HasRecent}" />
       <ItemsControl ItemsSource="{Binding Recent}" IsVisible="{Binding HasRecent}" Margin="-8,0"
                     AutomationProperties.AutomationId="RecentProjects" AutomationProperties.Name="Recent projects">
@@ -352,11 +343,15 @@
                                       <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
                                       <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title}"
                                                           AutomationProperties.AutomationId="NodeRowName" />
-                                      <PathIcon Grid.Column="2" Classes="stateIcon" Classes.spin="{Binding IsRunningNow}" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Top" Margin="0,2,0,0"
+                                      <PathIcon Grid.Column="2" Classes="stateIcon spin" IsVisible="{Binding IsRunningNow}" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Top" Margin="0,2,0,0"
                                                 theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding WaitReason}"
                                                 ToolTip.Tip="{Binding StatusLabel}"
-                                                AutomationProperties.AutomationId="NodeRowState"
-                                                AutomationProperties.Name="{Binding StatusLabel}" />
+                                                                                                AutomationProperties.Name="{Binding StatusLabel}" />
+                                      <!-- One state has one badge in every list. A running node keeps its spinner. -->
+                                      <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,0,0" State="{Binding State}" Why="{Binding WaitReason}"
+                                                        IsVisible="{Binding !IsRunningNow}" ToolTip.Tip="{Binding StatusLabel}"
+                                                        AutomationProperties.AutomationId="NodeRowState"
+                                                        AutomationProperties.Name="{Binding StatusLabel}" />
                                     </Grid>
                                   </DataTemplate>
                                 </ListBox.ItemTemplate>
@@ -405,8 +400,6 @@
       <!-- A row slides under the pinned rows at the top. What it reaches past the bottom edge would show cut through its letters, so
            the panel's own color covers that row until it comes in whole. The cover takes no pointer. -->
       <Border x:Name="TreeFootCover" Classes="treeCover" VerticalAlignment="Bottom" IsVisible="False" />
-      <!-- The pinned rows' lower edge would cut a row in the same way, so the same cover holds it until it goes whole under them. -->
-      <Border x:Name="TreeHeadCover" Classes="treeCover" VerticalAlignment="Top" IsVisible="False" />
       <!-- The project and the workflow of the rows under the top edge stay in view while they scroll. A click goes back to its row. -->
       <Border x:Name="TreeHead" Classes="treeHead" IsVisible="False">
         <StackPanel>

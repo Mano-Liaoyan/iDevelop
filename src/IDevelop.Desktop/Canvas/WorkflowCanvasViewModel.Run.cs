@@ -132,7 +132,8 @@ public sealed partial class WorkflowCanvasViewModel
             var chips = BarChips;
             var waits = chips.Where(chip => chip.State == NodeState.InputRequired && chip.Why != WaitReason.Interrupted).ToList();
             var tip = string.Join(", ", waits.Select(chip => chip.Label));
-            var sum = StateChip.Of(NodeState.InputRequired, waits is [var only] ? only.Why : WaitReason.Question, waits.Sum(chip => chip.Count), "waiting", tip);
+            // One reason keeps its own word, so a row and a wide bar say one word for one group.
+            var sum = waits is [var only] ? only : StateChip.Of(NodeState.InputRequired, WaitReason.Question, waits.Sum(chip => chip.Count), "waiting", tip);
             var others = chips.Except(waits).ToList();
             return new[] { others.FirstOrDefault(chip => chip.State == NodeState.Failed), sum }
                 .Concat(others.Where(chip => chip.State != NodeState.Failed))
@@ -140,26 +141,13 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
-    /// <summary>The chips of a tight bar: the groups that need the person, and one chip for the rest, whose tooltip names them. A bar of one group has nothing to sum.</summary>
-    public IReadOnlyList<StateChip> BarTight
-    {
-        get
-        {
-            var groups = BarGroups;
-            var rest = groups.Where(chip => !chip.IsUrgent).ToList();
-            return groups.Count < 2 || rest.Count == 0 ? groups : [.. groups.Where(chip => chip.IsUrgent), StateChip.Rest(rest)];
-        }
-    }
+    /// <summary>The chips of a tight bar: the groups that need the person keep their words, and the others their badges and counts, so no state hides.</summary>
+    public IReadOnlyList<StateChip> BarTight =>
+        [.. BarGroups.Select(chip => chip.IsUrgent ? chip : chip with { IsCounted = true })];
 
-    /// <summary>The chips of the tightest bar: the most urgent group, and one chip for all the others, whose tooltip names them.</summary>
-    public IReadOnlyList<StateChip> BarLeast
-    {
-        get
-        {
-            var groups = BarGroups;
-            return groups.Count < 2 ? groups : [groups[0], StateChip.Rest([.. groups.Skip(1)])];
-        }
-    }
+    /// <summary>The chips of the tightest bar: every group keeps its badge and its count, and its tooltip has its words.</summary>
+    public IReadOnlyList<StateChip> BarLeast =>
+        [.. BarGroups.Select(chip => chip with { IsCounted = true })];
 
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
     public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Interrupted > 0 && Counts.Failed == 0 ? "Next interrupted" : "Next failed";

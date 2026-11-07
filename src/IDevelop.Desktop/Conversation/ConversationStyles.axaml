@@ -77,6 +77,9 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
   <!-- Code sits in its own surface, with its language and Copy in a header row so a long line never runs under Copy. -->
+  <Style Selector="Button.mdCopy:pointerover PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
   <Style Selector="Border.mdCode">
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -343,15 +346,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- A short transcript sits on the composer while the node needs the person, so what it says stays beside the answer. -->
-  <!-- While the inspector shows the model and its pickers, the composer's chip only names them. -->
-  <Style Selector="Button.modelChip.readOnly">
-    <Setter Property="IsHitTestVisible" Value="False" />
-    <Setter Property="Focusable" Value="False" />
-  </Style>
-  <Style Selector="Button.modelChip.readOnly PathIcon.chipChevron">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
+  <!-- While the inspector shows the model and its pickers, the composer has no chip, because one model needs one place. -->
   <Style Selector="Border.resultNote">
     <Setter Property="Padding" Value="8,4" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />

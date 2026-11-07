@@ -293,15 +293,10 @@ public partial class SidebarView : UserControl
     private double ListBottom(Button row) =>
         row.FindAncestorOfType<StackPanel>() is { } block ? TopOf(block) + block.Bounds.Height : 0;
 
-    // A row that the tree's bottom edge or the pinned rows' lower edge would cut hides under a cover until it shows whole.
+    // A row that the tree's bottom edge would cut hides under a cover until it shows whole.
     private void CoverCutRows()
     {
         var rows = TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow).Select(row => (Top: TopOf(row) - Tree.Offset.Y, row.Bounds.Height)).ToList();
-        var head = TreeHead.IsVisible ? PinnedRowHeight * ((StickyProject.IsVisible ? 1 : 0) + (StickyWorkflow.IsVisible ? 1 : 0)) + 1 : 0;
-        var under = head == 0 ? 0 : rows.Where(row => row.Top < head - 0.5 && row.Top + row.Height > head + 0.5).Select(row => row.Top + row.Height - head).DefaultIfEmpty(0).Max();
-        TreeHeadCover.Height = under;
-        TreeHeadCover.Margin = new Thickness(0, head, 8, 0);
-        TreeHeadCover.IsVisible = under > 0;
         var height = Tree.Viewport.Height;
         var cut = rows.Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5).Select(row => height - row.Top).DefaultIfEmpty(0).Max();
         TreeFootCover.Height = cut;

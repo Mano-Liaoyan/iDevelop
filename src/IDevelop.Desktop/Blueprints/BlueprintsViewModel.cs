@@ -62,7 +62,7 @@ public sealed class BlueprintsViewModel : ObservableObject
     public bool HasEmptyLibrary => Groups.Any(group => group.IsEmpty);
 
     /// <summary>"No project blueprints yet. Derive one from a blueprint's More menu.", naming each empty library.</summary>
-    public string EmptyNote => $"No {string.Join(" or ", Groups.Where(group => group.IsEmpty).Select(group => group.Heading.ToLowerInvariant()))} blueprints yet. To add one, choose Derive Blueprint in a blueprint's More menu.";
+    public string EmptyNote => $"No {string.Join(" or ", Groups.Where(group => group.IsEmpty).Select(group => group.Heading.ToLowerInvariant()))} blueprints yet.";
 
     /// <summary>The blueprint being derived or edited, which the right panel shows in place of the inspector.</summary>
     public BlueprintEditorViewModel? Editor

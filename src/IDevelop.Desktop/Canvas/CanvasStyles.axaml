@@ -10,7 +10,7 @@
        whole inside it. The keyboard's ring, the app's one focus ring, sits outside it while the canvas has the keyboard's focus.
        A running node never looks like this: its title band fills with color (Kinds.axaml and runBand below). -->
   <Style Selector="Border.ring">
-    <Setter Property="Margin" Value="7,-3" />
+    <Setter Property="Margin" Value="8,-2" />
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
@@ -67,7 +67,11 @@
     <Setter Property="Opacity" Value="0.1" />
   </Style>
   <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+  </Style>
+  <!-- The selection line replaces a quiet state's edge, so a selected card has one outline. -->
+  <Style Selector="nodify|ItemContainer:selected Border.stateStroke.state-idle, nodify|ItemContainer:selected Border.stateStroke.state-completed">
+    <Setter Property="Opacity" Value="0" />
   </Style>
   <Style Selector="Panel.taskCard.expanded Border.stateTint">
     <Setter Property="CornerRadius" Value="10,10,0,0" />
@@ -186,7 +190,7 @@
   </Style>
   <!-- The smallest cards give the title the whole card, because its words tell one node from the next. The inspector and the tooltip name the model. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="20,6,44,0" />
+    <Setter Property="Margin" Value="20,6,16,0" />
     <Setter Property="FontSize" Value="44" />
     <Setter Property="LineHeight" Value="48" />
     <Setter Property="MaxLines" Value="3" />
@@ -324,10 +328,11 @@
     <Setter Property="Height" Value="32" />
     <Setter Property="Margin" Value="0,103,18,0" />
   </Style>
+  <!-- The title takes the whole card here, so the badge wears the card's corner, as the Block tier's does. -->
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
     <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />
-    <Setter Property="Margin" Value="0,117,16,0" />
+    <Setter Property="Margin" Value="0,142,-10,0" />
   </Style>
   <Style Selector=":is(Control).tier-block Panel.stateBadge">
     <Setter Property="Width" Value="80" />
@@ -391,15 +396,15 @@
   </Style>
   <!-- A selection line and a focus ring keep their weight on screen as the cards shrink. -->
   <Style Selector=":is(Control).tier-detail Border.ring, :is(Control).tier-compact Border.ring">
-    <Setter Property="Margin" Value="6,-4" />
+    <Setter Property="Margin" Value="7,-3" />
     <Setter Property="BorderThickness" Value="3" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.ring">
-    <Setter Property="Margin" Value="3,-7" />
+    <Setter Property="Margin" Value="5,-5" />
     <Setter Property="BorderThickness" Value="5" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
-    <Setter Property="Margin" Value="-2,-12" />
+    <Setter Property="Margin" Value="1,-9" />
     <Setter Property="BorderThickness" Value="9" />
   </Style>
   <Style Selector=":is(Control).tier-detail Border.keyRing, :is(Control).tier-compact Border.keyRing">
@@ -754,6 +759,12 @@
   </Style>
   <Style Selector=":is(Control).leastChips ItemsControl.barLeastChips">
     <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="ItemsControl.barChips ContentPresenter > StackPanel">
+    <Setter Property="Spacing" Value="4" />
+  </Style>
+  <Style Selector="ItemsControl.barLeastChips StackPanel">
+    <Setter Property="Spacing" Value="1" />
   </Style>
   <Style Selector=":is(Control).tightChips TextBlock.followLabel">
     <Setter Property="IsVisible" Value="False" />

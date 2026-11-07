@@ -129,13 +129,8 @@
                   </Grid>
                 </Border>
                 <TextBlock Classes="kindLine" Text=" · " ClipToBounds="True" />
-                <StackPanel Orientation="Horizontal">
-                  <TextBlock Classes="kindLine" Text="{Binding TypeName}"
-                             AutomationProperties.AutomationId="TaskType" />
-                  <Border Classes="infoGlyph kindHelp" Margin="4,0,0,0" ToolTip.Tip="{Binding KindTip}">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
-                  </Border>
-                </StackPanel>
+                <TextBlock Classes="kindLine" Text="{Binding TypeName}" Background="Transparent" ToolTip.Tip="{Binding KindTip}"
+                           AutomationProperties.AutomationId="TaskType" />
               </inspector:SeparatedLine>
               <Button Grid.Row="0" Grid.Column="3" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top"
                       AutomationProperties.AutomationId="InspectorMore"

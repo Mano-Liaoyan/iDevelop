@@ -336,20 +336,18 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.Render();
         T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
         var tree = Named<ScrollViewer>("Tree");
-        var (foot, head, pinned) = (Named<Border>("TreeFootCover"), Named<Border>("TreeHeadCover"), Named<Panel>("StickyWorkflow"));
+        var (foot, pinned) = (Named<Border>("TreeFootCover"), Named<Panel>("StickyWorkflow"));
 
         foreach (var offset in new[] { 0.0, 53, 171, 182, 299, 310, 433 })
         {
             tree.Offset = tree.Offset.WithY(offset);
             shell.Render();
             var height = tree.Viewport.Height;
-            var pins = Named<Border>("TreeHead").IsVisible ? Named<Border>("TreeHead").Bounds.Height : 0;
             foreach (var row in tree.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible))
             {
                 var at = row.TranslatePoint(default, tree)!.Value.Y;
                 var bottom = at + row.Bounds.Height;
                 Assert.True(!(at < height - 0.5 && bottom > height + 0.5) || (foot.IsVisible && height - foot.Height <= at + 0.5), $"The row at {at} is cut at {height}.");
-                Assert.True(pins == 0 || !(at < pins - 0.5 && bottom > pins + 0.5) || (head.IsVisible && pins + head.Height >= bottom - 0.5), $"The row at {at} is cut at the pinned rows' edge {pins}.");
             }
         }
 

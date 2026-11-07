@@ -836,7 +836,7 @@
   </Style>
   <Style Selector="ComboBox:pointerover /template/ Border#Background, ComboBox:pressed /template/ Border#Background">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <!-- Keyboard focus shows as the one ring, with no fill of Fluent's that reads as selected. -->
   <Style Selector="ComboBox:focus-visible /template/ Border#HighlightBackground">

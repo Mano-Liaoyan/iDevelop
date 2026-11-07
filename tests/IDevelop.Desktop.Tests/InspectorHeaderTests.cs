@@ -250,6 +250,6 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.Completed);
         shell.Render();
 
-        Assert.Equal([(NodeState.Completed, "Complete", 1)], shell.Window.ViewModel.Canvas!.Overview.States.Select(state => (state.State, state.Label, state.Count)));
+        Assert.Equal([(NodeState.Completed, "Completed", 1)], shell.Window.ViewModel.Canvas!.Overview.States.Select(state => (state.State, state.Label, state.Count)));
     }
 }
