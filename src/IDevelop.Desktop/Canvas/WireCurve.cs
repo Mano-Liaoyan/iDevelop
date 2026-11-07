@@ -41,13 +41,16 @@ internal static class WireCurve
     private const double Tolerance = 0.01;
 
     /// <summary>How far a curve reaches along the runs on each side of a turn, in the order it tries them.</summary>
-    private static readonly double[] Reaches = [double.PositiveInfinity, 120, 60, 30];
+    private static readonly double[] Reaches = [double.PositiveInfinity, 120, 60, 30, 14];
 
-    private const int Samples = 32;
+    private const int Samples = 64;
 
     // A card's body inside its container's 10 px port gutters, less 1 px, so a wire may leave its own port, and past its top and
     // bottom by a wire's clear space, so a curve never runs along a card's edge where a small bend avoids it.
     private static readonly Thickness Gutter = new(11, -14);
+
+    // The card's body alone, for a wire that has no way to keep that clear space.
+    private static readonly Thickness Body = new(11, -1);
 
     /// <summary>A wire's two ends and how far each aims off its port's row.</summary>
     public readonly record struct Ends(object Source, object Target, double SourceRow, double TargetRow);
@@ -78,20 +81,27 @@ internal static class WireCurve
     }
 
     /// <summary>
-    /// The curve from <paramref name="source"/> along <paramref name="route"/> to <paramref name="target"/>. It takes the
-    /// widest reach that keeps it off every card, and the narrowest reach when none does.
+    /// The curve from <paramref name="source"/> along <paramref name="route"/> to <paramref name="target"/>. It takes the widest
+    /// reach that keeps it off every card, first with a wire's clear space and with its fan, then without them. The narrowest
+    /// reach hugs the route, which already goes around every card, so a curve never crosses a card at any zoom.
     /// </summary>
     public static ImmutableArray<WirePiece> Of(Point source, IReadOnlyList<Point> route, Point target, double exit, double entry, IReadOnlyList<Rect> cards)
     {
         var points = Corners([source, .. route, target]);
-        var near = Near(points, cards);
         ImmutableArray<WirePiece> curve = [];
-        foreach (var reach in Reaches)
+        foreach (var margin in new[] { Gutter, Body })
         {
-            curve = Pieces(points, reach, exit, entry);
-            if (!curve.Any(piece => Touches(piece, near)))
+            var near = Near(points, cards, margin);
+            foreach (var reach in Reaches)
             {
-                break;
+                foreach (var (from, to) in new[] { (exit, entry), (0.0, 0.0) })
+                {
+                    curve = Pieces(points, reach, from, to);
+                    if (!curve.Any(piece => Touches(piece, near)))
+                    {
+                        return curve;
+                    }
+                }
             }
         }
 
@@ -131,7 +141,7 @@ internal static class WireCurve
             else
             {
                 // A wire that turns back rounds the turn, and the depth of the round grows with the height of the turn.
-                var depth = Math.Max(Math.Max(reachIn, reachOut), Math.Min(Math.Abs(bottom.Y - top.Y) / 2, Reaches[1]));
+                var depth = Math.Min(reach, Math.Max(Math.Max(reachIn, reachOut), Math.Min(Math.Abs(bottom.Y - top.Y) / 2, Reaches[1])));
                 pieces.Add(new WirePiece(start, start + new Vector(into * depth, 0), end + new Vector(into * depth, 0), end));
             }
 
@@ -193,12 +203,12 @@ internal static class WireCurve
     }
 
     // The card bodies a curve near these points could touch, so a long list of cards costs a wire little.
-    private static Rect[] Near(List<Point> points, IReadOnlyList<Rect> cards)
+    private static Rect[] Near(List<Point> points, IReadOnlyList<Rect> cards, Thickness margin)
     {
         var (left, right) = (points.Min(point => point.X), points.Max(point => point.X));
         var (top, bottom) = (points.Min(point => point.Y), points.Max(point => point.Y));
         var around = new Rect(left, top, right - left, bottom - top).Inflate(Reaches[1]);
-        return [.. cards.Where(around.Intersects).Select(card => card.Deflate(Gutter))];
+        return [.. cards.Where(around.Intersects).Select(card => card.Deflate(margin))];
     }
 
     private static bool Touches(WirePiece piece, Rect[] cards)

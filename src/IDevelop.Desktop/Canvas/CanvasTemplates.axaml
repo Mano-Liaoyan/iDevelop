@@ -19,7 +19,6 @@
                          Classes.connected="{Binding IsConnected}"
                          Fill="{TemplateBinding Background}" />
                 <Ellipse Classes="portDot" Classes.input="{Binding IsInput}" Classes.output="{Binding !IsInput}" IsVisible="{Binding IsLive}" IsHitTestVisible="False" />
-                <TextBlock Classes="portLabel" Classes.input="{Binding IsInput}" Classes.output="{Binding !IsInput}" Text="{Binding Label}" />
               </Panel>
             </ControlTemplate>
           </TemplatedControl.Template>
@@ -167,7 +166,8 @@
           <canvas:FittingText Classes="farAgent" Choices="{Binding CardLines}" TextTrimming="CharacterEllipsis" theme:StyleClass.State="{Binding State}"
                               AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
         </DockPanel>
-        <Panel Classes="stateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
+        <!-- While the node needs the person, the zoomed out badge acts as the full card's does, because Fit rests at this form. -->
+        <Panel Classes="stateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="{Binding HasAttention}">
           <Viewbox IsVisible="{Binding ShowsStateBadge}">
             <Canvas Width="16" Height="16">
               <Ellipse Classes="badgeDisc" Width="16" Height="16" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
@@ -176,6 +176,12 @@
                         AutomationProperties.AutomationId="CardFarGlyph" />
             </Canvas>
           </Viewbox>
+          <Button Classes="attention farAttention" IsVisible="{Binding HasAttention}"
+                  Command="{Binding AttendCommand}"
+                  ToolTip.Tip="{Binding AttentionLabel}"
+                  AutomationProperties.AutomationId="CardFarAttention"
+                  AutomationProperties.Name="{Binding AttentionLabel}"
+                  AutomationProperties.HelpText="{Binding AttendHelp}" />
         </Panel>
         <!-- The ports sit 32 px down, however tall the card is. -->
         <ContentControl Content="{Binding Input}" ClipToBounds="False" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.PortMargin}">

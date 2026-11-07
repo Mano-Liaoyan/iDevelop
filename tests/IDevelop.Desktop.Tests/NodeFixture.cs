@@ -83,6 +83,11 @@ internal sealed class NodeFixture : IDisposable
         var shell = Shell.Show(Clients());
         shell.Window.ViewModel.Open(Project);
         shell.Render();
+        if (shell.Window.ViewModel.Canvas is not null)
+        {
+            shell.AtOrigin();
+        }
+
         _windows.Add(shell);
         return shell;
     }

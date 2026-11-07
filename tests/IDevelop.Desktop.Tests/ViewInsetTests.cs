@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
@@ -54,6 +55,6 @@ public sealed class ViewInsetTests : IDisposable
         var design = CardInWindow(shell, "Design");
         var chrome = ChromeBottom(shell);
         Assert.True(design.Top >= chrome + 12, $"Design at {design} is under the top bar, which ends at {chrome}");
-        Assert.Equal(1.0, shell.Editor.ViewportZoom);
+        Assert.Equal(ZoomTiers.ActualSize, shell.Editor.ViewportZoom);
     }
 }

@@ -331,6 +331,19 @@
     <Setter Property="Height" Value="80" />
     <Setter Property="Margin" Value="0,-40,-30,0" />
   </Style>
+  <Style Selector="Button.attention.farAttention">
+    <Setter Property="Width" Value="NaN" />
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+  <Style Selector="Button.attention.farAttention:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
   <!-- A card's edge keeps its weight on screen as the cards shrink, and a node with no state keeps a visible edge. A running
        node's edge and glow stay the heaviest in every tier. -->
   <Style Selector=":is(Control).tier-detail Border.stateStroke, :is(Control).tier-compact Border.stateStroke">
@@ -513,29 +526,6 @@
   </Style>
   <Style Selector=":is(Control).tier-label Ellipse.port.output, :is(Control).tier-label Ellipse.portDot.output, :is(Control).tier-title Ellipse.port.output, :is(Control).tier-title Ellipse.portDot.output">
     <Setter Property="RenderTransform" Value="translateX(8px)" />
-  </Style>
-  <!-- A pin's name sits over its wire, outside the card, while a card has room for it, and on a far card only while it is selected. -->
-  <Style Selector="TextBlock.portLabel">
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="IsHitTestVisible" Value="False" />
-    <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Margin" Value="-60,-10,-60,0" />
-  </Style>
-  <Style Selector="TextBlock.portLabel.input">
-    <Setter Property="HorizontalAlignment" Value="Left" />
-    <Setter Property="TextAlignment" Value="Right" />
-    <Setter Property="Margin" Value="-60,-10,10,0" />
-  </Style>
-  <Style Selector="TextBlock.portLabel.output">
-    <Setter Property="HorizontalAlignment" Value="Right" />
-    <Setter Property="Margin" Value="10,-10,-60,0" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail TextBlock.portLabel, :is(Control).tier-compact TextBlock.portLabel">
-    <Setter Property="FontSize" Value="15" />
-  </Style>
-  <Style Selector=":is(Control).tier-label TextBlock.portLabel, :is(Control).tier-title TextBlock.portLabel, :is(Control).tier-block TextBlock.portLabel">
-    <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- A port's ring is faint until a connection uses it. -->
   <Style Selector="Ellipse.port">

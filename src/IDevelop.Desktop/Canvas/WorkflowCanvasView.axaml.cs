@@ -24,11 +24,11 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>How far apart the canvas's dots lie, in canvas units.</summary>
     private const double DotPitch = 24;
 
-    /// <summary>The zoom at which a found card's title and neighbours read: a card shows its tile and two lines.</summary>
-    private const double FoundZoom = 0.6;
+    /// <summary>The zoom at which a found card's title and neighbours read: the bar's 100%.</summary>
+    private const double FoundZoom = ZoomTiers.ActualSize;
 
     /// <summary>How far a zoomed out card's last line reaches under its box at <see cref="FoundZoom"/>.</summary>
-    private const double FarLineHeight = 26;
+    private static readonly double FarLineHeight = ZoomTiers.CardReach(ZoomTier.Label);
 
     private WorkflowCanvasViewModel? _viewModel;
     private Point? _windowAnchor;
@@ -192,14 +192,20 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     }
 
     /// <summary>
-    /// Zooms and pans so every card, and every ghost card of an open proposal, fits in the editor, never above 100%. Only a
+    /// Zooms and pans so every card, and every ghost card of an open proposal, fits in the editor, never above the bar's 100%. Only a
     /// graph that would need less than <see cref="CanvasChrome.LeastFitZoom"/> stops there, around the node that matters now.
     /// </summary>
     public void FitToView()
     {
         if (Cards().Any())
         {
-            Fit(Extent(), FocusPoint());
+            // A fit can change the zoom tier, and with it how far the cards draw, so it measures again at the zoom it reached.
+            var extent = Extent();
+            Fit(extent, FocusPoint(), CanvasChrome.FitZoom(extent, Room(FitMargin)));
+            if (Extent() != extent)
+            {
+                Fit(Extent(), FocusPoint(), CanvasChrome.FitZoom(Extent(), Room(FitMargin)));
+            }
         }
     }
 
@@ -218,7 +224,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         return node?.DisplayRect.Center ?? Extent().TopLeft;
     }
 
-    private void Fit(Rect extent, Point focus)
+    private void Fit(Rect extent, Point focus, double zoom)
     {
         // A fit posted before the window showed another workflow finds this view gone, and its size no longer says anything.
         if (extent.Width <= 0 || extent.Height <= 0 || Editor.Bounds.Width <= 0 || !this.IsAttachedToVisualTree())
@@ -227,7 +233,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
 
         var room = Room(FitMargin);
-        Editor.ViewportZoom = CanvasChrome.FitZoom(extent, room);
+        Editor.ViewportZoom = zoom;
         Editor.ViewportLocation = CanvasChrome.ViewOn(extent, room, Editor.ViewportZoom, focus);
         if (_viewModel is { } canvas)
         {
@@ -264,17 +270,18 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             : canvas.Nodes.Select(node => node.DisplayRect).Concat(canvas.Ghosts.OfType<GhostCardViewModel>().Select(ghost => new Rect(ghost.Location, size)));
     }
 
-    // Frames the nodes as Fit frames the whole graph.
+    // Frames the nodes as Fit frames the whole graph, but the person asked to look closer, so a frame may pass the bar's 100%.
     private void Frame(IReadOnlyCollection<TaskNodeViewModel> nodes)
     {
         if (nodes.Count > 0)
         {
             var extent = nodes.Select(node => node.DisplayRect).Aggregate((union, rect) => union.Union(rect));
-            Fit(extent, extent.Center);
+            var room = Room(FitMargin);
+            Fit(extent, extent.Center, Math.Clamp(Math.Min(room.Width / extent.Width, room.Height / extent.Height), CanvasChrome.LeastFitZoom, 1));
         }
     }
 
-    public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
+    public void ZoomToActual() => Editor.ZoomAtPosition(ZoomTiers.ActualSize / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
 
     protected override void OnDataContextChanged(EventArgs e)
     {

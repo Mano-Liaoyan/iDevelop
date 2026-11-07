@@ -516,9 +516,16 @@
   <Style Selector="Button.panelEdge:not(.closed):not(:pointerover):not(:focus-visible) /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Opacity" Value="0" />
   </Style>
+  <Style Selector="Button.panelEdge.leading">
+    <Setter Property="Margin" Value="6,0,-6,0" />
+  </Style>
+  <Style Selector="Button.panelEdge.trailing">
+    <Setter Property="Margin" Value="-6,0,6,0" />
+  </Style>
   <Style Selector="Button.panelEdge.closed">
     <Setter Property="Width" Value="18" />
     <Setter Property="Height" Value="84" />
+    <Setter Property="Margin" Value="0" />
   </Style>
   <Style Selector="TextBlock.edgeLabel">
     <Setter Property="FontSize" Value="11" />

@@ -32,6 +32,9 @@ internal static class WireRouting
     // A wire that goes straight past a card keeps this far from its top and bottom edges, or it reads as the card's own wire.
     private static readonly Thickness PassClearance = new(0, 14);
 
+    // What a detour keeps where cards stand closer than the clearance: the columns' port gutters and a wire's width.
+    private static readonly Thickness[] Tight = [new(4, 6), new(0, 2)];
+
     // How much longer a wide detour may run than a close one, so it never goes around a whole group of cards for clearance.
     private const double WideDetour = 100;
 
@@ -58,7 +61,13 @@ internal static class WireRouting
 
         var wideRows = new Thickness(WideColumns, Math.Max(Clearance, (RowGap - reach) / 2 - 1));
         var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance)), Detour(start, end, cards, wideRows));
-        return wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour) ? clear : close ?? step;
+        if (wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour))
+        {
+            return clear;
+        }
+
+        // Cards that stand too close for a wire's clear space still leave it a way between them, so a wire never takes a card's body.
+        return close ?? Tight.Select(gap => Detour(start, end, cards, gap)).FirstOrDefault(detour => detour is not null) ?? step;
     }
 
     private static double Length(ImmutableArray<Point> path) => path.Zip(path.Skip(1)).Sum(run => Point.Distance(run.First, run.Second));

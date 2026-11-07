@@ -11,19 +11,19 @@ public sealed class FitZoomTests
     [Fact]
     public void A_graph_that_fits_at_a_readable_zoom_fits_whole_and_centred()
     {
-        var extent = new Rect(100, 100, 1000, 400);
+        var extent = new Rect(100, 100, 1500, 400);
 
         var zoom = CanvasChrome.FitZoom(extent, Room);
         var location = CanvasChrome.ViewOn(extent, Room, zoom, new Point(100, 100));
 
-        Assert.Equal(0.68, zoom, 3);
+        Assert.Equal(0.4, zoom, 3);
         Assert.Equal(extent.Center, location + (Vector)Room.Center / zoom, new PointComparer());
     }
 
     [Fact]
-    public void Fit_never_zooms_past_100_percent()
+    public void Fit_never_zooms_past_the_size_the_bar_calls_100_percent()
     {
-        Assert.Equal(1, CanvasChrome.FitZoom(new Rect(0, 0, 260, 64), Room));
+        Assert.Equal(ZoomTiers.ActualSize, CanvasChrome.FitZoom(new Rect(0, 0, 260, 64), Room));
     }
 
     [Fact]

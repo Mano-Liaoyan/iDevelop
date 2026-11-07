@@ -85,9 +85,14 @@ public partial class MainWindow : Window
     private double _sidebarWidth;
     private double _inspectorWidth;
 
-    // A closed panel's column takes no width.
+    // The width of a closed panel's seam, which holds the panel's tab.
+    private const double ClosedSeam = 19;
+
+    // A closed panel's column takes no width, and its seam takes the tab's, so the canvas ends where the tab begins.
     private void ShowPanels()
     {
+        Columns.ColumnDefinitions[1].Width = new GridLength(ViewModel.IsSidebarOpen ? 1 : ClosedSeam);
+        Columns.ColumnDefinitions[3].Width = new GridLength(ViewModel.IsInspectorOpen || !ViewModel.HasProjects ? 1 : ClosedSeam);
         Fold(Columns.ColumnDefinitions[0], ViewModel.IsSidebarOpen, ref _sidebarWidth, _sidebarMin, _sidebarMax);
         Fold(Columns.ColumnDefinitions[4], ViewModel.IsInspectorOpen, ref _inspectorWidth, _inspectorMin, _inspectorMax);
         LimitPanels();

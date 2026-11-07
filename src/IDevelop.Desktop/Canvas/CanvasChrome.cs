@@ -32,9 +32,12 @@ internal static class CanvasChrome
     /// <summary>Below this canvas width the run bar's progress shortens to "5/9", so its chips fit whole.</summary>
     public const double ShortBarWidth = 760;
 
-    /// <summary>The zoom that fits <paramref name="extent"/> in <paramref name="room"/>, never above 100% and never under <see cref="LeastFitZoom"/>.</summary>
+    /// <summary>
+    /// The zoom that fits <paramref name="extent"/> in <paramref name="room"/>, never under <see cref="LeastFitZoom"/> and never
+    /// above the zoom the bar calls 100%, so a small graph rests at that size in the middle of the canvas, as in Blender and Unreal.
+    /// </summary>
     public static double FitZoom(Rect extent, Rect room) =>
-        Math.Clamp(Math.Min(room.Width / extent.Width, room.Height / extent.Height), LeastFitZoom, 1);
+        Math.Clamp(Math.Min(room.Width / extent.Width, room.Height / extent.Height), LeastFitZoom, ZoomTiers.ActualSize);
 
     /// <summary>
     /// The viewport location that shows the most of <paramref name="extent"/> around <paramref name="focus"/> in

@@ -67,6 +67,23 @@ public sealed class ConversationWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_failed_card_opens_its_conversation_from_its_badge_at_the_zoom_a_fit_rests_at()
+    {
+        using var f = new NodeFixture(NodeFixture.Task(TestTasks.Design, "Design", 105));
+        f.Install(On().Stderr("The model is not available.").Exit(2));
+        var shell = f.Open();
+        shell.NodeModel("Design").RunCommand.Execute(null);
+        shell.WaitForState("Design", NodeState.Failed);
+        shell.Editor.ViewportZoom = ZoomTiers.ActualSize;
+        shell.Render();
+        var attention = shell.InCard<Button>("Design", "CardFarAttention");
+
+        Assert.True(attention.IsEffectivelyVisible);
+        Shell.Invoke(attention);
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView"), "the conversation opens");
+    }
+
+    [AvaloniaFact]
     public void A_failed_card_opens_its_conversation_from_its_attention_glyph()
     {
         using var f = new NodeFixture(NodeFixture.Task(TestTasks.Design, "Design", 105));

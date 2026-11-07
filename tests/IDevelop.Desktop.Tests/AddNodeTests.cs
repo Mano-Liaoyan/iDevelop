@@ -340,7 +340,7 @@ public sealed class AddNodeTests : IDisposable
         shell.Click(Action(shell, "Zoom to 100%"));
 
         Assert.False(shell.AddPopoverIsOpen);
-        Assert.Equal(1, shell.Editor.ViewportZoom, 6);
+        Assert.Equal(ZoomTiers.ActualSize, shell.Editor.ViewportZoom, 6);
     }
 
     private static Button Action(Shell shell, string name) =>
@@ -361,6 +361,6 @@ public sealed class AddNodeTests : IDisposable
         shell.RightClick(shell.InEditor(600, 500));
         Assert.Equal("Delete Selection", shell.AddRows().Last());
         shell.Click(shell.Window.GetVisualDescendants().OfType<Button>().Single(button => Avalonia.Automation.AutomationProperties.GetName(button) == "Zoom to 100%"));
-        Assert.Equal(1, shell.Editor.ViewportZoom, 6);
+        Assert.Equal(ZoomTiers.ActualSize, shell.Editor.ViewportZoom, 6);
     }
 }

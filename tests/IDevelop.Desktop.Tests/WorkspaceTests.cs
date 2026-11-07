@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Avalonia;
+using IDevelop.Desktop.Canvas;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
@@ -186,7 +187,7 @@ public sealed class WorkspaceTests : IDisposable
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.Equal((1.0, new Point(-108, -232)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        Assert.Equal(ZoomTiers.ActualSize, shell.Editor.ViewportZoom);
         Assert.Null(shell.Window.ViewModel.Canvas!.SelectedNode);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
 

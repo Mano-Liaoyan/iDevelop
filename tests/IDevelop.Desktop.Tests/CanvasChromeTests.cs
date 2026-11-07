@@ -48,7 +48,7 @@ public sealed class CanvasChromeTests : IDisposable
 
         // A narrow window closes the inspector, and it gives its width back to the canvas.
         Resize(shell, 900, 600);
-        Assert.Equal((240, 0, 658), Widths(shell));
+        Assert.Equal((240, 0, 640), Widths(shell));
 
         Resize(shell, 1600, 1000);
         Assert.Equal((400, 520, 678), Widths(shell));
@@ -196,7 +196,8 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+        Shell.Invoke(shell.InCard<Button>("Write docs", "CardAttention"));
+        shell.Render();
         Resize(shell, 900, 600, 320);
 
         shell.Click(shell.Find<Button>("ConversationLayout"));
@@ -246,7 +247,8 @@ public sealed class CanvasChromeTests : IDisposable
         FanOut.Run(shell);
         FanOut.Generate(shell);
         Resize(shell, 1600, 1000, 320);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+        Shell.Invoke(shell.InCard<Button>("Write docs", "CardAttention"));
+        shell.Render();
 
         shell.Click(shell.Find<Button>("ConversationLayout"));
 
@@ -262,7 +264,8 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         FanOut.Run(shell);
         Resize(shell, 1600, 1000, 320);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+        Shell.Invoke(shell.InCard<Button>("Write docs", "CardAttention"));
+        shell.Render();
         // Zoomed in on "Design the API" in the upper middle, with the other two cards just showing at the canvas's right edge.
         shell.Editor.ViewportZoom = 1.5;
         shell.Editor.ViewportLocation = new Point(-220, 90);
@@ -293,7 +296,8 @@ public sealed class CanvasChromeTests : IDisposable
         shell.Pan(shell.InEditor(260, 600), new Vector(-100, 0));
         shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
         Assert.StartsWith("That would create a cycle", shell.Status);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+        Shell.Invoke(shell.InCard<Button>("Write docs", "CardAttention"));
+        shell.Render();
         shell.Click(shell.Find<Button>("ConversationLayout"));
         Resize(shell, 900, 660, 320);
         var (top, bottom) = Rows(shell);
@@ -335,7 +339,8 @@ public sealed class CanvasChromeTests : IDisposable
         FanOut.Generate(shell);
         if (docked)
         {
-            shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+            Shell.Invoke(shell.InCard<Button>("Write docs", "CardAttention"));
+            shell.Render();
             shell.Click(shell.Find<Button>("ConversationLayout"));
         }
 

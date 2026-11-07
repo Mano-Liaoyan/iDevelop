@@ -84,7 +84,8 @@ public sealed class ConversationLayoutTests
     {
         var shell = f.Open();
         FanOut.Run(shell);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+        Shell.Invoke(shell.InCard<Button>("Write docs", "CardAttention"));
+        shell.Render();
         var conversation = shell.Window.ViewModel.Conversation!;
         shell.WaitUntil(() => conversation.Items.OfType<MessageItemViewModel>().Any(), "the conversation shows its turn");
         Assert.True(shell.Find<Control>("ConversationRun").IsEffectivelyVisible);

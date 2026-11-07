@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
@@ -135,10 +136,10 @@ public sealed class ShortcutTests : IDisposable
         Assert.True(shell.Editor.ViewportZoom > 1);
 
         shell.Press(Key.D0);
-        Assert.Equal(1, shell.Editor.ViewportZoom, 6);
+        Assert.Equal(ZoomTiers.ActualSize, shell.Editor.ViewportZoom, 6);
 
         shell.Press(Key.OemMinus);
-        Assert.True(shell.Editor.ViewportZoom < 1);
+        Assert.True(shell.Editor.ViewportZoom < ZoomTiers.ActualSize);
 
         shell.Press(Key.F);
         Assert.True(new Rect(shell.Editor.ViewportLocation, shell.Editor.ViewportSize).Contains(new Point(505, 90)));

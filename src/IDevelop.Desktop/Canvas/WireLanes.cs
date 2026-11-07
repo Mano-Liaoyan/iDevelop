@@ -12,6 +12,8 @@ internal static class WireLanes
 {
     private const double Lane = 10;
 
+    private const double EdgeClearance = 2;
+
     private const double Tolerance = 0.01;
 
     /// <summary>One wire's route and its place in the order of lanes.</summary>
@@ -89,8 +91,9 @@ internal static class WireLanes
         }
     }
 
+    // A lane also keeps off a card's top and bottom edges, or the wire would run along the card's border.
     private static bool Crosses(ImmutableArray<Point> route, IReadOnlyList<Rect> cards) =>
-        route.Zip(route.Skip(1)).Any(run => cards.Any(card =>
+        route.Zip(route.Skip(1)).Any(run => cards.Select(card => card.Inflate(new Thickness(0, EdgeClearance))).Any(card =>
             Math.Max(run.First.X, run.Second.X) > card.Left + Tolerance && Math.Min(run.First.X, run.Second.X) < card.Right - Tolerance
             && Math.Max(run.First.Y, run.Second.Y) > card.Top + Tolerance && Math.Min(run.First.Y, run.Second.Y) < card.Bottom - Tolerance));
 }
