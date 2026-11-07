@@ -28,22 +28,22 @@
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
   </Style>
   <!-- The title as text over the box, at the box's border and padding, so it wraps where the box wraps. The box sits 6 px
-       before the column, so the text starts where a connection's or a workflow's name starts. Beyond four lines the box
-       waits for the focus, so a long title never pushes the actions down. -->
+       before the column, so the text starts where a connection's or a workflow's name starts. The text's first line sits beside
+       the tile, and beyond three lines the box waits for the focus, so a long title never pushes the actions down. -->
   <Style Selector="TextBlock.headerTitle">
     <Setter Property="FontSize" Value="14" />
     <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="TextWrapping" Value="WrapWithOverflow" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Margin" Value="6,0" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="6,2" />
   </Style>
   <Style Selector="Panel.headerTitle:focus-within > TextBlock.headerTitle">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Panel.headerTitle:not(:focus-within) > TextBox.headerTitle">
-    <Setter Property="MaxHeight" Value="84" />
+    <Setter Property="MaxHeight" Value="64" />
   </Style>
   <Style Selector="Panel.headerTitle:not(:focus-within) > TextBox.headerTitle /template/ TextPresenter#PART_TextPresenter">
     <Setter Property="Opacity" Value="0" />

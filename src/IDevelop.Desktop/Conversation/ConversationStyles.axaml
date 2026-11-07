@@ -181,7 +181,7 @@
     <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="TextWrapping" Value="WrapWithOverflow" />
-    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="MaxLines" Value="3" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.limitsText">

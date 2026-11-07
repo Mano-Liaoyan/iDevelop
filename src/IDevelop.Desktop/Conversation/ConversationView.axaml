@@ -50,7 +50,7 @@
            it leaves out the workflow's place and its actions too. -->
       <theme:SpillRow MinLeadWidth="186" Spacing="4" ItemsAlignment="Start" SpillIndent="28">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Center" />
+          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Top" />
           <StackPanel Grid.Column="1" VerticalAlignment="Center">
             <theme:EllipsisText Classes="conversationTitle" Whole="{Binding Node.Title}" ToolTip.Tip="{Binding Node.Title}"
                                 AutomationProperties.AutomationId="ConversationTitle" />
