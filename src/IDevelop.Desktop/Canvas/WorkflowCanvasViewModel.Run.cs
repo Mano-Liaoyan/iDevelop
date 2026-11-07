@@ -166,6 +166,12 @@ public sealed partial class WorkflowCanvasViewModel
 
     public string FollowLabel => IsFollowing ? "Stop following running nodes" : "Follow running nodes";
 
+    /// <summary>
+    /// Run Workflow's words: "Run Workflow" while it runs every node or nothing, else how many of the nodes it runs, such as
+    /// "Run 1 of 8", so the scope shows before the pointer reaches the button.
+    /// </summary>
+    public string RunWorkflowLabel => RunWork > 0 && RunWork < Nodes.Count ? $"Run {RunWork} of {Nodes.Count}" : "Run Workflow";
+
     /// <summary>The tooltip of Run Workflow: what it runs, or why nothing can run.</summary>
     public string RunWorkflowTip => (Nodes.Count, RunWork) switch
     {
@@ -254,6 +260,7 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarActivity));
         OnPropertyChanged(nameof(BarTip));
         OnPropertyChanged(nameof(RunWorkflowTip));
+        OnPropertyChanged(nameof(RunWorkflowLabel));
         OnSummaryChanged();
         _runWorkflow?.NotifyCanExecuteChanged();
         _stopAll?.NotifyCanExecuteChanged();

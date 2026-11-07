@@ -54,6 +54,22 @@ public sealed class CardIdentityTests
         Assert.Equal(0, canvas.RunWork);
         Assert.False(canvas.CanStartRun);
         Assert.Contains("Nothing to run", canvas.RunWorkflowTip);
+        Assert.Equal("Run Workflow", canvas.RunWorkflowLabel);
+    }
+
+    [AvaloniaFact]
+    public void Run_Workflow_says_on_its_face_how_many_nodes_it_runs_when_some_keep_their_result()
+    {
+        using var f = new NodeFixture(Task(A, "A", 105), Task(B, "B", 405));
+        f.Install(Reply("s-1", "Done."));
+        var shell = f.Open();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        Assert.Equal("Run Workflow", canvas.RunWorkflowLabel);
+
+        shell.RunNode("A");
+        shell.WaitForCard("A", "Completed");
+
+        Assert.Equal("Run 1 of 2", canvas.RunWorkflowLabel);
     }
 
     [AvaloniaFact]

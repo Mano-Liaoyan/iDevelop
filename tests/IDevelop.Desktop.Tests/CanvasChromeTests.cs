@@ -533,7 +533,7 @@ public sealed class CanvasChromeTests : IDisposable
             if (id == "RunWorkflow")
             {
                 // The workflow's primary action keeps its words at every width.
-                Assert.Contains("Run Workflow", labels);
+                Assert.Contains(shell.Window.ViewModel.Canvas!.RunWorkflowLabel, labels);
             }
             else if (compact)
             {
