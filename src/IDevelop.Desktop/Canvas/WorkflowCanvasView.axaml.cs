@@ -21,7 +21,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // What a fit keeps clear at the editor's edges. The cards take the rest, because the zoom decides how much of a title reads.
     private const double FitMargin = 16;
 
-    private const double NameTagInset = 4;
+    private const double LabelInset = 4;
 
     /// <summary>How far apart the canvas's dots lie, in canvas units.</summary>
     private const double DotPitch = 24;
@@ -358,46 +358,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             ShowTitleText();
         }
 
-        ShowNameTag();
         ShowAdd();
-    }
-
-    // The tag names the selected card in full where the card cuts its title: always at the Block tier, which shows no title, and
-    // at the Label and Title tiers when the title ends in an ellipsis. It stands in screen pixels under the card, over it, right
-    // of it, or left of it, the first place where it covers no other card (ADR 0064). Where no place holds it, it stands on its
-    // own card, which it then names in place.
-    private void ShowNameTag()
-    {
-        var node = _viewModel is { Tier: ZoomTier.Block or ZoomTier.Label or ZoomTier.Title, SelectedNodes.Count: 1 } canvas
-            && (canvas.Tier == ZoomTier.Block || TitleIsCut(canvas.SelectedNode)) ? canvas.SelectedNode : null;
-        NameTag.IsVisible = node is not null;
-        if (node is null)
-        {
-            return;
-        }
-
-        NameTagText.Text = node.Title;
-        NameTag.Margin = default;
-        NameTag.Measure(Size.Infinity);
-        var tag = NameTag.DesiredSize;
-        var card = CardRect(node);
-        var others = _viewModel!.Nodes.Where(other => other != node).Select(CardRect).ToArray();
-        var room = new Rect(Editor.Bounds.Size).Deflate(NameTagInset);
-        var left = Math.Clamp(card.X, room.X, Math.Max(room.X, room.Right - tag.Width));
-        var top = Math.Clamp(card.Y, room.Y, Math.Max(room.Y, room.Bottom - tag.Height));
-        Point[] places =
-        [
-            new(left, card.Bottom + NameTagInset),
-            new(left, card.Top - NameTagInset - tag.Height),
-            new(card.Right + NameTagInset, top),
-            new(card.Left - NameTagInset - tag.Width, top),
-        ];
-        var place = places.Select(at => (Point?)at).FirstOrDefault(at =>
-        {
-            var rect = new Rect(at!.Value, tag);
-            return room.Contains(rect) && !others.Any(other => other.Intersects(rect.Inflate(NameTagInset)));
-        }) ?? new Point(left, Math.Clamp(card.Center.Y - tag.Height / 2, room.Y, Math.Max(room.Y, room.Bottom - tag.Height)));
-        NameTag.Margin = new Thickness(place.X, place.Y, 0, 0);
     }
 
     private void OnPointerOverPort(object? sender, PointerEventArgs e)
@@ -435,7 +396,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         PortLabel.Measure(Size.Infinity);
         var label = PortLabel.DesiredSize;
         var at = (port!.Anchor - Editor.ViewportLocation) * Editor.ViewportZoom;
-        var room = new Rect(Editor.Bounds.Size).Deflate(NameTagInset);
+        var room = new Rect(Editor.Bounds.Size).Deflate(LabelInset);
         const double Gap = 10;
         var (after, before) = (at.X + Gap, at.X - Gap - label.Width);
         var left = port.IsInput ? (before >= room.X ? before : after) : (after + label.Width <= room.Right ? after : before);
@@ -453,11 +414,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         var width = node.IsExpanded ? node.CardSize.Width : WorkflowCanvasViewModel.TaskCardWidth;
         return new Rect(at.X + 10 * zoom, at.Y, (width - 20) * zoom, height * zoom);
     }
-
-    // The selected card's zoomed out title ends in an ellipsis.
-    private bool TitleIsCut(TaskNodeViewModel? node) =>
-        node is not null && Editor.GetVisualDescendants().OfType<ItemContainer>().FirstOrDefault(card => card.DataContext == node) is { } container
-        && container.GetVisualDescendants().OfType<Theme.EllipsisText>().Any(text => text.Classes.Contains("farTitle") && text.IsCut);
 
     // The selection comes back once the editor has laid out its cards, as a selection made on the canvas would.
     private void RestoreSelection(object? sender, EventArgs e)
@@ -506,23 +462,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Tier))
         {
             ShowTier();
-            ShowNameTag();
-            // The cards cut their titles anew once they lay out at the new tier.
-            Dispatcher.UIThread.Post(ShowNameTag, DispatcherPriority.Background);
         }
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.ViewportZoom))
         {
             ShowTitleText();
-            ShowNameTag();
-        }
-        else if (e.PropertyName is nameof(WorkflowCanvasViewModel.ViewportLocation))
-        {
-            ShowNameTag();
-        }
-        else if (e.PropertyName is nameof(WorkflowCanvasViewModel.SelectedNode))
-        {
-            ShowNameTag();
-            Dispatcher.UIThread.Post(ShowNameTag, DispatcherPriority.Background);
         }
     }
 

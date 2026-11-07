@@ -676,7 +676,7 @@
   <Style Selector="nodify|NodifyEditor.behindEditor">
     <Setter Property="Opacity" Value="0.45" />
   </Style>
-  <Style Selector="Border.nameTag">
+  <Style Selector="Border.portLabel">
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="MaxWidth" Value="260" />
@@ -686,7 +686,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
-  <Style Selector="Border.nameTag TextBlock">
+  <Style Selector="Border.portLabel TextBlock">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="LineHeight" Value="16" />
     <Setter Property="TextWrapping" Value="Wrap" />
