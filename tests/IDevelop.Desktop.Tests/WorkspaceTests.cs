@@ -187,7 +187,7 @@ public sealed class WorkspaceTests : IDisposable
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.Equal(ZoomTiers.ActualSize, shell.Editor.ViewportZoom);
+        Assert.Equal(ZoomTiers.LargestFitZoom, shell.Editor.ViewportZoom);
         Assert.Null(shell.Window.ViewModel.Canvas!.SelectedNode);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
 
