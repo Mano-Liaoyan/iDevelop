@@ -429,11 +429,13 @@
                                       AutomationProperties.AutomationId="ResultRow"
                                       AutomationProperties.Name="{Binding Heading}">
                                 <StackPanel Spacing="2">
-                                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                  <!-- The heading keeps its whole width beside the commit, or the commit moves under it, so neither is cut. -->
+                                  <theme:SpillRow MinLeadWidth="{x:Static x:Double.MaxValue}" LineSpacing="2" ItemsAlignment="Start">
                                     <TextBlock Classes="resultHeading" Text="{Binding Heading}" />
-                                    <TextBlock Grid.Column="1" Classes="location" Text="{Binding Commit}"
-                                               IsVisible="{Binding Commit, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                  </Grid>
+                                    <TextBlock Classes="location" Text="{Binding Commit}" ToolTip.Tip="{Binding CommitTip}"
+                                               IsVisible="{Binding Commit, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               AutomationProperties.AutomationId="ResultCommit" />
+                                  </theme:SpillRow>
                                   <StackPanel Spacing="2">
                                     <theme:EllipsisText x:Name="ResultText" Classes="detail resultSummary" Whole="{Binding PlainSummary}"
                                                            AutomationProperties.AutomationId="ResultSummary" />

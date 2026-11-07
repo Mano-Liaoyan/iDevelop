@@ -29,6 +29,9 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
     /// <summary>"Commit 1a2b3c4" for a node that edits the project, or null.</summary>
     public string? Commit => result.Commit is { Length: >= 7 } commit ? $"Commit {commit[..7]}" : null;
 
+    /// <summary>The whole commit identifier, which the short one's tooltip shows.</summary>
+    public string? CommitTip => result.Commit is { Length: >= 7 } commit ? $"Commit {commit}" : null;
+
     /// <summary>The whole commit id, which Copy takes, or null.</summary>
     public string? CommitId => result.Commit;
 

@@ -138,10 +138,15 @@ public sealed class EllipsisText : TextBlock
     // A title never breaks inside a word: a word wider than a line ends in the ellipsis.
     private bool Keeps => TextWrapping == TextWrapping.WrapWithOverflow;
 
+    // A window at a fractional scale rounds the box to device pixels after the measure, so a text that fits only to the last
+    // pixel can wrap at the arrange and lose its ellipsis past the last line. The text fits one pixel inside the box.
+    private const double Slack = 1;
+
     private bool Fits(string text, double width)
     {
+        width -= Slack;
         using var layout = new TextLayout(text, new Typeface(FontFamily, FontStyle, FontWeight, FontStretch), FontSize, Foreground,
             textWrapping: Keeps ? TextWrapping.WrapWithOverflow : TextWrapping.Wrap, maxWidth: Math.Max(1, width), lineHeight: LineHeight);
-        return layout.TextLines.Count <= MaxLines && (!Keeps || layout.TextLines.All(line => line.Width <= width + 0.5));
+        return layout.TextLines.Count <= MaxLines && (!Keeps || layout.TextLines.All(line => line.Width <= width));
     }
 }
