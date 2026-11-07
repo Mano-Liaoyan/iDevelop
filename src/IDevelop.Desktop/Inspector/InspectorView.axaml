@@ -124,7 +124,7 @@
                         Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
                   <Grid ColumnDefinitions="Auto,*" ToolTip.Tip="{Binding StatusLabel}">
                     <PathIcon Theme="{StaticResource Glyph}" Margin="0,0,4,0" />
-                    <TextBlock Grid.Column="1" Text="{Binding StatusLabel}"
+                    <TextBlock Grid.Column="1" Text="{Binding StateWord}"
                                AutomationProperties.AutomationId="RunTaskStatus" />
                   </Grid>
                 </Border>
@@ -763,7 +763,8 @@
                                     AutomationProperties.AutomationId="StateRow"
                                     AutomationProperties.Name="{Binding Label}">
                               <inspector:InspectorGrid>
-                                <PathIcon Classes="stateIcon" Classes.spin="{Binding IsRunning}" Theme="{StaticResource Glyph}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
+                                <PathIcon Classes="stateIcon spin" IsVisible="{Binding IsRunning}" Theme="{StaticResource Glyph}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
+                                <theme:StateBadge Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" State="{Binding State}" Why="{Binding Why}" IsVisible="{Binding !IsRunning}" />
                                 <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="linkTitle" Text="{Binding Label}" />
                                 <inspector:InkAlignedText Grid.Column="4" Classes="count" Text="{Binding Count}" AutomationProperties.AutomationId="StateCount" />
                               </inspector:InspectorGrid>

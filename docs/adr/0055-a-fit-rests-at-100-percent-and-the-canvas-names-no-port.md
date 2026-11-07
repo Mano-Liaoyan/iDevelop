@@ -1,6 +1,10 @@
 # A fit rests at 100%, the canvas names no port, and the inspector keeps one order
 
-Status: accepted. This record replaces the Ports and Inspector order lines of ADR 0054 and the sitting of a short transcript on the composer in the same record.
+A fit no longer enlarges a small workflow, the canvas draws no port label, and the inspector's sections stay in place. This changes parts of [ADR 0054](0054-a-node-with-a-result-leads-with-it-and-a-wait-for-words-needs-no-card.md): its Ports line, its section order, and the short transcript that sat on the composer. Workflow files and the engine stay the same.
+
+Round 7 of the UI review found port labels that overprinted, an Inspector tab over the last card, and sections that moved with a node's state.
+
+## How it works
 
 - **Fit.** Fit, opening a workflow, and Find never go past the zoom that the bar calls 100%. A small graph rests at that size in the middle of the canvas, as in Blender and Unreal. Reset (0) goes to the same zoom. Framing the selection may go closer, because the person asked to look closer.
 - **Ports.** The canvas draws no static port label at any zoom. Each card has one input and one output, so a label adds no information, and two labels overprint in the gap between cards. A port's tooltip names it.
@@ -10,4 +14,5 @@ Status: accepted. This record replaces the Ports and Inspector order lines of AD
 - **Zoomed out cards.** The badge of a card that needs the person acts as the full card's does, because a fit rests at that form. The smallest cards give the model's line to a third title line, and the badge wears the card's corner.
 - **Counts.** A tight row or run bar gives each state its badge and count, and its tooltip the words, so no state hides behind "+2". One wait reason keeps its own word in a row and in the bar.
 - **Left area.** Activity's second line says where the node is, workflow first, because the badge says why it is listed. Rows scroll directly under the pinned rows. The tree uses the same state badge as Activity. With no project open, only the canvas offers Open folder.
+- **State words.** One state has one word: the inspector's header says what a waiting node waits for, the Overview says Completed, and the sections and the tree show the one state badge.
 - **Composer.** While the inspector is open the composer has no model chip, because one model needs one place. A short transcript starts at the top of the conversation in every state.

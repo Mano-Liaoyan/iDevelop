@@ -48,13 +48,12 @@ public sealed class SkillPickerViewModel : ObservableObject
 
     public bool ShowsList => IsOpen && CanChoose;
 
-    /// <summary>"All skills" without a choice, else how many the node chose.</summary>
+    /// <summary>"All skills" without a choice, else the names of the skills the node chose, which the row cuts at its end.</summary>
     public string Summary => Settings?.Skills switch
     {
         null => "All skills",
         { Count: 0 } => "No skills",
-        { Count: 1 } => "1 skill",
-        { Count: var count } => $"{count} skills",
+        { } chosen => string.Join(", ", chosen),
     };
 
     /// <summary>The chosen skills' names, which the picker's tooltip lists.</summary>
