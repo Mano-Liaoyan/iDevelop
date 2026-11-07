@@ -50,7 +50,8 @@
        and a last line with the client's letter, the model and level, and the state's badge, so the badge never meets the title.
        The stripe says the kind, so a node with an agent gives the tile's place to its client's letter.
        The form takes more height than the card's 64 px without moving its neighbours or its wires: cardBody draws past the box
-       that the layout sees. Only the last tier gives up the text, for cardBlock's state fill. -->
+       that the layout sees. The last tier keeps the title and gives up the last line and the badge: cardBlock's band in the state's
+       fill along the card's bottom edge says the state there (ADR 0067). -->
   <DataTemplate x:Key="TaskCardTemplate" DataType="canvas:TaskNodeViewModel">
     <Panel Classes="taskCard" ClipToBounds="False" Classes.expanded="{Binding IsExpanded}"
            canvas:CardBehaviors.ReportsSize="True"
@@ -136,7 +137,7 @@
                  at its end, or, beside a similar title, starts with one before the part that differs (ADR 0065). The card's tooltip and the inspector show the whole title (ADR 0066). -->
             <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" KeepFrom="{Binding FarTitleKeep}" IsHitTestVisible="False"
                                 AutomationProperties.AccessibilityView="Raw" />
-            <Border Classes="cardBlock stateBlock" CornerRadius="{StaticResource RadiusLg}" IsHitTestVisible="False"
+            <Border Classes="cardBlock stateBlock" IsHitTestVisible="False"
                     theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
           </Panel>
           <canvas:CardDetail IsVisible="{Binding IsExpanded}" />

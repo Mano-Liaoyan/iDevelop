@@ -1,6 +1,6 @@
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>How much a card shows at the canvas's zoom, so a title never draws under 10 px on screen.</summary>
+/// <summary>How much a card shows at the canvas's zoom. Every tier shows the card's title, never under 9 px on screen.</summary>
 public enum ZoomTier { Full, Detail, Compact, Label, Title, Block }
 
 public static class ZoomTiers
@@ -20,11 +20,17 @@ public static class ZoomTiers
     /// <summary>The largest zoom of a fit: 120%, the last zoom at which a card keeps the form it has at 100%.</summary>
     public const double LargestFitZoom = 0.48;
 
-    /// <summary>The size in screen pixels that a Title tier card's text keeps.</summary>
-    private const double ReadablePixels = 10;
+    /// <summary>The least size in screen pixels of a Title or Block tier card's text.</summary>
+    public const double ReadablePixels = 9;
 
     /// <summary>The height in canvas units over the agent's line of a Title tier card.</summary>
     private const double TitleRoom = 106;
+
+    /// <summary>The height in canvas units for the title of a Block tier card, which has no agent's line and no badge.</summary>
+    private const double BlockRoom = 136;
+
+    /// <summary>The most title lines of a Block tier card.</summary>
+    private const int BlockLines = 2;
 
     /// <summary>A zoom that rises enters the larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
     private const double Gap = 0.012;
@@ -54,18 +60,23 @@ public static class ZoomTiers
         ZoomTier.Compact => 34,
         ZoomTier.Label => 90,
         ZoomTier.Title => 94,
+        ZoomTier.Block => 94,
         _ => 0,
     };
 
     /// <summary>
-    /// The text size in canvas units that keeps the Title tier's text just readable on screen at <paramref name="zoom"/>, in even
-    /// steps, with its line height and the title lines that <see cref="TitleRoom"/> holds, so a closer zoom keeps more words.
+    /// The text size in canvas units that keeps a Title or Block tier card's text just readable on screen at <paramref name="zoom"/>,
+    /// in even steps, with its line height and the title lines that the card's room holds, so a closer zoom keeps more words.
+    /// A Block tier card gives up its agent's line and its badge, so its title keeps one or two lines at 9 px at every zoom.
     /// </summary>
-    public static (double Size, double Line, int Lines) TitleText(double zoom)
+    public static (double Size, double Line, int Lines) TitleText(double zoom, ZoomTier tier = ZoomTier.Title)
     {
-        var size = Math.Clamp(2 * Math.Ceiling(ReadablePixels / zoom / 2), 30, 44);
+        var least = 2 * Math.Ceiling(ReadablePixels / zoom / 2);
+        var size = tier == ZoomTier.Block ? Math.Max(least, 30) : Math.Clamp(least, 30, 44);
         var line = Math.Ceiling(size * 1.08);
-        return (size, line, (int)(TitleRoom / line));
+        return tier == ZoomTier.Block
+            ? (size, line, Math.Clamp((int)(BlockRoom / line), 1, BlockLines))
+            : (size, line, (int)(TitleRoom / line));
     }
 
     /// <summary>The style class that the canvas takes in the tier, or null for the full card.</summary>

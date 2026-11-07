@@ -118,8 +118,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // The steps are even, so a zoom gesture measures the cards' text only when its size changes.
     private void ShowTitleText()
     {
-        var (size, line, lines) = ZoomTiers.TitleText(_viewModel?.ViewportZoom ?? 1);
-        if (!Resources.TryGetValue("FarTitleSize", out var shown) || !Equals(shown, size))
+        var (size, line, lines) = ZoomTiers.TitleText(_viewModel?.ViewportZoom ?? 1, _viewModel?.Tier ?? ZoomTier.Title);
+        if (!Resources.TryGetValue("FarTitleSize", out var shown) || !Equals(shown, size) || !Resources.TryGetValue("FarTitleLines", out var shownLines) || !Equals(shownLines, lines))
         {
             Resources["FarTitleSize"] = size;
             Resources["FarTitleLine"] = line;
@@ -462,6 +462,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Tier))
         {
             ShowTier();
+            ShowTitleText();
         }
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.ViewportZoom))
         {

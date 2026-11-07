@@ -86,6 +86,16 @@ public static class NodeStates
         _ => null,
     };
 
+    /// <summary>
+    /// The state's sentence in one short line, for a short inspector that has no room for <see cref="Detail"/>, or null where the
+    /// status and the actions say enough there.
+    /// </summary>
+    public static string? ShortDetail(EngineState state) => state switch
+    {
+        EngineState.InputRequired { Why: EngineState.Interrupted } => "Continue resumes. Retry starts again.",
+        _ => null,
+    };
+
     /// <summary>The state's tone. An interrupted node needs nothing yet, so it takes the neutral tone, as its badge's gray disc does.</summary>
     public static StatusTone Tone(NodeState state, WaitReason why) =>
         state == NodeState.InputRequired && why == WaitReason.Interrupted ? StatusTone.Neutral : Tone(state);

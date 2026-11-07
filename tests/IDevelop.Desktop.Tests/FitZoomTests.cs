@@ -6,16 +6,30 @@ namespace IDevelop.Desktop.Tests;
 public sealed class ZoomTitleTextTests
 {
     [Theory]
-    [InlineData(0.23, 44, 2)]
-    [InlineData(0.29, 36, 2)]
-    [InlineData(0.32, 32, 3)]
+    [InlineData(0.23, 40, 2)]
+    [InlineData(0.244, 38, 2)]
+    [InlineData(0.29, 32, 3)]
     [InlineData(0.34, 30, 3)]
     public void The_title_tier_keeps_its_text_readable_and_a_closer_zoom_keeps_more_lines(double zoom, double size, int lines)
     {
         var text = ZoomTiers.TitleText(zoom);
 
         Assert.Equal((size, lines), (text.Size, text.Lines));
-        Assert.True(text.Size * zoom >= 10, $"The text draws at {text.Size * zoom} px.");
+        Assert.True(text.Size * zoom >= 9, $"The text draws at {text.Size * zoom} px.");
+    }
+
+    [Theory]
+    [InlineData(0.22, 2)]
+    [InlineData(0.152, 2)]
+    [InlineData(0.12, 1)]
+    [InlineData(0.1, 1)]
+    public void A_block_tier_card_keeps_its_title_in_one_or_two_lines_at_9_px(double zoom, int lines)
+    {
+        var text = ZoomTiers.TitleText(zoom, ZoomTier.Block);
+
+        Assert.Equal(lines, text.Lines);
+        Assert.True(text.Size * zoom >= 9, $"The text draws at {text.Size * zoom} px.");
+        Assert.True(text.Line * text.Lines <= 136, "The title fits the card's room.");
     }
 }
 

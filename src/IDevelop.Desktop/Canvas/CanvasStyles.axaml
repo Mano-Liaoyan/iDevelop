@@ -30,7 +30,7 @@
     <Setter Property="Width" Value="340" />
   </Style>
   <!-- The smallest cards with text widen into the gap at their right, so a title keeps its words at the size that stays readable. -->
-  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded)">
+  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded), :is(Control).tier-block Panel.taskCard:not(.expanded)">
     <Setter Property="Width" Value="292" />
   </Style>
   <Style Selector="Panel.cardHead">
@@ -42,7 +42,7 @@
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <!-- The tint fills the taller zoomed out card too. -->
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.stateTint">
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-block Panel.taskCard:not(.expanded) Border.stateTint">
     <Setter Property="Height" Value="NaN" />
     <Setter Property="VerticalAlignment" Value="Stretch" />
   </Style>
@@ -120,14 +120,22 @@
   <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-compact Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-label Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-title Panel.taskCard:not(.expanded) :is(Control).cardFar">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardEdgeClip">
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-block Panel.taskCard:not(.expanded) Border.cardEdgeClip">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-compact Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-label Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-title Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-block Panel.taskCard:not(.expanded) Panel.stateBadge">
+  <!-- The Block tier keeps the title and gives up the last line and the badge, so the title keeps 9 px on screen (ADR 0067). -->
+  <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) :is(Control).farTitle">
     <Setter Property="IsVisible" Value="True" />
   </Style>
+  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-compact Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-label Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-title Panel.taskCard:not(.expanded) Panel.stateBadge">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <!-- At the Block tier the state's fill is a band along the card's bottom edge, under the title. -->
   <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) Border.cardBlock">
     <Setter Property="IsVisible" Value="True" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="CornerRadius" Value="0,0,10,10" />
   </Style>
   <Style Selector="Border.cardEdge">
     <Setter Property="HorizontalAlignment" Value="Left" />
@@ -136,7 +144,7 @@
   <Style Selector=":is(Control).tier-label Border.cardEdge">
     <Setter Property="Width" Value="8" />
   </Style>
-  <Style Selector=":is(Control).tier-title Border.cardEdge">
+  <Style Selector=":is(Control).tier-title Border.cardEdge, :is(Control).tier-block Border.cardEdge">
     <Setter Property="Width" Value="12" />
   </Style>
   <!-- The title has the card's whole width, and the last line's height comes on top of the card's 64 px. Each tier sets both in
@@ -173,6 +181,13 @@
     <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
+  <Style Selector=":is(Control).tier-block TextBlock.farTitle">
+    <Setter Property="Margin" Value="26,4,8,0" />
+    <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
+    <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
+    <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
   <!-- A ghost keeps a card's form at each zoom: its three lines close up, and far out only its title shows, as large as a card's. -->
   <Style Selector="TextBlock.ghostFar">
     <Setter Property="IsVisible" Value="False" />
@@ -199,11 +214,11 @@
     <Setter Property="Margin" Value="0,0,0,-90" />
   </Style>
   <!-- Under a zoom of 0.36 the card keeps its lines in the height a saved layout's rows leave. -->
-  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardBody">
+  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardBody, :is(Control).tier-block Panel.taskCard:not(.expanded) Panel.cardBody">
     <Setter Property="MinHeight" Value="158" />
     <Setter Property="Margin" Value="0,0,0,-94" />
   </Style>
-  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardHead">
+  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardHead, :is(Control).tier-block Panel.taskCard:not(.expanded) Panel.cardHead">
     <Setter Property="Height" Value="158" />
   </Style>
   <!-- The largest text keeps a text line's room from the card's edges too. -->

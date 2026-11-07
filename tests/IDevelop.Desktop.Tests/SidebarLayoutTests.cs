@@ -330,7 +330,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Selecting_a_node_of_a_large_folded_group_keeps_the_group_folded_and_the_selection()
+    public void Selecting_a_node_of_a_large_folded_group_opens_the_group_and_shows_its_row_selected()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
@@ -342,19 +342,22 @@ public sealed class SidebarLayoutTests : IDisposable
         var list = shell.Window.GetVisualDescendants().OfType<ListBox>().Single(list => list.DataContext == canvas && list.Classes.Contains("tasks"));
         Assert.True(group.IsFolded);
 
-        foreach (var node in new[] { canvas.Outline[3], canvas.Outline[7] })
-        {
-            canvas.SelectedNode = node;
-            shell.Render();
-            Assert.True(group.IsFolded);
-            Assert.Same(node, canvas.SelectedNode);
-            Assert.Null(list.SelectedItem);
-        }
+        canvas.SelectedNode = canvas.Outline[7];
+        shell.Render();
+        Assert.False(group.IsFolded);
+        Assert.Same(canvas.Outline[7], list.SelectedItem);
 
-        // The person opens the group, and the selected node's row shows selected.
+        // The person folds the group again, and the canvas keeps its selection.
         group.Toggle();
         shell.Render();
-        Assert.Same(canvas.Outline[7], list.SelectedItem);
+        Assert.True(group.IsFolded);
+        Assert.Same(canvas.Outline[7], canvas.SelectedNode);
+
+        // A new selection opens it again.
+        canvas.SelectedNode = canvas.Outline[3];
+        shell.Render();
+        Assert.False(group.IsFolded);
+        Assert.Same(canvas.Outline[3], list.SelectedItem);
         list.SelectedItem = canvas.Outline[2];
         shell.Render();
         Assert.Same(canvas.Outline[2], canvas.SelectedNode);

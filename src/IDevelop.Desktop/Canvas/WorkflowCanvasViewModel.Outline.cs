@@ -50,13 +50,12 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>
     /// The rows of the left tree under an expanded workflow: for each group that holds a node ("Needs you", "Running",
-    /// "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The selected node's group
-    /// opens when it holds at most <see cref="NodeGroup.FoldsAbove"/> nodes. A larger group opens only when the person opens it,
-    /// so a selection does not fill the tree (ADR 0066).
+    /// "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The group of the selected or
+    /// open node opens at any size, so the tree always shows that node's row (ADR 0067).
     /// </summary>
     public ObservableCollection<object> TreeRows { get; } = [];
 
-    /// <summary>The tree's rows in their order, with each node in <paramref name="keep"/> in an open group unless its group is large.</summary>
+    /// <summary>The tree's rows in their order, with each node in <paramref name="keep"/> in an open group.</summary>
     internal static IReadOnlyList<object> TreeOrder(IReadOnlyList<TaskNodeViewModel> outline, IReadOnlyList<NodeGroup> groups, params TaskNodeViewModel?[] keep)
     {
         var members = outline.ToLookup(NodeGroup.Of);
@@ -67,10 +66,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         foreach (var group in keep.OfType<TaskNodeViewModel>().Select(node => groups.First(group => group.Kind == NodeGroup.Of(node))))
         {
-            if (group.Count <= NodeGroup.FoldsAbove)
-            {
-                group.Open();
-            }
+            group.Open();
         }
 
         var rows = new List<object>(outline.Count + groups.Count);
@@ -86,13 +82,29 @@ public sealed partial class WorkflowCanvasViewModel
         return rows;
     }
 
-    /// <summary>Lists the tree's rows again, with a row for <paramref name="keep"/> too, which is about to be selected.</summary>
+    /// <summary>The node whose group the tree last opened, and that group, so a group that the person folds stays folded.</summary>
+    private (TaskNodeViewModel Node, NodeGroupKind Group)? _revealed;
+
+    /// <summary>
+    /// Lists the tree's rows again, with a row for <paramref name="keep"/>, which is about to be selected, or else for the selected
+    /// node. The tree opens a node's group once for each selection, and again when the node moves to another group.
+    /// </summary>
     private void ArrangeTreeRows(TaskNodeViewModel? keep = null)
     {
+        var reveal = keep ?? SelectedNode;
+        if (reveal is not null && _revealed == (reveal, NodeGroup.Of(reveal)))
+        {
+            reveal = null;
+        }
+        else if (reveal is not null)
+        {
+            _revealed = (reveal, NodeGroup.Of(reveal));
+        }
+
         _arrangingTree = true;
         try
         {
-            Arrange(TreeRows, TreeOrder(Outline, Groups, SelectedNode, keep));
+            Arrange(TreeRows, TreeOrder(Outline, Groups, reveal));
         }
         finally
         {

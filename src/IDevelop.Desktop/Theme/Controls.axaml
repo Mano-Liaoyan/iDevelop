@@ -415,6 +415,13 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- A group header in a workflow's node list: a quiet chevron, the group's name, and its count (ADR 0064). -->
+  <!-- A group header stands one level before its node rows: a node's tile starts under the group's name, so the levels read. -->
+  <Style Selector="ListBox.tasks ListBoxItem.groupRow">
+    <Setter Property="Padding" Value="2,4,8,4" />
+  </Style>
+  <Style Selector="ListBox.tasks ListBoxItem:not(.groupRow)">
+    <Setter Property="Padding" Value="21,4,8,4" />
+  </Style>
   <Style Selector="PathIcon.groupChevron">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
