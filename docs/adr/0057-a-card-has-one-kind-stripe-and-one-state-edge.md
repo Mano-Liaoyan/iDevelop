@@ -39,6 +39,7 @@ Round 9 of the UI review found too many color layers on a card, a running card t
 
 ## Consequences
 
+- A saved layout with a column gap under 32 canvas units lets a Title tier card reach its neighbour. The built-in layouts leave more room.
 - A kind reads less strongly from far away. The tree and the inspector keep the kind's tile.
 - A node name over one line loses its end in the row. This is the owner's to reverse.
 - A person sees why a node waits only in the tooltip, the card, or the conversation.
