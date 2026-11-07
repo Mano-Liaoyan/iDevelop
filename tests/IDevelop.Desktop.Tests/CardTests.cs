@@ -198,7 +198,7 @@ public sealed class CardTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_running_card_rings_in_the_running_blue_and_says_so()
+    public void A_running_card_keeps_a_plain_edge_and_says_so()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105));
         f.Install(AgyTurn.Reply("s-1", "Drafted.", On().WaitForFile(f.Gate("go"))));
@@ -212,7 +212,7 @@ public sealed class CardTests : IDisposable
         // The status takes the client's line, and the model and level stay on the line under it.
         Assert.Equal(["Design", "Antigravity", "Gemini 3.8", "Running"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-running", ring.Classes);
-        Assert.Equal(shell.Resource("StateRunningBrush"), ((ISolidColorBrush)ring.BorderBrush!).Color);
+        Assert.Equal(Color.Parse("#E5E5E5"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         Assert.Same(Application.Current!.FindResource("IconStateRunning"), shell.CardGlyph("Design").Data);
         f.Release("go");
         shell.WaitForCard("Design", "Completed");
@@ -325,12 +325,12 @@ public sealed class CardTests : IDisposable
         Assert.Equal((1, 1), Opacities());
 
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.WaitUntil(() => Wire("Build").StrokeThickness == 2.5, "the connection from Design stands out");
-        Assert.Equal((2.5, 1.5), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
+        shell.WaitUntil(() => Wire("Build").StrokeThickness == 3, "the connection from Design stands out");
+        Assert.Equal((3, 2), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
         shell.WaitUntil(() => Opacities() == (1, 0.6), "the other connection recedes");
 
         shell.Click(shell.Editor.TranslatePoint(new Point(400, 500), shell.Window)!.Value);
-        shell.WaitUntil(() => Wire("Build").StrokeThickness == 1.5, "nothing stands out without a selection");
+        shell.WaitUntil(() => Wire("Build").StrokeThickness == 2, "nothing stands out without a selection");
     }
 
     [AvaloniaFact]

@@ -24,7 +24,7 @@ public static class ZoomTiers
     private const double TitleRoom = 106;
 
     /// <summary>A zoom that rises enters the larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
-    private const double Gap = 0.02;
+    private const double Gap = 0.012;
 
     /// <summary>The tier at <paramref name="zoom"/>, after <paramref name="current"/>. A falling zoom leaves a tier at its threshold.</summary>
     public static ZoomTier Next(ZoomTier current, double zoom)

@@ -128,7 +128,7 @@ public sealed class CanvasChromeTests : IDisposable
         f.Install(FakeRule.On().WaitForFile(f.Gate("runs")));
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
-        Assert.Equal(["1 failed", "1 question", "1 reply", "2 interrupted"], canvas.BarChips.Select(chip => chip.Label));
+        Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], canvas.BarChips.Select(chip => chip.Label));
         Assert.Equal(["1", "2", "2"], canvas.BarLeast.Select(chip => chip.RowText));
         Assert.Equal("1 question, 1 reply", canvas.BarLeast[1].Tip);
 
@@ -152,7 +152,7 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.True(shell.ShowsAny("FitToScreen"), "Fit left a bar with room.");
         Assert.True(shell.ShowsAny("RunStatus"), "The progress left a bar with room.");
         Assert.True(shell.ShowsAny("ShowMinimap"), "The view controls left a bar with room.");
-        Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], shell.Find<Control>("RunGroups").GetVisualDescendants().OfType<Control>()
+        Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], shell.Find<Control>("RunChips").GetVisualDescendants().OfType<Control>()
             .Where(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "RunChip").Select(AutomationProperties.GetName));
 
         // Another workflow's chips reach the bar with no change to the canvas's width.
@@ -531,10 +531,14 @@ public sealed class CanvasChromeTests : IDisposable
                 // The workflow's primary action keeps its words at every width.
                 Assert.Contains("Run Workflow", labels);
             }
-            else
+            else if (compact)
             {
                 Assert.Empty(labels);
                 Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
+            }
+            else
+            {
+                Assert.Contains("Generate", labels);
             }
 
             Assert.Equal(AutomationProperties.GetName(button), ((string)ToolTip.GetTip(button)!).Split('\n')[0]);

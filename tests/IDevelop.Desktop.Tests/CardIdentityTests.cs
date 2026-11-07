@@ -100,7 +100,7 @@ public sealed class CardIdentityTests
     }
 
     [AvaloniaFact]
-    public void The_inspector_keeps_the_title_and_the_result_beside_the_open_conversation()
+    public void The_inspector_keeps_the_title_and_rests_Output_folded_beside_the_open_conversation()
     {
         using var f = new NodeFixture(Task(A, "A", 105));
         f.Install(Reply("s-1", "Done."));
@@ -113,8 +113,7 @@ public sealed class CardIdentityTests
         shell.Render();
 
         Assert.True(shell.Find<TextBox>("TaskTitle").IsEffectivelyVisible);
-        Assert.Contains("Done.", shell.Find<TextBlock>("ResultSummary").Text);
-        Assert.True(shell.Find<TextBlock>("ResultSummary").IsEffectivelyVisible);
+        Assert.False(shell.Has<TextBlock>("ResultSummary") && shell.Find<TextBlock>("ResultSummary").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -126,13 +125,13 @@ public sealed class CardIdentityTests
         shell.Click(shell.Header(shell.Node("A")));
         shell.Render();
         string[] Order() => [.. new[] { "Agent", "Input", "Output" }.OrderBy(section => shell.Bounds(shell.Section(section)).Top)];
-        Assert.Equal(["Agent", "Input", "Output"], Order());
+        Assert.Equal(["Output", "Agent", "Input"], Order());
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Completed");
         shell.Render();
 
-        Assert.Equal(["Agent", "Input", "Output"], Order());
+        Assert.Equal(["Output", "Agent", "Input"], Order());
     }
 
     [AvaloniaFact]
@@ -155,7 +154,7 @@ public sealed class CardIdentityTests
 
     [Theory]
     [InlineData("Sonnet 5.5", "Sonnet 5.5|Sonnet")]
-    [InlineData("GPT-6.1 Terra", "GPT-6.1 Terra|GPT-6.1|GPT-6.1")]
+    [InlineData("GPT-6.1 Terra", "GPT-6.1 Terra|GPT-6.1|GPT-6")]
     public void A_far_card_falls_back_to_the_model_family(string model, string lines)
     {
         var shown = CardText.FarLines(CardText.ModelLines(model, model));
