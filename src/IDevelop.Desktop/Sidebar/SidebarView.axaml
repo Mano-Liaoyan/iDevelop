@@ -361,13 +361,9 @@
                                       <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
                                       <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title}"
                                                           AutomationProperties.AutomationId="NodeRowName" />
-                                      <PathIcon Grid.Column="2" Classes="stateIcon spin" IsVisible="{Binding IsRunningNow}" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Top" Margin="0,2,0,0"
-                                                theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding WaitReason}"
-                                                ToolTip.Tip="{Binding StatusLabel}"
-                                                                                                AutomationProperties.Name="{Binding StatusLabel}" />
-                                      <!-- One state has one badge in every list. A running node keeps its spinner. -->
+                                      <!-- One state has one badge in every list, the card's own. -->
                                       <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,0,0" State="{Binding State}" Why="{Binding WaitReason}"
-                                                        IsVisible="{Binding !IsRunningNow}" ToolTip.Tip="{Binding StatusLabel}"
+                                                        ToolTip.Tip="{Binding StatusLabel}"
                                                         AutomationProperties.AutomationId="NodeRowState"
                                                         AutomationProperties.Name="{Binding StatusLabel}" />
                                     </Grid>
@@ -485,9 +481,9 @@
                              AutomationProperties.Name="{Binding Name}">
                     <Run Text="{Binding BeforeMatch}" /><Run Classes="match" Text="{Binding Match}" /><Run Text="{Binding AfterMatch}" />
                   </TextBlock>
-                  <PathIcon Grid.Column="2" Classes="stateIcon" Theme="{StaticResource Glyph}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
-                            IsVisible="{Binding IsNode}"
-                            theme:StyleClass.State="{Binding Node.State, FallbackValue={x:Null}}" theme:StyleClass.Why="{Binding Node.WaitReason, FallbackValue={x:Null}}" />
+                  <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                                    IsVisible="{Binding IsNode}"
+                                    State="{Binding Node.State, FallbackValue={x:Null}}" Why="{Binding Node.WaitReason, FallbackValue={x:Null}}" />
                   <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Classes="caption" Text="{Binding Place}" TextWrapping="Wrap" />
                 </Grid>
               </DataTemplate>

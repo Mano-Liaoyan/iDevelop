@@ -65,7 +65,7 @@ public sealed partial class TaskNodeViewModel
     /// <summary>What the node needs from the person, or why it failed or went stale, or null when its status says enough.</summary>
     public string? StateDetail => NodeStates.Detail(_engineState);
 
-    public StatusTone Tone => NodeStates.Tone(State);
+    public StatusTone Tone => NodeStates.Tone(State, WaitReason);
 
     /// <summary>The node waits for the person.</summary>
     public bool IsWaiting => State == NodeState.InputRequired;

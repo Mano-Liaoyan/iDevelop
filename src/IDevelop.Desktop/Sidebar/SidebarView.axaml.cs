@@ -33,16 +33,23 @@ public partial class SidebarView : UserControl
         // A click anywhere else leaves Find, as it leaves any floating list. A result takes no focus, so a click on one stays here.
         FindBox.LostFocus += (_, _) => ViewModel.Find.Clear();
         AddHandler(KeyDownEvent, OnRowKeyDown, RoutingStrategies.Tunnel);
-        // Activity never takes more than half of the panel, and a short panel folds it to its heading.
+        // Activity never takes more than half of the panel. A short panel, or a tree longer than half of it, folds Activity to its
+        // heading, so the tree keeps the room while the person moves through a long workflow. Both measures are free of the fold.
         Rows.SizeChanged += (_, e) =>
         {
             ActivityScroller.MaxHeight = e.NewSize.Height / 2;
-            if (DataContext is MainWindowViewModel view)
-            {
-                view.Activity.IsCompact = e.NewSize.Height < ActivityFoldHeight;
-            }
+            FoldActivity();
         };
+        TreeRows.SizeChanged += (_, _) => FoldActivity();
         DataContextChanged += (_, _) => WatchReveals();
+    }
+
+    private void FoldActivity()
+    {
+        if (DataContext is MainWindowViewModel view && Rows.Bounds.Height > 0)
+        {
+            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight || TreeRows.Bounds.Height > Rows.Bounds.Height / 2;
+        }
     }
 
     // The tree follows the window: what the person opens anywhere, it opens to and shows.

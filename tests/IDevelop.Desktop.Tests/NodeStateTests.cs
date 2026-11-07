@@ -15,7 +15,7 @@ public sealed class NodeStateTests
         { new EngineState.InputRequired(EngineState.Approval), NodeState.InputRequired, "Input required · Approval", StatusTone.Waiting },
         { new EngineState.InputRequired(EngineState.Reply), NodeState.InputRequired, "Input required · Reply", StatusTone.Waiting },
         { new EngineState.InputRequired(EngineState.Conflict), NodeState.InputRequired, "Input required · Conflict", StatusTone.Waiting },
-        { new EngineState.InputRequired(EngineState.Interrupted), NodeState.InputRequired, "Interrupted", StatusTone.Waiting },
+        { new EngineState.InputRequired(EngineState.Interrupted), NodeState.InputRequired, "Interrupted", StatusTone.Neutral },
         { new EngineState.InputRequired(EngineState.RoundLimit), NodeState.InputRequired, "Input required · Round limit", StatusTone.Waiting },
         { new EngineState.InputRequired("Which file?"), NodeState.InputRequired, "Input required · Question", StatusTone.Waiting },
         { new EngineState.Completed(), NodeState.Completed, "Completed", StatusTone.Complete },
@@ -30,7 +30,7 @@ public sealed class NodeStateTests
     {
         Assert.Equal(state, NodeStates.Of(engine));
         Assert.Equal(label, NodeStates.Label(engine));
-        Assert.Equal(tone, NodeStates.Tone(state));
+        Assert.Equal(tone, NodeStates.Tone(state, NodeStates.Why(engine)));
     }
 
     [Fact]

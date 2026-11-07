@@ -123,7 +123,7 @@
                         Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
                         Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
                   <Grid ColumnDefinitions="Auto,*" ToolTip.Tip="{Binding StatusLabel}">
-                    <PathIcon Theme="{StaticResource Glyph}" Margin="0,0,4,0" />
+                    <theme:StateBadge Width="14" Height="14" Margin="0,0,5,0" VerticalAlignment="Center" State="{Binding State}" Why="{Binding WaitReason}" />
                     <TextBlock Grid.Column="1" Text="{Binding StateWord}"
                                AutomationProperties.AutomationId="RunTaskStatus" />
                   </Grid>
@@ -634,9 +634,9 @@
                                       AutomationProperties.AutomationId="ContextLink" />
                                 <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="linkTitle" Text="{Binding Node.Title}" />
                                 <PathIcon Grid.Column="3" Classes="linkChevron" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" />
-                                <PathIcon Grid.Column="4" Classes="stateIcon" Classes.spin="{Binding Node.IsRunningNow}" Theme="{StaticResource Glyph}" Width="14" Height="14"
+                                <theme:StateBadge Grid.Column="4" Width="14" Height="14"
                                           HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0"
-                                          theme:StyleClass.State="{Binding Node.State}"
+                                          State="{Binding Node.State}" Why="{Binding Node.WaitReason}"
                                           AutomationProperties.Name="{Binding Node.StatusLabel}" />
                               </inspector:InspectorGrid>
                             </Button>
@@ -669,9 +669,9 @@
                                         AutomationProperties.AutomationId="ContextLink" />
                                   <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="linkTitle" Text="{Binding Node.Title}" />
                                   <PathIcon Grid.Column="3" Classes="linkChevron" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" />
-                                  <PathIcon Grid.Column="4" Classes="stateIcon" Classes.spin="{Binding Node.IsRunningNow}" Theme="{StaticResource Glyph}" Width="14" Height="14"
+                                  <theme:StateBadge Grid.Column="4" Width="14" Height="14"
                                             HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0"
-                                            theme:StyleClass.State="{Binding Node.State}"
+                                            State="{Binding Node.State}" Why="{Binding Node.WaitReason}"
                                             AutomationProperties.Name="{Binding Node.StatusLabel}" />
                                 </inspector:InspectorGrid>
                               </Button>

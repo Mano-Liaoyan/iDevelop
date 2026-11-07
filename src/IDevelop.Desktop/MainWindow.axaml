@@ -185,9 +185,8 @@
                           <TextBlock Text="Stop Workflow" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
-                      <!-- The workflow's one primary action, which keeps its words at every width, so the breadcrumb gives up its width first. Its words
-                           say how many nodes it runs when that is not all of them. It keeps one look,
-                           and with nothing to run its tooltip says why. An empty workflow's primary action is on the canvas's Generate card. -->
+                      <!-- The workflow's one primary action, which keeps its words and its width in every state, so the breadcrumb gives up its width first.
+                           Its tooltip says how many nodes it runs, and with nothing to run, why. The run bar says how far the workflow is. An empty workflow's primary action is on the canvas's Generate card. -->
                       <Button Classes="primary" Command="{Binding RunWorkflowCommand}"
                               ToolTip.ShowOnDisabled="True"
                               ToolTip.Placement="BottomEdgeAlignedRight"
@@ -203,7 +202,7 @@
                         </Button.IsVisible>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-                          <TextBlock Text="{Binding RunWorkflowLabel}" VerticalAlignment="Center" />
+                          <TextBlock Text="Run Workflow" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
                     </StackPanel>

@@ -16,7 +16,7 @@
     <Style Selector="TextBlock.sheetCaption">
       <Setter Property="FontSize" Value="11" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
     <Style Selector="TextBlock.sheetLabel">
       <Setter Property="FontSize" Value="12" />

@@ -86,6 +86,10 @@ public static class NodeStates
         _ => null,
     };
 
+    /// <summary>The state's tone. An interrupted node needs nothing yet, so it takes the neutral tone, as its badge's gray disc does.</summary>
+    public static StatusTone Tone(NodeState state, WaitReason why) =>
+        state == NodeState.InputRequired && why == WaitReason.Interrupted ? StatusTone.Neutral : Tone(state);
+
     public static StatusTone Tone(NodeState state) => state switch
     {
         NodeState.Running => StatusTone.Running,

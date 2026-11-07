@@ -116,7 +116,7 @@
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
-  <Style Selector="Border.pill PathIcon">
+  <Style Selector="Border.pill PathIcon:not(.badgeGlyph)">
     <Setter Property="Width" Value="12" />
     <Setter Property="Height" Value="12" />
     <Setter Property="Data" Value="{StaticResource IconIdle}" />
@@ -126,11 +126,11 @@
     <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="Border.pill.running PathIcon">
+  <Style Selector="Border.pill.running PathIcon:not(.badgeGlyph)">
     <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
-  <Style Selector="Border.pill.running PathIcon, PathIcon.spin">
+  <Style Selector="Border.pill.running PathIcon:not(.badgeGlyph), PathIcon.spin">
     <Style.Animations>
       <Animation Duration="0:0:1" IterationCount="Infinite">
         <KeyFrame Cue="0%">
@@ -147,7 +147,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="Border.pill.complete PathIcon">
+  <Style Selector="Border.pill.complete PathIcon:not(.badgeGlyph)">
     <Setter Property="Data" Value="{StaticResource IconStateSucceeded}" />
     <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
   </Style>
@@ -156,7 +156,7 @@
     <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="Border.pill.problem PathIcon">
+  <Style Selector="Border.pill.problem PathIcon:not(.badgeGlyph)">
     <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
     <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
   </Style>
@@ -165,7 +165,7 @@
     <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="Border.pill.waiting PathIcon">
+  <Style Selector="Border.pill.waiting PathIcon:not(.badgeGlyph)">
     <Setter Property="Data" Value="{StaticResource IconStateWaiting}" />
     <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
   </Style>
@@ -176,7 +176,7 @@
     <Setter Property="Background" Value="{DynamicResource StateWarning10Brush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="Border.pill.warning PathIcon">
+  <Style Selector="Border.pill.warning PathIcon:not(.badgeGlyph)">
     <Setter Property="Data" Value="{StaticResource IconStateOutOfDate}" />
     <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
   </Style>
@@ -216,9 +216,10 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- A disabled control keeps its colors at 40%. A kind segment is disabled while it is the chosen one, so it stays whole. -->
-  <Style Selector="Button:disabled:not(.segment)">
-    <Setter Property="Opacity" Value="0.4" />
+  <!-- A disabled control loses its fill and its pointer response, and its label takes the muted text color at full opacity, so
+       the label still reads at 4.5:1 or more in both themes. A kind segment is disabled while it is the chosen one, so it stays whole. -->
+  <Style Selector="Button:disabled:not(.segment) /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="Button.nav:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.icon:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.ghost:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
@@ -266,9 +267,9 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <!-- The one main command of a panel or sheet, filled with the accent under white text. -->
@@ -293,9 +294,10 @@
   <Style Selector="Button.primary:pressed">
     <Setter Property="Opacity" Value="0.84" />
   </Style>
+  <!-- With nothing to run, the primary action gives up the accent for the quiet fill, and its tooltip says why. -->
   <Style Selector="Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
-    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <!-- A command that removes something: red text on the neutral button, and a red fill under white text on hover. -->
@@ -317,9 +319,9 @@
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
   <Style Selector="Button.destructive:disabled /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <Style Selector="Button.segment, RadioButton.segment">
@@ -916,7 +918,7 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
   <Style Selector="MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:disabled /template/ ContentControl#PART_IconPresenter, MenuItem:disabled /template/ TextBlock#PART_InputGestureText">
-    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="MenuItem:disabled /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="Transparent" />

@@ -33,7 +33,7 @@
     </Style>
     <Style Selector="Button.addRow TextBlock.hint">
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
     <Style Selector="Button.addRow.highlighted TextBlock.hint">
       <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
