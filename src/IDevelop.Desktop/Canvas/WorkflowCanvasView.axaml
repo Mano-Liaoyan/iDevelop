@@ -263,6 +263,12 @@
            is also the badges' legend. Stop Workflow sits where Run Workflow was. UI Automation shows no plain border, so a user
            control carries its id. As the canvas narrows, the chips sum what they name and the buttons keep only their glyphs, so
            no chip is cut. With no run, the band says how many nodes the workflow has. -->
+      <!-- While a blueprint is open in the inspector, the run bar's place says so and where to leave it. -->
+      <TextBlock Classes="barText" canvas:CanvasBottomBar.Slot="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                 IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}"
+                 Text="{Binding Blueprints.Editor.Name, StringFormat='Editing blueprint {0}. Save or Cancel in the inspector.', FallbackValue=''}"
+                 ToolTip.Tip="{Binding $self.Text}"
+                 AutomationProperties.AutomationId="BlueprintMode" />
       <Panel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" MinHeight="28" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
         <TextBlock Classes="barText" HorizontalAlignment="Center" Text="{Binding BarIdle}" IsVisible="{Binding !ShowsBar}"
                    AutomationProperties.AutomationId="RunIdle" />

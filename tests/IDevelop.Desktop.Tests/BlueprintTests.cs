@@ -43,9 +43,14 @@ public sealed class BlueprintTests : IDisposable
         Press(shell, "Implement", "DeriveBlueprint");
         Assert.Equal("A new blueprint from Implement, version 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
         shell.Find<TextBox>("BlueprintName").Text = "Bug fix";
+        shell.Render();
+        // The run bar's place names the open blueprint and how to leave it.
+        Assert.Equal("Editing blueprint Bug fix. Save or Cancel in the inspector.", shell.Find<TextBlock>("BlueprintMode").Text);
+        Assert.True(shell.Find<TextBlock>("BlueprintMode").IsVisible);
         shell.Click(shell.InView<Button>("SaveBlueprint"));
 
         Assert.Equal("Saved Bug fix, version 1, to the project library.", shell.Status);
+        Assert.False(shell.Find<TextBlock>("BlueprintMode").IsVisible);
         Assert.Equal(["Bug fix"], EntryNames(shell, "PROJECT"));
         var key = Assert.Single(BlueprintLibrary.Project(project).Read().Blueprints).Key;
         Assert.Equal(1, key.Version);
