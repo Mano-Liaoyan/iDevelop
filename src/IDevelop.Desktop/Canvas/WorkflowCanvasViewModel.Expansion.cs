@@ -97,7 +97,7 @@ public sealed partial class WorkflowCanvasViewModel
     {
         var nodes = Nodes.ToList();
         // Only an expanded card moves its neighbours. A far card's wider form stays in the gap at its right.
-        var offsets = CardLayout.Offsets([.. nodes.Select(node => new CardBox(node.Location, new Size(node.IsExpanded ? node.CardSize.Width : TaskCardWidth, node.CardSize.Height)))]);
+        var offsets = CardLayout.Offsets([.. nodes.Select(node => new CardBox(node.Location, new Avalonia.Size(node.IsExpanded ? node.CardSize.Width : TaskCardWidth, node.CardSize.Height)))]);
         for (var index = 0; index < nodes.Count; index++)
         {
             nodes[index].ViewOffset = offsets[index];
