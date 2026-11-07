@@ -50,10 +50,25 @@
            it leaves out the workflow's place and its actions too. -->
       <theme:SpillRow MinLeadWidth="186" Spacing="4" ItemsAlignment="Start" SpillIndent="28">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Top" />
+          <!-- The node's name shows once: the inspector beside a full conversation names it, so the header keeps only the node's place. -->
+          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Top">
+            <theme:KindTile.IsVisible>
+              <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
+                <Binding Path="$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="False" />
+              </MultiBinding>
+            </theme:KindTile.IsVisible>
+          </theme:KindTile>
           <StackPanel Grid.Column="1" VerticalAlignment="Center">
             <theme:EllipsisText Classes="conversationTitle" Whole="{Binding Node.Title}" ToolTip.Tip="{Binding Node.Title}"
-                                AutomationProperties.AutomationId="ConversationTitle" />
+                                AutomationProperties.AutomationId="ConversationTitle">
+              <theme:EllipsisText.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                  <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
+                  <Binding Path="$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="False" />
+                </MultiBinding>
+              </theme:EllipsisText.IsVisible>
+            </theme:EllipsisText>
             <TextBlock Classes="caption" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
                        ToolTip.Tip="{Binding BreadcrumbTip}" AutomationProperties.AutomationId="ConversationBreadcrumb"
@@ -403,8 +418,8 @@
                     <TextBlock Grid.Column="1" Classes="taskLabel" Text="Task" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="{Binding TaskPreview}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                IsVisible="{Binding !IsTaskOpen}" AutomationProperties.AutomationId="ConversationTaskPreview" />
-                    <!-- What the agent read from earlier nodes. Opening the task names them. -->
-                    <TextBlock Grid.Column="3" Classes="caption" Text="{Binding TaskInputCount}" VerticalAlignment="Center" Margin="0,0,10,0"
+                    <!-- Where the agent's input came from: the first earlier node by name. Opening the task names them all. -->
+                    <TextBlock Grid.Column="3" Classes="caption" Text="{Binding TaskInputCount}" VerticalAlignment="Center" Margin="0,0,10,0" MaxWidth="240" TextTrimming="CharacterEllipsis"
                                IsVisible="{Binding ShowsTaskInputCount}" ToolTip.Tip="{Binding TaskInputLine}"
                                AutomationProperties.AutomationId="ConversationTaskInputCount" />
                   </Grid>

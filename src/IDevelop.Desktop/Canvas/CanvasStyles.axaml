@@ -363,21 +363,21 @@
     <Setter Property="Margin" Value="1,-9" />
     <Setter Property="BorderThickness" Value="9" />
   </Style>
-  <!-- The pointer over a card lifts it and draws a faint accent line of one screen pixel outside its edge at each zoom, so
+  <!-- The pointer over a card lifts it and draws a half-strength accent line of two screen pixels outside its edge at each zoom, which reads on both themes, so
        hover never reads as the interrupted state's grey edge, and only the selection draws the full accent ring. -->
   <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="Opacity" Value="0.5" />
+    <Setter Property="Opacity" Value="0.65" />
   </Style>
   <Style Selector=":is(Control).tier-detail nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-compact nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="1.6" />
+    <Setter Property="BorderThickness" Value="3.2" />
   </Style>
   <Style Selector=":is(Control).tier-label nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="2.5" />
+    <Setter Property="BorderThickness" Value="5" />
   </Style>
   <Style Selector=":is(Control).tier-title nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-block nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="4" />
+    <Setter Property="BorderThickness" Value="8" />
   </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
        show through it (#85). Its dashed edge and faded tile say it is a proposal. -->
@@ -680,9 +680,9 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The canvas has the keys: the app's 2 px focus ring, as on every field. -->
+  <!-- The canvas has the keys: one thin accent line inside its edge, so a selected card's ring stays the strongest mark. -->
   <Style Selector="Border.canvasFocus">
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="Button.zoomValue TextBlock">

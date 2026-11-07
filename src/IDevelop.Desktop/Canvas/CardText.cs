@@ -24,13 +24,20 @@ public static class CardText
         _ => "AG",
     };
 
-    /// <summary>A zoomed out card's model lines: a model's card lines, and last its family, or its major version, which fits whole where the rest does not.</summary>
+    /// <summary>A zoomed out card's model lines: a model's card lines, then its family with its major version, and last its family alone, each of which fits whole where the rest does not.</summary>
     public static IReadOnlyList<string> FarLines(IReadOnlyList<string> lines)
     {
         var last = lines[^1];
         var words = last.Split(' ');
-        var family = words.Length > 1 ? string.Join(' ', words[..^1]) : last.Contains('.') ? last[..last.LastIndexOf('.')] : last;
-        return [.. lines.Append(family).Distinct()];
+        string? Major(string word) => word.Contains('.') ? word[..word.LastIndexOf('.')] : null;
+        if (words.Length == 1)
+        {
+            return [.. lines.Append(Major(last) ?? last).Distinct()];
+        }
+
+        // "Gemini 3.8" keeps its major version, "Gemini 3", before only its family's name.
+        var family = string.Join(' ', words[..^1]);
+        return [.. lines.Append(Major(words[^1]) is { } major ? $"{family} {major}" : family).Append(family).Distinct()];
     }
 
     /// <summary>A model's card lines, the fullest first, down to the words that name its version.</summary>

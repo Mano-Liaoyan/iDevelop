@@ -269,8 +269,13 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The earlier nodes that the agent read, by name, or null.</summary>
     public string? TaskInputLine => HasInputs ? $"Input: {string.Join(", ", Node.Inputs.Select(link => link.Node.Title))}" : null;
 
-    /// <summary>"2 inputs", which stands beside the folded task.</summary>
-    public string TaskInputCount => Node.Inputs.Count == 1 ? "1 input" : $"{Node.Inputs.Count} inputs";
+    /// <summary>
+    /// "From Plan the rollout", or "From Plan the rollout +1", which stands beside the folded task, so the person sees where the
+    /// agent's input came from without opening it.
+    /// </summary>
+    public string TaskInputCount => Node.Inputs is { Count: > 0 } inputs
+        ? inputs.Count == 1 ? $"From {inputs[0].Node.Title}" : $"From {inputs[0].Node.Title} +{inputs.Count - 1}"
+        : "";
 
     /// <summary>The folded task says that the agent read earlier nodes.</summary>
     public bool ShowsTaskInputCount => !IsTaskOpen && HasInputs;

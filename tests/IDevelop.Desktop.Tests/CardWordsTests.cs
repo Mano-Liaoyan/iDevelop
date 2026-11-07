@@ -16,7 +16,8 @@ public sealed class CardWordsTests
     public void A_model_with_one_word_falls_back_to_its_major_version()
     {
         Assert.Equal(["GPT-6.1", "GPT-6"], CardText.FarLines(["GPT-6.1"]));
-        Assert.Equal(["Opus 5.5", "Opus"], CardText.FarLines(["Opus 5.5"]));
+        Assert.Equal(["Opus 5.5", "Opus 5", "Opus"], CardText.FarLines(["Opus 5.5"]));
+        Assert.Equal(["Gemini 3.8", "Gemini 3", "Gemini"], CardText.FarLines(["Gemini 3.8"]));
     }
 
     [Fact]

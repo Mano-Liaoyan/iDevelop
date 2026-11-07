@@ -721,11 +721,10 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BoxShadow" Value="none" />
   </Style>
-  <!-- The frame stays neutral until the composer has the keys, and then it takes the app's 2 px focus line. The padding keeps the text still. -->
+  <!-- The frame stays neutral until the composer has the keys, and then its one line takes the accent. The line keeps its
+       width, so the reply and the result stay stronger than the frame and the text stays still. -->
   <Style Selector="Border.composer:focus-within">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="BorderThickness" Value="2" />
-    <Setter Property="Padding" Value="0" />
   </Style>
   <!-- A tooltip in the composer's bar opens along the bar and down from its top, so it never covers the words being typed. -->
   <Style Selector="Grid.composerBar Button">

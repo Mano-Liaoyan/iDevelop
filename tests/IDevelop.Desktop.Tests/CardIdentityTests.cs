@@ -168,7 +168,7 @@ public sealed class CardIdentityTests
     public void A_diff_line_says_what_it_is(string text, DiffLineKind kind) => Assert.Equal(kind, DiffLine.Of(text).Kind);
 
     [Theory]
-    [InlineData("Sonnet 5.5", "Sonnet 5.5|Sonnet")]
+    [InlineData("Sonnet 5.5", "Sonnet 5.5|Sonnet 5|Sonnet")]
     [InlineData("GPT-6.1 Terra", "GPT-6.1 Terra|GPT-6.1|GPT-6")]
     public void A_far_card_falls_back_to_the_model_family(string model, string lines)
     {
