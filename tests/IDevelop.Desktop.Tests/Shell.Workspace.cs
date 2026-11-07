@@ -82,7 +82,7 @@ internal sealed partial class Shell
     public (string, string) Breadcrumb() => (Find<TextBlock>("BreadcrumbProject").Text ?? "", Find<TextBlock>("BreadcrumbWorkflow").Text ?? "");
 
     public ListBoxItem TaskRow(string project, string workflow, string title) =>
-        WorkflowTasks(project, workflow).GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);
+        WorkflowTasks(project, workflow).GetVisualDescendants().OfType<ListBoxItem>().Single(row => row.DataContext is TaskNodeViewModel node && node.Title == title);
 
     private IEnumerable<Control> ProjectItems() => Find<ItemsControl>("Projects").GetRealizedContainers();
 

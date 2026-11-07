@@ -166,7 +166,7 @@ internal sealed partial class Shell
         string.Join(" · ", new[] { NodeModel(title).AgentClient, NodeModel(title).AgentModel }.Where(line => line.Length > 0));
 
     public ListBoxItem SidebarRow(string title) =>
-        Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);
+        Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => row.DataContext is TaskNodeViewModel node && node.Title == title);
 
     // The pending connection draws its own LineConnection, so only connections that show a ConnectionViewModel count.
     public IEnumerable<BaseConnection> Connections() =>

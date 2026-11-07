@@ -5,36 +5,76 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>The left tree's node rows of a large workflow (ADR 0063).</summary>
+/// <summary>The left tree's node rows, grouped by state (ADR 0064).</summary>
 public sealed class TreeRowsTests
 {
-    [AvaloniaFact]
-    public void A_large_workflow_lists_the_nodes_that_need_the_person_first_and_folds_the_rest_after_12_rows()
+    private static string Started => """{"entry":"turnStarted","basis":{"inputs":[],"instruction":"","model":null},"session":null,"round":false}""";
+
+    private static void Log(NodeFixture f, TaskId id, string last)
     {
-        var ids = Enumerable.Range(0, 14).Select(_ => new TaskId(Guid.NewGuid())).ToArray();
-        using var f = new NodeFixture([.. ids.Select((id, index) => NodeFixture.Task(id, $"Node {index}", 105 + index * 300))]);
-        var started = """{"entry":"turnStarted","basis":{"inputs":[],"instruction":"","model":null},"session":null,"round":false}""";
-        var log = Engine.NodeLog.PathOf(f.Project, ids[^1]);
+        var log = Engine.NodeLog.PathOf(f.Project, id);
         Directory.CreateDirectory(Path.GetDirectoryName(log)!);
-        File.WriteAllLines(log, [started, """{"entry":"failed","reason":"The model is not available."}"""]);
-        var shell = f.Open();
-        var canvas = shell.Window.ViewModel.Canvas!;
+        File.WriteAllLines(log, [Started, last]);
+    }
 
-        Assert.Equal(14, canvas.Outline.Count);
-        Assert.Equal(WorkflowCanvasViewModel.TreeRowLimit, canvas.TreeRows.Count);
-        Assert.Equal("Node 13", canvas.TreeRows[0].Title);
-        Assert.Equal(["Node 0", "Node 1"], canvas.TreeRows.Skip(1).Take(2).Select(node => node.Title));
-        Assert.True(canvas.HasFoldedRows);
-        Assert.Equal("Show all 14 nodes", canvas.ShowAllLabel);
+    private static string Row(object row) => row switch
+    {
+        NodeGroup group => $"[{group.Name} {group.Count}]",
+        TaskNodeViewModel node => node.Title,
+        _ => "?",
+    };
 
-        // A selected node always has its row, so the list keeps the selection.
-        var hidden = canvas.Outline.Single(node => node.Title == "Node 12");
-        canvas.SelectedNode = hidden;
-        Assert.Contains(hidden, canvas.TreeRows);
-        Assert.Same(hidden, canvas.SelectedNode);
+    [AvaloniaFact]
+    public void A_workflow_lists_every_node_under_a_header_of_its_group()
+    {
+        var ids = Enumerable.Range(0, 4).Select(_ => new TaskId(Guid.NewGuid())).ToArray();
+        using var f = new NodeFixture([.. ids.Select((id, index) => NodeFixture.Task(id, $"Node {index}", 105 + index * 300))]);
+        Log(f, ids[^1], """{"entry":"failed","reason":"The model is not available."}""");
+        var canvas = f.Open().Window.ViewModel.Canvas!;
 
-        canvas.ToggleAllRowsCommand.Execute(null);
-        Assert.Equal(14, canvas.TreeRows.Count);
-        Assert.Equal("Show fewer nodes", canvas.ShowAllLabel);
+        Assert.Equal(["[Needs you 1]", "Node 3", "[Not started 3]", "Node 0", "Node 1", "Node 2"], canvas.TreeRows.Select(Row));
+    }
+
+    [Fact]
+    public void Done_starts_folded_above_5_nodes_and_the_other_groups_start_open()
+    {
+        Assert.False(new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 5 }.IsFolded);
+        Assert.True(new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 6 }.IsFolded);
+        Assert.False(new NodeGroup(NodeGroupKind.NotStarted, () => { }) { Count = 40 }.IsFolded);
+
+        var done = new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 6 };
+        done.Toggle();
+        done.Count = 9;
+        Assert.False(done.IsFolded);
+    }
+
+    [AvaloniaFact]
+    public void A_header_folds_and_opens_its_group()
+    {
+        var ids = Enumerable.Range(0, 3).Select(_ => new TaskId(Guid.NewGuid())).ToArray();
+        using var f = new NodeFixture([.. ids.Select((id, index) => NodeFixture.Task(id, $"Node {index}", 105 + index * 300))]);
+        var canvas = f.Open().Window.ViewModel.Canvas!;
+        var group = canvas.Groups.Single(group => group.Kind == NodeGroupKind.NotStarted);
+
+        group.Toggle();
+        Assert.Equal(["[Not started 3]"], canvas.TreeRows.Select(Row));
+        group.Toggle();
+        Assert.Equal(["[Not started 3]", "Node 0", "Node 1", "Node 2"], canvas.TreeRows.Select(Row));
+    }
+
+    [AvaloniaFact]
+    public void Selecting_a_node_of_a_folded_group_opens_the_group()
+    {
+        var ids = Enumerable.Range(0, 3).Select(_ => new TaskId(Guid.NewGuid())).ToArray();
+        using var f = new NodeFixture([.. ids.Select((id, index) => NodeFixture.Task(id, $"Node {index}", 105 + index * 300))]);
+        var canvas = f.Open().Window.ViewModel.Canvas!;
+        var group = canvas.Groups.Single(group => group.Kind == NodeGroupKind.NotStarted);
+        group.Toggle();
+
+        var node = canvas.Outline[1];
+        canvas.SelectedNode = node;
+        Assert.False(group.IsFolded);
+        Assert.Contains(node, canvas.TreeRows);
+        Assert.Same(node, canvas.SelectedNode);
     }
 }

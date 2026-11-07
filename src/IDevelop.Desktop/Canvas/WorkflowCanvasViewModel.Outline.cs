@@ -45,62 +45,66 @@ public sealed partial class WorkflowCanvasViewModel
         return order;
     }
 
-    /// <summary>A workflow with more nodes than this lists the ones that need the person first and folds the rest after this many rows.</summary>
-    public const int TreeRowLimit = 12;
+    /// <summary>The group headers of the left tree, in its order (ADR 0064).</summary>
+    public IReadOnlyList<NodeGroup> Groups => field ??= [.. Enum.GetValues<NodeGroupKind>().Select(kind => new NodeGroup(kind, OnGroupFolded))];
 
     /// <summary>
-    /// The node rows of the left tree. A workflow of up to <see cref="TreeRowLimit"/> nodes lists all of them in reading order.
-    /// A larger one lists first the nodes that need the person or run (waiting, failed, interrupted, running), then the rest up
-    /// to <see cref="TreeRowLimit"/> rows, each part in reading order, until the person asks for every row. The selected node
-    /// always has its row.
+    /// The rows of the left tree under an expanded workflow: for each group that holds a node ("Needs you", "Running",
+    /// "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The selected node's group
+    /// opens, so the selected node always has its row.
     /// </summary>
-    public ObservableCollection<TaskNodeViewModel> TreeRows { get; } = [];
+    public ObservableCollection<object> TreeRows { get; } = [];
 
-    /// <summary>The left tree lists every node of a large workflow.</summary>
-    public bool ShowsAllRows
+    /// <summary>The tree's rows in their order, with each node in <paramref name="keep"/> in an open group.</summary>
+    internal static IReadOnlyList<object> TreeOrder(IReadOnlyList<TaskNodeViewModel> outline, IReadOnlyList<NodeGroup> groups, params TaskNodeViewModel?[] keep)
     {
-        get;
-        set
+        var members = outline.ToLookup(NodeGroup.Of);
+        foreach (var group in groups)
         {
-            if (SetProperty(ref field, value))
+            group.Count = members[group.Kind].Count();
+        }
+
+        foreach (var node in keep.OfType<TaskNodeViewModel>())
+        {
+            groups.First(group => group.Kind == NodeGroup.Of(node)).Open();
+        }
+
+        var rows = new List<object>(outline.Count + groups.Count);
+        foreach (var group in groups.Where(group => group.Count > 0))
+        {
+            rows.Add(group);
+            if (!group.IsFolded)
             {
-                OnPropertyChanged(nameof(ShowAllLabel));
-                ArrangeTreeRows();
+                rows.AddRange(members[group.Kind]);
             }
         }
-    }
 
-    /// <summary>The workflow has more nodes than the tree lists at first, so the tree offers a row that lists them all.</summary>
-    public bool HasFoldedRows => Outline.Count > TreeRowLimit;
-
-    /// <summary>"Show all 50 nodes", or "Show fewer nodes" while the tree lists them all.</summary>
-    public string ShowAllLabel => ShowsAllRows ? "Show fewer nodes" : $"Show all {Outline.Count} nodes";
-
-    public ICommand ToggleAllRowsCommand => field ??= new RelayCommand(() => ShowsAllRows = !ShowsAllRows);
-
-    /// <summary>The node needs the person or runs, so a large workflow's tree lists it first.</summary>
-    private static bool LeadsTree(TaskNodeViewModel node) => node.IsWaiting || node.State is NodeState.Failed or NodeState.Running;
-
-    /// <summary>The tree's rows in their order, with a row for each node in <paramref name="keep"/>.</summary>
-    internal static IReadOnlyList<TaskNodeViewModel> TreeOrder(IReadOnlyList<TaskNodeViewModel> outline, bool all, params TaskNodeViewModel?[] keep)
-    {
-        if (all || outline.Count <= TreeRowLimit)
-        {
-            return outline;
-        }
-
-        var first = outline.Where(LeadsTree).ToList();
-        var rest = outline.Where(node => !LeadsTree(node)).ToList();
-        var shown = rest.Take(Math.Max(0, TreeRowLimit - first.Count)).ToHashSet();
-        return [.. first, .. rest.Where(node => shown.Contains(node) || keep.Contains(node))];
+        return rows;
     }
 
     /// <summary>Lists the tree's rows again, with a row for <paramref name="keep"/> too, which is about to be selected.</summary>
     private void ArrangeTreeRows(TaskNodeViewModel? keep = null)
     {
-        Arrange(TreeRows, TreeOrder(Outline, ShowsAllRows, SelectedNode, keep));
-        OnPropertyChanged(nameof(HasFoldedRows));
-        OnPropertyChanged(nameof(ShowAllLabel));
+        _arrangingTree = true;
+        try
+        {
+            Arrange(TreeRows, TreeOrder(Outline, Groups, SelectedNode, keep));
+        }
+        finally
+        {
+            _arrangingTree = false;
+        }
+    }
+
+    private bool _arrangingTree;
+
+    // A group that opens while the tree arranges its rows needs no second pass.
+    private void OnGroupFolded()
+    {
+        if (!_arrangingTree)
+        {
+            ArrangeTreeRows();
+        }
     }
 
     private void ArrangeOutline()
@@ -109,7 +113,8 @@ public sealed partial class WorkflowCanvasViewModel
         ArrangeTreeRows();
     }
 
-    private void Arrange(ObservableCollection<TaskNodeViewModel> rows, IReadOnlyList<TaskNodeViewModel> order)
+    private void Arrange<T>(ObservableCollection<T> rows, IReadOnlyList<T> order)
+        where T : class
     {
         if (rows.SequenceEqual(order))
         {
@@ -118,7 +123,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         // A list forgets its selection when the selected row leaves it, even to come straight back, and tells the canvas.
         // So the selected row stays, and the other rows take their places around it.
-        var stays = SelectedNode is { } selected && order.Contains(selected) ? selected : null;
+        var stays = SelectedNode is T selected && order.Contains(selected) ? selected : null;
         foreach (var row in rows.Where(row => row != stays).ToList())
         {
             rows.Remove(row);

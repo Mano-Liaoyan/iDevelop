@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -33,6 +34,8 @@ public partial class SidebarView : UserControl
         // A click anywhere else leaves Find, as it leaves any floating list. A result takes no focus, so a click on one stays here.
         FindBox.LostFocus += (_, _) => ViewModel.Find.Clear();
         AddHandler(KeyDownEvent, OnRowKeyDown, RoutingStrategies.Tunnel);
+        // A group header folds or opens its group, and the list never selects it.
+        AddHandler(PointerPressedEvent, OnGroupPressed, RoutingStrategies.Tunnel);
         // Activity never takes more than half of the panel. A short panel, or a tree longer than half of it, folds Activity to its
         // heading, so the tree keeps the room while the person moves through a long workflow. Both measures are free of the fold.
         Rows.SizeChanged += (_, e) =>
@@ -190,6 +193,25 @@ public partial class SidebarView : UserControl
         _ => false,
     })];
 
+    // A group header is a row that the arrow keys reach, but Tab goes on to the nodes, and the header names its group.
+    private void OnTreeContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        var header = sender is ListBox list && list.ItemsView[e.Index] is NodeGroup;
+        e.Container.Classes.Set("groupRow", header);
+        KeyboardNavigation.SetIsTabStop(e.Container, !header);
+        AutomationProperties.SetAutomationId(e.Container, header ? "NodeGroup" : null);
+    }
+
+    private static void OnGroupPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: NodeGroup group } item
+            && e.GetCurrentPoint(item).Properties.IsLeftButtonPressed)
+        {
+            group.Toggle();
+            e.Handled = true;
+        }
+    }
+
     private void OnRowKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.KeyModifiers != KeyModifiers.None || e.Source is TextBox || (e.Source as Visual)?.FindAncestorOfType<MenuItem>(includeSelf: true) is not null)
@@ -205,6 +227,13 @@ public partial class SidebarView : UserControl
         }
 
         var row = rows[at];
+        if (e.Key is Key.Enter or Key.Space && row.DataContext is NodeGroup group)
+        {
+            group.Toggle();
+            e.Handled = true;
+            return;
+        }
+
         Control? next = e.Key switch
         {
             Key.Down => rows[Math.Min(at + 1, rows.Count - 1)],
@@ -241,6 +270,9 @@ public partial class SidebarView : UserControl
             case WorkflowCanvasViewModel { IsExpanded: false } canvas when row is Button:
                 canvas.IsExpanded = true;
                 return true;
+            case NodeGroup { IsFolded: true } group:
+                group.Toggle();
+                return true;
             default:
                 return false;
         }
@@ -256,6 +288,9 @@ public partial class SidebarView : UserControl
             case WorkflowCanvasViewModel { IsExpanded: true } canvas when row is Button:
                 canvas.IsExpanded = false;
                 return true;
+            case NodeGroup { IsFolded: false } group:
+                group.Toggle();
+                return true;
             default:
                 return false;
         }
@@ -263,7 +298,10 @@ public partial class SidebarView : UserControl
 
     private static Control? ParentRow(IReadOnlyList<Control> rows, int at) => rows[at] switch
     {
-        ListBoxItem { DataContext: TaskNodeViewModel node } => rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == node.Canvas),
+        ListBoxItem { DataContext: TaskNodeViewModel node } => rows.Take(at).LastOrDefault(row => row.DataContext is NodeGroup group && group.Kind == NodeGroup.Of(node))
+            ?? rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == node.Canvas),
+        ListBoxItem { DataContext: NodeGroup } item => item.FindAncestorOfType<ListBox>()?.DataContext is WorkflowCanvasViewModel canvas
+            ? rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == canvas) : rows[at],
         Button { DataContext: WorkflowCanvasViewModel canvas } => rows.Take(at).LastOrDefault(row => row.DataContext == canvas.Project),
         _ => rows[at],
     };

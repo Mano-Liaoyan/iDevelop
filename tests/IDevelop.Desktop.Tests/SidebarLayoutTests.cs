@@ -334,7 +334,6 @@ public sealed class SidebarLayoutTests : IDisposable
         var shell = Shell.Open(reports);
         shell.OpenNodes(Reports, ReleaseNotes);
         // The tree lists every row of the large workflow, so it scrolls.
-        shell.Window.ViewModel.Canvas!.ShowsAllRows = true;
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();
@@ -367,7 +366,6 @@ public sealed class SidebarLayoutTests : IDisposable
         var shell = Shell.Open(reports);
         shell.OpenNodes(Reports, ReleaseNotes);
         // The tree lists every row of the large workflow, so it scrolls.
-        shell.Window.ViewModel.Canvas!.ShowsAllRows = true;
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();

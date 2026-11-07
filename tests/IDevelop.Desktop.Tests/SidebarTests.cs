@@ -43,14 +43,14 @@ public sealed class SidebarTests : IDisposable
         Assert.Equal([("seed", ["Workflow"])], shell.Tree());
         Assert.Equal("0/3", shell.Find<TextBlock>("WorkflowSummary").Text);
         Assert.True(shell.Find<ListBox>("SidebarTasks").IsEffectivelyVisible);
-        Assert.Equal(["Design", "Build", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
+        Assert.Equal(["Not started", "3", "Design", "Build", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
 
         shell.AddNode();
 
         // The new task lands under Design, above Review, and the list reads the canvas from the top.
         Assert.Equal("0/4", shell.Find<TextBlock>("WorkflowSummary").Text);
         Assert.True(shell.Find<Control>("WorkflowUnsaved").IsEffectivelyVisible);
-        Assert.Equal(["Design", "Build", "New task", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
+        Assert.Equal(["Not started", "4", "Design", "Build", "New task", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
     }
 
     [AvaloniaFact]
@@ -65,13 +65,13 @@ public sealed class SidebarTests : IDisposable
         shell.ShowTasks();
         var canvas = shell.Window.ViewModel.Canvas!;
         var sidebar = shell.Find<ListBox>("SidebarTasks");
-        Assert.Equal(["Build", "Review", "Design"], Shell.Texts(sidebar));
+        Assert.Equal(["Not started", "3", "Build", "Review", "Design"], Shell.Texts(sidebar));
         shell.Click(shell.SidebarRow("Review"));
 
         canvas.Edit(new WorkflowEdit.MoveTasks([new TaskPosition(Review, new CanvasPoint(105, 0))]));
         shell.Render();
 
-        Assert.Equal(["Review", "Build", "Design"], Shell.Texts(sidebar));
+        Assert.Equal(["Not started", "3", "Review", "Build", "Design"], Shell.Texts(sidebar));
         Assert.Equal(("Review", "Review"), (canvas.SelectedNode?.Title, ((TaskNodeViewModel?)sidebar.SelectedItem)?.Title));
         Assert.True(shell.Node("Review").IsSelected);
     }
