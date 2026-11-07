@@ -9,8 +9,8 @@ namespace IDevelop.Desktop.Theme;
 /// Wrapped text that keeps to <see cref="TextBlock.MaxLines"/> and ends in an ellipsis when it loses text. Avalonia's own
 /// trimming adds no ellipsis to text that its line limit cuts at a word's end, and it cuts a long last line short, so
 /// this control finds the longest start of <see cref="Whole"/> that fits, ellipsis included. When <see cref="KeepFrom"/> marks
-/// the part of the text that tells it from a similar one and that part fits after a start of the text, the cut falls before
-/// that part, so the part stays in view. The text always starts with its own first word and is cut in one place only. Under
+/// the part of the text that tells it from a similar one and that whole part fits after a start of the text, the cut falls in
+/// the shared words before that part, so the whole part stays in view. The text always starts with its own first word and is cut in one place only. Under
 /// <see cref="TextWrapping.WrapWithOverflow"/> no word breaks across lines. It styles as a <see cref="TextBlock"/>.
 /// </summary>
 public sealed class EllipsisText : TextBlock
@@ -89,16 +89,17 @@ public sealed class EllipsisText : TextBlock
             return whole;
         }
 
-        // A plain cut will do when it leaves the word that differs in view.
+        // The part that differs shows whole after the start's first words where it fits, so a title never loses the words that
+        // tell it from a similar one. The cut drops at least one shared word, or it would only add an ellipsis.
         var end = Longest(whole.Length, length => Cut(whole, length), width);
-        if (KeepFrom <= 0 || KeepFrom >= whole.Length || end >= WordEnd(whole, KeepFrom))
+        if (KeepFrom <= 1 || KeepFrom >= whole.Length)
         {
             return Cut(whole, end);
         }
 
         var kept = whole[KeepFrom..];
-        var head = WholeWords(whole, Longest(KeepFrom, length => Joined(whole, length, kept), width));
-        return head > 0 ? Joined(whole, head, kept) : Cut(whole, end);
+        var head = whole[..WholeWords(whole, Longest(KeepFrom - 2, length => Joined(whole, length, kept), width))].TrimEnd().Length;
+        return head > 0 && head < KeepFrom - 1 && whole[head] == ' ' ? Joined(whole, head, kept) : Cut(whole, end);
     }
 
     // A start that keeps its words reads as the same start on every similar title. A first word that is cut stays as it is.

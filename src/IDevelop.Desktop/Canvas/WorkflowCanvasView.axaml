@@ -205,7 +205,7 @@
                 AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
         </Button>
-        <Button Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
+        <Button x:Name="ZoomOutButton" Classes="icon zoom zoomStep" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
                 AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
         </Button>
@@ -213,7 +213,7 @@
                 AutomationProperties.AutomationId="ZoomValue" AutomationProperties.Name="Reset the zoom">
           <TextBlock Text="{Binding ZoomLabel}" AutomationProperties.AutomationId="ZoomLabel" />
         </Button>
-        <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
+        <Button Classes="icon zoom zoomStep" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
                 AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
         </Button>
@@ -238,10 +238,23 @@
             <MenuFlyout Placement="TopEdgeAlignedLeft">
               <MenuItem Header="Fit to screen" Click="OnFitToScreen" AutomationProperties.AutomationId="FitMenu"
                         theme:MenuGlyph.Data="{StaticResource IconFit}" />
+              <MenuItem Header="Zoom in" Click="OnZoomIn" AutomationProperties.AutomationId="ZoomInMenu"
+                        IsVisible="{Binding !#ZoomOutButton.IsVisible}" theme:MenuGlyph.Data="{StaticResource IconZoomIn}" />
+              <MenuItem Header="Zoom out" Click="OnZoomOut" AutomationProperties.AutomationId="ZoomOutMenu"
+                        IsVisible="{Binding !#ZoomOutButton.IsVisible}" theme:MenuGlyph.Data="{StaticResource IconZoomOut}" />
               <MenuItem Header="{Binding ExpandCardsLabel}" Command="{Binding ExpandCardsCommand}" AutomationProperties.AutomationId="ExpandAllMenu"
                         theme:MenuGlyph.Data="{StaticResource IconExpandAll}" />
               <MenuItem Header="Minimap" Click="OnMinimapMenu" AutomationProperties.AutomationId="MinimapMenu"
                         theme:MenuGlyph.Data="{StaticResource IconMinimap}" />
+              <MenuItem Header="{Binding NextLabel}" Command="{Binding NextWaitingCommand}" AutomationProperties.AutomationId="NextWaitingMenu"
+                        theme:MenuGlyph.Data="{StaticResource IconChevronRight}">
+                <MenuItem.IsVisible>
+                  <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="HasAttention" />
+                    <Binding ElementName="NextSlot" Path="!IsVisible" />
+                  </MultiBinding>
+                </MenuItem.IsVisible>
+              </MenuItem>
               <MenuItem Header="Follow running nodes" ToggleType="CheckBox" IsChecked="{Binding IsFollowing}"
                         AutomationProperties.AutomationId="FollowMenu" theme:MenuGlyph.Data="{StaticResource IconFollow}">
                 <MenuItem.IsVisible>
@@ -280,6 +293,8 @@
                      AutomationProperties.Name="{Binding BarSummary}">
           <DockPanel Height="28">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">
+              <!-- The narrowest bar moves Next to the overflow menu, so waiting and failed keep their words. -->
+              <Panel x:Name="NextSlot" Classes="barNext">
               <Button Classes="action bar" Command="{Binding NextWaitingCommand}" IsVisible="{Binding HasAttention}"
                       ToolTip.Tip="{x:Static canvas:WorkflowCanvasView.NextHelp}"
                       AutomationProperties.AutomationId="NextWaiting"
@@ -289,6 +304,7 @@
                   <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
                 </StackPanel>
               </Button>
+              </Panel>
               <!-- The tightest bar moves Follow to the overflow menu, so the chips keep their words. -->
               <Panel x:Name="FollowSlot" Classes="barFollow">
               <ToggleButton Classes="bar follow" IsChecked="{Binding IsFollowing}" IsVisible="{Binding !!RunningCount}"

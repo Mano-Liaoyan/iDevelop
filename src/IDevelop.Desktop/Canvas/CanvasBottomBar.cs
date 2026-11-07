@@ -11,9 +11,9 @@ namespace IDevelop.Desktop.Canvas;
 /// controls, and it never gets wider than the room left, so it never covers them. A bar that needs more than its width takes
 /// the tightView class, whose styles move the view's own controls to the overflow menu, then the tightFollow class, whose styles
 /// move Follow to the overflow menu, so the states keep their names before a view setting does, then the leastChips class, whose styles
-/// keep the urgent groups in words, fold the others into "+N more", and move Fit to the overflow menu, then the tightChips
-/// class, whose styles keep only the most urgent group and "+N more" and give the chips the progress's room, and then the tightNext class, whose styles leave
-/// Next its glyph, so no chip is cut. The run bar always measures at its whole width, so
+/// show a quiet group as its badge and number and move Fit to the overflow menu, then the tightChips class, whose styles show
+/// every group except waiting and failed as its badge and number and give the chips the progress's room, and then the tightNext class, whose styles leave
+/// Next its glyph, then the foldZoom class, whose styles move Zoom in and Zoom out to the overflow menu, and then the foldNext class, whose styles move Next to the overflow menu, so no chip is cut. The run bar always measures at its whole width, so
 /// a change in its text reaches this panel.
 /// </summary>
 public sealed class CanvasBottomBar : Panel
@@ -27,7 +27,7 @@ public sealed class CanvasBottomBar : Panel
     public static void SetSlot(Control control, ChromeSlot value) => control.SetValue(SlotProperty, value);
 
     // Each step gives the run bar less to show. The first step is no class.
-    private static readonly string[] Steps = ["tightView", "tightFollow", "leastChips", "tightChips", "tightNext"];
+    private static readonly string[] Steps = ["tightView", "tightFollow", "leastChips", "tightChips", "tightNext", "foldZoom", "foldNext"];
 
     // The steps the bar has taken, and the width it wanted before each one, which it takes that step back at.
     private readonly double[] _wanted = new double[Steps.Length];

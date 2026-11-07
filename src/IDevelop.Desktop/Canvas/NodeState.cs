@@ -77,7 +77,7 @@ public static class NodeStates
         EngineState.InputRequired { Why: EngineState.Reply } => "The agent replied. Write back, or approve its reply as the result.",
         EngineState.InputRequired { Why: EngineState.Conflict } =>
             "The work handed on conflicts. Resolve the conflict in the node's worktree, then mark it resolved.",
-        EngineState.InputRequired { Why: EngineState.Interrupted } => "iDevelop closed during its turn. Continue the session, or retry.",
+        EngineState.InputRequired { Why: EngineState.Interrupted } => "iDevelop closed during its turn. Continue resumes the same session. Retry starts a new attempt.",
         EngineState.InputRequired { Why: EngineState.RoundLimit } =>
             "The review reached its round limit. Approve the work, send it back with a note, or edit the workflow.",
         EngineState.InputRequired waiting => waiting.Why,

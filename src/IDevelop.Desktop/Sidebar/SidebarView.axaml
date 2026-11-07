@@ -320,7 +320,7 @@
                                     <ItemsControl.ItemTemplate>
                                       <DataTemplate DataType="canvas:StateChip">
                                         <StackPanel Orientation="Horizontal" Spacing="4" AutomationProperties.Name="{Binding Label}">
-                                          <theme:StateBadge Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" IsVisible="{Binding !IsMore}" />
+                                          <theme:StateBadge Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" />
                                           <TextBlock Classes="caption" Text="{Binding RowText}" ToolTip.Tip="{Binding Tip}" VerticalAlignment="Center" />
                                         </StackPanel>
                                       </DataTemplate>

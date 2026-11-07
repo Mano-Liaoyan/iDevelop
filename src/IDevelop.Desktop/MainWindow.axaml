@@ -175,7 +175,7 @@
                         </StackPanel>
                       </Button>
                       <!-- While a node runs, the way out takes the place of the button that started the run. -->
-                      <Button Classes="destructive" Command="{Binding StopAllCommand}" IsVisible="{Binding !RunsNothing}"
+                      <Button Classes="destructive runSlot" Command="{Binding StopAllCommand}" IsVisible="{Binding !RunsNothing}"
                               ToolTip.Placement="BottomEdgeAlignedRight"
                               ToolTip.Tip="Stop Workflow&#10;Stop every running node. Finished results stay."
                               AutomationProperties.AutomationId="StopAll"
@@ -186,8 +186,8 @@
                         </StackPanel>
                       </Button>
                       <!-- The workflow's one primary action, which keeps its words and its width in every state, so the breadcrumb gives up its width first.
-                           Its tooltip says how many nodes it runs, and with nothing to run, why. The run bar says how far the workflow is. An empty workflow's primary action is on the canvas's Generate card. -->
-                      <Button Classes="primary" Command="{Binding RunWorkflowCommand}"
+                           Its words say when it runs only part of the workflow ("Run 3 of 9"), and its tooltip says why, or why nothing can run. Run and Stop share one width, so a run does not cut the breadcrumb. The run bar says how far the workflow is. An empty workflow's primary action is on the canvas's Generate card. -->
+                      <Button Classes="primary runSlot" Command="{Binding RunWorkflowCommand}"
                               ToolTip.ShowOnDisabled="True"
                               ToolTip.Placement="BottomEdgeAlignedRight"
                               ToolTip.Tip="{Binding RunWorkflowTip}"
@@ -202,7 +202,7 @@
                         </Button.IsVisible>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-                          <TextBlock Text="Run Workflow" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding RunWorkflowLabel}" VerticalAlignment="Center" AutomationProperties.AutomationId="RunWorkflowLabel" />
                         </StackPanel>
                       </Button>
                     </StackPanel>

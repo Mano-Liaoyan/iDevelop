@@ -34,7 +34,20 @@ public sealed class TitlePartsTests
     }
 
     [AvaloniaFact]
-    public void A_plain_cut_stays_when_it_leaves_the_word_that_differs_in_view()
+    public void A_cut_title_keeps_the_whole_part_that_differs_and_not_only_its_first_word()
+    {
+        const string Title = "Move the account statement query";
+        const string Shown = "Move… account statement query";
+        var text = new EllipsisText { Whole = Title, KeepFrom = "Move the ".Length, FontSize = 13, MaxLines = 1, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        using var layout = new Avalonia.Media.TextFormatting.TextLayout(Shown, new Avalonia.Media.Typeface(text.FontFamily), 13, null);
+
+        text.Measure(new Avalonia.Size(Math.Ceiling(layout.Width) + 3, double.PositiveInfinity));
+
+        Assert.Equal(Shown, text.Text);
+    }
+
+    [AvaloniaFact]
+    public void A_plain_cut_stays_when_the_title_shares_only_its_first_word()
     {
         var text = new EllipsisText { Whole = "Add the usage_events schema now", KeepFrom = "Add ".Length, FontSize = 13, MaxLines = 1, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
 

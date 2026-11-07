@@ -1008,6 +1008,11 @@
   <Style Selector=".compact :is(Control).compactOnly">
     <Setter Property="IsVisible" Value="True" />
   </Style>
+  <!-- Run Workflow and Stop Workflow take turns in one place at one width, so a run does not move or cut the breadcrumb. -->
+  <Style Selector="Button.runSlot">
+    <Setter Property="MinWidth" Value="132" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
   <Style Selector=".compact Button.primary">
     <Setter Property="Padding" Value="8,0" />
   </Style>

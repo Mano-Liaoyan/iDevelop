@@ -127,13 +127,12 @@ public sealed partial class WorkflowCanvasViewModel
     }
 
     /// <summary>
-    /// The chips of a tight bar: the groups that need the person keep their words, and one "+N more" chip sums the less urgent
-    /// groups. Its tooltip names them. With no urgent group, the first group keeps its words.
+    /// The chips of a tight bar: each group keeps its words, but a quiet group (stale) shows only its badge and number.
     /// </summary>
-    public IReadOnlyList<StateChip> BarLeast => StateChip.Fold(BarChips, Math.Max(1, BarChips.Count(chip => chip.IsUrgent)));
+    public IReadOnlyList<StateChip> BarLeast => StateChip.Shorten(BarChips, chip => chip.IsQuiet);
 
-    /// <summary>The chips of the tightest bar: the most urgent group in words, and "+N more" for all the others.</summary>
-    public IReadOnlyList<StateChip> BarTightest => StateChip.Fold(BarChips, 1);
+    /// <summary>The chips of the tightest bar: waiting and failed keep their words, and every other group shows its badge and number.</summary>
+    public IReadOnlyList<StateChip> BarTightest => StateChip.Shorten(BarChips, _ => true);
 
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
     public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Interrupted > 0 && Counts.Failed == 0 ? "Next interrupted" : "Next failed";
@@ -165,6 +164,12 @@ public sealed partial class WorkflowCanvasViewModel
     }
 
     public string FollowLabel => IsFollowing ? "Stop following running nodes" : "Follow running nodes";
+
+    /// <summary>
+    /// The words on Run Workflow: "Run Workflow" when it runs every node or nothing, and "Run 3 of 9" when nodes with a current
+    /// result keep it, so the button says that it runs only part of the workflow.
+    /// </summary>
+    public string RunWorkflowLabel => RunWork > 0 && RunWork < Nodes.Count ? $"Run {RunWork} of {Nodes.Count}" : "Run Workflow";
 
     /// <summary>The tooltip of Run Workflow: what it runs, or why nothing can run.</summary>
     public string RunWorkflowTip => (Nodes.Count, RunWork) switch
@@ -254,6 +259,7 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarActivity));
         OnPropertyChanged(nameof(BarTip));
         OnPropertyChanged(nameof(RunWorkflowTip));
+        OnPropertyChanged(nameof(RunWorkflowLabel));
         OnSummaryChanged();
         _runWorkflow?.NotifyCanExecuteChanged();
         _stopAll?.NotifyCanExecuteChanged();

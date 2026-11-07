@@ -129,12 +129,13 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
         Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], canvas.BarChips.Select(chip => chip.Label));
-        // A tight bar keeps words: the groups that need the person, then "+N more" for the rest, which its tooltip names.
-        Assert.Equal(["1 failed", "2 waiting", "+2 more"], canvas.BarLeast.Select(chip => chip.RowText));
+        // A tight bar hides no group: only a quiet group shortens, and the tightest bar shortens every group but waiting and
+        // failed to its badge and number. Waiting and failed always keep their words, and each tooltip names its group.
+        Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], canvas.BarLeast.Select(chip => chip.RowText));
         Assert.Equal("1 question, 1 reply", canvas.BarLeast[1].Tip);
-        Assert.Equal("2 interrupted", canvas.BarLeast[2].Tip);
-        Assert.Equal(["1 failed", "+4 more"], canvas.BarTightest.Select(chip => chip.RowText));
-        Assert.Equal("2 waiting, 2 interrupted", canvas.BarTightest[1].Tip);
+        Assert.Equal(["1 failed", "2 waiting", "2"], canvas.BarTightest.Select(chip => chip.RowText));
+        Assert.Equal("2 interrupted", canvas.BarTightest[2].Tip);
+        Assert.Equal(canvas.BarTightest, canvas.RowChips);
 
         void Sweep()
         {
@@ -532,8 +533,8 @@ public sealed class CanvasChromeTests : IDisposable
             var labels = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
             if (id == "RunWorkflow")
             {
-                // The workflow's primary action keeps its words at every width.
-                Assert.Contains("Run Workflow", labels);
+                // The workflow's primary action keeps its words at every width, and they say when it runs only part of the workflow.
+                Assert.Contains(shell.Window.ViewModel.Canvas!.RunWorkflowLabel, labels);
             }
             else if (compact)
             {

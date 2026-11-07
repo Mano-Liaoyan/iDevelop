@@ -43,7 +43,7 @@ internal static class NodeActions
 
         if (node.ShowsContinue)
         {
-            return [new("ContinueTask", "Continue", "IconRun", node.ContinueCommand, true, null), Retry(node, primary: false)];
+            return [new("ContinueTask", "Continue", "IconRun", node.ContinueCommand, true, "Resumes the same session where the agent stopped"), Retry(node, primary: false)];
         }
 
         if (node.IsAsking || node.IsWaiting)
@@ -76,7 +76,7 @@ internal static class NodeActions
 
     private static NodeAction Retry(TaskNodeViewModel node, bool primary) =>
         new("RetryTask", node.State == NodeState.Completed ? "Run from here" : "Retry", "IconRefresh", node.RetryCommand, primary,
-            node.RunRefusal ?? "Runs this node again in a fresh session, then each node after it");
+            node.RunRefusal ?? "Starts a new attempt in a fresh session, then runs each node after it");
 
     private static NodeAction Stop(TaskNodeViewModel node) => new("StopTask", "Stop", "IconStop", node.StopCommand, false, null);
 }

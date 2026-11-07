@@ -718,8 +718,8 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <!-- Every chip says its group in words. A tight bar names what needs the person and folds the rest into "+N more", and the
-       tightest bar names the most urgent group and folds all the others. The "+N more" tooltip names the folded groups. -->
+  <!-- Every chip says its group in words. A tight bar shows a quiet group (stale) as its badge and number, and the tightest bar
+       shows every group except waiting and failed so. No group is hidden, and waiting and failed always keep their words. -->
   <Style Selector="ItemsControl.barLeastChips, ItemsControl.barTightestChips">
     <Setter Property="IsVisible" Value="False" />
   </Style>
@@ -734,6 +734,9 @@
   </Style>
   <Style Selector="ItemsControl.barLeastChips ItemsPresenter > StackPanel, ItemsControl.barTightestChips ItemsPresenter > StackPanel">
     <Setter Property="Spacing" Value="6" />
+  </Style>
+  <Style Selector=":is(Control).foldZoom Button.zoomStep, :is(Control).foldNext Panel.barNext">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).tightFollow Panel.barFollow">
     <Setter Property="IsVisible" Value="False" />
