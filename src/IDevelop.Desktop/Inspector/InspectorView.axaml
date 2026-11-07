@@ -237,9 +237,154 @@
             <ContentControl.DataTemplates>
               <DataTemplate DataType="canvas:TaskNodeViewModel">
                 <!-- The sections keep one order in every state, as Godot's and Blender's do, so a field never moves when a node's state changes:
-                     what the node gave, what it is asked, who does it, what it reads, and who reads it. The header says the state. -->
+                     who does it, so the model is never under a long task, what it is asked, what it proposes, what it gave, what it reads,
+                     and who reads it. The header says the state. -->
                 <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-                  <inspector:InspectorSection Key="Proposal" Title="Proposal" IsShown="{Binding Proposal, Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <!-- Who does the work comes first in every state, so a model change never needs a scroll past a long task. -->
+                  <inspector:InspectorSection Grid.Row="0" Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
+                                              Changes="{Binding AgentChanges}" IsShown="{Binding HasAgent}">
+                    <StackPanel>
+                      <inspector:InspectorRow Label="Client" Info="{Binding PermissionNote}" InfoName="{Binding PermissionSummary}" InfoId="PermissionNote"
+                                              RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding ClientChanged}" RevertId="RevertAgent" RevertTip="Back to the blueprint's or the saved client">
+                        <ComboBox ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}" SelectionChanged="OnAgentChosen"
+                                  ToolTip.Tip="{Binding Picker.SelectedClient.Label, FallbackValue={x:Null}}"
+                                  AutomationProperties.AutomationId="TaskClient"
+                                  AutomationProperties.HelpText="{Binding PermissionNote}"
+                                  AutomationProperties.Name="Client" ItemTemplate="{StaticResource InspectorChoice}" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Model" LabelTip="{x:Static canvas:CanvasKeys.ModelHint}" IsShown="{Binding HasClient}"
+                                              RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding ModelChanged}" RevertId="RevertModel" RevertTip="Back to the blueprint's or the saved model">
+                        <ComboBox ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}" SelectionChanged="OnAgentChosen"
+                                  PlaceholderText="Choose a model" ToolTip.Tip="{Binding Picker.SelectedModel.Label, StringFormat='{}{0} (Alt+M)', FallbackValue='Model (Alt+M)'}"
+                                  AutomationProperties.AutomationId="TaskModel"
+                                  AutomationProperties.Name="Model" ItemTemplate="{StaticResource InspectorChoice}" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Reasoning" IsShown="{Binding Picker.HasReasoning}"
+                                              RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding ReasoningChanged}" RevertId="RevertReasoning" RevertTip="Back to the blueprint's or the saved reasoning">
+                        <ComboBox ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}" SelectionChanged="OnAgentChosen"
+                                  PlaceholderText="Choose a level" ToolTip.Tip="{Binding Picker.SelectedReasoning.Label, FallbackValue={x:Null}}"
+                                  AutomationProperties.AutomationId="TaskReasoning"
+                                  AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource InspectorChoice}" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Skills" IsShown="{Binding HasClient}"
+                                              Info="{Binding Skills.FixedNote}" InfoName="{Binding Skills.FixedNote}" InfoId="SkillsFixed"
+                                              RevertCommand="{Binding Skills.RevertCommand}" CanRevert="{Binding Skills.CanRevert}" RevertId="RevertSkills" RevertTip="Back to the blueprint's skills">
+                        <Panel>
+                          <ToggleButton Classes="picker" IsChecked="{Binding Skills.IsOpen}" IsVisible="{Binding Skills.CanChoose}"
+                                        ToolTip.Tip="{Binding Skills.SummaryTip}"
+                                        AutomationProperties.AutomationId="TaskSkills"
+                                        AutomationProperties.Name="Skills">
+                            <TextBlock Text="{Binding Skills.Summary}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                          </ToggleButton>
+                          <!-- A client that takes no choice shows a plain value, with no box and no arrow. Its glyph and tooltip say why. -->
+                          <Border Classes="fixedValue" IsVisible="{Binding !Skills.CanChoose}" ToolTip.Tip="{Binding Skills.FixedNote}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                              <TextBlock Classes="value" Text="{Binding Skills.Summary}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                         AutomationProperties.AutomationId="TaskSkillsValue" />
+                              <PathIcon Grid.Column="1" Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" Width="14" Height="14"
+                                        Foreground="{DynamicResource TextMutedBrush}" />
+                            </Grid>
+                          </Border>
+                        </Panel>
+                      </inspector:InspectorRow>
+                      <!-- The picker opens its list in place, under the row at the section's whole width, so each name wraps in full. -->
+                      <inspector:InspectorRow Layout="Full" Label="Skills" IsShown="{Binding Skills.ShowsList}">
+                        <Border Classes="skillList" AutomationProperties.AutomationId="SkillList">
+                          <StackPanel>
+                            <TextBlock Classes="note" Margin="0,4" Text="{Binding Skills.ListNote}"
+                                       IsVisible="{Binding Skills.ListNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       AutomationProperties.AutomationId="SkillListNote" />
+                            <ItemsControl ItemsSource="{Binding Skills.Choices}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="canvas:SkillChoiceViewModel">
+                                  <CheckBox Classes="skill" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Description}"
+                                            AutomationProperties.AutomationId="SkillChoice"
+                                            AutomationProperties.Name="{Binding Label}">
+                                    <StackPanel>
+                                      <TextBlock Text="{Binding Label}" TextWrapping="Wrap" Classes.missing="{Binding !IsInstalled}" />
+                                      <TextBlock Classes="letsIn" Text="{Binding LetsIn}" TextWrapping="Wrap"
+                                                 IsVisible="{Binding LetsIn, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                 AutomationProperties.AutomationId="SkillLetsIn" />
+                                    </StackPanel>
+                                  </CheckBox>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="note" Margin="0,4" Text="{Binding Skills.ListFooter}"
+                                       IsVisible="{Binding Skills.ListFooter, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       AutomationProperties.AutomationId="SkillListFooter" />
+                          </StackPanel>
+                        </Border>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full" Label="Skills" IsShown="{Binding Skills.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Classes="note" Text="{Binding Skills.Note}"
+                                   AutomationProperties.AutomationId="SkillsNote" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Mode" IsShown="{Binding HasConversation}"
+                                              Info="{Binding ConversationNote}" InfoName="{Binding ConversationSummary}" InfoId="ConversationNote"
+                                              RevertCommand="{Binding RevertConversationCommand}" CanRevert="{Binding CanRevertConversation}" RevertId="RevertConversation" RevertTip="Back to the blueprint's mode">
+                        <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
+                                  AutomationProperties.AutomationId="TaskConversation"
+                                  AutomationProperties.HelpText="{Binding ConversationNote}"
+                                  AutomationProperties.Name="Mode" ItemTemplate="{StaticResource InspectorChoice}" />
+                      </inspector:InspectorRow>
+                      <!-- What the blueprint tells this node's agent, with the node's own values in it. A blueprint edits the template. -->
+                      <inspector:InspectorRow Label="Prompt" LabelTip="System prompt" IsShown="{Binding HasSystemPrompt}">
+                        <ToggleButton x:Name="PromptOpen" Classes="disclosure rowDisclosure" ToolTip.Tip="Show what the blueprint tells this agent"
+                                      AutomationProperties.AutomationId="SystemPromptMore" AutomationProperties.Name="Show the whole system prompt">
+                          <StackPanel Orientation="Horizontal" Spacing="4">
+                            <PathIcon Theme="{StaticResource Glyph}" />
+                            <TextBlock Text="Show prompt" />
+                          </StackPanel>
+                        </ToggleButton>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full" Label="Prompt" IsShown="{Binding #PromptOpen.IsChecked}">
+                        <Border Classes="templatePreview">
+                          <conversation:MarkdownView Classes="promptView" Markdown="{Binding SystemPrompt}"
+                                                     AutomationProperties.AutomationId="SystemPrompt" />
+                        </Border>
+                      </inspector:InspectorRow>
+                    </StackPanel>
+                  </inspector:InspectorSection>
+
+                  <!-- The open conversation holds the task, so this section rests folded beside it, and a click opens it to edit. -->
+                  <inspector:InspectorSection Grid.Row="1" Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
+                    <ItemsControl ItemsSource="{Binding Fields}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="canvas:FieldViewModel">
+                          <inspector:InspectorRow Label="{Binding Label}" LabelTip="{Binding LabelTip}"
+                                                  Layout="{Binding IsMultiline, Converter={x:Static inspector:InspectorConverters.StackedWhen}}"
+                                                  RevertCommand="{Binding RevertCommand}" CanRevert="{Binding CanRevert}" RevertId="{Binding RevertId}" RevertTip="Back to the blueprint's default">
+                            <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box.
+                                 Until the box has focus, long text reads as text over it, in up to four lines with an ellipsis, and More opens the
+                                 rest in place. A click on the text edits the source. -->
+                            <StackPanel>
+                            <Panel Classes="fieldText" Classes.multiline="{Binding IsMultiline}" Classes.open="{Binding IsReadingOpen}">
+                              <TextBox Text="{Binding Text}" Watermark="{Binding Placeholder}"
+                                       AcceptsReturn="{Binding IsMultiline}" TextWrapping="Wrap" NewLine="&#10;"
+                                       Classes.multiline="{Binding IsMultiline}"
+                                       AutomationProperties.AutomationId="{Binding AutomationId}"
+                                       AutomationProperties.Name="{Binding Label}" />
+                              <theme:EllipsisText x:Name="FieldReading" Classes="fieldReading" Whole="{Binding Reading}" IsHitTestVisible="False" IsVisible="{Binding IsMultiline}"
+                                                  AutomationProperties.AutomationId="{Binding ReadingId}" />
+                            </Panel>
+                            <ToggleButton Classes="textLink" Content="{Binding ReadingToggle}" IsChecked="{Binding IsReadingOpen}"
+                                          AutomationProperties.AutomationId="{Binding ReadingMoreId}" AutomationProperties.Name="{Binding ReadingToggleName}">
+                              <ToggleButton.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                                  <Binding Path="#FieldReading.IsCut" />
+                                  <Binding Path="IsReadingOpen" />
+                                </MultiBinding>
+                              </ToggleButton.IsVisible>
+                            </ToggleButton>
+                            </StackPanel>
+                          </inspector:InspectorRow>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </inspector:InspectorSection>
+
+                  <inspector:InspectorSection Grid.Row="2" Key="Proposal" Title="Proposal" IsShown="{Binding Proposal, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <StackPanel>
                       <ContentControl Content="{Binding Proposal}">
                         <ContentControl.ContentTemplate>
@@ -409,7 +554,7 @@
                   </inspector:InspectorSection>
 
                   <!-- What the node hands on: its results, newest first, and a review's findings. The open conversation shows the result, so this section rests folded beside it. -->
-                  <inspector:InspectorSection Grid.Row="1" Key="Output" Title="Output" RestsFolded="{Binding IsConversationShown}">
+                  <inspector:InspectorSection Grid.Row="3" Key="Output" Title="Output" RestsFolded="{Binding IsConversationShown}">
                     <StackPanel>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasNoOutput}">
                         <TextBlock Classes="note" Text="No result yet."
@@ -545,149 +690,6 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    </StackPanel>
-                  </inspector:InspectorSection>
-
-                  <!-- The open conversation holds the task, so this section rests folded beside it, and a click opens it to edit. -->
-                  <inspector:InspectorSection Grid.Row="2" Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
-                    <ItemsControl ItemsSource="{Binding Fields}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="canvas:FieldViewModel">
-                          <inspector:InspectorRow Label="{Binding Label}" LabelTip="{Binding LabelTip}"
-                                                  Layout="{Binding IsMultiline, Converter={x:Static inspector:InspectorConverters.StackedWhen}}"
-                                                  RevertCommand="{Binding RevertCommand}" CanRevert="{Binding CanRevert}" RevertId="{Binding RevertId}" RevertTip="Back to the blueprint's default">
-                            <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box.
-                                 Until the box has focus, long text reads as text over it, in up to four lines with an ellipsis, and More opens the
-                                 rest in place. A click on the text edits the source. -->
-                            <StackPanel>
-                            <Panel Classes="fieldText" Classes.multiline="{Binding IsMultiline}" Classes.open="{Binding IsReadingOpen}">
-                              <TextBox Text="{Binding Text}" Watermark="{Binding Placeholder}"
-                                       AcceptsReturn="{Binding IsMultiline}" TextWrapping="Wrap" NewLine="&#10;"
-                                       Classes.multiline="{Binding IsMultiline}"
-                                       AutomationProperties.AutomationId="{Binding AutomationId}"
-                                       AutomationProperties.Name="{Binding Label}" />
-                              <theme:EllipsisText x:Name="FieldReading" Classes="fieldReading" Whole="{Binding Reading}" IsHitTestVisible="False" IsVisible="{Binding IsMultiline}"
-                                                  AutomationProperties.AutomationId="{Binding ReadingId}" />
-                            </Panel>
-                            <ToggleButton Classes="textLink" Content="{Binding ReadingToggle}" IsChecked="{Binding IsReadingOpen}"
-                                          AutomationProperties.AutomationId="{Binding ReadingMoreId}" AutomationProperties.Name="{Binding ReadingToggleName}">
-                              <ToggleButton.IsVisible>
-                                <MultiBinding Converter="{x:Static BoolConverters.Or}">
-                                  <Binding Path="#FieldReading.IsCut" />
-                                  <Binding Path="IsReadingOpen" />
-                                </MultiBinding>
-                              </ToggleButton.IsVisible>
-                            </ToggleButton>
-                            </StackPanel>
-                          </inspector:InspectorRow>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </inspector:InspectorSection>
-
-                  <inspector:InspectorSection Grid.Row="3" Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
-                                              Changes="{Binding AgentChanges}" IsShown="{Binding HasAgent}">
-                    <StackPanel>
-                      <inspector:InspectorRow Label="Client" Info="{Binding PermissionNote}" InfoName="{Binding PermissionSummary}" InfoId="PermissionNote"
-                                              RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding ClientChanged}" RevertId="RevertAgent" RevertTip="Back to the blueprint's or the saved client">
-                        <ComboBox ItemsSource="{Binding Picker.ClientChoices}" SelectedItem="{Binding Picker.SelectedClient, Mode=OneWay}" SelectionChanged="OnAgentChosen"
-                                  ToolTip.Tip="{Binding Picker.SelectedClient.Label, FallbackValue={x:Null}}"
-                                  AutomationProperties.AutomationId="TaskClient"
-                                  AutomationProperties.HelpText="{Binding PermissionNote}"
-                                  AutomationProperties.Name="Client" ItemTemplate="{StaticResource InspectorChoice}" />
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Label="Model" LabelTip="{x:Static canvas:CanvasKeys.ModelHint}" IsShown="{Binding HasClient}"
-                                              RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding ModelChanged}" RevertId="RevertModel" RevertTip="Back to the blueprint's or the saved model">
-                        <ComboBox ItemsSource="{Binding Picker.ModelChoices}" SelectedItem="{Binding Picker.SelectedModel, Mode=OneWay}" SelectionChanged="OnAgentChosen"
-                                  PlaceholderText="Choose a model" ToolTip.Tip="{Binding Picker.SelectedModel.Label, StringFormat='{}{0} (Alt+M)', FallbackValue='Model (Alt+M)'}"
-                                  AutomationProperties.AutomationId="TaskModel"
-                                  AutomationProperties.Name="Model" ItemTemplate="{StaticResource InspectorChoice}" />
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Label="Reasoning" IsShown="{Binding Picker.HasReasoning}"
-                                              RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding ReasoningChanged}" RevertId="RevertReasoning" RevertTip="Back to the blueprint's or the saved reasoning">
-                        <ComboBox ItemsSource="{Binding Picker.ReasoningChoices}" SelectedItem="{Binding Picker.SelectedReasoning, Mode=OneWay}" SelectionChanged="OnAgentChosen"
-                                  PlaceholderText="Choose a level" ToolTip.Tip="{Binding Picker.SelectedReasoning.Label, FallbackValue={x:Null}}"
-                                  AutomationProperties.AutomationId="TaskReasoning"
-                                  AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource InspectorChoice}" />
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Label="Skills" IsShown="{Binding HasClient}"
-                                              Info="{Binding Skills.FixedNote}" InfoName="{Binding Skills.FixedNote}" InfoId="SkillsFixed"
-                                              RevertCommand="{Binding Skills.RevertCommand}" CanRevert="{Binding Skills.CanRevert}" RevertId="RevertSkills" RevertTip="Back to the blueprint's skills">
-                        <Panel>
-                          <ToggleButton Classes="picker" IsChecked="{Binding Skills.IsOpen}" IsVisible="{Binding Skills.CanChoose}"
-                                        ToolTip.Tip="{Binding Skills.SummaryTip}"
-                                        AutomationProperties.AutomationId="TaskSkills"
-                                        AutomationProperties.Name="Skills">
-                            <TextBlock Text="{Binding Skills.Summary}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
-                          </ToggleButton>
-                          <!-- A client that takes no choice shows a plain value, with no box and no arrow. Its glyph and tooltip say why. -->
-                          <Border Classes="fixedValue" IsVisible="{Binding !Skills.CanChoose}" ToolTip.Tip="{Binding Skills.FixedNote}">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                              <TextBlock Classes="value" Text="{Binding Skills.Summary}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                         AutomationProperties.AutomationId="TaskSkillsValue" />
-                              <PathIcon Grid.Column="1" Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" Width="14" Height="14"
-                                        Foreground="{DynamicResource TextMutedBrush}" />
-                            </Grid>
-                          </Border>
-                        </Panel>
-                      </inspector:InspectorRow>
-                      <!-- The picker opens its list in place, under the row at the section's whole width, so each name wraps in full. -->
-                      <inspector:InspectorRow Layout="Full" Label="Skills" IsShown="{Binding Skills.ShowsList}">
-                        <Border Classes="skillList" AutomationProperties.AutomationId="SkillList">
-                          <StackPanel>
-                            <TextBlock Classes="note" Margin="0,4" Text="{Binding Skills.ListNote}"
-                                       IsVisible="{Binding Skills.ListNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                       AutomationProperties.AutomationId="SkillListNote" />
-                            <ItemsControl ItemsSource="{Binding Skills.Choices}">
-                              <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="canvas:SkillChoiceViewModel">
-                                  <CheckBox Classes="skill" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Description}"
-                                            AutomationProperties.AutomationId="SkillChoice"
-                                            AutomationProperties.Name="{Binding Label}">
-                                    <StackPanel>
-                                      <TextBlock Text="{Binding Label}" TextWrapping="Wrap" Classes.missing="{Binding !IsInstalled}" />
-                                      <TextBlock Classes="letsIn" Text="{Binding LetsIn}" TextWrapping="Wrap"
-                                                 IsVisible="{Binding LetsIn, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                 AutomationProperties.AutomationId="SkillLetsIn" />
-                                    </StackPanel>
-                                  </CheckBox>
-                                </DataTemplate>
-                              </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock Classes="note" Margin="0,4" Text="{Binding Skills.ListFooter}"
-                                       IsVisible="{Binding Skills.ListFooter, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                       AutomationProperties.AutomationId="SkillListFooter" />
-                          </StackPanel>
-                        </Border>
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" Label="Skills" IsShown="{Binding Skills.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <TextBlock Classes="note" Text="{Binding Skills.Note}"
-                                   AutomationProperties.AutomationId="SkillsNote" />
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Label="Mode" IsShown="{Binding HasConversation}"
-                                              Info="{Binding ConversationNote}" InfoName="{Binding ConversationSummary}" InfoId="ConversationNote"
-                                              RevertCommand="{Binding RevertConversationCommand}" CanRevert="{Binding CanRevertConversation}" RevertId="RevertConversation" RevertTip="Back to the blueprint's mode">
-                        <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
-                                  AutomationProperties.AutomationId="TaskConversation"
-                                  AutomationProperties.HelpText="{Binding ConversationNote}"
-                                  AutomationProperties.Name="Mode" ItemTemplate="{StaticResource InspectorChoice}" />
-                      </inspector:InspectorRow>
-                      <!-- What the blueprint tells this node's agent, with the node's own values in it. A blueprint edits the template. -->
-                      <inspector:InspectorRow Label="Prompt" LabelTip="System prompt" IsShown="{Binding HasSystemPrompt}">
-                        <ToggleButton x:Name="PromptOpen" Classes="disclosure rowDisclosure" ToolTip.Tip="Show what the blueprint tells this agent"
-                                      AutomationProperties.AutomationId="SystemPromptMore" AutomationProperties.Name="Show the whole system prompt">
-                          <StackPanel Orientation="Horizontal" Spacing="4">
-                            <PathIcon Theme="{StaticResource Glyph}" />
-                            <TextBlock Text="Show prompt" />
-                          </StackPanel>
-                        </ToggleButton>
-                      </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" Label="Prompt" IsShown="{Binding #PromptOpen.IsChecked}">
-                        <Border Classes="templatePreview">
-                          <conversation:MarkdownView Classes="promptView" Markdown="{Binding SystemPrompt}"
-                                                     AutomationProperties.AutomationId="SystemPrompt" />
-                        </Border>
-                      </inspector:InspectorRow>
                     </StackPanel>
                   </inspector:InspectorSection>
                 </Grid>

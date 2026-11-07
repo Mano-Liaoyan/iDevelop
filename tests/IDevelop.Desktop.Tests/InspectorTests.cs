@@ -46,14 +46,15 @@ public sealed class InspectorTests : IDisposable
         Assert.Equal(reading, Execution.ResultViewModel.Reading(source));
 
     [AvaloniaFact]
-    public void Every_node_shows_its_sections_in_one_order()
+    public void Every_node_shows_its_sections_in_one_order_with_its_agent_first()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.Window.ViewModel.Canvas!.Inspect(shell.Window.ViewModel.Canvas.Nodes.Single());
         shell.Render();
-        string[] Keys() => [.. shell.Window.GetVisualDescendants().OfType<InspectorSection>().Where(section => section.IsVisible).Select(section => section.Key)];
+        string[] Keys() => [.. shell.Window.GetVisualDescendants().OfType<InspectorSection>().Where(section => section.IsVisible)
+            .OrderBy(section => section.TranslatePoint(default, shell.Window)!.Value.Y).Select(section => section.Key)];
 
-        Assert.Equal(["Output", "Input", "Task", "Agent"], Keys());
+        Assert.Equal(["Agent", "Task", "Output", "Input"], Keys());
     }
 
     [AvaloniaFact]
@@ -169,7 +170,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal("", shell.Find<TextBox>("InspectorFilter").Text);
         Assert.True(shell.Shows("Agent"));
-        Assert.Equal(["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Mode"], shell.ShownRows().Take(7));
+        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode"], shell.ShownRows().Take(5));
     }
 
     [AvaloniaFact]

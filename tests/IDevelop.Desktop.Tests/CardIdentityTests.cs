@@ -125,13 +125,13 @@ public sealed class CardIdentityTests
         shell.Click(shell.Header(shell.Node("A")));
         shell.Render();
         string[] Order() => [.. new[] { "Agent", "Input", "Output" }.OrderBy(section => shell.Bounds(shell.Section(section)).Top)];
-        Assert.Equal(["Output", "Agent", "Input"], Order());
+        Assert.Equal(["Agent", "Output", "Input"], Order());
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Completed");
         shell.Render();
 
-        Assert.Equal(["Output", "Agent", "Input"], Order());
+        Assert.Equal(["Agent", "Output", "Input"], Order());
     }
 
     [AvaloniaFact]

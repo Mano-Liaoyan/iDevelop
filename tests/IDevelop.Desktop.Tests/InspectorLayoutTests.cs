@@ -191,7 +191,7 @@ public sealed class InspectorLayoutTests : IDisposable
             .Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons) }).ToArray();
 
         Assert.Equal(
-            ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"],
+            ["Client", "Model", "Reasoning", "Skills", "Mode", "Prompt", "Instructions", "Acceptance criteria"],
             rows.Select(row => row.Label));
         Assert.All(rows, row => Assert.True(row.Icon is null && row.Lead is null, $"{row.Label} leads with a glyph."));
     }
