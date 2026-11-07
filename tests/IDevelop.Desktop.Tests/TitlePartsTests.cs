@@ -41,6 +41,17 @@ public sealed class TitlePartsTests
     }
 
     [AvaloniaFact]
+    public void A_kept_token_wider_than_a_line_breaks_at_its_hyphen_so_the_part_that_differs_still_leads()
+    {
+        var whole = Theme.NameBreaks.Keep("Backfill ledger partition 2025-Q1")!;
+        var text = new EllipsisText { Whole = whole, KeepFrom = "Backfill ledger partition ".Length, FontSize = 13, MaxLines = 2, TextWrapping = Avalonia.Media.TextWrapping.WrapWithOverflow };
+
+        text.Measure(new Avalonia.Size(50, double.PositiveInfinity));
+
+        Assert.Equal("…2025-Q1", text.Text);
+    }
+
+    [AvaloniaFact]
     public void The_backfill_partitions_of_the_large_fixture_read_apart_when_their_titles_are_cut()
     {
         string[] titles = [.. new[] { "2023-Q4", "2024-Q1", "2024-Q2", "2024-Q3", "2024-Q4", "2025-Q1", "2025-Q2", "2025-Q3" }

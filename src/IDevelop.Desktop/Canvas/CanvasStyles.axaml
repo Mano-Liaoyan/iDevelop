@@ -771,10 +771,10 @@
   <Style Selector="TextBlock.nextShort">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).tightNext:not(.ownRow) TextBlock.nextShort">
+  <Style Selector=":is(Control).tightNext:not(.tightChips):not(.ownRow) TextBlock.nextShort">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tightNext:not(.ownRow) TextBlock.nextLabel">
+  <Style Selector=":is(Control).tightNext:not(.tightChips):not(.ownRow) TextBlock.nextLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).tightFollow:not(.ownRow) Panel.barFollow, :is(Control).tightOwnRow Panel.barFollow">

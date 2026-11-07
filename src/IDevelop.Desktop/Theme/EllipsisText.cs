@@ -106,7 +106,10 @@ public sealed class EllipsisText : TextBlock
             }
         }
 
-        return Cut(whole, end);
+        // On the smallest cards a kept token such as 2024-Q3 can be wider than a line. It then breaks at its hyphen, so the part
+        // that differs still leads (ADR 0067).
+        var loose = Ellipsis + NameBreaks.Loose(whole[KeepFrom..]);
+        return loose != Ellipsis + whole[KeepFrom..] && Fits(loose, width) ? loose : Cut(whole, end);
     }
 
     // The starts of the words after the first one, up to and with the start of the kept part, the earliest first.

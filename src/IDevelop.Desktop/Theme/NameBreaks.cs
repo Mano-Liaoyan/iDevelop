@@ -10,4 +10,7 @@ public static class NameBreaks
     public static readonly IValueConverter KeepTokens = new FuncValueConverter<string?, string?>(Keep);
 
     internal static string? Keep(string? name) => name?.Replace("-", "-" + WordJoiner);
+
+    /// <summary>The name without the joins that <see cref="Keep"/> adds, so a token can break at its hyphen again.</summary>
+    internal static string Loose(string name) => name.Replace(WordJoiner, string.Empty);
 }
