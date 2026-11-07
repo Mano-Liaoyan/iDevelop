@@ -6,9 +6,8 @@ using Avalonia.VisualTree;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// Lays out the band along the canvas's bottom edge: the zoom controls at the left and the run bar after them. The run bar
-/// centres on the canvas and moves aside only as far as it must to keep <see cref="CanvasChrome.Spacing"/> from the zoom
-/// controls, and it never gets wider than the room left, so it never covers them. A bar that needs more than its width takes
+/// Lays out the band along the canvas's bottom edge: the zoom controls at the left and the run bar after them, at
+/// <see cref="CanvasChrome.Spacing"/> from the zoom controls at every width, and it never gets wider than the room left, so it never covers them. A bar that needs more than its width takes
 /// the tightView class, whose styles move the view's own controls to the overflow menu, then the tightFollow class, whose styles
 /// move Follow to the overflow menu, so the states keep their names before a view setting does, then the leastChips class, whose styles
 /// show a quiet group as its badge and number and move Fit to the overflow menu, then the tightChips class, whose styles show
@@ -107,9 +106,9 @@ public sealed class CanvasBottomBar : Panel
         Bottom(trailing, finalSize.Width - (trailing?.DesiredSize.Width ?? 0), finalSize.Height);
         if (center is not null)
         {
+            // The run bar sits right after the zoom controls at every width, so it never moves as the canvas grows.
             var width = Math.Min(center.DesiredSize.Width, Math.Max(0, right - left));
-            var centered = (finalSize.Width - width) / 2;
-            center.Arrange(new Rect(Math.Max(left, Math.Min(centered, right - width)), finalSize.Height - center.DesiredSize.Height, width, center.DesiredSize.Height));
+            center.Arrange(new Rect(left, finalSize.Height - center.DesiredSize.Height, width, center.DesiredSize.Height));
         }
 
         return finalSize;

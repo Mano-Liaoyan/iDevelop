@@ -692,10 +692,14 @@
     <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
   </Style>
 
-  <!-- The selected node's row holds the one accent fill. Its workflow keeps its name's weight and its open chevron with no
-       fill, so it never reads as a row under the pointer, whose fill is neutral (ADR 0060). -->
+  <!-- The selected node's row holds the one accent fill. Its workflow has no fill, so it never reads as a row under the
+       pointer, whose fill is neutral (ADR 0060), and a 2 px accent line on its leading edge keeps it marked as the shown one. -->
   <Style Selector="Button.nav.workflow.selected.holdsNode:not(:pointerover) /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.nav.workflow.selected.holdsNode /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderThickness" Value="2,0,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <!-- UI Automation reads which workflow the window shows from its row's status. -->

@@ -63,12 +63,20 @@
         <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
           <TextBlock Classes="section" Text="Activity" VerticalAlignment="Center" />
           <PathIcon Grid.Column="1" Theme="{StaticResource Glyph}" Width="12" Height="12" />
-          <StackPanel Grid.Column="3" Classes="counts" VerticalAlignment="Center">
+          <!-- Waiting and failed say their state in words, so nobody needs a tooltip to see that nodes wait for them. The others
+               keep their badge and number. A narrow panel wraps the counts rather than cut them. -->
+          <WrapPanel Grid.Column="2" Grid.ColumnSpan="2" HorizontalAlignment="Right" VerticalAlignment="Center" ItemSpacing="8" LineSpacing="2">
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasWaiting}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting for you'}"
                         AutomationProperties.AutomationId="ActivityWaiting">
               <theme:StateBadge State="InputRequired" Why="Question" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.WaitingCount}" />
+              <TextBlock Classes="caption" Text="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting'}" />
+            </StackPanel>
+            <StackPanel Classes="count" IsVisible="{Binding Activity.HasFailed}" Background="Transparent"
+                        ToolTip.Tip="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}"
+                        AutomationProperties.AutomationId="ActivityFailed">
+              <theme:StateBadge State="Failed" Width="14" Height="14" />
+              <TextBlock Classes="caption" Text="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasInterrupted}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}"
@@ -76,19 +84,13 @@
               <theme:StateBadge State="InputRequired" Why="Interrupted" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.InterruptedCount}" />
             </StackPanel>
-            <StackPanel Classes="count" IsVisible="{Binding Activity.HasFailed}" Background="Transparent"
-                        ToolTip.Tip="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}"
-                        AutomationProperties.AutomationId="ActivityFailed">
-              <theme:StateBadge State="Failed" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.FailedCount}" />
-            </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasRunning}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.RunningCount, StringFormat='{}{0} running'}"
                         AutomationProperties.AutomationId="ActivityRunning">
               <theme:StateBadge State="Running" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.RunningCount}" />
             </StackPanel>
-          </StackPanel>
+          </WrapPanel>
         </Grid>
       </ToggleButton>
       <ScrollViewer x:Name="ActivityScroller" Grid.Row="1" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding Activity.IsOpen}">
@@ -314,7 +316,7 @@
                                                 AutomationProperties.AutomationId="WorkflowAlert">
                                     <ItemsControl.ItemsPanel>
                                       <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="8" />
+                                        <WrapPanel ItemSpacing="8" LineSpacing="2" />
                                       </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>

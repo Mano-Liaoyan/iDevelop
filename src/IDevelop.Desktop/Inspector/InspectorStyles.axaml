@@ -266,6 +266,7 @@
     <Setter Property="Template">
       <ControlTemplate>
         <StackPanel Margin="0,0,0,4">
+          <Border Name="PART_Rule" Classes="sectionRule" />
           <Button Name="PART_Header" Classes="sectionHeader" AutomationProperties.Name="{TemplateBinding Title}">
             <Grid ColumnDefinitions="Auto,4,14,*,Auto">
               <PathIcon Grid.Column="2" Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
@@ -290,6 +291,15 @@
     <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
   </Style>
   <Style Selector="inspector|InspectorSection:folded /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <!-- A hairline across the panel over each header, with room above it, so a section's edge weighs more than one field. -->
+  <Style Selector="Border.sectionRule">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="0,4,0,4" />
+    <Setter Property="Background" Value="{DynamicResource Border100Brush}" />
+  </Style>
+  <Style Selector="inspector|InspectorSection:unmatched /template/ Border#PART_Rule">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="inspector|InspectorSection:unmatched /template/ Button#PART_Header">
