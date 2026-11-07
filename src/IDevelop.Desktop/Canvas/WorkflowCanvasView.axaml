@@ -153,7 +153,7 @@
     <!-- Bars have no words at this zoom, so the one selected node keeps its name beside its bar. -->
     <Border x:Name="NameTag" Classes="nameTag" IsHitTestVisible="False" IsVisible="False"
             AutomationProperties.AutomationId="CanvasNameTag">
-      <TextBlock x:Name="NameTagText" TextTrimming="CharacterEllipsis" />
+      <TextBlock x:Name="NameTagText" />
     </Border>
 
     <canvas:GenerateLayer />

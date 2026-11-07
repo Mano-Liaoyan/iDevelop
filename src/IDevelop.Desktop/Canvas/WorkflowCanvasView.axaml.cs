@@ -329,11 +329,14 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         ShowAdd();
     }
 
-    // The tag stands in screen pixels in the gap under the bar, or in the gap over it, with NameTagInset clear of each bar, so
-    // it covers no other bar. Where neither gap holds it, it stands on its own bar, which it then names in place.
+    // The tag names the selected card in full where the card cuts its title: always at the Block tier, which shows no title, and
+    // at the Label and Title tiers when the title ends in an ellipsis. It stands in screen pixels under the card, over it, right
+    // of it, or left of it, the first place where it covers no other card (ADR 0064). Where no place holds it, it stands on its
+    // own card, which it then names in place.
     private void ShowNameTag()
     {
-        var node = _viewModel is { Tier: ZoomTier.Block, SelectedNodes.Count: 1 } canvas ? canvas.SelectedNode : null;
+        var node = _viewModel is { Tier: ZoomTier.Block or ZoomTier.Label or ZoomTier.Title, SelectedNodes.Count: 1 } canvas
+            && (canvas.Tier == ZoomTier.Block || TitleIsCut(canvas.SelectedNode)) ? canvas.SelectedNode : null;
         NameTag.IsVisible = node is not null;
         if (node is null)
         {
@@ -341,30 +344,43 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
 
         NameTagText.Text = node.Title;
-        var zoom = Editor.ViewportZoom;
-        var at = (node.DisplayLocation - Editor.ViewportLocation) * zoom;
+        NameTag.Margin = default;
         NameTag.Measure(Size.Infinity);
-        var width = NameTag.DesiredSize.Width - NameTag.Margin.Left;
-        var x = Math.Max(NameTagInset, Math.Min(at.X, Editor.Bounds.Width - width - NameTagInset));
-        var height = WorkflowCanvasViewModel.TaskCardHeight * zoom;
-        NameTag.Margin = new Thickness(x, NameTagTop(node, at.Y, at.Y + height, x, width), 0, 0);
+        var tag = NameTag.DesiredSize;
+        var card = CardRect(node);
+        var others = _viewModel!.Nodes.Where(other => other != node).Select(CardRect).ToArray();
+        var room = new Rect(Editor.Bounds.Size).Deflate(NameTagInset);
+        var left = Math.Clamp(card.X, room.X, Math.Max(room.X, room.Right - tag.Width));
+        var top = Math.Clamp(card.Y, room.Y, Math.Max(room.Y, room.Bottom - tag.Height));
+        Point[] places =
+        [
+            new(left, card.Bottom + NameTagInset),
+            new(left, card.Top - NameTagInset - tag.Height),
+            new(card.Right + NameTagInset, top),
+            new(card.Left - NameTagInset - tag.Width, top),
+        ];
+        var place = places.Select(at => (Point?)at).FirstOrDefault(at =>
+        {
+            var rect = new Rect(at!.Value, tag);
+            return room.Contains(rect) && !others.Any(other => other.Intersects(rect.Inflate(NameTagInset)));
+        }) ?? new Point(left, Math.Clamp(card.Center.Y - tag.Height / 2, room.Y, Math.Max(room.Y, room.Bottom - tag.Height)));
+        NameTag.Margin = new Thickness(place.X, place.Y, 0, 0);
     }
 
-    private double NameTagTop(TaskNodeViewModel node, double top, double bottom, double left, double width)
+    // The card as the screen shows it, its port gutters left out and its zoomed out lines under its box included.
+    private Rect CardRect(TaskNodeViewModel node)
     {
         var zoom = Editor.ViewportZoom;
-        var tag = NameTag.Height + 2 * NameTagInset;
-        var bars = _viewModel!.Nodes.Where(other => other != node)
-            .Select(other => new Rect(((other.DisplayLocation - Editor.ViewportLocation) * zoom),
-                new Size(WorkflowCanvasViewModel.TaskCardWidth * zoom, WorkflowCanvasViewModel.TaskCardHeight * zoom)))
-            .Where(bar => bar.Right > left && bar.Left < left + width)
-            .ToArray();
-        var next = bars.Where(bar => bar.Top >= bottom).Select(bar => bar.Top).DefaultIfEmpty(Editor.Bounds.Height).Min();
-        var last = bars.Where(bar => bar.Bottom <= top).Select(bar => bar.Bottom).DefaultIfEmpty(0).Max();
-        return next - bottom >= tag ? bottom + NameTagInset
-            : top - last >= tag ? top - NameTagInset - NameTag.Height
-            : (top + bottom - NameTag.Height) / 2;
+        var at = (node.DisplayLocation - Editor.ViewportLocation) * zoom;
+        var height = node.IsExpanded ? node.CardSize.Height : WorkflowCanvasViewModel.TaskCardHeight + ZoomTiers.CardReach(_viewModel!.Tier);
+        var width = node.IsExpanded ? node.CardSize.Width : WorkflowCanvasViewModel.TaskCardWidth;
+        return new Rect(at.X + 10 * zoom, at.Y, (width - 20) * zoom, height * zoom);
     }
+
+    // The selected card's zoomed out title ends in an ellipsis.
+    private bool TitleIsCut(TaskNodeViewModel? node) =>
+        node is not null && Editor.GetVisualDescendants().OfType<ItemContainer>().FirstOrDefault(card => card.DataContext == node) is { } container
+        && container.GetVisualDescendants().OfType<Theme.EllipsisText>().Any(text => text.Classes.Contains("farTitle") && text.IsCut);
 
     // The selection comes back once the editor has laid out its cards, as a selection made on the canvas would.
     private void RestoreSelection(object? sender, EventArgs e)
@@ -414,15 +430,22 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             ShowTier();
             ShowNameTag();
+            // The cards cut their titles anew once they lay out at the new tier.
+            Dispatcher.UIThread.Post(ShowNameTag, DispatcherPriority.Background);
         }
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.ViewportZoom))
         {
             ShowTitleText();
             ShowNameTag();
         }
-        else if (e.PropertyName is nameof(WorkflowCanvasViewModel.ViewportLocation) or nameof(WorkflowCanvasViewModel.SelectedNode))
+        else if (e.PropertyName is nameof(WorkflowCanvasViewModel.ViewportLocation))
         {
             ShowNameTag();
+        }
+        else if (e.PropertyName is nameof(WorkflowCanvasViewModel.SelectedNode))
+        {
+            ShowNameTag();
+            Dispatcher.UIThread.Post(ShowNameTag, DispatcherPriority.Background);
         }
     }
 

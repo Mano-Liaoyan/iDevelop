@@ -158,10 +158,10 @@
   </Style>
   <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="22,6,8,0" />
+    <Setter Property="Margin" Value="22,4,8,0" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="FontSize" Value="28" />
-    <Setter Property="LineHeight" Value="31" />
+    <Setter Property="LineHeight" Value="29" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
   <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
@@ -219,12 +219,20 @@
     <Setter Property="Height" Value="28" />
     <Setter Property="Margin" Value="23,62,52,0" />
   </Style>
-  <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom, 15 units under a three-line title. -->
+  <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom. A model name that does not fit on one
+       line wraps to a second line, which still ends above a three-line title (ADR 0064). -->
   <Style Selector=":is(Control).tier-label DockPanel.farLine">
-    <Setter Property="Height" Value="34" />
+    <Setter Property="MinHeight" Value="32" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="22,0,58,6" />
+    <Setter Property="Margin" Value="22,0,58,4" />
   </Style>
+  <Style Selector="DockPanel.farLine > :is(Control)">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector=":is(Control).tier-label DockPanel.farLine > :is(Control)">
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
+
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="44" />
     <Setter Property="Margin" Value="32,112,62,0" />
@@ -288,6 +296,11 @@
   </Style>
   <Style Selector=":is(Control).tier-label TextBlock.farAgent">
     <Setter Property="FontSize" Value="28" />
+    <Setter Property="LineHeight" Value="29" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,1,0,0" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farAgent">
     <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
@@ -668,15 +681,16 @@
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="MaxWidth" Value="260" />
-    <Setter Property="Height" Value="18" />
-    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="Padding" Value="6,2" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
   <Style Selector="Border.nameTag TextBlock">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
