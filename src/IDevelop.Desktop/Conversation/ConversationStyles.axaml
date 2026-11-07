@@ -343,7 +343,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- A short transcript sits on the composer while the node waits for words, so a question stays beside its answer. -->
+  <!-- A short transcript sits on the composer while the node needs the person, so what it says stays beside the answer. -->
   <Style Selector="StackPanel.nearComposer">
     <Setter Property="VerticalAlignment" Value="Bottom" />
   </Style>

@@ -130,6 +130,9 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The first line of what the agent did last, unless the transcript's last row already says it.</summary>
     public string? WorkingLine => Node.Latest?.Split('\n', 2)[0] is { } line && !(Items.LastOrDefault() is StepGroupItemViewModel steps && steps.LastLine == line) ? line : null;
 
+    /// <summary>A short transcript sits on the composer while the node needs the person, so what it says stays beside the answer.</summary>
+    public bool SitsOnComposer => WaitsForWords || ShowsCard;
+
     public AttentionCard Card => Node.IsAsking ? AttentionCard.Question : Node.EngineState switch
     {
         EngineState.InputRequired { Why: EngineState.Approval or EngineState.RoundLimit } => AttentionCard.Approval,
@@ -404,6 +407,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CardHint));
         OnPropertyChanged(nameof(ShowsCardBody));
         OnPropertyChanged(nameof(ShowsCard));
+        OnPropertyChanged(nameof(SitsOnComposer));
         _loadEarlier.NotifyCanExecuteChanged();
     }
 
@@ -587,7 +591,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(IsReplyCard), nameof(ShowsCardApprove),
         nameof(ShowsComposerStop), nameof(ShowsSend), nameof(ShowsStopAndSend), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
         nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
-        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody), nameof(WaitsForWords),
+        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody), nameof(WaitsForWords), nameof(SitsOnComposer),
     ];
 
     private static readonly string[] StripProperties =

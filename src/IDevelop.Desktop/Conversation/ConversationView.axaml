@@ -395,7 +395,7 @@
       <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
         <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
-        <StackPanel Margin="0,0,0,12" Classes.nearComposer="{Binding WaitsForWords}">
+        <StackPanel Margin="0,0,0,12" Classes.nearComposer="{Binding SitsOnComposer}">
           <Button Classes="action" HorizontalAlignment="Center" Height="28" Margin="0,12,0,0"
                   Command="{Binding LoadEarlierCommand}" IsVisible="{Binding HasEarlier}"
                   AutomationProperties.AutomationId="LoadEarlier"
