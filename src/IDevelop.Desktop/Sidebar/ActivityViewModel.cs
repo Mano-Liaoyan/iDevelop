@@ -136,6 +136,13 @@ public sealed class ActivityViewModel : ObservableObject
 
     public string ShowAllLabel => $"Show all {_ordered.Count}";
 
+    /// <summary>Several projects are open, and the list covers them all.</summary>
+    public bool CoversSeveralProjects
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
     public ICommand ShowAllCommand { get; }
 
     /// <summary>The nodes in <paramref name="state"/>, in list order.</summary>
@@ -151,6 +158,7 @@ public sealed class ActivityViewModel : ObservableObject
             .ToList();
         // The project's name says whose a row is while more than one project is open.
         var showsProject = projects.Count > 1;
+        CoversSeveralProjects = showsProject;
         foreach (var gone in _rows.Keys.Except(nodes).ToList())
         {
             _rows.Remove(gone);

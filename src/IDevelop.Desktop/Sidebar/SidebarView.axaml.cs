@@ -399,9 +399,13 @@ public partial class SidebarView : UserControl
         canvas.BeginRenameWorkflow();
     }
 
-    private void OnNewWorkflow(object? sender, RoutedEventArgs e)
+    private void OnNewWorkflow(object? sender, RoutedEventArgs e) => NewWorkflow((sender as Control)?.DataContext as ProjectViewModel);
+
+    private void OnNewWorkflowHere(object? sender, RoutedEventArgs e) => NewWorkflow(ViewModel.Canvas?.Project);
+
+    private void NewWorkflow(ProjectViewModel? project)
     {
-        if ((sender as Control)?.DataContext is ProjectViewModel project && ViewModel.NewWorkflow(project) is { } canvas)
+        if (project is not null && ViewModel.NewWorkflow(project) is { } canvas)
         {
             Window?.UpdateLayout();
             this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();

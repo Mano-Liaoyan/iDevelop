@@ -93,6 +93,9 @@
       </ToggleButton>
       <ScrollViewer x:Name="ActivityScroller" Grid.Row="1" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding Activity.IsOpen}">
         <StackPanel Spacing="2" Margin="0,0,8,0">
+          <!-- While several projects are open, the list covers all of them, whichever project the window shows. -->
+          <TextBlock Classes="caption" Margin="8,0,0,2" Text="All open projects" IsVisible="{Binding Activity.CoversSeveralProjects}"
+                     AutomationProperties.AutomationId="ActivityScope" />
           <ItemsControl ItemsSource="{Binding Activity.Rows}"
                         AutomationProperties.AutomationId="Activity"
                         AutomationProperties.Name="Activity">
@@ -108,12 +111,10 @@
                         AutomationProperties.AutomationId="ActivityRow"
                         AutomationProperties.Name="{Binding Node.Title}"
                         AutomationProperties.HelpText="{Binding Detail}">
-                  <Grid ColumnDefinitions="16,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
-                    <theme:StateBadge Margin="0,1,0,0" VerticalAlignment="Top" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
-                    <TextBlock Grid.Column="1" Classes="rowName" Text="{Binding Node.Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                    <!-- The second line says where the node is, and the badge says why it is listed. -->
-                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Place}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                               AutomationProperties.AutomationId="ActivityDetail" AutomationProperties.Name="{Binding Detail}" />
+                  <!-- One line: the badge says why the node is listed, and the tooltip says where it is. -->
+                  <Grid ColumnDefinitions="16,*" ColumnSpacing="8">
+                    <theme:StateBadge VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
+                    <TextBlock Grid.Column="1" Classes="rowName" Text="{Binding Node.Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                   </Grid>
                 </Button>
               </DataTemplate>
@@ -153,13 +154,21 @@
     <Grid Grid.Row="3" RowDefinitions="Auto,*" IsVisible="{Binding HasProjects}">
       <Grid ColumnDefinitions="*,Auto" Height="28" Margin="16,0,16,0">
         <TextBlock Classes="section" Text="Projects" VerticalAlignment="Center" />
-        <Button Grid.Column="1" Classes="icon small" VerticalAlignment="Center"
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+        <Button Classes="icon small" Click="OnNewWorkflowHere" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
+                ToolTip.Tip="New workflow in this project"
+                AutomationProperties.AutomationId="NewWorkflowHere"
+                AutomationProperties.Name="New workflow in this project">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
+        </Button>
+        <Button Classes="icon small"
                 Click="OnOpenFolder"
                 ToolTip.Tip="Open folder"
                 AutomationProperties.AutomationId="OpenFolder"
                 AutomationProperties.Name="Open folder">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" />
         </Button>
+        </StackPanel>
       </Grid>
       <!-- Each project lists its workflows, and each workflow lists its nodes, one size smaller, while its row is expanded. The
            shown workflow is the selected row. A name takes one line and is cut at its end, and its tooltip holds all of it. The scroll bar draws in
@@ -307,8 +316,6 @@
                                   </ItemsControl>
                                 </Grid>
                               </Button>
-                              <!-- The shown workflow's mark, which a hover's fill never takes. -->
-                              <Border Classes="rowMark" IsVisible="{Binding IsSelected}" />
                               <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="38,2,4,2"
                                                      AutomationProperties.AutomationId="WorkflowNameBox"
                                                      AutomationProperties.Name="Workflow name" />
@@ -337,7 +344,7 @@
                                 </ListBox.ItemsPanel>
                                 <ListBox.ItemTemplate>
                                   <DataTemplate DataType="canvas:TaskNodeViewModel">
-                                    <!-- A name takes at most two lines, so a long list stays in view, and the selected node shows its whole name. -->
+                                    <!-- A name takes one line, so a long list stays in view. The tooltip holds the whole name. -->
                                     <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">
                                       <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
                                       <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title}"

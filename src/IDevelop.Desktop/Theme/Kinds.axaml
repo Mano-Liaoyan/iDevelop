@@ -154,16 +154,12 @@
   </Style>
 
   <!-- The order of loudness: Running, then Failed and what waits for the person, then Stale, then Completed, then Idle
-       (ADR 0045). Only Running moves. What waits for the person differs by hue, so a question, an approval, and an interruption
+       (ADR 0045). Only Running moves. A card shows a state with its edge and its badge, and the kind only with its stripe. What waits for the person differs by hue, so a question, an approval, and an interruption
        read apart without the badge. Red is only for failure. The ring takes the state's color for every state, and the kind's
        hue stays in the band. -->
   <Style Selector="Border.stateStroke">
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-  </Style>
-  <Style Selector="Border.stateStroke.state-running">
-    <Setter Property="BorderThickness" Value="3" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateRunningBrush}" />
   </Style>
   <Style Selector="Border.stateStroke.state-inputrequired">
     <Setter Property="BorderThickness" Value="2" />
@@ -188,26 +184,10 @@
     <Setter Property="Stroke" Value="{DynamicResource StateWarningStrokeBrush}" />
     <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeDashArray" Value="4,3" />
-    <Setter Property="Opacity" Value="0.75" />
+    <Setter Property="Opacity" Value="0.6" />
   </Style>
   <Style Selector="Rectangle.staleEdge.state-stale:not(.role-proposing)">
     <Setter Property="IsVisible" Value="True" />
-  </Style>
-
-  <Style Selector="Border.stateTint.state-running">
-    <Setter Property="Background" Value="{DynamicResource StateSelected25Brush}" />
-  </Style>
-  <Style Selector="Border.stateTint.state-inputrequired">
-    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
-  </Style>
-  <Style Selector="Border.stateTint.state-inputrequired.why-approval">
-    <Setter Property="Background" Value="{DynamicResource StateApproval10Brush}" />
-  </Style>
-  <Style Selector="Border.stateTint.state-inputrequired.why-interrupted">
-    <Setter Property="Background" Value="{DynamicResource StateNeutral10Brush}" />
-  </Style>
-  <Style Selector="Border.stateTint.state-failed">
-    <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
   </Style>
 
   <!-- A state as one fill: a card at the Block tier and a minimap item. -->
@@ -333,8 +313,10 @@
   <Style Selector="PathIcon.badgeGlyph.state-failed">
     <Setter Property="Data" Value="{StaticResource IconBadgeFailed}" />
   </Style>
+  <!-- Stale asks least of the person, so its disc is the quietest color. -->
   <Style Selector="Ellipse.badgeDisc.state-stale">
     <Setter Property="Fill" Value="{DynamicResource StateWarningStrokeBrush}" />
+    <Setter Property="Opacity" Value="0.8" />
   </Style>
   <Style Selector="PathIcon.badgeGlyph.state-stale">
     <Setter Property="Data" Value="{StaticResource IconBadgeStale}" />
@@ -386,27 +368,7 @@
     <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
 
-  <!-- A running node's glow pulses and its glyph spins, and nothing else on the canvas moves. Tests read their classes, because
-       their pixels depend on the time. -->
-  <Style Selector="Border.glow">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector="Border.glow.state-running:not(.role-proposing)">
-    <Setter Property="IsVisible" Value="True" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
-  </Style>
-  <Style Selector="Border.glow.state-running:not(.role-proposing)">
-    <Style.Animations>
-      <Animation Duration="0:0:1.6" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
-        <KeyFrame Cue="0%">
-          <Setter Property="Opacity" Value="1" />
-        </KeyFrame>
-        <KeyFrame Cue="100%">
-          <Setter Property="Opacity" Value="0.35" />
-        </KeyFrame>
-      </Animation>
-    </Style.Animations>
-  </Style>
+  <!-- A running node's glyph spins, and nothing else on a card moves. Tests read its classes, because its pixels depend on the time. -->
   <Style Selector="PathIcon.stateIcon.state-running:not(.role-proposing), PathIcon.badgeGlyph.state-running:not(.role-proposing)">
     <Style.Animations>
       <Animation Duration="0:0:1" IterationCount="Infinite">

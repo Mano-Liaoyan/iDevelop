@@ -19,7 +19,9 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private const double CardMargin = 24;
 
     // What a fit keeps clear at the editor's edges. The cards take the rest, because the zoom decides how much of a title reads.
-    private const double FitMargin = 8;
+    private const double FitMargin = 16;
+
+    private const double NameTagInset = 4;
 
     /// <summary>How far apart the canvas's dots lie, in canvas units.</summary>
     private const double DotPitch = 24;
@@ -316,7 +318,28 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             ShowTitleText();
         }
 
+        ShowNameTag();
         ShowAdd();
+    }
+
+    // The tag stands over the bar in screen pixels, and under it where the canvas's top edge leaves no room.
+    private void ShowNameTag()
+    {
+        var node = _viewModel is { Tier: ZoomTier.Block, SelectedNodes.Count: 1 } canvas ? canvas.SelectedNode : null;
+        NameTag.IsVisible = node is not null;
+        if (node is null)
+        {
+            return;
+        }
+
+        NameTagText.Text = node.Title;
+        var zoom = Editor.ViewportZoom;
+        var at = (node.DisplayLocation - Editor.ViewportLocation) * zoom;
+        NameTag.Measure(Size.Infinity);
+        var (width, height) = (NameTag.DesiredSize.Width, NameTag.DesiredSize.Height);
+        var top = at.Y - height - 2;
+        var y = top >= NameTagInset ? top : at.Y + WorkflowCanvasViewModel.TaskCardHeight * zoom + 2;
+        NameTag.Margin = new Thickness(Math.Max(NameTagInset, Math.Min(at.X, Editor.Bounds.Width - width - NameTagInset)), y, 0, 0);
     }
 
     // The selection comes back once the editor has laid out its cards, as a selection made on the canvas would.
@@ -366,10 +389,16 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Tier))
         {
             ShowTier();
+            ShowNameTag();
         }
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.ViewportZoom))
         {
             ShowTitleText();
+            ShowNameTag();
+        }
+        else if (e.PropertyName is nameof(WorkflowCanvasViewModel.ViewportLocation) or nameof(WorkflowCanvasViewModel.SelectedNode))
+        {
+            ShowNameTag();
         }
     }
 

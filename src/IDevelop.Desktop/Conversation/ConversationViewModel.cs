@@ -155,9 +155,17 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public bool ShowsCardRetry => Card is AttentionCard.Failed or AttentionCard.Stale or AttentionCard.Interrupted;
 
-    public bool IsRetryPrimary => Card is AttentionCard.Failed or AttentionCard.Stale;
+    public bool IsRetryPrimary => Card is AttentionCard.Failed or AttentionCard.Stale && !IsChangeModelPrimary;
 
     public bool ShowsChangeModel => Card == AttentionCard.Failed && Node.HasAgent;
+
+    /// <summary>The failure says that another attempt on this model cannot work, so the card leads with Change model.</summary>
+    public bool IsChangeModelPrimary => ShowsChangeModel && CardBody is { } reason && NeedsAnotherModel(reason);
+
+    // The words that providers use when a retry on the same model cannot help.
+    internal static bool NeedsAnotherModel(string reason) =>
+        new[] { "another model", "different model", "credit", "balance", "quota", "billing", "payment required" }
+            .Any(words => reason.Contains(words, StringComparison.OrdinalIgnoreCase));
 
     public string CardTitle => Card switch
     {
@@ -595,7 +603,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(IsReplyCard), nameof(ShowsCardApprove),
         nameof(ShowsComposerStop), nameof(ShowsSend), nameof(ShowsStopAndSend), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
         nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
-        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody), nameof(WaitsForWords),
+        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(IsChangeModelPrimary), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody), nameof(WaitsForWords),
     ];
 
     private static readonly string[] StripProperties =

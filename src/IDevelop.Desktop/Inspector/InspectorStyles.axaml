@@ -28,7 +28,7 @@
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
   </Style>
   <!-- The title as text over the box, at the box's border and padding, so it wraps where the box wraps. The box sits 6 px
-       before the column, so the text starts where a connection's or a workflow's name starts. Beyond two lines the box
+       before the column, so the text starts where a connection's or a workflow's name starts. Beyond four lines the box
        waits for the focus, so a long title never pushes the actions down. -->
   <Style Selector="TextBlock.headerTitle">
     <Setter Property="FontSize" Value="14" />
@@ -43,7 +43,7 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Panel.headerTitle:not(:focus-within) > TextBox.headerTitle">
-    <Setter Property="MaxHeight" Value="44" />
+    <Setter Property="MaxHeight" Value="84" />
   </Style>
   <Style Selector="Panel.headerTitle:not(:focus-within) > TextBox.headerTitle /template/ TextPresenter#PART_TextPresenter">
     <Setter Property="Opacity" Value="0" />
@@ -265,14 +265,14 @@
   <Style Selector="inspector|InspectorSection">
     <Setter Property="Template">
       <ControlTemplate>
-        <StackPanel Margin="0,0,0,6">
+        <StackPanel Margin="0,0,0,4">
           <Button Name="PART_Header" Classes="sectionHeader" AutomationProperties.Name="{TemplateBinding Title}">
-            <Grid ColumnDefinitions="14,6,*,Auto">
-              <PathIcon Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
-              <TextBlock Grid.Column="2" Classes="sectionTitle" Text="{TemplateBinding Title}"
+            <Grid ColumnDefinitions="Auto,4,14,*,Auto">
+              <PathIcon Grid.Column="2" Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
+              <TextBlock Classes="sectionTitle" Text="{TemplateBinding Title}"
                          AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
               <!-- The count's drawing ends where the glyphs' drawing ends, whatever its last character keeps clear. -->
-              <inspector:InkAlignedText Grid.Column="3" Classes="sectionBadge" Text="{TemplateBinding Badge}"
+              <inspector:InkAlignedText Grid.Column="4" Classes="sectionBadge" Text="{TemplateBinding Badge}"
                                         Margin="{x:Static inspector:InspectorGrid.GlyphInkMargin}" ToolTip.Tip="Values that differ from the blueprint's defaults" />
             </Grid>
           </Button>

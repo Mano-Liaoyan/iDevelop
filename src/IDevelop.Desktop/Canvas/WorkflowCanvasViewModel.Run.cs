@@ -60,7 +60,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>How many nodes Run Workflow would start. A node that needs the person keeps its turn, so it does not count.</summary>
     public int RunWork => Nodes.Count(node => node.State is NodeState.Idle or NodeState.Stale or NodeState.Failed);
 
-    /// <summary>Run Workflow has work to start, so it takes the primary look. With none it keeps its words in a quiet look, and its tooltip says why.</summary>
+    /// <summary>Run Workflow has work to start. With none its tooltip says why.</summary>
     public bool CanStartRun => !IsEmpty && RunsNothing && RunWork > 0;
 
     /// <summary>The toolbar offers Generate while the canvas's own Generate card does not. A plan in progress or under review keeps it, because it reports that state.</summary>

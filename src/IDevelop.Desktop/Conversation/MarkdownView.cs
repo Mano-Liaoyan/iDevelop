@@ -286,7 +286,7 @@ public sealed class MarkdownView : StackPanel
         };
 
         var header = new Grid { Classes = { "mdCodeHeader" }, ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        header.Children.Add(new TextBlock { Classes = { "mdCodeLanguage" }, Text = string.IsNullOrWhiteSpace(language) ? "Code" : language.Trim() });
+        header.Children.Add(new TextBlock { Classes = { "mdCodeLanguage" }, Text = language?.Trim() ?? "" });
         Grid.SetColumn(copy, 1);
         header.Children.Add(copy);
         var body = new CodeText(source, language) { Classes = { "mdMono", "mdCodeText" } };

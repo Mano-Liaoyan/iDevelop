@@ -85,7 +85,7 @@ public sealed class ConnectionViewModel : ObservableObject
     public double HotStroke => Math.Max(Stroke, 3 * ZoomTiers.WireScale(_canvas.Tier));
 
     /// <summary>What the wire says it carries, as its tooltip.</summary>
-    public string Tip => WireFlows.Tip(Flow, From.Title, To.Title);
+    public string Tip => From.HandsOn is { Length: > 0 } result ? $"{WireFlows.Tip(Flow, From.Title, To.Title)}\n{CardText.Line(result, 200)}" : WireFlows.Tip(Flow, From.Title, To.Title);
 
     /// <summary>The corners of the wire's plan, from the end of its source stub to the start of its target stub.</summary>
     public IReadOnlyList<Point> Route => _route;

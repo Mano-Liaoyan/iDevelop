@@ -184,9 +184,9 @@
                           <TextBlock Text="Stop Workflow" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
-                      <!-- The workflow's one primary action, which keeps its words at every width, so the breadcrumb gives up its width first. With nothing to run
-                           it takes the quiet look, and its tooltip says why. An empty workflow's primary action is on the canvas's Generate card. -->
-                      <Button Classes.primary="{Binding CanStartRun}" Classes.action="{Binding !CanStartRun}" Command="{Binding RunWorkflowCommand}"
+                      <!-- The workflow's one primary action, which keeps its words at every width, so the breadcrumb gives up its width first. It keeps one look,
+                           and with nothing to run its tooltip says why. An empty workflow's primary action is on the canvas's Generate card. -->
+                      <Button Classes="primary" Command="{Binding RunWorkflowCommand}"
                               ToolTip.ShowOnDisabled="True"
                               ToolTip.Placement="BottomEdgeAlignedRight"
                               ToolTip.Tip="{Binding RunWorkflowTip}"

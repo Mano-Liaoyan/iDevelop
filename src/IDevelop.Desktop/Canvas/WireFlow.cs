@@ -53,8 +53,8 @@ public static class WireFlows
     /// <summary>The wire's stroke before emphasis and zoom.</summary>
     public static double Stroke(WireFlow flow) => flow switch
     {
-        WireFlow.Feeding => 2,
-        _ => 1.5,
+        WireFlow.Feeding => 2.5,
+        _ => 2,
     };
 
     /// <summary>A sentence for the wire's tooltip.</summary>

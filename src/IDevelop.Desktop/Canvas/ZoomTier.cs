@@ -49,7 +49,7 @@ public static class ZoomTiers
     {
         ZoomTier.Detail => 30,
         ZoomTier.Compact => 34,
-        ZoomTier.Label => 82,
+        ZoomTier.Label => 90,
         ZoomTier.Title => 94,
         _ => 0,
     };

@@ -103,13 +103,13 @@
                 </ItemsControl>
               </StackPanel>
               <theme:KindTile Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" />
-              <!-- Until the box has focus, a text block over it shows the title in up to two lines, so the header reads as a
+              <!-- Until the box has focus, a text block over it shows the title in up to four lines, so the header reads as a
                    title rather than a field. The box takes the title's whole length once it has focus. -->
               <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0" ToolTip.Tip="{Binding Title}">
                 <TextBox Classes="headerTitle" Text="{Binding Title}"
                          AutomationProperties.AutomationId="TaskTitle"
                          AutomationProperties.Name="Title" />
-                <theme:EllipsisText Classes="headerTitle" Whole="{Binding Title}" MaxLines="2" IsHitTestVisible="False"
+                <theme:EllipsisText Classes="headerTitle" Whole="{Binding Title}" MaxLines="4" IsHitTestVisible="False"
                                     AutomationProperties.AccessibilityView="Raw" />
               </Panel>
               <!-- The status and the kind share a line. The status is a plain word with its glyph, so it never reads as a button.
@@ -237,8 +237,8 @@
             <ContentControl.DataTemplates>
               <DataTemplate DataType="canvas:TaskNodeViewModel">
                 <!-- The sections keep one order in every state, as Godot's and Blender's do, so a field never moves when a node's state changes:
-                     what the node is asked, who does it, what it reads, and what it hands on. The header says the state. -->
-                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                     what the node gave, what it is asked, who does it, what it reads, and who reads it. The header says the state. -->
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
                   <inspector:InspectorSection Key="Proposal" Title="Proposal" IsShown="{Binding Proposal, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <StackPanel>
                       <ContentControl Content="{Binding Proposal}">
@@ -408,8 +408,8 @@
                     </StackPanel>
                   </inspector:InspectorSection>
 
-                  <!-- What the node hands on: its results, newest first, a review's findings, and the nodes that read them. -->
-                  <inspector:InspectorSection Grid.Row="4" Key="Output" Title="Output">
+                  <!-- What the node hands on: its results, newest first, and a review's findings. The open conversation shows the result, so this section rests folded beside it. -->
+                  <inspector:InspectorSection Grid.Row="1" Key="Output" Title="Output" RestsFolded="{Binding IsConversationShown}">
                     <StackPanel>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasNoOutput}">
                         <TextBlock Classes="note" Text="No result yet."
@@ -468,7 +468,11 @@
                         </ItemsControl>
                       </StackPanel>
                     </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Title" Label="Goes to" IsShown="{Binding HasOutputs}" />
+                    </StackPanel>
+                  </inspector:InspectorSection>
+
+                  <!-- The nodes that read this node's result. -->
+                  <inspector:InspectorSection Grid.Row="5" Key="GoesTo" Title="Goes to" IsShown="{Binding HasOutputs}">
                     <ItemsControl ItemsSource="{Binding Outputs}" AutomationProperties.AutomationId="OutputLinks">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="canvas:NodeLink">
@@ -494,11 +498,10 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    </StackPanel>
                   </inspector:InspectorSection>
 
                   <!-- What the node reads: each incoming connection's node. A person's own input is a field under Task. -->
-                  <inspector:InspectorSection Grid.Row="3" Key="Input" Title="Input">
+                  <inspector:InspectorSection Grid.Row="4" Key="Input" Title="Input">
                     <StackPanel>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasNoInputs}">
                         <TextBlock Classes="note" Text="No input. This node starts first."
@@ -544,7 +547,7 @@
                   </inspector:InspectorSection>
 
                   <!-- The open conversation holds the task, so this section rests folded beside it, and a click opens it to edit. -->
-                  <inspector:InspectorSection Grid.Row="1" Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
+                  <inspector:InspectorSection Grid.Row="2" Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
                     <ItemsControl ItemsSource="{Binding Fields}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="canvas:FieldViewModel">
@@ -580,7 +583,7 @@
                     </ItemsControl>
                   </inspector:InspectorSection>
 
-                  <inspector:InspectorSection Grid.Row="2" Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
+                  <inspector:InspectorSection Grid.Row="3" Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
                                               Changes="{Binding AgentChanges}" IsShown="{Binding HasAgent}">
                     <StackPanel>
                       <inspector:InspectorRow Label="Client" Info="{Binding PermissionNote}" InfoName="{Binding PermissionSummary}" InfoId="PermissionNote"
@@ -613,7 +616,7 @@
                                         ToolTip.Tip="{Binding Skills.SummaryTip}"
                                         AutomationProperties.AutomationId="TaskSkills"
                                         AutomationProperties.Name="Skills">
-                            <TextBlock Text="{Binding Skills.Summary}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Skills.Summary}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
                           </ToggleButton>
                           <!-- A client that takes no choice shows a plain value, with no box and no arrow. Its glyph and tooltip say why. -->
                           <Border Classes="fixedValue" IsVisible="{Binding !Skills.CanChoose}" ToolTip.Tip="{Binding Skills.FixedNote}">

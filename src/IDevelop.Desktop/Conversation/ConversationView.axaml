@@ -265,7 +265,7 @@
                       AutomationProperties.AutomationId="ConversationSendBackOpen" AutomationProperties.Name="Send back with a note">
                 <TextBlock Text="Send back" />
               </Button>
-              <Button Classes="action" Height="28" Click="OnChangeModel" IsVisible="{Binding ShowsChangeModel}"
+              <Button Classes.primary="{Binding IsChangeModelPrimary}" Classes.action="{Binding !IsChangeModelPrimary}" Height="28" Click="OnChangeModel" IsVisible="{Binding ShowsChangeModel}"
                       ToolTip.Tip="Choose another model before you retry"
                       AutomationProperties.AutomationId="ConversationChangeModel" AutomationProperties.Name="Change model">
                 <TextBlock Text="Change model" />
@@ -370,7 +370,7 @@
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
               </Button>
               <Button Classes="round send" Command="{Binding Node.SendCommand}" IsVisible="{Binding ShowsSend}"
-                      ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True"
+                      ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True" ToolTip.Placement="Top"
                       AutomationProperties.AutomationId="ConversationSend"
                       AutomationProperties.Name="Send">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
