@@ -224,8 +224,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public ICommand CommitMovesCommand { get; }
 
-    /// <summary>How many nodes wait for the person.</summary>
-    public int WaitingCount => Nodes.Count(node => node.IsWaiting);
+    /// <summary>How many nodes need the person's word. An interrupted node is not among them: <see cref="StateCounts"/> holds it apart.</summary>
+    public int WaitingCount => Nodes.Count(node => node.IsWaiting && node.WaitReason != WaitReason.Interrupted);
 
     /// <summary>Selects the next node that waits for the person or failed, after the selected one, in the order the sidebar lists them, and shows it.</summary>
     public ICommand NextWaitingCommand { get; }

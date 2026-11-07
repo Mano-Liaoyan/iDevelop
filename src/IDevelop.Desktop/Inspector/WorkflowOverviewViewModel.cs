@@ -77,7 +77,7 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
         [
             (NodeState.Failed, WaitReason.None, "Failed", counts.Failed), .. waiting, (NodeState.Running, WaitReason.None, "Running", counts.Running),
             (NodeState.Stale, WaitReason.None, "Stale", counts.Stale), (NodeState.Completed, WaitReason.None, "Complete", counts.Completed),
-            (NodeState.Idle, WaitReason.None, "Idle", counts.Total - counts.Waiting - counts.Failed - counts.Running - counts.Stale - counts.Completed),
+            (NodeState.Idle, WaitReason.None, "Idle", counts.Total - counts.Waiting - counts.Interrupted - counts.Failed - counts.Running - counts.Stale - counts.Completed),
         ];
         ImmutableArray<StateCount> states =
         [

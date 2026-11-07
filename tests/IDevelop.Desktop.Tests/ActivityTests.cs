@@ -30,7 +30,11 @@ public sealed class ActivityTests : IDisposable
     [InlineData(5, 0, 1, 2, 1, 9, "5 of 9 · 1 waiting · 2 failed · 1 stale")]
     [InlineData(9, 0, 0, 0, 0, 9, "9 of 9")]
     public void A_workflow_s_summary_uses_the_run_bar_s_words(int completed, int running, int waiting, int failed, int stale, int total, string summary) =>
-        Assert.Equal(summary, new StateCounts(completed, running, waiting, failed, stale, total).Summary());
+        Assert.Equal(summary, new StateCounts(completed, running, waiting, 0, failed, stale, total).Summary());
+
+    [Fact]
+    public void An_interrupted_node_is_counted_apart_from_what_waits_for_the_person() =>
+        Assert.Equal("5 of 9 · 2 waiting · 1 interrupted", new StateCounts(5, 0, 2, 1, 0, 0, 9).Summary());
 
     [Fact]
     public void A_client_with_a_problem_changes_the_footer_s_words_and_a_missing_client_does_not()

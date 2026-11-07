@@ -9,7 +9,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>How many nodes are in each state.</summary>
     public StateCounts Counts => new(
         Nodes.Count(node => node.State == NodeState.Completed), Nodes.Count(node => node.State == NodeState.Running), WaitingCount,
-        Nodes.Count(node => node.State == NodeState.Failed), Nodes.Count(node => node.State == NodeState.Stale), Nodes.Count);
+        Nodes.Count(node => node.WaitReason == WaitReason.Interrupted), Nodes.Count(node => node.State == NodeState.Failed), Nodes.Count(node => node.State == NodeState.Stale), Nodes.Count);
 
     /// <summary>"5 of 9 · 1 running · 3 waiting", "9 nodes" before anything runs, or "No nodes yet", then "Unsaved" while it applies.</summary>
     public string Summary => string.Join(" · ", new[] { Counts.Summary(), HasUnsavedChanges ? "Unsaved" : null }.OfType<string>());
@@ -17,21 +17,8 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>How far the work went, at the row's end. The chips under the name hold the other states.</summary>
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
 
-    /// <summary>What the row says under the name, in words: what failed, waits, runs, and is stale. Every reason to wait sums to one chip, and the run bar tells them apart.</summary>
-    public IReadOnlyList<StateChip> RowChips
-    {
-        get
-        {
-            var counts = Counts;
-            return new[]
-            {
-                StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed"),
-                StateChip.Of(NodeState.InputRequired, WaitReason.None, counts.Waiting, "waiting"),
-                StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"),
-                StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, "stale"),
-            }.OfType<StateChip>().ToList();
-        }
-    }
+    /// <summary>What the row says under the name: the run bar's groups, so the row and the bar give one number for one group.</summary>
+    public IReadOnlyList<StateChip> RowChips => BarGroups;
 
     public bool HasRowChips => RowChips.Count > 0;
 

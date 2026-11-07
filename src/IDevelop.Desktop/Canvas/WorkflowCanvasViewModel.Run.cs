@@ -135,7 +135,7 @@ public sealed partial class WorkflowCanvasViewModel
     }
 
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
-    public string NextLabel => Nodes.Any(node => node.IsWaiting) ? "Next waiting" : "Next failed";
+    public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Failed > 0 ? "Next failed" : "Next interrupted";
 
     public StatusTone BarTone => RunningCount > 0 ? StatusTone.Running : HasAttention ? StatusTone.Waiting : StatusTone.Complete;
 

@@ -270,6 +270,12 @@ public sealed class WorkspaceTests : IDisposable
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
         Assert.Equal("Interrupted", shell.CardText("Design", "CardStatus"));
+        var reopened = shell.Window.ViewModel.Canvas!;
+        Assert.Equal((0, 1), (reopened.Counts.Waiting, reopened.Counts.Interrupted));
+        Assert.Equal("1 interrupted", Assert.Single(reopened.RowChips).Label);
+        Assert.Equal(reopened.BarGroups, reopened.RowChips);
+        Assert.Equal("Next interrupted", reopened.NextLabel);
+        Assert.Equal((0, 1), (shell.Window.ViewModel.Activity.WaitingCount, shell.Window.ViewModel.Activity.InterruptedCount));
     }
 
     [AvaloniaFact]

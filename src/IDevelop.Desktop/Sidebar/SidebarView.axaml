@@ -70,6 +70,12 @@
               <PathIcon Classes="stateIcon state-inputrequired" Theme="{StaticResource Glyph}" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.WaitingCount}" />
             </StackPanel>
+            <StackPanel Classes="count" IsVisible="{Binding Activity.HasInterrupted}" Background="Transparent"
+                        ToolTip.Tip="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}"
+                        AutomationProperties.AutomationId="ActivityInterrupted">
+              <PathIcon Classes="stateIcon state-inputrequired why-interrupted" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+              <TextBlock Classes="caption" Text="{Binding Activity.InterruptedCount}" />
+            </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasFailed}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}"
                         AutomationProperties.AutomationId="ActivityFailed">
@@ -219,6 +225,14 @@
                                       AutomationProperties.Name="{Binding WaitingLabel}">
                             <PathIcon Classes="stateIcon state-inputrequired" Theme="{StaticResource Glyph}" Width="14" Height="14" />
                             <TextBlock Classes="caption" Text="{Binding WaitingCount}" />
+                          </StackPanel>
+                          <StackPanel Classes="count" IsVisible="{Binding HasInterrupted}"
+                                      Background="Transparent"
+                                      ToolTip.Tip="{Binding InterruptedLabel}"
+                                      AutomationProperties.AutomationId="ProjectInterrupted"
+                                      AutomationProperties.Name="{Binding InterruptedLabel}">
+                            <PathIcon Classes="stateIcon state-inputrequired why-interrupted" Theme="{StaticResource Glyph}" Width="14" Height="14" />
+                            <TextBlock Classes="caption" Text="{Binding InterruptedCount}" />
                           </StackPanel>
                         </StackPanel>
                       </Grid>
@@ -394,6 +408,8 @@
       <!-- A row slides under the pinned rows at the top. What it reaches past the bottom edge would show cut through its letters, so
            the panel's own color covers that row until it comes in whole. The cover takes no pointer. -->
       <Border x:Name="TreeFootCover" Classes="treeCover" VerticalAlignment="Bottom" IsVisible="False" />
+      <!-- The pinned rows' lower edge would cut a row in the same way, so the same cover holds it until it goes whole under them. -->
+      <Border x:Name="TreeHeadCover" Classes="treeCover" VerticalAlignment="Top" IsVisible="False" />
       <!-- The project and the workflow of the rows under the top edge stay in view while they scroll. A click goes back to its row. -->
       <Border x:Name="TreeHead" Classes="treeHead" IsVisible="False">
         <StackPanel>

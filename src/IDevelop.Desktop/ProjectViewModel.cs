@@ -80,6 +80,13 @@ public sealed class ProjectViewModel : ObservableObject
     /// <summary>How many of the project's nodes failed.</summary>
     public int FailedCount => Workflows.Sum(canvas => canvas.Counts.Failed);
 
+    /// <summary>How many of its nodes iDevelop's closing stopped, which a folded row sums apart from what waits for the person.</summary>
+    public int InterruptedCount => Workflows.Sum(canvas => canvas.Counts.Interrupted);
+
+    public bool HasInterrupted => InterruptedCount > 0;
+
+    public string InterruptedLabel => InterruptedCount == 1 ? "1 node interrupted" : $"{InterruptedCount} nodes interrupted";
+
     public bool HasFailed => FailedCount > 0;
 
     /// <summary>How many of its nodes run now, which a folded row sums too.</summary>
@@ -132,6 +139,9 @@ public sealed class ProjectViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsWaiting));
                 OnPropertyChanged(nameof(WaitingCount));
                 OnPropertyChanged(nameof(FailedCount));
+                OnPropertyChanged(nameof(InterruptedCount));
+                OnPropertyChanged(nameof(HasInterrupted));
+                OnPropertyChanged(nameof(InterruptedLabel));
                 OnPropertyChanged(nameof(HasFailed));
                 OnPropertyChanged(nameof(WaitingLabel));
                 OnPropertyChanged(nameof(FailedLabel));
