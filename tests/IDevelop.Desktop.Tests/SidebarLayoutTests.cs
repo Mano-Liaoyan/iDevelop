@@ -204,7 +204,7 @@ public sealed class SidebarLayoutTests : IDisposable
     [AvaloniaTheory]
     [InlineData(240)]
     [InlineData(400)]
-    public void Rows_keep_one_height_while_their_names_fit_and_state_shows_in_words_under_the_name(double width)
+    public void Rows_keep_one_height_while_their_names_fit_and_state_shows_as_counts_under_the_name(double width)
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var shell = OpenBoth(_fakes.DiscoverAsync().Result);
@@ -225,10 +225,13 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.True(row.Bounds.Height > 28, "The state takes no line of its own.");
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
-        // The progress keeps the row's end in every state, and the state is in words under the name.
+        // The progress keeps the row's end in every state, and the state is a badge and a count under the name, with its words
+        // in the chip's tooltip and name.
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
-        Assert.Equal(canvas.RowChips.Select(chip => chip.Label), Of<Control>(row.GetVisualParent()!, "WorkflowAlert").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
+        var alert = Of<Control>(row.GetVisualParent()!, "WorkflowAlert");
+        Assert.Equal(canvas.RowChips.Select(chip => chip.Count.ToString()), alert.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
+        Assert.Equal(canvas.RowChips.Select(chip => chip.Tip), alert.GetVisualDescendants().OfType<StackPanel>().Select(chip => (string)ToolTip.GetTip(chip)!));
     }
 
     [Theory]

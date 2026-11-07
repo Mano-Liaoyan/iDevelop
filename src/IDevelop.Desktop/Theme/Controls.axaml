@@ -284,8 +284,10 @@
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
+  <!-- Under the pointer the fill darkens in both themes and the label stays white: the light theme takes the darker hover
+       fill, and the dark theme's slight transparency darkens the fill against its dark panel. -->
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentFillHoverBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
   <Style Selector="Button.primary:pointerover">

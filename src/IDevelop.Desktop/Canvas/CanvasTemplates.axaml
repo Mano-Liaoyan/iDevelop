@@ -155,7 +155,7 @@
             <TextBlock Text="{Binding ClientMark}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        AutomationProperties.AutomationId="CardClientMark" />
           </Border>
-          <TextBlock x:Name="FarAgent" Classes="farAgent" Text="{Binding CardLine}" TextTrimming="CharacterEllipsis" theme:StyleClass.State="{Binding State}"
+          <TextBlock x:Name="FarAgent" Classes="farAgent" Text="{Binding CardLine}" theme:StyleClass.State="{Binding State}"
                               AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
         </DockPanel>
         <!-- While the node needs the person, the zoomed out badge acts as the full card's does, because Fit rests at this form. -->

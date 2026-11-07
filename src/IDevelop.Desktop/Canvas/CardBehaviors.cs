@@ -56,6 +56,9 @@ public static class CardBehaviors
             }
 
             ToolTip.SetTip(control, peek);
+            // The peek stands over the card, clear of it, so it hides neither the card's text nor its selection ring.
+            ToolTip.SetPlacement(control, PlacementMode.Top);
+            ToolTip.SetVerticalOffset(control, -8);
         });
     }
 

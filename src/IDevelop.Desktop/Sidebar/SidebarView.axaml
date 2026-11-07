@@ -286,8 +286,8 @@
                         <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
                           <StackPanel Spacing="2">
                             <Panel>
-                              <!-- One line for the name, and at its end how far the work went. A folded row adds one line with the most
-                                   urgent groups, and the tree rows of an open one show the rest. The tooltip holds the sum. -->
+                              <!-- One line for the name, and at its end how far the work went. A folded row adds one line with a badge and a
+                                   count for each urgent group, and the tree rows of an open one show the rest. The tooltip holds the sum. -->
                               <Button Classes="nav workflow" Classes.selected="{Binding IsSelected}" Classes.holdsNode="{Binding ShowsNodeSelection}" HorizontalContentAlignment="Stretch"
                                       IsVisible="{Binding !IsRenamingWorkflow}"
                                       Click="OnWorkflowClick"
@@ -321,9 +321,12 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                       <DataTemplate DataType="canvas:StateChip">
-                                        <StackPanel Orientation="Horizontal" Spacing="4" AutomationProperties.Name="{Binding Label}">
+                                        <!-- A badge and its count keep the row's state to one short line. Activity says the states in
+                                             words, and the chip's tooltip and name keep them here (ADR 0066). -->
+                                        <StackPanel Orientation="Horizontal" Spacing="3" Background="Transparent" ToolTip.Tip="{Binding Tip}"
+                                                    AutomationProperties.Name="{Binding Label}">
                                           <theme:StateBadge Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" />
-                                          <TextBlock Classes="caption" Text="{Binding Label}" ToolTip.Tip="{Binding Tip}" VerticalAlignment="Center" />
+                                          <TextBlock Classes="caption" Text="{Binding Count}" VerticalAlignment="Center" />
                                         </StackPanel>
                                       </DataTemplate>
                                     </ItemsControl.ItemTemplate>

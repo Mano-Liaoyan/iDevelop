@@ -146,6 +146,9 @@ const brushes = [
   ['AccentStroke', ['apple-blue-strong', 'apple-blue']],
   ['AccentText', 'apple-blue-text'],
   ['AccentFill', 'apple-blue-fill'],
+  // The primary fill under the pointer: darker than the fill in the light theme. The dark theme keeps the fill, and the
+  // button's opacity darkens it against the dark panel, so hover darkens the fill in both themes.
+  ['AccentFillHover', ['apple-blue-text', 'apple-blue-fill']],
   ['DestructiveText', 'apple-red-text'],
   ['DestructiveFill', 'apple-red-fill'],
   ['OnAccent', 'white'],
@@ -277,7 +280,7 @@ const contrast = [
   ...pairs(['TextBrush'], tints.map((tint) => [tint, 'SurfaceRaisedBrush']), 4.5),
   ['TextBrush', 'SurfaceMutedBrush', 4.5],
   ...pairs(['AccentTextBrush', 'DestructiveTextBrush'], ['SurfaceOverlayBrush', 'AppPanelBrush', 'SurfaceRaisedBrush'], 4.5),
-  ...pairs(['OnAccentBrush'], ['AccentFillBrush', 'DestructiveFillBrush'], 4.5),
+  ...pairs(['OnAccentBrush'], ['AccentFillBrush', 'AccentFillHoverBrush', 'DestructiveFillBrush'], 4.5),
   ...pairs(['OnTileBrush'], kinds.map(([kind]) => `Kind${kind}TileBrush`), 3),
   ...pairs(strokes.map((stroke) => `${stroke}StrokeBrush`), [canvas, 'SurfaceRaisedBrush'], 3),
   ...strokes.flatMap((hue) => pairs([`${hue}StrongBrush`], ['SurfaceRaisedBrush', [`${hue}10Brush`, 'SurfaceRaisedBrush']], 3)),

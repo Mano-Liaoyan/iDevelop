@@ -780,15 +780,15 @@
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
   <Style Selector="Button.send:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.send:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentFillHoverBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
-  <!-- Send lightens under the pointer and deepens when pressed, as Run Workflow does. -->
+  <!-- Send darkens under the pointer and when pressed, as Run Workflow does. -->
   <Style Selector="Button.send:pointerover">
-    <Setter Property="Opacity" Value="0.88" />
+    <Setter Property="Opacity" Value="0.92" />
   </Style>
   <Style Selector="Button.send:pressed">
-    <Setter Property="Opacity" Value="0.78" />
+    <Setter Property="Opacity" Value="0.84" />
   </Style>
   <!-- Send with nothing to send rests in the quiet fill at full opacity, so it stays in view. -->
   <Style Selector="Button.send:disabled">

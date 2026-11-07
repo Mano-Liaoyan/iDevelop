@@ -94,6 +94,7 @@
       <SolidColorBrush x:Key="AccentStrokeBrush" Color="#1E6EF4" />
       <SolidColorBrush x:Key="AccentTextBrush" Color="#0040DD" />
       <SolidColorBrush x:Key="AccentFillBrush" Color="#1E6EF4" />
+      <SolidColorBrush x:Key="AccentFillHoverBrush" Color="#0040DD" />
       <SolidColorBrush x:Key="DestructiveTextBrush" Color="#D70015" />
       <SolidColorBrush x:Key="DestructiveFillBrush" Color="#E9152D" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
@@ -207,6 +208,7 @@
       <SolidColorBrush x:Key="AccentStrokeBrush" Color="#0091FF" />
       <SolidColorBrush x:Key="AccentTextBrush" Color="#5CB8FF" />
       <SolidColorBrush x:Key="AccentFillBrush" Color="#1E6EF4" />
+      <SolidColorBrush x:Key="AccentFillHoverBrush" Color="#1E6EF4" />
       <SolidColorBrush x:Key="DestructiveTextBrush" Color="#FF6165" />
       <SolidColorBrush x:Key="DestructiveFillBrush" Color="#E9152D" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />

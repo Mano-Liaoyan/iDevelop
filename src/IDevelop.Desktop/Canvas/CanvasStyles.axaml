@@ -225,7 +225,7 @@
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="32" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="22,0,58,4" />
+    <Setter Property="Margin" Value="22,0,55,4" />
   </Style>
   <Style Selector="DockPanel.farLine > :is(Control)">
     <Setter Property="VerticalAlignment" Value="Center" />
@@ -270,12 +270,16 @@
     <Setter Property="FontSize" Value="20" />
   </Style>
   <!-- The client's letters keep the agent's text size on screen, so they read at every zoom with text. -->
+  <!-- At the Label tier, where a fit rests, the letters and the model's name share the line with the badge, so both keep a size
+       at which a name such as "GPT-6.1 Sol" or "Sonnet 5.5" fits whole (ADR 0066). -->
   <Style Selector=":is(Control).tier-label Border.farClient">
-    <Setter Property="MinWidth" Value="32" />
-    <Setter Property="Height" Value="32" />
+    <Setter Property="MinWidth" Value="28" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="2,0" />
+    <Setter Property="Margin" Value="0,0,5,0" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="27" />
+    <Setter Property="FontSize" Value="24" />
   </Style>
   <!-- The smallest cards keep their model's words, so the client's letters stay small there. -->
   <Style Selector=":is(Control).tier-title Border.farClient">
@@ -285,19 +289,20 @@
   <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
     <Setter Property="FontSize" Value="26" />
   </Style>
+  <!-- A model name that does not fit ends at a whole word and an ellipsis, as "Opus…", never "Opus …" or "Qwen 4 …". -->
   <Style Selector="TextBlock.farAgent">
     <Setter Property="FontSize" Value="17" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextTrimming" Value="WordEllipsis" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector=":is(Control).tier-compact TextBlock.farAgent">
     <Setter Property="FontSize" Value="20" />
   </Style>
   <Style Selector=":is(Control).tier-label TextBlock.farAgent">
-    <Setter Property="FontSize" Value="28" />
-    <Setter Property="LineHeight" Value="31" />
+    <Setter Property="FontSize" Value="25" />
+    <Setter Property="LineHeight" Value="30" />
     <Setter Property="TextWrapping" Value="NoWrap" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
