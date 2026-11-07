@@ -45,8 +45,8 @@ public sealed class ExecutionLanguageTests
     [Fact]
     public void Feeding_is_the_heaviest_wire_and_a_wire_that_carries_nothing_is_the_lightest()
     {
-        Assert.Equal(2, WireFlows.Stroke(WireFlow.Feeding));
-        Assert.All(new[] { WireFlow.Delivered, WireFlow.Outdated, WireFlow.Ready, WireFlow.Context, WireFlow.Stopped, WireFlow.Idle }, flow => Assert.Equal(1.5, WireFlows.Stroke(flow)));
+        Assert.Equal(2.5, WireFlows.Stroke(WireFlow.Feeding));
+        Assert.All(new[] { WireFlow.Delivered, WireFlow.Outdated, WireFlow.Ready, WireFlow.Context, WireFlow.Stopped, WireFlow.Idle }, flow => Assert.Equal(2, WireFlows.Stroke(flow)));
     }
 
     [Theory]
@@ -82,7 +82,7 @@ public sealed class ExecutionLanguageTests
         new([.. points.Select(point => new Point(point.X, point.Y))], order, targetOrder);
 
     [Fact]
-    public void Wires_on_one_run_take_lanes_10_px_apart_in_source_order()
+    public void Wires_on_one_run_take_lanes_22_px_apart_in_source_order()
     {
         var routes = WireLanes.Spread(
         [
@@ -90,8 +90,8 @@ public sealed class ExecutionLanguageTests
             Wire(1, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
         ], []);
 
-        Assert.Equal(205, routes[0][1].X);
-        Assert.Equal(195, routes[1][1].X);
+        Assert.Equal(211, routes[0][1].X);
+        Assert.Equal(189, routes[1][1].X);
         Assert.Equal(0, routes[0][1].Y);
     }
 
@@ -108,8 +108,8 @@ public sealed class ExecutionLanguageTests
             Wire(2, 1, (100, 50), (200, 50), (200, 100), (300, 100)),
         ], []));
 
-        Assert.Equal([195.0, 205.0], fanOut.Select(route => route[1].X));
-        Assert.Equal([195.0, 205.0], fanIn.Select(route => route[1].X));
+        Assert.Equal([189.0, 211.0], fanOut.Select(route => route[1].X));
+        Assert.Equal([189.0, 211.0], fanIn.Select(route => route[1].X));
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class ExecutionLanguageTests
         ], [new Rect(201, 20, 40, 40)]);
 
         Assert.Equal(200, routes[0][1].X);
-        Assert.Equal(195, routes[1][1].X);
+        Assert.Equal(189, routes[1][1].X);
     }
 
     [AvaloniaTheory]

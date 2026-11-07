@@ -637,6 +637,10 @@
     <Setter Property="Width" Value="40" />
   </Style>
   <!-- The app's one focus ring, inside the canvas's edge, so no panel covers it. -->
+  <!-- While the inspector edits a blueprint, the canvas stays in view behind the edit and is not a part of it. -->
+  <Style Selector="nodify|NodifyEditor.behindEditor">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
   <Style Selector="Border.nameTag">
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Top" />
@@ -693,13 +697,10 @@
     <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
   </Style>
   <!-- A bar with too little room for each reason to wait sums them. A tight bar then names what needs the person and sums the rest, and the tightest bar names the most urgent group and sums all the others. -->
-  <Style Selector="ItemsControl.barGroups, ItemsControl.barLeastChips, :is(Control).groupChips ItemsControl.barChips.barReasons">
+  <Style Selector="ItemsControl.barLeastChips">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).groupChips ItemsControl.barGroups">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).leastChips ItemsControl.barGroups, :is(Control).tightChips Panel.barProgress, :is(Control).leastChips Button.barSpare, :is(Control).tightNext TextBlock.nextLabel">
+  <Style Selector=":is(Control).leastChips ItemsControl.barReasons, :is(Control).tightChips Panel.barProgress, :is(Control).leastChips Button.barSpare, :is(Control).tightNext TextBlock.nextLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).leastChips ItemsControl.barLeastChips">

@@ -103,47 +103,32 @@ public sealed partial class WorkflowCanvasViewModel
     public string BarIdle => Counts.Completed > 0 ? BarProgress : Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes";
 
     /// <summary>
-    /// One chip for each group of nodes that the bar names, in the order of what needs the person first. Each reason to wait is
-    /// its own group with the glyph its cards show, so the bar says what the person will find.
+    /// One chip for each group of nodes that the bar names, in the order of what needs the person first. What waits for the person is
+    /// one group under one word, and its tooltip names the reasons. Interrupted stays its own, because it waits for nobody's word.
     /// </summary>
     public IReadOnlyList<StateChip> BarChips
     {
         get
         {
             var counts = Counts;
-            var waiting = Nodes.Where(node => node.State == NodeState.InputRequired).GroupBy(node => node.WaitReason).OrderBy(group => group.Key)
-                .Select(group => StateChip.Of(NodeState.InputRequired, group.Key, group.Count(), NodeStates.Need(group.Key).ToLowerInvariant()));
-            return new[] { StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed") }
-                .Concat(waiting)
+            var reasons = Nodes.Where(node => node.State == NodeState.InputRequired && node.WaitReason != WaitReason.Interrupted)
+                .GroupBy(node => node.WaitReason).OrderBy(group => group.Key).ToList();
+            var tip = string.Join(", ", reasons.Select(group => $"{group.Count()} {NodeStates.Need(group.Key).ToLowerInvariant()}"));
+            return new[]
+                {
+                    StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed"),
+                    StateChip.Of(NodeState.InputRequired, reasons is [var only] ? only.Key : WaitReason.Question, reasons.Sum(group => group.Count()), "waiting", tip),
+                    StateChip.Of(NodeState.InputRequired, WaitReason.Interrupted, counts.Interrupted, "interrupted"),
+                }
                 .Append(StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"))
                 .Append(StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, "stale"))
                 .OfType<StateChip>().ToList();
         }
     }
 
-    /// <summary>
-    /// The chips of a bar with too little room for each reason to wait: what waits for the person in one chip, with the glyph its
-    /// nodes share or a question's. Interrupted stays its own, because an interrupted node waits for nobody's word.
-    /// </summary>
-    public IReadOnlyList<StateChip> BarGroups
-    {
-        get
-        {
-            var chips = BarChips;
-            var waits = chips.Where(chip => chip.State == NodeState.InputRequired && chip.Why != WaitReason.Interrupted).ToList();
-            var tip = string.Join(", ", waits.Select(chip => chip.Label));
-            // One reason keeps its own word, so a row and a wide bar say one word for one group.
-            var sum = waits is [var only] ? only : StateChip.Of(NodeState.InputRequired, WaitReason.Question, waits.Sum(chip => chip.Count), "waiting", tip);
-            var others = chips.Except(waits).ToList();
-            return new[] { others.FirstOrDefault(chip => chip.State == NodeState.Failed), sum }
-                .Concat(others.Where(chip => chip.State != NodeState.Failed))
-                .OfType<StateChip>().ToList();
-        }
-    }
-
     /// <summary>The chips of the tightest bar: every group keeps its badge and its count, and its tooltip has its words.</summary>
     public IReadOnlyList<StateChip> BarLeast =>
-        [.. BarGroups.Select(chip => chip with { IsCounted = true })];
+        [.. BarChips.Select(chip => chip with { IsCounted = true })];
 
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
     public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Interrupted > 0 && Counts.Failed == 0 ? "Next interrupted" : "Next failed";
@@ -255,7 +240,7 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarIdle));
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
-        OnPropertyChanged(nameof(BarGroups));
+        OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(BarLeast));
         OnPropertyChanged(nameof(RunWork));
         OnPropertyChanged(nameof(CanStartRun));

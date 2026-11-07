@@ -336,8 +336,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         var zoom = Editor.ViewportZoom;
         var at = (node.DisplayLocation - Editor.ViewportLocation) * zoom;
         NameTag.Measure(Size.Infinity);
-        var (width, height) = (NameTag.DesiredSize.Width, NameTag.DesiredSize.Height);
-        var top = at.Y - height - 2;
+        var width = NameTag.DesiredSize.Width - NameTag.Margin.Left;
+        var top = at.Y - NameTag.Height - 2;
         var y = top >= NameTagInset ? top : at.Y + WorkflowCanvasViewModel.TaskCardHeight * zoom + 2;
         NameTag.Margin = new Thickness(Math.Max(NameTagInset, Math.Min(at.X, Editor.Bounds.Width - width - NameTagInset)), y, 0, 0);
     }

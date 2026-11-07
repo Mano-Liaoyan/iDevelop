@@ -4,13 +4,13 @@ using Avalonia;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// Moves apart the wires that share a run, so a person can trace each one. Every wire on a run takes its own lane, 10 px from
+/// Moves apart the wires that share a run, so a person can trace each one. Every wire on a run takes its own lane, 22 px from
 /// the next, in order of its source position and then its target position, so no wires share a trunk (ADR 0045). A wire's
 /// ends stay on its ports' rows. A wire that its lane would take through a card stays where it was.
 /// </summary>
 internal static class WireLanes
 {
-    private const double Lane = 10;
+    private const double Lane = 22;
 
     private const double EdgeClearance = 2;
 

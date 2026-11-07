@@ -46,6 +46,7 @@
                          ConnectionTemplate="{StaticResource ConnectionTemplate}"
                          PendingConnectionTemplate="{StaticResource PendingConnectionTemplate}"
                          FocusAdorner="{x:Null}"
+                         Classes.behindEditor="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}"
                          GridCellSize="15">
 
       <nodify:NodifyEditor.Background>
@@ -299,13 +300,6 @@
               </Panel>
               <Panel VerticalAlignment="Center">
                 <ItemsControl Classes="barChips barReasons" ItemsSource="{Binding BarChips}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunChips">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <StackPanel Orientation="Horizontal" Spacing="6" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                </ItemsControl>
-                <ItemsControl Classes="barChips barGroups" ItemsSource="{Binding BarGroups}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunGroups">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel Orientation="Horizontal" Spacing="6" />

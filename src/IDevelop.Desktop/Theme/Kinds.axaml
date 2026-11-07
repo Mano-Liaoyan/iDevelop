@@ -327,9 +327,6 @@
   <Style Selector="PathIcon.badgeGlyph.state-inputrequired">
     <Setter Property="Data" Value="{StaticResource IconBadgeQuestion}" />
   </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-reply">
-    <Setter Property="Data" Value="{StaticResource IconBadgeReply}" />
-  </Style>
   <Style Selector="Ellipse.badgeDisc.state-inputrequired.why-approval">
     <Setter Property="Fill" Value="{DynamicResource StateApprovalStrokeBrush}" />
   </Style>

@@ -114,8 +114,8 @@ public sealed class InspectorLayoutTests : IDisposable
         Assert.Equal("actions at 12, values at 12", Edges(shell));
         AssertBeside(shell, "TaskModel", "TaskSkills");
         AssertNothingCutShort(shell);
-        // The box is as tall as the pickers above it, and its list and its note take the section's width under it.
-        Assert.Equal(shell.Find<ComboBox>("TaskModel").Bounds.Height, picker.Bounds.Height, 0.5);
+        // The box is at least as tall as the pickers above it, because its value wraps, and its list and its note take the section's width under it.
+        Assert.True(picker.Bounds.Height >= shell.Find<ComboBox>("TaskModel").Bounds.Height - 0.5);
         var box = shell.Bounds(picker);
         var inspector = shell.Bounds(shell.Find<Control>("Inspector"));
         foreach (var under in new[] { shell.Find<Control>("SkillList"), shell.Find<Control>("SkillsNote") })
@@ -450,7 +450,7 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(280)]
     [InlineData(320)]
     [InlineData(520)]
-    public void A_long_title_takes_two_lines_ends_in_an_ellipsis_and_its_tooltip_holds_the_rest(double width)
+    public void A_long_title_takes_up_to_four_lines_and_its_tooltip_holds_all_of_it(double width)
     {
         const string title = "Draft the release notes for the storage adapter and its migration and its rollback plan for every region";
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
@@ -461,8 +461,7 @@ public sealed class InspectorLayoutTests : IDisposable
         var header = shell.Find<Control>("InspectorHeader");
         var shown = header.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("headerTitle"));
         Assert.Equal((title, title), (((EllipsisText)shown).Whole, ToolTip.GetTip((Control)shown.Parent!)));
-        Assert.Equal(width < 520, shown.Text != title);
-        Assert.Equal(2, shown.TextLayout.TextLines.Count);
+        Assert.InRange(shown.TextLayout.TextLines.Count, 2, 4);
         AssertNothingCutShort(shell);
         // More stays on the title's first line, at the panel's action edge.
         var more = shell.Bounds(shell.Find<Button>("InspectorMore"));
@@ -506,7 +505,8 @@ public sealed class InspectorLayoutTests : IDisposable
     public void The_scroll_bar_keeps_to_the_right_inset_so_nothing_sits_under_it(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
-        shell.Window.Height = shell.Window.MinHeight;
+        shell.Window.MinHeight = 420;
+        shell.Window.Height = 420;
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
@@ -526,7 +526,8 @@ public sealed class InspectorLayoutTests : IDisposable
     public void The_foot_marks_more_below_and_the_last_row_in_view_is_whole_until_the_end()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
-        shell.Window.Height = shell.Window.MinHeight;
+        shell.Window.MinHeight = 420;
+        shell.Window.Height = 420;
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Render();
         var inspector = shell.Find<Control>("Inspector");

@@ -288,7 +288,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_node_s_name_takes_two_lines_with_a_tooltip_and_all_of_it_while_it_is_selected()
+    public void A_node_s_name_takes_one_line_with_a_tooltip_also_while_it_is_selected()
     {
         const string Long = "Backfill the ledger partition for every tenant that opened an account before the migration began and keep it online";
         var reports = _temp.Create(Reports);
@@ -301,13 +301,14 @@ public sealed class SidebarLayoutTests : IDisposable
         var node = view.Canvas!.Outline.Single(item => item.Title == Long);
 
         Assert.EndsWith("…", name.Text);
-        Assert.Equal(2, name.TextLayout.TextLines.Count);
+        Assert.Single(name.TextLayout.TextLines);
         Assert.Equal(Long, ToolTip.GetTip(name.GetVisualParent<Grid>()!));
 
         view.Canvas.Inspect(node);
         shell.Render();
 
-        Assert.Equal(Long, name.Text?.Replace("\u2060", "", StringComparison.Ordinal));
+        Assert.EndsWith("…", name.Text);
+        Assert.Single(name.TextLayout.TextLines);
     }
 
     [AvaloniaFact]

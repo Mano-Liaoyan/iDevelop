@@ -56,7 +56,7 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
 
     private void SelectFirst(NodeState state, WaitReason why)
     {
-        if (_canvas.Outline.FirstOrDefault(node => node.State == state && node.WaitReason == why) is { } node)
+        if (_canvas.Outline.FirstOrDefault(node => node.State == state && (node.WaitReason == WaitReason.Interrupted) == (why == WaitReason.Interrupted)) is { } node)
         {
             _canvas.Inspect(node);
         }
@@ -71,11 +71,10 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
     private void CountStates()
     {
         var counts = _canvas.Counts;
-        var waiting = _canvas.Nodes.Where(node => node.State == NodeState.InputRequired).GroupBy(node => node.WaitReason).OrderBy(group => group.Key)
-            .Select(group => (NodeState.InputRequired, group.Key, NodeStates.Need(group.Key), group.Count()));
         (NodeState State, WaitReason Why, string Label, int Count)[] all =
         [
-            (NodeState.Failed, WaitReason.None, "Failed", counts.Failed), .. waiting, (NodeState.Running, WaitReason.None, "Running", counts.Running),
+            (NodeState.Failed, WaitReason.None, "Failed", counts.Failed), (NodeState.InputRequired, WaitReason.Question, "Waiting", counts.Waiting),
+            (NodeState.InputRequired, WaitReason.Interrupted, "Interrupted", counts.Interrupted), (NodeState.Running, WaitReason.None, "Running", counts.Running),
             (NodeState.Stale, WaitReason.None, "Stale", counts.Stale), (NodeState.Completed, WaitReason.None, "Completed", counts.Completed),
             (NodeState.Idle, WaitReason.None, "Idle", counts.Total - counts.Waiting - counts.Interrupted - counts.Failed - counts.Running - counts.Stale - counts.Completed),
         ];

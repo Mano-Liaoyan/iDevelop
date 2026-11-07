@@ -23,10 +23,10 @@ public sealed partial class WorkflowCanvasViewModel
     /// one number for one group. Past <see cref="RowChipLimit"/> groups, each keeps its badge and its count, and its tooltip has its words.
     /// </summary>
     public IReadOnlyList<StateChip> RowChips =>
-        BarGroups.Count <= RowChipLimit ? BarGroups : [.. BarGroups.Select(chip => chip with { IsCounted = true })];
+        BarChips.Count <= RowChipLimit ? BarChips : [.. BarChips.Select(chip => chip with { IsCounted = true })];
 
     /// <summary>A folded row says its groups. The node rows of an open workflow show the same states one by one.</summary>
-    public bool ShowsRowChips => !IsExpanded && BarGroups.Count > 0;
+    public bool ShowsRowChips => !IsExpanded && BarChips.Count > 0;
 
     /// <summary>The workflow row's tooltip: the whole name, which the row may cut, and the whole sum.</summary>
     public string RowTip => $"{Name}\n{Summary}";

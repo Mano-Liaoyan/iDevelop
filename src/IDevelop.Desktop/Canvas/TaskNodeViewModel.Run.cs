@@ -60,7 +60,7 @@ public sealed partial class TaskNodeViewModel
     public string StatusLabel => NodeStates.Label(_engineState, _background);
 
     /// <summary>The one word for the state: while the node waits, what it waits for, as Activity and the run bar say it.</summary>
-    public string StateWord => State == NodeState.InputRequired ? NodeStates.Need(WaitReason) : StatusLabel;
+    public string StateWord => State != NodeState.InputRequired ? StatusLabel : WaitReason == WaitReason.Interrupted ? "Interrupted" : "Waiting";
 
     /// <summary>What the node needs from the person, or why it failed or went stale, or null when its status says enough.</summary>
     public string? StateDetail => NodeStates.Detail(_engineState);

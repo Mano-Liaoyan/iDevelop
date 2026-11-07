@@ -137,8 +137,8 @@
               </theme:SpillRow>
             </Border>
 
-            <!-- Run Workflow runs every node that has no current result, so it needs no selected node (ADR 0017). Add and Generate
-                 show their glyphs at every width, and their tooltips name them. -->
+            <!-- Run Workflow runs every node that has no current result, so it needs no selected node (ADR 0017). Add shows its glyph at every width, and Generate adds its word while
+                 the bar has room. Their tooltips name them. -->
             <Panel canvas:CanvasTopBar.Slot="Trailing" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
               <ContentControl Content="{Binding Canvas}">
                 <ContentControl.ContentTemplate>
@@ -152,7 +152,7 @@
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
                         </StackPanel>
                       </Button>
-                      <Button Classes="action iconOnly" Click="OnGenerate" IsVisible="{Binding ShowsGenerate}"
+                      <Button Classes="action glyph" Click="OnGenerate" IsVisible="{Binding ShowsGenerate}"
                               ToolTip.Tip="{Binding GenerateLabel, StringFormat='{}{0}&#10;Describe what to build, and a planner proposes the tasks'}"
                               AutomationProperties.AutomationId="GenerateWorkflow"
                               AutomationProperties.Name="{Binding GenerateLabel}">
@@ -160,6 +160,7 @@
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
                           <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
                                     Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding IsPlanning}" />
+                          <TextBlock Classes="label" Text="Generate" Margin="6,0,0,0" VerticalAlignment="Center" />
                           <!-- An open proposal shows a dot before its label, or on the glyph when the label hides. -->
                           <Panel Classes="wideOnly" VerticalAlignment="Center">
                             <Ellipse Width="8" Height="8" Margin="10,0,4,0" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}" />

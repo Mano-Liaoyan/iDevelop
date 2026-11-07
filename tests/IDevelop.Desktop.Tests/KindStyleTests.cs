@@ -55,7 +55,7 @@ public sealed class KindStyleTests
     }
 
     [AvaloniaFact]
-    public void A_ring_takes_its_states_color_and_only_failed_waiting_and_running_tint_the_card()
+    public void A_card_edge_takes_the_state_s_color_and_running_keeps_the_plain_edge_and_no_state_tints_the_card()
     {
         var ring = new Border { Classes = { "stateStroke" } };
         var tint = new Border { Classes = { "stateTint" } };
@@ -76,9 +76,9 @@ public sealed class KindStyleTests
         Assert.Equal(
             [
                 "#FFE5E5E5  #FF564ADE False",
-                "#FF0088FF #400088FF #FF0088FF True",
-                "#FFC55300 #1AFF8D28 #FFC55300 True",
-                "#FFE9152D #1AFF383C #FFE9152D True",
+                "#FFE5E5E5  #FF0088FF True",
+                "#FFC55300  #FFC55300 True",
+                "#FFE9152D  #FFE9152D True",
                 "#FFE5E5E5  #FF008932 True",
                 "#FF1E6EF4 #1A0088FF #FF1E6EF4 True",
             ],
@@ -89,7 +89,7 @@ public sealed class KindStyleTests
     }
 
     [AvaloniaFact]
-    public void Each_wait_has_its_own_ring_tint_and_badge_and_no_ring_but_failure_is_red()
+    public void Each_wait_has_its_own_edge_and_badge_and_no_edge_but_failure_is_red()
     {
         var ring = new Border { Classes = { "stateStroke" } };
         var tint = new Border { Classes = { "stateTint" } };
@@ -107,7 +107,7 @@ public sealed class KindStyleTests
         }
 
         Assert.Equal(
-            ["#FFC55300 #1AFF8D28 #FFC55300", "#FFB02FC2 #1ACB30E0 #FFB02FC2", "#FF6C6C70 #1A8E8E93 #FF6C6C70"],
+            ["#FFC55300  #FFC55300", "#FFB02FC2  #FFB02FC2", "#FF6C6C70  #FF6C6C70"],
             [Paint(WaitReason.Question), Paint(WaitReason.Approval), Paint(WaitReason.Interrupted)]);
     }
 

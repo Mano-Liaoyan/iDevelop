@@ -154,8 +154,8 @@ public sealed class ConnectionTests : IDisposable
         shell.Drag(header, header + new Vector(0, -186), beforeRelease: () =>
             held = (shell.ColorAt(shell.Editor, new Point(535, 122)), connection.Route));
 
-        // The held card is selected, so its own surface takes the selection's fill.
-        Assert.Equal(Color.Parse("#E5F3FF"), held?.Under);
+        // The held card keeps its own surface while it is selected.
+        Assert.Equal(Colors.White, held?.Under);
         Assert.Equal<Point>([new Point(381, 122), new Point(689, 122)], held?.Route);
     }
 

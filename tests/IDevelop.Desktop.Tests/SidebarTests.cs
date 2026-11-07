@@ -157,8 +157,8 @@ public sealed class SidebarTests : IDisposable
     {
         var shell = SelectBuildOnTheCanvasAndPanItAway();
         shell.Find<TextBox>("FindBox").Focus();
-        // Open Folder, the project's row, its New Workflow and Close Project, the workflow's row, then its selected task.
-        for (var stop = 0; stop < 6; stop++)
+        // New Workflow, Open Folder, the project's row, its New Workflow and Close Project, the workflow's row, then its selected task.
+        for (var stop = 0; stop < 7; stop++)
         {
             shell.Press(Key.Tab);
         }
@@ -245,7 +245,7 @@ public sealed class SidebarTests : IDisposable
         }
 
         Assert.Equal(
-            ["OpenFolder", "ProjectExpand", "NewWorkflow", "CloseProject", "WorkflowRow", "Design", "AgentsStatus", "ThemeSystem", "ThemeLight", "ThemeDark"],
-            Enumerable.Range(0, 10).Select(_ => Tab()));
+            ["NewWorkflowHere", "OpenFolder", "ProjectExpand", "NewWorkflow", "CloseProject", "WorkflowRow", "Design", "AgentsStatus", "ThemeSystem", "ThemeLight", "ThemeDark"],
+            Enumerable.Range(0, 11).Select(_ => Tab()));
     }
 }
