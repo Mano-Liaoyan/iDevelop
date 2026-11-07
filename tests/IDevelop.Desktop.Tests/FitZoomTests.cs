@@ -51,7 +51,7 @@ public sealed class FitZoomTests
         var location = CanvasChrome.ViewOn(extent, Room, zoom, new Point(20000, 10000));
 
         Assert.Equal(CanvasChrome.LeastFitZoom, zoom);
-        Assert.Equal(new Point(20000, 10000), location + (Vector)Room.Center / zoom);
+        Assert.Equal(new Point(20000, 10000), location + (Vector)Room.Center / zoom, new PointComparer());
     }
 
     [Fact]

@@ -107,14 +107,14 @@ public sealed class CanvasTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
         Assert.Equal(["Build", "No agent", "Idle"], Shell.Texts(shell.Node("Build")));
-        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Nothing written yet.", "Instructions is empty."], shell.PeekTexts("Build")!);
+        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Nothing written yet.", "Instructions is empty.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Build")!);
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
         Assert.Equal(["Build", "No agent", "Idle"], Shell.Texts(shell.Node("Build")));
-        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Compile", "The node has no agent."], shell.PeekTexts("Build")!);
+        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Compile", "The node has no agent.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Build")!);
     }
 
     [AvaloniaFact]

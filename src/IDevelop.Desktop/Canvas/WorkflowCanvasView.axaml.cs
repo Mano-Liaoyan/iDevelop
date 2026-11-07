@@ -190,10 +190,13 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         Dispatcher.UIThread.Post(() => BringIntoViewIfHidden(node), DispatcherPriority.Background);
     }
 
+    /// <summary>The width at the editor's right edge that a panel lies over, as the narrow window's inspector does, so a view keeps its cards clear of it.</summary>
+    internal double RightCover { get; set; }
+
     // The part of the editor where a view keeps its cards. A small docked canvas has no room for the margin.
     private Rect Room(double margin = CardMargin)
     {
-        var whole = new Rect(Editor.Bounds.Size);
+        var whole = new Rect(Editor.Bounds.Size).Deflate(new Thickness(0, 0, Math.Min(RightCover, Math.Max(0, Editor.Bounds.Width - 2 * MinFitRoom)), 0));
         var room = whole.Deflate(margin);
         return room.Width < MinFitRoom || room.Height < MinFitRoom ? whole : room;
     }
@@ -540,14 +543,22 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
+    // A double-click on a card opens its agent's conversation, as Enter does; on the empty canvas it adds a node there.
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (_viewModel is { } canvas && Card(e.Source) is null && !OnConnection(e.Source) && canvas.IsEmptyAt(Pointer))
+        if (Card(e.Source) is { DataContext: TaskNodeViewModel { HasAgent: true, IsRenaming: false } node } && !InCardDetail(e.Source))
+        {
+            node.OpenConversationCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (_viewModel is { } canvas && Card(e.Source) is null && !OnConnection(e.Source) && canvas.IsEmptyAt(Pointer))
         {
             canvas.OpenAdd(new AddTarget.AtPoint(Pointer));
             e.Handled = true;
         }
     }
+
+    private static bool InCardDetail(object? source) => source is Visual visual && (visual is TextBox || visual.FindAncestorOfType<TextBox>(includeSelf: true) is not null || visual.FindAncestorOfType<CardDetail>(includeSelf: true) is not null);
 
     // Alt+click on a port deletes the connections on that side of its node. Nodify's connector raises this event for
     // Alt+click. Its pointer gestures fire; only the editor's key gestures do not.

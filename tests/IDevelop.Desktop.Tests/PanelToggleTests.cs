@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Engine;
 using IDevelop.TestSupport;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 
 namespace IDevelop.Desktop.Tests;
 
@@ -56,6 +57,26 @@ public sealed class PanelToggleTests : IDisposable
         view.IsNarrow = false;
         view.IsNarrow = true;
         Assert.True(view.IsInspectorOpen);
+    }
+
+    [AvaloniaFact]
+    public void A_narrow_window_lays_a_selected_nodes_inspector_over_the_canvas_until_its_tab_closes_it()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90), TaskAt(TestTasks.Build, "Build", 405, 90)));
+        var view = shell.Window.ViewModel;
+        view.IsNarrow = true;
+        Assert.False(view.IsInspectorShown);
+
+        shell.Click(shell.Header(shell.Node("Design")));
+        Assert.Equal((false, true), (view.IsInspectorOpen, view.IsInspectorOverlay));
+        Assert.Equal(0, Columns(shell)[4].ActualWidth);
+        Assert.True(shell.Find<TextBox>("TaskTitle").IsEffectivelyVisible);
+
+        shell.Click(shell.Find<Button>("ToggleInspector"));
+        Assert.False(view.IsInspectorShown);
+
+        shell.Click(shell.Header(shell.Node("Build")));
+        Assert.True(view.IsInspectorOverlay);
     }
 
     [Fact]

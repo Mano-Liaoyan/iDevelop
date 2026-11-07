@@ -152,6 +152,32 @@ public sealed class ConversationWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_double_click_on_a_card_opens_its_conversation_with_the_keys_in_the_composer()
+    {
+        var shell = Shell.Open(Project());
+
+        shell.DoubleClick(shell.Header(shell.Node("Design")));
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView"), "the conversation opens");
+        shell.Render();
+
+        Assert.Equal("Design", Conversation(shell).Node.Title);
+        Assert.True(shell.Find<TextBox>("ConversationComposer").IsFocused);
+    }
+
+    [AvaloniaFact]
+    public void Enter_on_a_selected_card_opens_its_conversation_with_the_keys_in_the_composer()
+    {
+        var shell = Shell.Open(Project());
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        shell.Press(Key.Enter);
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView"), "the conversation opens");
+        shell.Render();
+
+        Assert.True(shell.Find<TextBox>("ConversationComposer").IsFocused);
+    }
+
+    [AvaloniaFact]
     public void Expanding_or_closing_the_dock_gives_its_height_back_to_the_main_area()
     {
         var shell = Shell.Open(Project());

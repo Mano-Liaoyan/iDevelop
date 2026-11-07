@@ -56,6 +56,11 @@ public partial class MainWindow : Window
             {
                 ShowPanels();
             }
+            else if (e.PropertyName == nameof(MainWindowViewModel.IsInspectorOverlay))
+            {
+                // A new workflow's canvas view lays out first.
+                Dispatcher.UIThread.Post(CoverCanvas, DispatcherPriority.Background);
+            }
         };
         _sidebarMax = Columns.ColumnDefinitions[0].MaxWidth;
         _inspectorMax = Columns.ColumnDefinitions[4].MaxWidth;
@@ -388,7 +393,7 @@ public partial class MainWindow : Window
                 yield return (conversation, conversation.FocusComposer);
             }
 
-            if (ViewModel.IsInspectorOpen)
+            if (ViewModel.IsInspectorShown)
             {
                 yield return (InspectorPanel, FocusInspector);
             }
@@ -435,6 +440,21 @@ public partial class MainWindow : Window
         if (sender is Button button)
         {
             CanvasView?.OpenAddInView(button.TranslatePoint(new Point(0, button.Bounds.Height + 4), this) ?? default);
+        }
+    }
+
+    // The overlay inspector covers the canvas's right edge, so the selected card moves out from under it.
+    private void CoverCanvas()
+    {
+        if (CanvasView is not { } canvas)
+        {
+            return;
+        }
+
+        canvas.RightCover = ViewModel.IsInspectorOverlay ? PanelWidths.OverlayInspectorWidth : 0;
+        if (ViewModel.IsInspectorOverlay && ViewModel.Canvas?.SelectedNode is { } node)
+        {
+            canvas.BringIntoViewIfHidden(node);
         }
     }
 

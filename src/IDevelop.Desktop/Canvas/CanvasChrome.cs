@@ -17,9 +17,10 @@ internal static class CanvasChrome
     public const double CompactWidth = 680;
 
     /// <summary>
-    /// The lowest zoom of a fit, the editor's least. A graph that takes less stops here, and the rest is for panning.
+    /// The lowest zoom of a fit: the least zoom at which a card's title reads whole and tells it from its neighbours. A graph
+    /// that takes less stops here around the selected or active node, and the rest is for panning and the minimap (ADR 0059).
     /// </summary>
-    public const double LeastFitZoom = 0.1;
+    public const double LeastFitZoom = ZoomTiers.ReadableZoom;
 
     /// <summary>Below this canvas height, as with the conversation docked under it, the minimap hides.</summary>
     public const double MinimapMinHeight = 480;

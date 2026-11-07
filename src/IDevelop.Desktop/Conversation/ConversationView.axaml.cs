@@ -174,12 +174,12 @@ public partial class ConversationView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        // The composer shows the keys are there, so it takes them only while the node waits for the person's words.
+        // The composer takes the keys when the conversation opens, by mouse or by Enter, and its 2 px line shows where they are.
         Dispatcher.UIThread.Post(() =>
         {
-            if (_model?.WaitsForWords == true)
+            if (Composer.IsEffectivelyVisible)
             {
-                Composer.Focus();
+                Composer.Focus(NavigationMethod.Tab);
             }
             else
             {

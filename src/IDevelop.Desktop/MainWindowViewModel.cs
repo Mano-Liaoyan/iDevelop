@@ -30,6 +30,9 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private bool? _inspectorChoice;
 
+    // The node whose overlay the person closed, so the overlay stays closed until another node is selected.
+    private TaskNodeViewModel? _overlayClosedFor;
+
     private readonly RelayCommand _save;
     private readonly RelayCommand _undo;
     private readonly RelayCommand _redo;
@@ -64,7 +67,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Projects.CollectionChanged += (_, _) => RaiseProjects();
         Recent.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecent));
         ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
-        ToggleInspectorCommand = new RelayCommand(() => ChooseInspector(!IsInspectorOpen));
+        ToggleInspectorCommand = new RelayCommand(ToggleInspector);
         Unopened.CollectionChanged += (_, _) => RaiseProjects();
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
@@ -118,9 +121,19 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>The inspector is open: as the person last chose, or else while the window has room for it. With no project it has nothing to show.</summary>
     public bool IsInspectorOpen => HasProjects && (_inspectorChoice ?? !IsNarrow);
 
+    /// <summary>
+    /// The window is too narrow for the inspector's column, so a selected node's inspector lies over the canvas's edge instead, and
+    /// its edge tab closes it. A choice the person made with the tab, and an open conversation, keep it off (ADR 0059).
+    /// </summary>
+    public bool IsInspectorOverlay => HasProjects && IsNarrow && _inspectorChoice is null && Conversation is null
+        && Canvas?.SelectedNode is { } node && node != _overlayClosedFor;
+
+    /// <summary>The inspector shows, in its column or over the canvas.</summary>
+    public bool IsInspectorShown => IsInspectorOpen || IsInspectorOverlay;
+
     public string SidebarToggleLabel => IsSidebarOpen ? "Hide the left panel" : "Show the left panel";
 
-    public string InspectorToggleLabel => IsInspectorOpen ? "Hide the inspector" : "Show the inspector";
+    public string InspectorToggleLabel => IsInspectorShown ? "Hide the inspector" : "Show the inspector";
 
     public ICommand ToggleSidebarCommand { get; }
 
@@ -151,10 +164,27 @@ public sealed class MainWindowViewModel : ObservableObject
         get;
         private set
         {
+            var shown = field;
             if (SetProperty(ref field, value))
             {
+                shown?.PropertyChanged -= OnCanvasChanged;
+                value?.PropertyChanged += OnCanvasChanged;
                 OnPropertyChanged(nameof(ShowsCanvasBar));
+                RaiseInspector();
             }
+        }
+    }
+
+    private void OnCanvasChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WorkflowCanvasViewModel.SelectedNode))
+        {
+            if (Canvas?.SelectedNode != _overlayClosedFor)
+            {
+                _overlayClosedFor = null;
+            }
+
+            RaiseInspector();
         }
     }
 
@@ -170,6 +200,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 shown?.IsConversationShown = false;
                 value?.Node.IsConversationShown = true;
                 OnConversationLayoutChanged();
+                RaiseInspector();
             }
         }
     }
@@ -327,6 +358,20 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Opens the inspector for what the person asked to see in it.</summary>
     internal void ShowInspector() => ChooseInspector(true);
 
+    // The tab closes an overlay for its node and leaves the person's choice as it was.
+    private void ToggleInspector()
+    {
+        if (IsInspectorOverlay)
+        {
+            _overlayClosedFor = Canvas?.SelectedNode;
+            RaiseInspector();
+        }
+        else
+        {
+            ChooseInspector(!IsInspectorOpen);
+        }
+    }
+
     private void ChooseInspector(bool open)
     {
         _inspectorChoice = open;
@@ -342,6 +387,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private void RaiseInspector()
     {
         OnPropertyChanged(nameof(IsInspectorOpen));
+        OnPropertyChanged(nameof(IsInspectorOverlay));
+        OnPropertyChanged(nameof(IsInspectorShown));
         OnPropertyChanged(nameof(InspectorToggleLabel));
     }
 

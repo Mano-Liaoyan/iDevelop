@@ -1,6 +1,6 @@
 <!-- A collapsed card's tooltip (#94, ADR 0024): a quick read-only look at what the expanded card would show first. The
      title and the agent, then what goes on now under its heading. A tooltip takes no input, so answering, the links, and
-     the agent's pickers stay on the expanded card. -->
+     the agent's pickers stay on the expanded card. Its last line names the one action that opens the agent's conversation. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
@@ -33,5 +33,8 @@
     <TextBlock Text="{Binding Detail.Problem, FallbackValue={x:Null}}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
                Foreground="{DynamicResource TextMutedBrush}"
                IsVisible="{Binding Detail.HasProblem, FallbackValue=False}" />
+    <TextBlock Text="Double-click or Enter opens the conversation." FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+               Foreground="{DynamicResource TextMutedBrush}" IsVisible="{Binding HasAgent}"
+               AutomationProperties.AutomationId="CardPeekGesture" />
   </StackPanel>
 </UserControl>

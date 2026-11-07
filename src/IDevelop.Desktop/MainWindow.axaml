@@ -241,7 +241,21 @@
 
     <GridSplitter Grid.Column="3" Width="8" Margin="-3.5,0" ZIndex="1" IsVisible="{Binding IsInspectorOpen}" />
 
-    <DockPanel x:Name="InspectorPanel" Grid.Column="4" IsVisible="{Binding IsInspectorOpen}" Background="{DynamicResource AppPanelBrush}" AutomationProperties.AutomationId="Inspector">
+    <!-- In a window too narrow for its column, a selected node's inspector lies over the canvas's right edge, beside its tab,
+         which closes it (ADR 0059). -->
+    <Border x:Name="InspectorFrame" Grid.Column="4" IsVisible="{Binding IsInspectorShown}" Classes.overlay="{Binding IsInspectorOverlay}">
+      <Border.Styles>
+        <Style Selector="Border#InspectorFrame.overlay">
+          <Setter Property="Grid.Column" Value="2" />
+          <Setter Property="ZIndex" Value="1" />
+          <Setter Property="HorizontalAlignment" Value="Right" />
+          <Setter Property="Width" Value="{x:Static local:PanelWidths.OverlayInspectorWidth}" />
+          <Setter Property="BorderThickness" Value="1,0,0,0" />
+          <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+          <Setter Property="BoxShadow" Value="{DynamicResource FloatingShadow}" />
+        </Style>
+      </Border.Styles>
+    <DockPanel x:Name="InspectorPanel" Background="{DynamicResource AppPanelBrush}" AutomationProperties.AutomationId="Inspector">
       <!-- Windows draws the caption buttons over this band. Linux ignores the request to draw into the title bar, so the band
            collapses there, as the left area's does. -->
       <Border DockPanel.Dock="Top" Height="44"
@@ -257,6 +271,7 @@
           </ContentControl.DataTemplates>
         </ContentControl>
     </DockPanel>
+    </Border>
 
     <!-- A tab on each panel's edge hides the panel. An open panel's tab sits on the canvas's side of the seam, so a panel's scroll bar
          never runs under it. A closed panel's seam widens to hold the tab, with the panel's name, at the window's edge, so the tab
@@ -277,11 +292,11 @@
         </StackPanel>
       </Panel>
     </Button>
-    <Button Grid.Column="3" Classes="panelEdge trailing" Classes.closed="{Binding !IsInspectorOpen}" ZIndex="1" HorizontalAlignment="Center" IsVisible="{Binding HasProjects}"
+    <Button Grid.Column="3" Classes="panelEdge trailing" Classes.closed="{Binding !IsInspectorShown}" ZIndex="1" HorizontalAlignment="Center" IsVisible="{Binding HasProjects}"
             Command="{Binding ToggleInspectorCommand}" ToolTip.Tip="{Binding InspectorToggleLabel, StringFormat='{}{0} (Ctrl+Alt+B)'}"
             AutomationProperties.AutomationId="ToggleInspector" AutomationProperties.Name="{Binding InspectorToggleLabel}">
       <Panel>
-        <StackPanel Spacing="4" IsVisible="{Binding !IsInspectorOpen}">
+        <StackPanel Spacing="4" IsVisible="{Binding !IsInspectorShown}">
           <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" RenderTransform="scale(-1, 1)" />
           <LayoutTransformControl HorizontalAlignment="Center">
             <LayoutTransformControl.LayoutTransform>
@@ -290,7 +305,7 @@
             <TextBlock Classes="edgeLabel" Text="Inspector" />
           </LayoutTransformControl>
         </StackPanel>
-        <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" IsVisible="{Binding IsInspectorOpen}" />
+        <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" IsVisible="{Binding IsInspectorShown}" />
       </Panel>
     </Button>
 
