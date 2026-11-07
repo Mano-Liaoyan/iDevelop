@@ -163,6 +163,9 @@
     <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
+  <Style Selector=":is(Control).tier-label nodify|ItemContainer:selected Panel.taskCard:not(.expanded) TextBlock.farTitle">
+    <Setter Property="MaxLines" Value="12" />
+  </Style>
   <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
        text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
@@ -209,7 +212,15 @@
   <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardHead">
     <Setter Property="Height" Value="112" />
   </Style>
+  <!-- A selected card at the Label tier, where a fit rests, shows its whole title: the card grows by the lines its title needs,
+       and the layout moves the cards under it down, so it covers none of them (ADR 0060). -->
+  <Style Selector=":is(Control).tier-label nodify|ItemContainer:selected Panel.taskCard:not(.expanded) Panel.cardHead">
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="112" />
+    <Setter Property="Margin" Value="0,0,0,42" />
+  </Style>
   <Style Selector="DockPanel.farLine">
+    <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Margin" Value="20,62,48,0" />
     <Setter Property="Height" Value="24" />
   </Style>
@@ -217,9 +228,12 @@
     <Setter Property="Height" Value="28" />
     <Setter Property="Margin" Value="20,62,52,0" />
   </Style>
+  <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom, so a selected card that grows for
+       its whole title keeps it under the title. -->
   <Style Selector=":is(Control).tier-label DockPanel.farLine">
     <Setter Property="Height" Value="34" />
-    <Setter Property="Margin" Value="18,110,58,0" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Margin" Value="18,0,58,-80" />
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="44" />
@@ -290,6 +304,7 @@
   </Style>
   <!-- The badge ends the last line, inside the card. Only the Block tier's card, which has no text, wears it on its corner. -->
   <Style Selector="Panel.stateBadge">
+    <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Width" Value="24" />
     <Setter Property="Height" Value="24" />
     <Setter Property="Margin" Value="0,62,18,0" />
@@ -302,7 +317,8 @@
   <Style Selector=":is(Control).tier-label Panel.stateBadge">
     <Setter Property="Width" Value="32" />
     <Setter Property="Height" Value="32" />
-    <Setter Property="Margin" Value="0,111,18,0" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Margin" Value="0,0,18,-79" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
     <Setter Property="Width" Value="36" />

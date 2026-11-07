@@ -147,7 +147,7 @@
         <!-- The selection line sits a gap outside the card's edge, and the keyboard's ring outside it. -->
         <Border Classes="ring" CornerRadius="14" IsHitTestVisible="False" />
         <!-- The zoomed out card's last line, under its title, which leaves the state's badge its place at the end. -->
-        <DockPanel Classes="cardFar farLine" VerticalAlignment="Top" IsHitTestVisible="False">
+        <DockPanel Classes="cardFar farLine" IsHitTestVisible="False">
           <theme:KindTile Classes="farTile" DockPanel.Dock="Left" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" VerticalAlignment="Center"
                           IsVisible="{Binding !HasClient}" />
           <Border Classes="farClient" DockPanel.Dock="Left" VerticalAlignment="Center" IsVisible="{Binding HasClient}">
@@ -158,7 +158,7 @@
                               AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
         </DockPanel>
         <!-- While the node needs the person, the zoomed out badge acts as the full card's does, because Fit rests at this form. -->
-        <Panel Classes="stateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="{Binding HasAttention}">
+        <Panel Classes="stateBadge" HorizontalAlignment="Right" IsHitTestVisible="{Binding HasAttention}">
           <Viewbox>
             <Canvas Width="16" Height="16">
               <Ellipse Classes="badgeDisc" Width="16" Height="16" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
