@@ -333,6 +333,7 @@ public sealed class SidebarLayoutTests : IDisposable
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
         shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Window.ViewModel.Canvas!.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted).Open();
         // The tree lists every row of the large workflow, so it scrolls.
         shell.Window.Width = 900;
         shell.Window.Height = 600;
@@ -365,6 +366,7 @@ public sealed class SidebarLayoutTests : IDisposable
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
         shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Window.ViewModel.Canvas!.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted).Open();
         // The tree lists every row of the large workflow, so it scrolls.
         shell.Window.Width = 900;
         shell.Window.Height = 600;

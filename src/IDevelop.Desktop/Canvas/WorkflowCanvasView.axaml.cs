@@ -67,6 +67,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         Editor.AddHandler(PointerReleasedEvent, OnRightReleased, RoutingStrategies.Bubble, handledEventsToo: true);
         Editor.AddHandler(Connector.DisconnectEvent, OnPortDisconnect);
         Editor.DoubleTapped += OnDoubleTapped;
+        Editor.AddHandler(PointerMovedEvent, OnPointerOverPort, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Editor.PointerExited += (_, _) => ShowPortLabel(null, null);
         Editor.KeyDown += OnEditorKeyDown;
         Editor.KeyUp += OnEditorKeyUp;
         AddPopover.Closed += OnAddClosed;
@@ -396,6 +398,50 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             return room.Contains(rect) && !others.Any(other => other.Intersects(rect.Inflate(NameTagInset)));
         }) ?? new Point(left, Math.Clamp(card.Center.Y - tag.Height / 2, room.Y, Math.Max(room.Y, room.Bottom - tag.Height)));
         NameTag.Margin = new Thickness(place.X, place.Y, 0, 0);
+    }
+
+    private void OnPointerOverPort(object? sender, PointerEventArgs e)
+    {
+        for (var visual = e.Source as Visual; visual is not null && visual != Editor; visual = visual.GetVisualParent())
+        {
+            if (visual is StyledElement { DataContext: PortViewModel port })
+            {
+                ShowPortLabel(port, port.Tip);
+                return;
+            }
+
+            if (visual is RoutedConnection { DataContext: ConnectionViewModel wire })
+            {
+                ShowPortLabel(wire.From.Output, wire.Tip);
+                return;
+            }
+        }
+
+        ShowPortLabel(null, null);
+    }
+
+    // The label stands beside the port, outside its card: right of an output and left of an input, or on the other side
+    // where the canvas's edge would cut it. It shows only while the pointer is over the port or a wire from it.
+    private void ShowPortLabel(PortViewModel? port, string? text)
+    {
+        PortLabel.IsVisible = port is not null && !string.IsNullOrEmpty(text);
+        if (!PortLabel.IsVisible)
+        {
+            return;
+        }
+
+        PortLabelText.Text = text;
+        PortLabel.Margin = default;
+        PortLabel.Measure(Size.Infinity);
+        var label = PortLabel.DesiredSize;
+        var at = (port!.Anchor - Editor.ViewportLocation) * Editor.ViewportZoom;
+        var room = new Rect(Editor.Bounds.Size).Deflate(NameTagInset);
+        const double Gap = 10;
+        var (after, before) = (at.X + Gap, at.X - Gap - label.Width);
+        var left = port.IsInput ? (before >= room.X ? before : after) : (after + label.Width <= room.Right ? after : before);
+        PortLabel.Margin = new Thickness(
+            Math.Clamp(left, room.X, Math.Max(room.X, room.Right - label.Width)),
+            Math.Clamp(at.Y - label.Height / 2, room.Y, Math.Max(room.Y, room.Bottom - label.Height)), 0, 0);
     }
 
     // The card as the screen shows it, its port gutters left out and its zoomed out lines under its box included.

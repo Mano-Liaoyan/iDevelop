@@ -148,6 +148,30 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_pointer_over_a_port_names_what_passes_through_it_beside_the_port_and_only_then()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
+            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        var label = shell.Find<Border>("CanvasPortLabel");
+        Assert.False(label.IsVisible);
+
+        var port = shell.Thumb(shell.Input("Build"));
+        shell.Window.MouseMove(port);
+        shell.Render();
+
+        Assert.True(label.IsVisible);
+        Assert.Equal("Input: Design", Shell.Texts(label).Single());
+        var box = shell.Bounds(label);
+        Assert.True(box.Right <= port.X, $"The label at {box} is not left of the input port at {port}.");
+
+        shell.Window.MouseMove(shell.Header(shell.Node("Build")));
+        shell.Render();
+        Assert.False(label.IsVisible);
+    }
+
+    [AvaloniaFact]
     public void Docking_the_conversation_keeps_the_node_and_its_direct_neighbours_in_view()
     {
         var shell = Shell.Open(_temp.Seed(

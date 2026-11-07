@@ -156,6 +156,12 @@
       <TextBlock x:Name="NameTagText" />
     </Border>
 
+    <!-- The pointer over a port or a wire names, at the port, what passes through it (ADR 0065). -->
+    <Border x:Name="PortLabel" Classes="nameTag portLabel" IsHitTestVisible="False" IsVisible="False"
+            AutomationProperties.AutomationId="CanvasPortLabel">
+      <TextBlock x:Name="PortLabelText" />
+    </Border>
+
     <canvas:GenerateLayer />
 
     <canvas:AddNodePopover x:Name="AddPopover" />

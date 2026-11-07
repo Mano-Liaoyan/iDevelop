@@ -14,7 +14,7 @@
           <TemplatedControl.Template>
             <ControlTemplate>
               <!-- The transparent panel lets the whole 20 px square take the pointer, not only the 10 px handle. -->
-              <Panel Background="Transparent" ClipToBounds="False" x:DataType="canvas:PortViewModel" ToolTip.Tip="{Binding Tip}">
+              <Panel Background="Transparent" ClipToBounds="False" x:DataType="canvas:PortViewModel">
                 <Ellipse Classes="port" Classes.input="{Binding IsInput}" Classes.output="{Binding !IsInput}"
                          Classes.connected="{Binding IsConnected}"
                          Fill="{TemplateBinding Background}" />
@@ -226,7 +226,6 @@
                              Curve="{Binding Curve}"
                              SourceOnEdge="{Binding LeavesOwnPoint}" TargetOnEdge="{Binding EntersOwnPoint}"
                              theme:StyleClass.Flow="{Binding Flow}"
-                             ToolTip.Tip="{Binding Tip}"
                              Classes.highlighted="{Binding IsHighlighted}"
                              Classes.dimmed="{Binding IsDimmed}"
                              Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
