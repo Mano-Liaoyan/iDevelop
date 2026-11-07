@@ -38,8 +38,9 @@ internal sealed partial class Shell
     /// <summary>Sets the inspector's width, as dragging the splitter before it does, within its 280 to 520 px range.</summary>
     public void SizeInspector(double width)
     {
-        var inspector = Find<Control>("Inspector");
-        ((Grid)inspector.Parent!).ColumnDefinitions[Grid.GetColumn(inspector)].Width = new GridLength(width);
+        // The inspector's frame holds its column.
+        var frame = (Control)Find<Control>("Inspector").Parent!;
+        ((Grid)frame.Parent!).ColumnDefinitions[Grid.GetColumn(frame)].Width = new GridLength(width);
         Render();
     }
 

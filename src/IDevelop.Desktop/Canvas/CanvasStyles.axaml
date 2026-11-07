@@ -6,11 +6,11 @@
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:theme="using:IDevelop.Desktop.Theme">
-  <!-- One accent line outside the card says selected, as the app's accent does everywhere, and it leaves the state's own edge
-       whole inside it. The canvas's own ring says that it has the keyboard's focus, so a card keeps one outline.
+  <!-- One accent line outside the card, with a gap, says selected, as the app's accent does everywhere, and it leaves the
+       state's own edge whole inside it. The canvas's own ring says that it has the keyboard's focus, so a card keeps one outline.
        A running node never looks like this: its title band fills with color (Kinds.axaml and runBand below). -->
   <Style Selector="Border.ring">
-    <Setter Property="Margin" Value="8,-2" />
+    <Setter Property="Margin" Value="5,-5" />
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
@@ -343,24 +343,26 @@
   <Style Selector=":is(Control).tier-title Rectangle.staleEdge, :is(Control).tier-block Rectangle.staleEdge">
     <Setter Property="StrokeThickness" Value="5" />
   </Style>
-  <!-- A selection line and a focus ring keep their weight on screen as the cards shrink. -->
+  <!-- A selection line and a focus ring keep their weight on screen as the cards shrink, and a gap as wide as the line
+       keeps them apart from a failed, waiting, or stale card's own edge, so the state's color stays whole inside them. -->
   <Style Selector=":is(Control).tier-detail Border.ring, :is(Control).tier-compact Border.ring">
-    <Setter Property="Margin" Value="7,-3" />
+    <Setter Property="Margin" Value="4,-6" />
     <Setter Property="BorderThickness" Value="3" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.ring">
-    <Setter Property="Margin" Value="5,-5" />
+    <Setter Property="Margin" Value="1,-9" />
     <Setter Property="BorderThickness" Value="5" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
     <Setter Property="Margin" Value="1,-9" />
     <Setter Property="BorderThickness" Value="9" />
   </Style>
-  <!-- The pointer over a card keeps its surface and draws one neutral line of one screen pixel at each zoom, so only the
-       selection draws the accent ring. -->
+  <!-- The pointer over a card lifts it and draws a faint accent line of one screen pixel outside its edge at each zoom, so
+       hover never reads as the interrupted state's grey edge, and only the selection draws the full accent ring. -->
   <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Opacity" Value="0.5" />
   </Style>
   <Style Selector=":is(Control).tier-detail nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-compact nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderThickness" Value="1.6" />

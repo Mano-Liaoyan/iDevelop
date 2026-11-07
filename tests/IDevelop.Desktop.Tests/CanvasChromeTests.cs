@@ -603,7 +603,7 @@ public sealed class CanvasChromeTests : IDisposable
 
     private static (double Sidebar, double Inspector, double Canvas) Widths(Shell shell)
     {
-        var columns = (Grid)shell.Find<Control>("Inspector").Parent!;
+        var columns = (Grid)((Control)shell.Find<Control>("Inspector").Parent!).Parent!;
         return (columns.ColumnDefinitions[0].ActualWidth, columns.ColumnDefinitions[4].ActualWidth, columns.ColumnDefinitions[2].ActualWidth);
     }
 

@@ -70,7 +70,8 @@ public sealed class EllipsisText : TextBlock
             }
         }
 
-        else if (MaxLines == 0 && Text != Whole)
+        // An unbounded measure, as a row's measure of its natural width, reads the whole text, never the cut of an earlier width.
+        else if ((MaxLines == 0 || !double.IsFinite(availableSize.Width)) && Text != Whole)
         {
             SetCurrentValue(TextProperty, Whole);
         }

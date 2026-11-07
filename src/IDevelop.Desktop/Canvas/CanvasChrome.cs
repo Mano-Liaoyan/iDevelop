@@ -35,10 +35,11 @@ internal static class CanvasChrome
 
     /// <summary>
     /// The zoom that fits <paramref name="extent"/> in <paramref name="room"/>, never under <see cref="LeastFitZoom"/> and never
-    /// above the zoom the bar calls 100%, so a small graph rests at that size in the middle of the canvas, as in Blender and Unreal.
+    /// above <see cref="ZoomTiers.LargestFitZoom"/>, so a small graph in a large window grows into it with the cards it has at
+    /// 100%, and rests at that size in the middle of the canvas (ADR 0059).
     /// </summary>
     public static double FitZoom(Rect extent, Rect room) =>
-        Math.Clamp(Math.Min(room.Width / extent.Width, room.Height / extent.Height), LeastFitZoom, ZoomTiers.ActualSize);
+        Math.Clamp(Math.Min(room.Width / extent.Width, room.Height / extent.Height), LeastFitZoom, ZoomTiers.LargestFitZoom);
 
     /// <summary>
     /// The viewport location that shows the most of <paramref name="extent"/> around <paramref name="focus"/> in

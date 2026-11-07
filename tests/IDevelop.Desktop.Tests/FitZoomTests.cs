@@ -27,7 +27,7 @@ public sealed class FitZoomTests
     [Fact]
     public void A_graph_that_fits_at_a_readable_zoom_fits_whole_and_centred()
     {
-        var extent = new Rect(100, 100, 1500, 400);
+        var extent = new Rect(100, 100, 1700, 400);
 
         var zoom = CanvasChrome.FitZoom(extent, Room);
         var location = CanvasChrome.ViewOn(extent, Room, zoom, new Point(100, 100));
@@ -37,9 +37,10 @@ public sealed class FitZoomTests
     }
 
     [Fact]
-    public void Fit_never_zooms_past_the_size_the_bar_calls_100_percent()
+    public void Fit_never_zooms_past_the_largest_fit_zoom_where_a_card_keeps_its_form()
     {
-        Assert.Equal(ZoomTiers.ActualSize, CanvasChrome.FitZoom(new Rect(0, 0, 260, 64), Room));
+        Assert.Equal(ZoomTiers.LargestFitZoom, CanvasChrome.FitZoom(new Rect(0, 0, 260, 64), Room));
+        Assert.Equal(ZoomTier.Label, ZoomTiers.Next(ZoomTier.Label, ZoomTiers.LargestFitZoom));
     }
 
     [Fact]

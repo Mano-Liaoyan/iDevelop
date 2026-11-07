@@ -48,13 +48,13 @@ public sealed class ViewInsetTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Opening_a_workflow_fits_it_below_the_top_bar_and_never_above_100_percent()
+    public void Opening_a_workflow_fits_it_below_the_top_bar_and_never_above_the_largest_fit_zoom()
     {
         var shell = Shell.OpenFitted(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 20), TaskAt(TestTasks.Build, "Build", 405, 300)));
 
         var design = CardInWindow(shell, "Design");
         var chrome = ChromeBottom(shell);
         Assert.True(design.Top >= chrome + 12, $"Design at {design} is under the top bar, which ends at {chrome}");
-        Assert.Equal(ZoomTiers.ActualSize, shell.Editor.ViewportZoom);
+        Assert.Equal(ZoomTiers.LargestFitZoom, shell.Editor.ViewportZoom);
     }
 }

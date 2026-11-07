@@ -450,8 +450,8 @@ public sealed class CardExpansionTests : IDisposable
         Assert.Equal(
             ["Docs", "Implement · Codex · gpt-5.5 · high", "Instructions",
              "Write the workflow file through a temporary file and a rename, so a crash never leaves half a file.",
-             // Run starts nothing before Design is completed, which the peek says last.
-             "It waits for Design."],
+             // Run starts nothing before Design is completed, which the peek says before the gesture that opens the conversation.
+             "It waits for Design.", "Double-click or Enter opens the conversation."],
             Shell.Texts(peek));
 
         shell.Window.MouseMove(new Point(5, 5));

@@ -17,6 +17,9 @@ public static class ZoomTiers
     /// <summary>The zoom that the bar calls 100%: a card here reads at the app's body size, title and agent, at a size that fits a workflow.</summary>
     public const double ActualSize = 0.4;
 
+    /// <summary>The largest zoom of a fit: 120%, the last zoom at which a card keeps the form it has at 100%.</summary>
+    public const double LargestFitZoom = 0.48;
+
     /// <summary>The size in screen pixels that a Title tier card's text keeps.</summary>
     private const double ReadablePixels = 10;
 
