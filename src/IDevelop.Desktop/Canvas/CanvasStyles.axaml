@@ -743,17 +743,8 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <Style Selector="TextBlock.barBrief">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).narrowBar TextBlock.barBrief">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).narrowBar TextBlock.barLong">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- A bar with too little room for each reason to wait sums them. A tight bar then names what needs the person and sums the rest in words. -->
-  <Style Selector="ItemsControl.barGroups, ItemsControl.barTightChips, :is(Control).groupChips ItemsControl.barChips.barReasons">
+  <!-- A bar with too little room for each reason to wait sums them. A tight bar then names what needs the person and sums the rest, and the tightest bar names the most urgent group and sums all the others. -->
+  <Style Selector="ItemsControl.barGroups, ItemsControl.barTightChips, ItemsControl.barLeastChips, :is(Control).groupChips ItemsControl.barChips.barReasons">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).groupChips ItemsControl.barGroups">
@@ -765,8 +756,11 @@
   <Style Selector=":is(Control).tightChips ItemsControl.barTightChips">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).narrowBar ItemsControl.barChips">
+  <Style Selector=":is(Control).leastChips ItemsControl.barTightChips, :is(Control).leastChips Panel.barProgress, :is(Control).leastChips Button.barSpare, :is(Control).tightNext TextBlock.nextLabel">
     <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).leastChips ItemsControl.barLeastChips">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
   <Style Selector=":is(Control).tightChips TextBlock.followLabel">
     <Setter Property="IsVisible" Value="False" />

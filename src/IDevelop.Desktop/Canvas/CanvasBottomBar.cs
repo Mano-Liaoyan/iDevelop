@@ -8,8 +8,10 @@ namespace IDevelop.Desktop.Canvas;
 /// centres on the canvas and moves aside only as far as it must to keep <see cref="CanvasChrome.Spacing"/> from the zoom
 /// controls, and it never gets wider than the room left, so it never covers them. A bar that needs more than its width takes
 /// the groupChips class, whose styles sum the reasons to wait, then the tightView class, whose styles move the view's own
-/// controls to the overflow menu, and then the tightChips class, whose styles name what needs the person and sum the rest in
-/// words, so no word is cut.
+/// controls to the overflow menu, then the tightChips class, whose styles name what needs the person and sum the rest, then
+/// the tightNext class, whose styles leave Next its glyph, and then the leastChips class, whose styles name the most urgent
+/// group, sum all the others, and give up the progress and move Fit to the overflow menu, so no chip is cut. The run bar always measures at its whole width, so
+/// a change in its text reaches this panel.
 /// </summary>
 public sealed class CanvasBottomBar : Panel
 {
@@ -22,7 +24,7 @@ public sealed class CanvasBottomBar : Panel
     public static void SetSlot(Control control, ChromeSlot value) => control.SetValue(SlotProperty, value);
 
     // Each step gives the run bar less to show. The first step is no class.
-    private static readonly string[] Steps = ["groupChips", "tightView", "tightChips"];
+    private static readonly string[] Steps = ["groupChips", "tightView", "tightChips", "tightNext", "leastChips"];
 
     // The steps the bar has taken, and the width it wanted before each one, which it takes that step back at.
     private readonly double[] _wanted = new double[Steps.Length];
@@ -80,9 +82,6 @@ public sealed class CanvasBottomBar : Panel
             _step++;
             Measure();
         }
-
-        var (left, right) = Bar.Room(width, leading, trailing);
-        center.Measure(new Size(Math.Max(0, right - left), double.PositiveInfinity));
     }
 
     protected override Size ArrangeOverride(Size finalSize)

@@ -140,14 +140,24 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
-    /// <summary>The chips of a tight bar: the groups that need the person, and one chip for the rest, whose tooltip names them.</summary>
+    /// <summary>The chips of a tight bar: the groups that need the person, and one chip for the rest, whose tooltip names them. A bar of one group has nothing to sum.</summary>
     public IReadOnlyList<StateChip> BarTight
     {
         get
         {
             var groups = BarGroups;
             var rest = groups.Where(chip => !chip.IsUrgent).ToList();
-            return rest.Count < 2 ? groups : [.. groups.Where(chip => chip.IsUrgent), StateChip.Rest(rest)];
+            return groups.Count < 2 || rest.Count == 0 ? groups : [.. groups.Where(chip => chip.IsUrgent), StateChip.Rest(rest)];
+        }
+    }
+
+    /// <summary>The chips of the tightest bar: the most urgent group, and one chip for all the others, whose tooltip names them.</summary>
+    public IReadOnlyList<StateChip> BarLeast
+    {
+        get
+        {
+            var groups = BarGroups;
+            return groups.Count < 2 ? groups : [groups[0], StateChip.Rest([.. groups.Skip(1)])];
         }
     }
 
@@ -159,15 +169,6 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>The running nodes' titles, or null.</summary>
     public string? BarActivity => RunningCount == 0 ? null
         : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
-
-    /// <summary>The whole bar on a narrow canvas, without its chips: "5/9 done · 3 waiting · 1 failed".</summary>
-    public string BarBrief => string.Join(" · ", new[]
-    {
-        BarProgress,
-        Counts.Failed > 0 ? $"{Counts.Failed} failed" : null,
-        Counts.Waiting > 0 ? $"{Counts.Waiting} waiting" : null,
-        Counts.Interrupted > 0 ? $"{Counts.Interrupted} interrupted" : null,
-    }.OfType<string>());
 
     /// <summary>The bar's tooltip: the whole summary, then the running nodes' titles.</summary>
     public string BarTip => string.Join("\n", new[]
@@ -268,11 +269,11 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarSummary));
         OnPropertyChanged(nameof(BarProgress));
         OnPropertyChanged(nameof(BarIdle));
-        OnPropertyChanged(nameof(BarBrief));
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(BarGroups));
         OnPropertyChanged(nameof(BarTight));
+        OnPropertyChanged(nameof(BarLeast));
         OnPropertyChanged(nameof(RunWork));
         OnPropertyChanged(nameof(CanStartRun));
         OnPropertyChanged(nameof(HasAttention));

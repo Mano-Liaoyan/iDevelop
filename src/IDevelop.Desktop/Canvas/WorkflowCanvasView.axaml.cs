@@ -286,6 +286,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
 
         _viewModel = DataContext as WorkflowCanvasViewModel;
+        BottomBar.RefitChips();
         if (_viewModel is { } canvas)
         {
             canvas.View = this;

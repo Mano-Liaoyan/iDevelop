@@ -25,8 +25,7 @@ internal static class CanvasChrome
     public const double MinimapMinHeight = 480;
 
     /// <summary>
-    /// Below this canvas width the run bar's words stand in for its chips, its tooltip keeps the whole text, the view controls
-    /// move to the overflow menu, and the minimap hides.
+    /// Below this canvas width the view controls move to the overflow menu and the minimap hides.
     /// </summary>
     public const double NarrowBarWidth = 520;
 

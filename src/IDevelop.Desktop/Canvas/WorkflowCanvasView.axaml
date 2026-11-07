@@ -191,7 +191,7 @@
     <canvas:CanvasBottomBar x:Name="BottomBar" VerticalAlignment="Center" Margin="8,0">
       <StackPanel x:Name="ZoomPanel" Orientation="Horizontal" canvas:CanvasBottomBar.Slot="Leading"
                   AutomationProperties.AutomationId="ZoomPanel">
-        <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
+        <Button Classes="icon zoom barSpare" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
                 AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
         </Button>
@@ -226,6 +226,8 @@
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
           <Button.Flyout>
             <MenuFlyout Placement="TopEdgeAlignedLeft">
+              <MenuItem Header="Fit to screen" Click="OnFitToScreen" AutomationProperties.AutomationId="FitMenu"
+                        theme:MenuGlyph.Data="{StaticResource IconFit}" />
               <MenuItem Header="{Binding ExpandCardsLabel}" Command="{Binding ExpandCardsCommand}" AutomationProperties.AutomationId="ExpandAllMenu"
                         theme:MenuGlyph.Data="{StaticResource IconExpandAll}" />
               <MenuItem Header="Minimap" Click="OnMinimapMenu" AutomationProperties.AutomationId="MinimapMenu"
@@ -240,8 +242,8 @@
       <!-- One bar for a run: how far it went, one labelled chip per group of nodes, Next, Follow, and Merge into my branch while
            every node is completed and nothing is stale (ADR 0017). The chips are the canvas's badges with their words, so the bar
            is also the badges' legend. Stop Workflow sits where Run Workflow was. UI Automation shows no plain border, so a user
-           control carries its id. As the canvas narrows, the summary shortens, then the words stand in for the chips, and the
-           buttons keep only their glyphs. With no run, the band says how many nodes the workflow has. -->
+           control carries its id. As the canvas narrows, the chips sum what they name and the buttons keep only their glyphs, so
+           no chip is cut. With no run, the band says how many nodes the workflow has. -->
       <Panel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" MinHeight="28" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
         <TextBlock Classes="barText" HorizontalAlignment="Center" Text="{Binding BarIdle}" IsVisible="{Binding !ShowsBar}"
                    AutomationProperties.AutomationId="RunIdle" />
@@ -283,9 +285,8 @@
               </Button>
             </StackPanel>
             <DockPanel VerticalAlignment="Center">
-              <Panel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0">
-                <TextBlock Classes="barText barLong" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
-                <TextBlock Classes="barText barBrief" Text="{Binding BarBrief}" AutomationProperties.AutomationId="RunStatusBrief" />
+              <Panel Classes="barProgress" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0">
+                <TextBlock Classes="barText" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
               </Panel>
               <Panel VerticalAlignment="Center">
                 <ItemsControl Classes="barChips barReasons" ItemsSource="{Binding BarChips}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunChips">
@@ -303,6 +304,13 @@
                   </ItemsControl.ItemsPanel>
                 </ItemsControl>
                 <ItemsControl Classes="barChips barTightChips" ItemsSource="{Binding BarTight}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunTightChips">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <ItemsControl Classes="barChips barLeastChips" ItemsSource="{Binding BarLeast}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunLeastChips">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel Orientation="Horizontal" Spacing="6" />

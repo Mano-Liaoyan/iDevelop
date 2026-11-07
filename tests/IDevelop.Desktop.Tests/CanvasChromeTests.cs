@@ -8,6 +8,7 @@ using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Theme;
 using IDevelop.TestSupport;
+using IDevelop.Workflows;
 using Nodify;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 
@@ -103,6 +104,63 @@ public sealed class CanvasChromeTests : IDisposable
             Resize(shell, width, height, inspector);
             Assert.True(bar.DesiredSize.Width <= bar.GetVisualParent<Control>()!.Bounds.Width + 0.5, $"The bar at {width}x{height} wants {bar.DesiredSize.Width} px.");
         }
+    }
+
+    [AvaloniaFact]
+    public void A_workflow_of_many_states_keeps_every_run_chip_whole_at_every_window_size_and_panel_width()
+    {
+        var (failed, asks, replies, stopped, alsoStopped, running) = (TestTasks.Design, TestTasks.Build, TestTasks.Review, new TaskId(Guid.NewGuid()), new TaskId(Guid.NewGuid()), new TaskId(Guid.NewGuid()));
+        using var f = new NodeFixture(
+            NodeFixture.Task(failed, "Failed", 105), NodeFixture.Task(asks, "Asks", 405), NodeFixture.Task(replies, "Replies", 705),
+            NodeFixture.Task(stopped, "Stopped", 1005), NodeFixture.Task(alsoStopped, "Also stopped", 1305), NodeFixture.Task(running, "Runs", 1605));
+        var started = """{"entry":"turnStarted","basis":{"inputs":[],"instruction":"","model":null},"session":null,"round":false}""";
+        void Log(TaskId node, params string[] lines)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Engine.NodeLog.PathOf(f.Project, node))!);
+            File.WriteAllLines(Engine.NodeLog.PathOf(f.Project, node), [started, .. lines]);
+        }
+
+        Log(failed, """{"entry":"failed","reason":"The model is not available."}""");
+        Log(asks, """{"entry":"waiting","why":"Which window?","text":"Which window?"}""");
+        Log(replies, """{"entry":"waiting","why":"reply","text":null}""");
+        Log(stopped);
+        Log(alsoStopped);
+        f.Install(FakeRule.On().WaitForFile(f.Gate("runs")));
+        var shell = f.Open();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        Assert.Equal(["1 failed", "1 question", "1 reply", "2 interrupted"], canvas.BarChips.Select(chip => chip.Label));
+        Assert.Equal(["1 failed", "2 waiting", "+1"], canvas.BarTight.Select(chip => chip.Label));
+        Assert.Equal(["1 failed", "+2"], canvas.BarLeast.Select(chip => chip.Label));
+        Assert.Equal("2 waiting, 2 interrupted", canvas.BarLeast[1].Tip);
+
+        void Sweep()
+        {
+            var windows = new[] { 900.0, 1000, 1100, 1180, 1280, 1400, 1600 };
+            foreach (var width in windows.Concat(windows.Reverse()))
+            {
+                foreach (var inspector in new double[] { 280, 320, 400, 520 })
+                {
+                    Resize(shell, width, 800, inspector);
+                    AssertBottomRow(shell, $"{width}x800, inspector {inspector}, canvas {shell.Window.CanvasArea.Bounds.Width}, {canvas.BarSummary}");
+                }
+            }
+        }
+
+        Sweep();
+
+        // Another workflow's chips reach the bar with no change to the canvas's width.
+        Resize(shell, 1180, 800, 320);
+        shell.Window.ViewModel.NewWorkflow(shell.Window.ViewModel.Projects[0]);
+        shell.Render();
+        shell.Window.ViewModel.Select(canvas);
+        shell.Render();
+        AssertBottomRow(shell, "the return to the workflow");
+
+        shell.RunNode("Runs");
+        shell.WaitForState("Runs", NodeState.Running);
+        Sweep();
+        f.Release("runs");
+        shell.WaitUntil(() => canvas.RunningCount == 0, "the node ends");
     }
 
     [AvaloniaFact]
@@ -488,8 +546,11 @@ public sealed class CanvasChromeTests : IDisposable
 
         // The bar holds its status, its chips, and whichever of its buttons show, its text whole.
         var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunChips", "RunStatus", "RunStatusBrief", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
+        var inside = new[] { "RunStatus", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
         Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
+        var chips = bar.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "RunChip").ToArray();
+        var limit = shell.ShowsAny("NextWaiting") ? shell.Bounds(shell.Find<Control>("NextWaiting")).Left : shell.Bounds(bar).Right;
+        Assert.All(chips, chip => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(chip)) && shell.Bounds(chip).Right <= limit, $"At {at}, the chip \"{AutomationProperties.GetName(chip)}\" at {shell.Bounds(chip)} is cut by the bar at {shell.Bounds(bar)}."));
         if (shell.ShowsAny("StopWorkflow"))
         {
             Assert.Equal(canvas.Width >= CanvasChrome.CompactWidth, shell.Find<Button>("StopWorkflow").GetVisualDescendants().OfType<TextBlock>().Single().IsEffectivelyVisible);

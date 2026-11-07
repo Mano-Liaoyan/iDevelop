@@ -150,7 +150,6 @@ public sealed class RunBarTests
 
         Assert.Equal("2 nodes", canvas.BarIdle);
         Assert.Equal("Next failed", canvas.NextLabel);
-        Assert.Equal("0/2 done", canvas.BarBrief);
     }
 
 }
