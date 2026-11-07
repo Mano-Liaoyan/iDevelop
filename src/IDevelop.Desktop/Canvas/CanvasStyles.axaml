@@ -180,12 +180,13 @@
     <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
-  <!-- The smallest cards with text keep two title lines and the agent's line, because a node is an agent wherever its words read. -->
+  <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
+       text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
     <Setter Property="Margin" Value="20,6,16,0" />
-    <Setter Property="FontSize" Value="44" />
-    <Setter Property="LineHeight" Value="48" />
-    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
+    <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
+    <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
   <!-- A ghost keeps a card's form at each zoom: its three lines close up, and far out only its title shows, as large as a card's. -->
@@ -239,7 +240,7 @@
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="44" />
-    <Setter Property="Margin" Value="20,106,62,0" />
+    <Setter Property="Margin" Value="20,112,56,0" />
   </Style>
   <Style Selector="theme|KindTile.farTile">
     <Setter Property="TileSize" Value="20" />
@@ -277,11 +278,11 @@
     <Setter Property="FontSize" Value="22" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient">
-    <Setter Property="MinWidth" Value="38" />
-    <Setter Property="Height" Value="40" />
+    <Setter Property="MinWidth" Value="34" />
+    <Setter Property="Height" Value="36" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="36" />
+    <Setter Property="FontSize" Value="26" />
   </Style>
   <Style Selector="TextBlock.farAgent">
     <Setter Property="FontSize" Value="17" />
@@ -297,7 +298,7 @@
     <Setter Property="FontSize" Value="28" />
   </Style>
   <Style Selector=":is(Control).tier-title TextBlock.farAgent">
-    <Setter Property="FontSize" Value="44" />
+    <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
   </Style>
   <Style Selector="TextBlock.farAgent.state-running">
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
@@ -322,9 +323,9 @@
     <Setter Property="Margin" Value="0,103,18,0" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
-    <Setter Property="Width" Value="40" />
-    <Setter Property="Height" Value="40" />
-    <Setter Property="Margin" Value="0,108,18,0" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Margin" Value="0,116,16,0" />
   </Style>
   <Style Selector=":is(Control).tier-block Panel.stateBadge">
     <Setter Property="Width" Value="80" />
@@ -721,19 +722,13 @@
     <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
   </Style>
   <!-- A bar with too little room for each reason to wait sums them. A tight bar then names what needs the person and sums the rest, and the tightest bar names the most urgent group and sums all the others. -->
-  <Style Selector="ItemsControl.barGroups, ItemsControl.barTightChips, ItemsControl.barLeastChips, :is(Control).groupChips ItemsControl.barChips.barReasons">
+  <Style Selector="ItemsControl.barGroups, ItemsControl.barLeastChips, :is(Control).groupChips ItemsControl.barChips.barReasons">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).groupChips ItemsControl.barGroups">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tightChips ItemsControl.barGroups">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).tightChips ItemsControl.barTightChips">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).leastChips ItemsControl.barTightChips, :is(Control).leastChips Panel.barProgress, :is(Control).leastChips Button.barSpare, :is(Control).tightNext TextBlock.nextLabel">
+  <Style Selector=":is(Control).leastChips ItemsControl.barGroups, :is(Control).tightChips Panel.barProgress, :is(Control).leastChips Button.barSpare, :is(Control).tightNext TextBlock.nextLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).leastChips ItemsControl.barLeastChips">

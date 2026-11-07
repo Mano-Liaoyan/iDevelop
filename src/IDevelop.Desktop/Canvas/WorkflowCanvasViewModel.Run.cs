@@ -141,10 +141,6 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
-    /// <summary>The chips of a tight bar: the groups that need the person keep their words, and the others their badges and counts, so no state hides.</summary>
-    public IReadOnlyList<StateChip> BarTight =>
-        [.. BarGroups.Select(chip => chip.IsUrgent ? chip : chip with { IsCounted = true })];
-
     /// <summary>The chips of the tightest bar: every group keeps its badge and its count, and its tooltip has its words.</summary>
     public IReadOnlyList<StateChip> BarLeast =>
         [.. BarGroups.Select(chip => chip with { IsCounted = true })];
@@ -260,7 +256,6 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(BarGroups));
-        OnPropertyChanged(nameof(BarTight));
         OnPropertyChanged(nameof(BarLeast));
         OnPropertyChanged(nameof(RunWork));
         OnPropertyChanged(nameof(CanStartRun));

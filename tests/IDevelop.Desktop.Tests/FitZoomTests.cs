@@ -3,6 +3,22 @@ using IDevelop.Desktop.Canvas;
 
 namespace IDevelop.Desktop.Tests;
 
+public sealed class ZoomTitleTextTests
+{
+    [Theory]
+    [InlineData(0.23, 44, 2)]
+    [InlineData(0.29, 36, 2)]
+    [InlineData(0.32, 32, 3)]
+    [InlineData(0.34, 30, 3)]
+    public void The_title_tier_keeps_its_text_readable_and_a_closer_zoom_keeps_more_lines(double zoom, double size, int lines)
+    {
+        var text = ZoomTiers.TitleText(zoom);
+
+        Assert.Equal((size, lines), (text.Size, text.Lines));
+        Assert.True(text.Size * zoom >= 10, $"The text draws at {text.Size * zoom} px.");
+    }
+}
+
 /// <summary>Fit keeps titles readable (ADR 0045).</summary>
 public sealed class FitZoomTests
 {

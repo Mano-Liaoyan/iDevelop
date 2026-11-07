@@ -17,6 +17,12 @@ public static class ZoomTiers
     /// <summary>The zoom that the bar calls 100%: a card here reads at the app's body size, title and agent, at a size that fits a workflow.</summary>
     public const double ActualSize = 0.4;
 
+    /// <summary>The size in screen pixels that a Title tier card's text keeps.</summary>
+    private const double ReadablePixels = 10;
+
+    /// <summary>The height in canvas units over the agent's line of a Title tier card.</summary>
+    private const double TitleRoom = 106;
+
     /// <summary>A zoom that rises enters the larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
     private const double Gap = 0.02;
 
@@ -47,6 +53,17 @@ public static class ZoomTiers
         ZoomTier.Title => 94,
         _ => 0,
     };
+
+    /// <summary>
+    /// The text size in canvas units that keeps the Title tier's text just readable on screen at <paramref name="zoom"/>, in even
+    /// steps, with its line height and the title lines that <see cref="TitleRoom"/> holds, so a closer zoom keeps more words.
+    /// </summary>
+    public static (double Size, double Line, int Lines) TitleText(double zoom)
+    {
+        var size = Math.Clamp(2 * Math.Ceiling(ReadablePixels / zoom / 2), 30, 44);
+        var line = Math.Ceiling(size * 1.08);
+        return (size, line, (int)(TitleRoom / line));
+    }
 
     /// <summary>The style class that the canvas takes in the tier, or null for the full card.</summary>
     public static string? StyleClass(ZoomTier tier) => tier switch

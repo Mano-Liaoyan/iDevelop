@@ -109,6 +109,18 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // The minimap shows on the person's choice, where the canvas has room for its dock.
     private void ShowMinimap() => MinimapPanel.IsVisible = MinimapToggle.IsChecked == true && CanvasChrome.ShowsMinimap(Bounds.Size);
 
+    // The steps are even, so a zoom gesture measures the cards' text only when its size changes.
+    private void ShowTitleText()
+    {
+        var (size, line, lines) = ZoomTiers.TitleText(_viewModel?.ViewportZoom ?? 1);
+        if (!Resources.TryGetValue("FarTitleSize", out var shown) || !Equals(shown, size))
+        {
+            Resources["FarTitleSize"] = size;
+            Resources["FarTitleLine"] = line;
+            Resources["FarTitleLines"] = lines;
+        }
+    }
+
     // A tier takes one class on the view, so only a threshold changes the cards' layout. Under a zoom of 0.5 the dots would turn
     // into a texture, so they spread to a four times wider grid, and the smallest cards have only the canvas's color.
     private void ShowTier()
@@ -301,6 +313,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             Editor.LayoutUpdated += RestoreSelection;
             Editor.LayoutUpdated += PositionOnce;
             ShowTier();
+            ShowTitleText();
         }
 
         ShowAdd();
@@ -353,6 +366,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Tier))
         {
             ShowTier();
+        }
+        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.ViewportZoom))
+        {
+            ShowTitleText();
         }
     }
 

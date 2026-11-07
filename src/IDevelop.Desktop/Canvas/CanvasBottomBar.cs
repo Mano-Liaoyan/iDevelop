@@ -10,9 +10,9 @@ namespace IDevelop.Desktop.Canvas;
 /// centres on the canvas and moves aside only as far as it must to keep <see cref="CanvasChrome.Spacing"/> from the zoom
 /// controls, and it never gets wider than the room left, so it never covers them. A bar that needs more than its width takes
 /// the groupChips class, whose styles sum the reasons to wait, then the tightView class, whose styles move the view's own
-/// controls to the overflow menu, then the tightChips class, whose styles name what needs the person and sum the rest, then
-/// the tightNext class, whose styles leave Next its glyph, and then the leastChips class, whose styles name the most urgent
-/// group, sum all the others, and give up the progress and move Fit to the overflow menu, so no chip is cut. The run bar always measures at its whole width, so
+/// controls to the overflow menu, then the tightChips class, whose styles give the chips the progress's room, then
+/// the tightNext class, whose styles leave Next its glyph, and then the leastChips class, whose styles leave each
+/// group its badge and count and move Fit to the overflow menu, so no chip is cut. The run bar always measures at its whole width, so
 /// a change in its text reaches this panel.
 /// </summary>
 public sealed class CanvasBottomBar : Panel
