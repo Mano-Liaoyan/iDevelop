@@ -76,9 +76,6 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The node runs now, so a list's state glyph spins.</summary>
     public bool IsRunningNow => State == NodeState.Running;
 
-    /// <summary>A zoomed out card's corner badge shows a state or a planner's open proposal. An idle node has no glyph.</summary>
-    public bool ShowsStateBadge => State != NodeState.Idle || Role != NodeRole.None;
-
     /// <summary>Why the engine would not start the node now, which keeps Run and Retry off and is their tooltip, or null.</summary>
     public string? RunRefusal => State == NodeState.Running || IsAsking ? null : _runRefusal;
 

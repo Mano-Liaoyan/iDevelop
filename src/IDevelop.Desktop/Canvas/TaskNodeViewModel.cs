@@ -85,25 +85,13 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     public NodeState State
     {
         get;
-        private set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(ShowsStateBadge));
-            }
-        }
+        private set => SetProperty(ref field, value);
     }
 
     public NodeRole Role
     {
         get;
-        private set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(ShowsStateBadge));
-            }
-        }
+        private set => SetProperty(ref field, value);
     }
 
     public PortViewModel Input { get; }

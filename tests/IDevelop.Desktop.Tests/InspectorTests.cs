@@ -113,17 +113,6 @@ public sealed class InspectorTests : IDisposable
         Assert.Equal((changes, model), (node.AgentChanges, node.AgentModel));
     }
 
-    [AvaloniaFact]
-    public void An_overview_row_selects_the_first_node_in_its_state()
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)));
-        var canvas = shell.Window.ViewModel.Canvas!;
-
-        canvas.Overview.States.Single(state => state.State == NodeState.Idle).SelectCommand.Execute(null);
-
-        Assert.Equal(canvas.Outline[0], canvas.SelectedNode);
-    }
-
     [Theory]
     [InlineData("acc", "Acceptance criteria", true)]
     [InlineData("rsn", "Reasoning", true)]
@@ -333,7 +322,7 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void With_nothing_selected_the_inspector_counts_the_workflows_states()
+    public void With_nothing_selected_the_inspector_names_the_workflow_and_lists_the_library()
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
@@ -341,7 +330,8 @@ public sealed class InspectorTests : IDisposable
             new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, new CanvasPoint(105, 330)) { Title = "Plan it" }));
 
         Assert.Equal(["Workflow", "4 nodes"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
-        Assert.Equal(["Overview", "Idle", "4"], Shell.Texts(shell.Section("Overview")));
+        // The run bar holds the workflow's state counts, so the inspector does not repeat them.
+        Assert.DoesNotContain(shell.Window.GetVisualDescendants().OfType<InspectorSection>(), section => section.Key == "Overview");
         Assert.True(shell.Section("Library").IsEffectivelyVisible);
     }
 

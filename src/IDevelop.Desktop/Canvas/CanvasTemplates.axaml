@@ -159,7 +159,7 @@
         </DockPanel>
         <!-- While the node needs the person, the zoomed out badge acts as the full card's does, because Fit rests at this form. -->
         <Panel Classes="stateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="{Binding HasAttention}">
-          <Viewbox IsVisible="{Binding ShowsStateBadge}">
+          <Viewbox>
             <Canvas Width="16" Height="16">
               <Ellipse Classes="badgeDisc" Width="16" Height="16" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
               <PathIcon Canvas.Left="3" Canvas.Top="3" Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"

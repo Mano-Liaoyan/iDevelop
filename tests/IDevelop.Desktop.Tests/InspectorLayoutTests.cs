@@ -218,43 +218,16 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(320)]
     [InlineData(400)]
     [InlineData(520)]
-    public void The_overview_counts_end_where_the_library_buttons_end(double width)
+    public void The_library_buttons_end_at_the_inspector_s_edge(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)));
         shell.SizeInspector(width);
         var edge = shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset;
 
-        var counts = Shell.ById<TextBlock>(shell.Window, "StateCount").Where(count => count.IsEffectivelyVisible).ToArray();
         var more = Shell.ById<Button>(shell.Window, "BlueprintMore").Where(button => button.IsEffectivelyVisible).ToArray();
 
-        Assert.NotEmpty(counts);
         Assert.Equal(6, more.Length);
         Assert.All(more, control => Assert.Equal(edge, shell.Bounds(control).Right, 1));
-        // A glyph's drawing ends inside its button, so a count's digits end there too, which the next test sees in pixels.
-        Assert.All(counts, count => Assert.Equal(edge - InspectorGrid.GlyphInkInset, shell.Bounds(count).Right, 1));
-    }
-
-    [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void The_counts_digits_end_a_glyphs_inset_before_the_panels_edge(double width)
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
-            new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, new CanvasPoint(105, 290)) { Title = "Plan" }));
-        shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        shell.SizeInspector(width);
-
-        var counts = Shell.ById<TextBlock>(shell.Window, "StateCount").Where(text => text.IsEffectivelyVisible).ToArray();
-        Assert.Equal(["3"], counts.Select(count => count.Text));
-        var filter = shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset - InspectorGrid.GlyphInkInset;
-
-        // A "1" keeps more of its advance clear than a "2", so each count ends by its own drawing.
-        foreach (var count in counts)
-        {
-            var ink = InkRight(shell, count);
-            Assert.True(Math.Abs(ink - filter) <= 2, $"The ink ends at {ink} for the count \"{count.Text}\" and {filter} for the filter button.");
-        }
     }
 
     [AvaloniaFact]

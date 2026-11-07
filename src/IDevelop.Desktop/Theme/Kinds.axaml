@@ -290,8 +290,8 @@
   <Style Selector="PathIcon.badgeGlyph.state-idle:not(.role-proposing)">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <!-- A list's Idle mark is the empty ring, so a row with no run still says its state. -->
-  <Style Selector="theme|StateBadge Ellipse.badgeDisc.state-idle:not(.role-proposing)">
+  <!-- Idle's mark is the empty ring in every list and on every card, so a node with no run still says its state. -->
+  <Style Selector="Ellipse.badgeDisc.state-idle:not(.role-proposing)">
     <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
     <Setter Property="StrokeThickness" Value="1.5" />
   </Style>

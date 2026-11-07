@@ -761,29 +761,6 @@
 
               <DataTemplate DataType="inspector:WorkflowOverviewViewModel">
                 <StackPanel>
-                  <inspector:InspectorSection Key="Overview" Title="Overview" IsShown="{Binding HasStates}">
-                    <StackPanel>
-                    <ItemsControl ItemsSource="{Binding States}" AutomationProperties.AutomationId="WorkflowStates">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="inspector:StateCount">
-                          <!-- A click goes to the first node in that state. -->
-                          <inspector:InspectorRow Layout="Buttons" Label="{Binding Label}">
-                            <Button Classes="nodeLink" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Tip}"
-                                    AutomationProperties.AutomationId="StateRow"
-                                    AutomationProperties.Name="{Binding Label}">
-                              <inspector:InspectorGrid>
-                                <PathIcon Classes="stateIcon spin" IsVisible="{Binding IsRunning}" Theme="{StaticResource Glyph}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-                                <theme:StateBadge Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" State="{Binding State}" Why="{Binding Why}" IsVisible="{Binding !IsRunning}" />
-                                <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="linkTitle" Text="{Binding Label}" />
-                                <inspector:InkAlignedText Grid.Column="4" Classes="count" Text="{Binding Count}" AutomationProperties.AutomationId="StateCount" />
-                              </inspector:InspectorGrid>
-                            </Button>
-                          </inspector:InspectorRow>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    </StackPanel>
-                  </inspector:InspectorSection>
                   <inspector:InspectorSection Key="Library" Title="Library">
                     <blueprints:PaletteView DataContext="{Binding Blueprints}" />
                   </inspector:InspectorSection>

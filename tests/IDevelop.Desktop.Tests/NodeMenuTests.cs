@@ -243,7 +243,9 @@ public sealed class NodeMenuTests : IDisposable
         shell.Window.Height = 320;
         shell.Click(shell.Header(shell.Node("Build")));
         var viewport = shell.Find<ComboBox>("TaskClient").FindAncestorOfType<ScrollViewer>()!;
-        viewport.Offset = default;
+        // The Agent group leads the inspector, so the view scrolls to its end to put the picker out of view.
+        shell.Render();
+        viewport.Offset = new Vector(0, viewport.Extent.Height);
         shell.Render();
         Assert.False(shell.Bounds(viewport).Contains(shell.Bounds(shell.Find<ComboBox>("TaskClient"))), "The picker is already in view.");
         Rect? placedAgainst = null;

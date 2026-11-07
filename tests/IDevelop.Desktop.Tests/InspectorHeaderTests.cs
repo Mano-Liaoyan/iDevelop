@@ -237,19 +237,4 @@ public sealed class InspectorHeaderTests : IDisposable
 
         Assert.Equal("Add acceptance criteria", shell.Find<TextBox>("TaskAcceptanceCriteria").Watermark);
     }
-
-    [AvaloniaFact]
-    public void The_overview_counts_the_nodes_by_state_and_follows_a_run()
-    {
-        using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105));
-        f.Install(Reply("s-1", "Hello."));
-        var shell = f.Open();
-        Assert.Equal([(NodeState.Idle, "Idle", 1)], shell.Window.ViewModel.Canvas!.Overview.States.Select(state => (state.State, state.Label, state.Count)));
-
-        shell.RunNode("Say hi");
-        shell.WaitForState("Say hi", NodeState.Completed);
-        shell.Render();
-
-        Assert.Equal([(NodeState.Completed, "Completed", 1)], shell.Window.ViewModel.Canvas!.Overview.States.Select(state => (state.State, state.Label, state.Count)));
-    }
 }

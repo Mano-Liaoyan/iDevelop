@@ -237,35 +237,40 @@
   </Style>
   <!-- The letter of the client that runs the node, in the tile's place. -->
   <Style Selector="Border.farClient">
-    <Setter Property="MinWidth" Value="20" />
-    <Setter Property="Height" Value="20" />
+    <Setter Property="MinWidth" Value="22" />
+    <Setter Property="Height" Value="22" />
     <Setter Property="Padding" Value="3,0" />
     <Setter Property="Margin" Value="0,0,6,0" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
   <Style Selector="Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="17" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector=":is(Control).tier-compact Border.farClient">
-    <Setter Property="MinWidth" Value="22" />
-    <Setter Property="Height" Value="22" />
+    <Setter Property="MinWidth" Value="24" />
+    <Setter Property="Height" Value="24" />
   </Style>
+  <Style Selector=":is(Control).tier-compact Border.farClient TextBlock">
+    <Setter Property="FontSize" Value="20" />
+  </Style>
+  <!-- The client's letters keep the agent's text size on screen, so they read at every zoom with text. -->
   <Style Selector=":is(Control).tier-label Border.farClient">
-    <Setter Property="MinWidth" Value="28" />
-    <Setter Property="Height" Value="28" />
+    <Setter Property="MinWidth" Value="32" />
+    <Setter Property="Height" Value="32" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="22" />
+    <Setter Property="FontSize" Value="27" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient">
-    <Setter Property="MinWidth" Value="34" />
-    <Setter Property="Height" Value="36" />
+    <Setter Property="MinWidth" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Padding" Value="5,0" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
   </Style>
   <Style Selector="TextBlock.farAgent">
     <Setter Property="FontSize" Value="17" />
@@ -710,7 +715,7 @@
   <Style Selector="ItemsControl.barLeastChips, ItemsControl.barTightestChips">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).leastChips ItemsControl.barReasons, :is(Control).tightChips Panel.barProgress, :is(Control).leastChips Button.barSpare, :is(Control).tightNext TextBlock.nextLabel">
+  <Style Selector=":is(Control).leastChips ItemsControl.barReasons, :is(Control).tightChips Panel.barProgress, :is(Control).tightChips Button.barSpare, :is(Control).tightNext TextBlock.nextLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).leastChips:not(.tightChips) ItemsControl.barLeastChips, :is(Control).tightChips ItemsControl.barTightestChips">
