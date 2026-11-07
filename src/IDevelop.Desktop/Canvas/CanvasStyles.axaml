@@ -264,13 +264,13 @@
   <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
     <Setter Property="FontSize" Value="27" />
   </Style>
+  <!-- The smallest cards keep their model's words, so the client's letters stay small there. -->
   <Style Selector=":is(Control).tier-title Border.farClient">
-    <Setter Property="MinWidth" Value="44" />
-    <Setter Property="Height" Value="44" />
-    <Setter Property="Padding" Value="5,0" />
+    <Setter Property="MinWidth" Value="34" />
+    <Setter Property="Height" Value="36" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
+    <Setter Property="FontSize" Value="26" />
   </Style>
   <Style Selector="TextBlock.farAgent">
     <Setter Property="FontSize" Value="17" />
