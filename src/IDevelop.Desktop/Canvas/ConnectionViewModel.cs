@@ -18,6 +18,7 @@ public sealed class ConnectionViewModel : ObservableObject
     private ImmutableArray<Point> _ownRoute = [];
     private ImmutableArray<Point> _route = [];
     private IReadOnlyList<WirePiece> _curve = [];
+    private (double Exit, double Entry) _slots;
 
     internal ConnectionViewModel(WorkflowCanvasViewModel canvas, ConnectionKey key, TaskNodeViewModel from, TaskNodeViewModel to, ConnectionKind kind)
     {
@@ -87,6 +88,12 @@ public sealed class ConnectionViewModel : ObservableObject
     /// <summary>What the wire says it carries, as its tooltip.</summary>
     public string Tip => From.HandsOn is { Length: > 0 } result ? $"{WireFlows.Tip(Flow, From.Title, To.Title)}\n{CardText.Line(result, 200)}" : WireFlows.Tip(Flow, From.Title, To.Title);
 
+    /// <summary>Where the wire leaves its source card: its own point on the output side, under or over the port when the port has several wires.</summary>
+    public Point SourcePoint => From.Output.Anchor + new Vector(0, _slots.Exit);
+
+    /// <summary>Where the wire enters its target card: its own point on the input side.</summary>
+    public Point TargetPoint => To.Input.Anchor + new Vector(0, _slots.Entry);
+
     /// <summary>The corners of the wire's plan, from the end of its source stub to the start of its target stub.</summary>
     public IReadOnlyList<Point> Route => _route;
 
@@ -120,7 +127,15 @@ public sealed class ConnectionViewModel : ObservableObject
             new(From.Output.Anchor - new Vector(From.CardSize.Width - WorkflowCanvasViewModel.InputPortCenter.X, WorkflowCanvasViewModel.InputPortCenter.Y), From.DrawnSize),
             new(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter, To.DrawnSize),
         ];
-        var route = WireRouting.Route(From.Output.Anchor, To.Input.Anchor, cards, ZoomTiers.CardReach(_canvas.Tier));
+        var slots = _canvas.Slots(this);
+        if (slots != _slots)
+        {
+            _slots = slots;
+            OnPropertyChanged(nameof(SourcePoint));
+            OnPropertyChanged(nameof(TargetPoint));
+        }
+
+        var route = WireRouting.Route(SourcePoint, TargetPoint, cards, ZoomTiers.CardReach(_canvas.Tier));
         if (!route.SequenceEqual(_ownRoute))
         {
             _ownRoute = route;
@@ -131,13 +146,10 @@ public sealed class ConnectionViewModel : ObservableObject
     /// <summary>The route that this wire finds alone, before it takes a lane beside other wires.</summary>
     internal WireLanes.Wire Lane => new(_ownRoute, From.Location.Y + From.Location.X / 100000, To.Location.Y + To.Location.X / 100000);
 
-    /// <summary>The wire's ports and their rows, which decide the angle it takes at each port.</summary>
-    internal WireCurve.Ends Ends => new(From, To, From.Output.Anchor.Y, To.Input.Anchor.Y);
-
     /// <summary>Takes the route with the wire's lane, and the curve along it.</summary>
-    internal void ShowRoute(ImmutableArray<Point> route, (double Exit, double Entry) fan, IReadOnlyList<Rect> cards)
+    internal void ShowRoute(ImmutableArray<Point> route, IReadOnlyList<Rect> cards)
     {
-        var curve = WireCurve.Of(From.Output.Anchor, route, To.Input.Anchor, fan.Exit, fan.Entry, cards);
+        var curve = WireCurve.Of(SourcePoint, route, TargetPoint, cards);
         if (!route.SequenceEqual(_route))
         {
             _route = route;
@@ -172,6 +184,8 @@ public sealed class ConnectionViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(PortViewModel.Anchor))
         {
+            OnPropertyChanged(nameof(SourcePoint));
+            OnPropertyChanged(nameof(TargetPoint));
             Reroute();
         }
     }

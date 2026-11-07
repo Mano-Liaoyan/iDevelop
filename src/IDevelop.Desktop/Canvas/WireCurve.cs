@@ -21,23 +21,11 @@ public readonly record struct WirePiece(Point Start, Point First, Point Second, 
 /// Turns a wire's orthogonal route into the curve the canvas draws (ADR 0045). The route stays the wire's plan: it says
 /// which gaps the wire takes past the cards. Each up or down run of the route becomes an S curve that leaves and arrives
 /// across, as a Blender or Unreal wire does, so a wire with one such run is one curve from port to port. Where that curve
-/// would touch a card, the curve keeps closer to the route. Wires that share a port leave it or reach it at their own angles,
-/// so no two of them share a trunk.
+/// would touch a card, the curve keeps closer to the route. Wires that share a port leave it or reach it at their own points
+/// on the card's edge (<see cref="PortSlots"/>), so no two of them share a trunk.
 /// </summary>
 internal static class WireCurve
 {
-    /// <summary>How far apart, in canvas units, wires that share a port lie at <see cref="FanRun"/> from it.</summary>
-    internal const double Fan = 26;
-
-    /// <summary>The widest fan on one side of a port, so a busy port keeps its wires near its row.</summary>
-    private const double FanLimit = 65;
-
-    /// <summary>A fan is an angle: a curve's aim moves by the fan for each this many units along its first run.</summary>
-    private const double FanRun = 60;
-
-    /// <summary>How far a long curve's aim may leave its port's row.</summary>
-    private const double AimLimit = 140;
-
     private const double Tolerance = 0.01;
 
     /// <summary>How far a curve reaches along the runs on each side of a turn, in the order it tries them.</summary>
@@ -52,41 +40,12 @@ internal static class WireCurve
     // The card's body alone, for a wire that has no way to keep that clear space.
     private static readonly Thickness Body = new(11, -1);
 
-    /// <summary>A wire's two ends and how far each aims off its port's row.</summary>
-    public readonly record struct Ends(object Source, object Target, double SourceRow, double TargetRow);
-
-    /// <summary>How far each wire aims off its row at its source and at its target, in the order given.</summary>
-    /// <param name="scale">How much thicker wires draw at the zoom tier, which opens the fans as much, so they stay apart on screen.</param>
-    public static (double Exit, double Entry)[] Fans(IReadOnlyList<Ends> wires, double scale = 1)
-    {
-        var fans = new (double Exit, double Entry)[wires.Count];
-        foreach (var port in Enumerable.Range(0, wires.Count).GroupBy(wire => wires[wire].Source).Where(port => port.Count() > 1))
-        {
-            var order = port.OrderBy(wire => wires[wire].TargetRow).ToList();
-            for (var rank = 0; rank < order.Count; rank++)
-            {
-                fans[order[rank]].Exit = Offset(rank, order.Count) * scale;
-            }
-        }
-
-        foreach (var port in Enumerable.Range(0, wires.Count).GroupBy(wire => wires[wire].Target).Where(port => port.Count() > 1))
-        {
-            var order = port.OrderBy(wire => wires[wire].SourceRow).ToList();
-            for (var rank = 0; rank < order.Count; rank++)
-            {
-                fans[order[rank]].Entry = Offset(rank, order.Count) * scale;
-            }
-        }
-
-        return fans;
-    }
-
     /// <summary>
     /// The curve from <paramref name="source"/> along <paramref name="route"/> to <paramref name="target"/>. It takes the widest
-    /// reach that keeps it off every card, first with a wire's clear space and with its fan, then without them. The narrowest
+    /// reach that keeps it off every card, first with a wire's clear space, then without it. The narrowest
     /// reach hugs the route, which already goes around every card, so a curve never crosses a card at any zoom.
     /// </summary>
-    public static ImmutableArray<WirePiece> Of(Point source, IReadOnlyList<Point> route, Point target, double exit, double entry, IReadOnlyList<Rect> cards)
+    public static ImmutableArray<WirePiece> Of(Point source, IReadOnlyList<Point> route, Point target, IReadOnlyList<Rect> cards)
     {
         var points = Corners([source, .. route, target]);
         ImmutableArray<WirePiece> curve = [];
@@ -95,13 +54,10 @@ internal static class WireCurve
             var near = Near(points, cards, margin);
             foreach (var reach in Reaches)
             {
-                foreach (var (from, to) in new[] { (exit, entry), (0.0, 0.0) })
+                curve = Pieces(points, reach);
+                if (!curve.Any(piece => Touches(piece, near)))
                 {
-                    curve = Pieces(points, reach, from, to);
-                    if (!curve.Any(piece => Touches(piece, near)))
-                    {
-                        return curve;
-                    }
+                    return curve;
                 }
             }
         }
@@ -113,12 +69,10 @@ internal static class WireCurve
     public static ImmutableArray<WirePiece> Plain(Point source, Point target)
     {
         var middle = (source.X + target.X) / 2;
-        return Pieces(Corners([source, new Point(middle, source.Y), new Point(middle, target.Y), target]), double.PositiveInfinity, 0, 0);
+        return Pieces(Corners([source, new Point(middle, source.Y), new Point(middle, target.Y), target]), double.PositiveInfinity);
     }
 
-    private static double Offset(int rank, int count) => Math.Clamp((rank - (count - 1) / 2.0) * Fan, -FanLimit, FanLimit);
-
-    private static ImmutableArray<WirePiece> Pieces(List<Point> points, double reach, double exit, double entry)
+    private static ImmutableArray<WirePiece> Pieces(List<Point> points, double reach)
     {
         var pieces = new List<WirePiece>();
         var cursor = points[0];
@@ -155,14 +109,8 @@ internal static class WireCurve
             return [new WirePiece(points[0], points[0], points[0], points[0])];
         }
 
-        pieces[0] = pieces[0] with { First = pieces[0].First + new Vector(0, Aim(exit, pieces[0].First, pieces[0].Start)) };
-        pieces[^1] = pieces[^1] with { Second = pieces[^1].Second + new Vector(0, Aim(entry, pieces[^1].Second, pieces[^1].End)) };
         return [.. pieces];
     }
-
-    // A fixed offset would vanish on a long curve, so the offset grows with the run and every wire keeps its angle at the port.
-    private static double Aim(double fan, Point aim, Point port) =>
-        Math.Clamp(fan * Math.Max(Math.Abs(aim.X - port.X), FanRun) / FanRun, -AimLimit, AimLimit);
 
     private static int Across(Point from, Point to) => to.X < from.X - Tolerance ? -1 : 1;
 

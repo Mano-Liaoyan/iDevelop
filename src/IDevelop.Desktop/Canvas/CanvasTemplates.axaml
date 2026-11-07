@@ -213,8 +213,8 @@
   </DataTemplate>
 
   <DataTemplate x:Key="ConnectionTemplate" DataType="canvas:ConnectionViewModel">
-    <canvas:RoutedConnection Classes="wire" Source="{Binding From.Output.Anchor}"
-                             Target="{Binding To.Input.Anchor}"
+    <canvas:RoutedConnection Classes="wire" Source="{Binding SourcePoint}"
+                             Target="{Binding TargetPoint}"
                              Curve="{Binding Curve}"
                              theme:StyleClass.Flow="{Binding Flow}"
                              ToolTip.Tip="{Binding Tip}"

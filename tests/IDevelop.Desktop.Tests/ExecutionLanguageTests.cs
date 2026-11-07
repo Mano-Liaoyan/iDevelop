@@ -96,17 +96,30 @@ public sealed class ExecutionLanguageTests
     }
 
     [Fact]
-    public void Lanes_and_fans_widen_as_much_as_the_tier_thickens_the_wires_so_they_stay_apart_on_screen()
+    public void Lanes_and_port_points_widen_as_much_as_the_tier_thickens_the_wires_so_they_stay_apart_on_screen()
     {
         var routes = WireLanes.Spread(
         [
             Wire(2, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
             Wire(1, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
         ], [], scale: 2);
-        var ends = new[] { new WireCurve.Ends("a", "b", 0, 0), new WireCurve.Ends("a", "c", 0, 50) };
 
         Assert.Equal([222.0, 178.0], routes.Select(route => route[1].X));
-        Assert.Equal(WireCurve.Fans(ends).Select(fan => fan.Exit * 2), WireCurve.Fans(ends, 2).Select(fan => fan.Exit));
+        Assert.Equal(PortSlots.Of([0, 50], 80, 0, 154).Select(slot => slot * 2), PortSlots.Of([0, 50], 80, 0, 154, 2));
+    }
+
+    [Fact]
+    public void Wires_that_share_a_port_meet_the_card_at_their_own_points_in_the_order_of_their_far_rows()
+    {
+        // Three wires out of a port at row 32 of a card from 0 to 64: one point each, the highest far row on top, 12 apart.
+        Assert.Equal([12.0, -12.0, 0.0], PortSlots.Of([300, -100, 100], 32, 0, 64));
+        // One wire keeps the port's own point, and so does the wire whose other end lies on the port's row.
+        Assert.Equal([0.0], PortSlots.Of([300], 32, 0, 64));
+        Assert.Equal([0.0, 12.0], PortSlots.Of([32, 300], 32, 0, 64));
+        // Many wires squeeze into the card's edge, 10 from its top and its bottom.
+        var squeezed = PortSlots.Of([.. Enumerable.Range(0, 9).Select(row => (double)row)], 32, 0, 64);
+        Assert.Equal(-22, squeezed[0], 3);
+        Assert.Equal(22, squeezed[^1], 3);
     }
 
     [Fact]

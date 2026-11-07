@@ -176,8 +176,10 @@ public sealed class CanvasTests : IDisposable
             .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == title).Bounds.Position;
         Assert.Equal((new Point(0, 0), new Point(300, 0)), (Item("Design"), Item("Build")));
 
+        // The minimap takes the editor's room, so the view may fit again, and a drag moves by its screen distance at that zoom.
+        shell.Render();
         var from = shell.Header(shell.Node("Design"));
-        shell.Drag(from, from + new Vector(150, 75));
+        shell.Drag(from, from + new Vector(150, 75) * shell.Editor.ViewportZoom);
 
         Assert.Equal((new Point(0, 75), new Point(150, 0)), (Item("Design"), Item("Build")));
     }

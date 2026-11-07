@@ -85,10 +85,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             ShowMinimap();
         };
         // A view that Fit made fits again at the editor's new size, so a resized panel, a dock, or the minimap never cuts the
-        // graph. A view that the person moved stays.
-        Editor.SizeChanged += (_, _) =>
+        // graph. A view that the person moved stays, unless the smaller editor cuts a card that showed whole before.
+        Editor.SizeChanged += (_, e) =>
         {
-            if (IsFitted)
+            var zoom = Editor.ViewportZoom;
+            var (before, after) = (new Rect(Editor.ViewportLocation, e.PreviousSize / zoom), new Rect(Editor.ViewportLocation, e.NewSize / zoom));
+            if (IsFitted || Cards().Any(card => before.Contains(card) && !after.Contains(card)))
             {
                 Dispatcher.UIThread.Post(FitToView, DispatcherPriority.Background);
             }
@@ -223,11 +225,16 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
-    // The cards as they draw at this zoom, so a fit leaves room for a zoomed out card's lower lines.
+    // The cards as they draw at this zoom, so a fit leaves room for a zoomed out card's lower lines, and the wires, so a fit
+    // never cuts a wire that arcs past the cards.
     private Rect Extent()
     {
         var reach = _viewModel is { } canvas ? ZoomTiers.CardReach(canvas.Tier) : 0;
-        return Cards().Aggregate((union, card) => union.Union(card)).Inflate(new Thickness(0, 0, 0, reach));
+        var cards = Cards().Aggregate((union, card) => union.Union(card)).Inflate(new Thickness(0, 0, 0, reach));
+        var wires = _viewModel?.Connections.SelectMany(wire => wire.Curve).SelectMany(piece => new[] { piece.Start, piece.At(0.5), piece.End }) ?? [];
+        return wires.Aggregate(cards, (union, point) => new Rect(
+            new Point(Math.Min(union.Left, point.X), Math.Min(union.Top, point.Y)),
+            new Point(Math.Max(union.Right, point.X), Math.Max(union.Bottom, point.Y))));
     }
 
     // The selected node, else a running node, else a node that needs the person, else the graph's start.

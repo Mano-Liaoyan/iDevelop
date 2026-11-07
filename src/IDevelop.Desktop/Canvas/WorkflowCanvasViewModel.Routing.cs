@@ -33,10 +33,25 @@ public sealed partial class WorkflowCanvasViewModel
         Rect[] cards = [.. Nodes.Select(node => node.DrawnRect)];
         var scale = ZoomTiers.WireScale(Tier);
         var routes = WireLanes.Spread([.. Connections.Select(connection => connection.Lane)], cards, scale);
-        var fans = WireCurve.Fans([.. Connections.Select(connection => connection.Ends)], scale);
         for (var wire = 0; wire < routes.Length; wire++)
         {
-            Connections[wire].ShowRoute(routes[wire], fans[wire], cards);
+            Connections[wire].ShowRoute(routes[wire], cards);
+        }
+    }
+
+    /// <summary>How far <paramref name="wire"/> meets its source card under the output port and its target card under the input port.</summary>
+    internal (double Exit, double Entry) Slots(ConnectionViewModel wire)
+    {
+        var scale = ZoomTiers.WireScale(Tier);
+        var outs = Connections.Where(other => other.From == wire.From).Append(wire).Distinct().ToList();
+        var ins = Connections.Where(other => other.To == wire.To).Append(wire).Distinct().ToList();
+        return (Slot(outs, wire, wire.From.Output.Anchor.Y, wire.From, other => other.To.Input.Anchor.Y),
+                Slot(ins, wire, wire.To.Input.Anchor.Y, wire.To, other => other.From.Output.Anchor.Y));
+
+        double Slot(List<ConnectionViewModel> port, ConnectionViewModel own, double row, TaskNodeViewModel card, Func<ConnectionViewModel, double> far)
+        {
+            var top = row - InputPortCenter.Y;
+            return PortSlots.Of([.. port.Select(far)], row, top, top + card.DrawnSize.Height, scale)[port.IndexOf(own)];
         }
     }
 

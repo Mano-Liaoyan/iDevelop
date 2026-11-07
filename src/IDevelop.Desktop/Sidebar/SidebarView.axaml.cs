@@ -40,7 +40,7 @@ public partial class SidebarView : UserControl
             ActivityScroller.MaxHeight = e.NewSize.Height / 2;
             FoldActivity();
         };
-        TreeRows.SizeChanged += (_, _) => FoldActivity();
+        TreeRows.LayoutUpdated += (_, _) => FoldActivity();
         DataContextChanged += (_, _) => WatchReveals();
     }
 
@@ -48,7 +48,7 @@ public partial class SidebarView : UserControl
     {
         if (DataContext is MainWindowViewModel view && Rows.Bounds.Height > 0)
         {
-            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight || TreeRows.Bounds.Height > Rows.Bounds.Height / 2;
+            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight || TreeRows.DesiredSize.Height > Rows.Bounds.Height / 2;
         }
     }
 

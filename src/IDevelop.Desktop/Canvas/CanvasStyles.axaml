@@ -141,8 +141,9 @@
   </Style>
   <!-- The title has the card's whole width, and the last line's height comes on top of the card's 64 px. Each tier sets both in
        canvas units, so the text stays at least 10 px on screen. -->
+  <!-- The title and the last line start on one line, 8 px past the kind stripe at every tier. -->
   <Style Selector="TextBlock.farTitle">
-    <Setter Property="Margin" Value="16,0,20,0" />
+    <Setter Property="Margin" Value="23,0,20,0" />
     <Setter Property="FontSize" Value="17" />
     <Setter Property="LineHeight" Value="21" />
     <Setter Property="FontWeight" Value="Medium" />
@@ -157,19 +158,16 @@
   </Style>
   <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="18,8,14,0" />
+    <Setter Property="Margin" Value="28,6,14,0" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
-  <Style Selector=":is(Control).tier-label nodify|ItemContainer:selected Panel.taskCard:not(.expanded) TextBlock.farTitle">
-    <Setter Property="MaxLines" Value="12" />
-  </Style>
   <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
        text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="22,8,10,0" />
+    <Setter Property="Margin" Value="32,8,10,0" />
     <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
     <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
     <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />
@@ -212,32 +210,24 @@
   <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardHead">
     <Setter Property="Height" Value="112" />
   </Style>
-  <!-- A selected card at the Label tier, where a fit rests, shows its whole title: the card grows by the lines its title needs,
-       and the layout moves the cards under it down, so it covers none of them (ADR 0060). -->
-  <Style Selector=":is(Control).tier-label nodify|ItemContainer:selected Panel.taskCard:not(.expanded) Panel.cardHead">
-    <Setter Property="Height" Value="NaN" />
-    <Setter Property="MinHeight" Value="108" />
-    <Setter Property="Margin" Value="0,0,0,46" />
-  </Style>
   <Style Selector="DockPanel.farLine">
     <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Margin" Value="20,62,48,0" />
+    <Setter Property="Margin" Value="23,62,48,0" />
     <Setter Property="Height" Value="24" />
   </Style>
   <Style Selector=":is(Control).tier-compact DockPanel.farLine">
     <Setter Property="Height" Value="28" />
-    <Setter Property="Margin" Value="20,62,52,0" />
+    <Setter Property="Margin" Value="23,62,52,0" />
   </Style>
-  <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom, so a selected card that grows for
-       its whole title keeps it under the title. -->
+  <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom, 15 units under a three-line title. -->
   <Style Selector=":is(Control).tier-label DockPanel.farLine">
     <Setter Property="Height" Value="34" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="18,0,58,10" />
+    <Setter Property="Margin" Value="28,0,58,6" />
   </Style>
   <Style Selector=":is(Control).tier-title DockPanel.farLine">
     <Setter Property="Height" Value="44" />
-    <Setter Property="Margin" Value="22,112,62,0" />
+    <Setter Property="Margin" Value="32,112,62,0" />
   </Style>
   <Style Selector="theme|KindTile.farTile">
     <Setter Property="TileSize" Value="20" />

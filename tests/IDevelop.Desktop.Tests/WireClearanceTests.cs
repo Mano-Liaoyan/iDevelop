@@ -15,12 +15,22 @@ public sealed class WireClearanceTests
     private static (ImmutableArray<WirePiece>[] Curves, Rect[] Bodies) Draw((double X, double Y)[] nodes, (int From, int To)[] edges, double reach)
     {
         Rect[] cards = [.. nodes.Select(node => new Rect(new Point(node.X, node.Y), Card + new Size(0, reach)))];
-        Point Out(int node) => new(nodes[node].X + Card.Width - WorkflowCanvasViewModel.InputPortCenter.X, nodes[node].Y + WorkflowCanvasViewModel.InputPortCenter.Y);
-        Point In(int node) => new Point(nodes[node].X, nodes[node].Y) + (Vector)WorkflowCanvasViewModel.InputPortCenter;
-        var wires = edges.Select(edge => new WireLanes.Wire(WireRouting.Route(Out(edge.From), In(edge.To), cards, reach), nodes[edge.From].Y, nodes[edge.To].Y)).ToList();
+        Point Port(int node) => new(nodes[node].X + Card.Width - WorkflowCanvasViewModel.InputPortCenter.X, nodes[node].Y + WorkflowCanvasViewModel.InputPortCenter.Y);
+        Point Entry(int node) => new Point(nodes[node].X, nodes[node].Y) + (Vector)WorkflowCanvasViewModel.InputPortCenter;
+        // Each wire meets its cards at its own point, as the canvas places them.
+        double Slot(int wire, Func<(int From, int To), int> own, Func<(int From, int To), int> far)
+        {
+            var port = edges.Select((edge, index) => (edge, index)).Where(pair => own(pair.edge) == own(edges[wire])).ToList();
+            var row = nodes[own(edges[wire])].Y + WorkflowCanvasViewModel.InputPortCenter.Y;
+            var slots = PortSlots.Of([.. port.Select(pair => nodes[far(pair.edge)].Y)], row, nodes[own(edges[wire])].Y, nodes[own(edges[wire])].Y + Card.Height + reach);
+            return slots[port.FindIndex(pair => pair.index == wire)];
+        }
+
+        Point Out(int wire) => Port(edges[wire].From) + new Vector(0, Slot(wire, edge => edge.From, edge => edge.To));
+        Point In(int wire) => Entry(edges[wire].To) + new Vector(0, Slot(wire, edge => edge.To, edge => edge.From));
+        var wires = edges.Select((edge, index) => new WireLanes.Wire(WireRouting.Route(Out(index), In(index), cards, reach), nodes[edge.From].Y, nodes[edge.To].Y)).ToList();
         var routes = WireLanes.Spread(wires, cards);
-        var fans = WireCurve.Fans([.. edges.Select(edge => new WireCurve.Ends(edge.From, edge.To, Out(edge.From).Y, In(edge.To).Y))]);
-        var curves = edges.Select((edge, index) => WireCurve.Of(Out(edge.From), routes[index], In(edge.To), fans[index].Exit, fans[index].Entry, cards)).ToArray();
+        var curves = edges.Select((edge, index) => WireCurve.Of(Out(index), routes[index], In(index), cards)).ToArray();
         return (curves, [.. cards.Select(card => card.Deflate(new Thickness(11, 0)))]);
     }
 

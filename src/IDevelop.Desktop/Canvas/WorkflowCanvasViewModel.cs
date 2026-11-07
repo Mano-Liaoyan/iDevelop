@@ -479,9 +479,14 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             SyncConnections(current);
         }
 
-        if (positionsChanged)
+        // A wire that arrives or leaves moves the points of the other wires on its ports.
+        if (positionsChanged || connectionsChanged)
         {
             Reroute();
+        }
+
+        if (positionsChanged)
+        {
             ScheduleCardLayout();
         }
 

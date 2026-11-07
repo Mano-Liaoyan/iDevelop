@@ -11,7 +11,7 @@ public sealed class WireCurveTests
     [Fact]
     public void A_wire_with_one_turn_is_one_curve_from_port_to_port_that_leaves_and_arrives_across()
     {
-        var curve = WireCurve.Of(Source, [new Point(126, 100), new Point(200, 100), new Point(200, 300), new Point(274, 300)], new Point(300, 300), 0, 0, []);
+        var curve = WireCurve.Of(Source, [new Point(126, 100), new Point(200, 100), new Point(200, 300), new Point(274, 300)], new Point(300, 300), []);
 
         var piece = Assert.Single(curve);
         Assert.Equal(new WirePiece(Source, new Point(200, 100), new Point(200, 300), new Point(300, 300)), piece);
@@ -20,7 +20,7 @@ public sealed class WireCurveTests
     [Fact]
     public void A_wire_on_one_row_is_straight()
     {
-        var piece = Assert.Single(WireCurve.Of(Source, [new Point(126, 100), new Point(274, 100)], new Point(300, 100), 0, 0, []));
+        var piece = Assert.Single(WireCurve.Of(Source, [new Point(126, 100), new Point(274, 100)], new Point(300, 100), []));
 
         Assert.All(new[] { 0.25, 0.5, 0.75 }, at => Assert.Equal(100, piece.At(at).Y));
     }
@@ -33,7 +33,7 @@ public sealed class WireCurveTests
             Source,
             [new Point(126, 100), new Point(126, 188), new Point(574, 188), new Point(574, 100)],
             new Point(600, 100),
-            0, 0, []);
+            []);
 
         Assert.Equal(2, curve.Length);
         Assert.Equal(Source, curve[0].Start);
@@ -49,42 +49,24 @@ public sealed class WireCurveTests
         var card = new Rect(250, 160, 260, 64);
         Point[] route = [new Point(126, 100), new Point(600, 100), new Point(600, 300), new Point(674, 300)];
 
-        var wide = WireCurve.Of(Source, route, new Point(700, 300), 0, 0, []);
-        var fitted = WireCurve.Of(Source, route, new Point(700, 300), 0, 0, [card]);
+        var wide = WireCurve.Of(Source, route, new Point(700, 300), []);
+        var fitted = WireCurve.Of(Source, route, new Point(700, 300), [card]);
 
         Assert.Contains(wide.SelectMany(Samples), new Rect(250, 100, 260, 200).Contains);
         Assert.DoesNotContain(fitted.SelectMany(Samples), card.Contains);
     }
 
     [Fact]
-    public void Wires_that_share_a_port_leave_and_arrive_at_their_own_angles_in_the_order_of_their_rows()
+    public void Two_wires_into_one_port_stay_apart_up_to_the_card()
     {
-        object port = "output";
-        var fans = WireCurve.Fans(
-        [
-            new WireCurve.Ends(port, "low", 100, 400),
-            new WireCurve.Ends(port, "high", 100, 0),
-            new WireCurve.Ends("alone", "low", 300, 400),
-        ]);
+        var slots = PortSlots.Of([100, 300], 200, 168, 232);
+        var (upper, lower) = (new Point(500, 200 + slots[0]), new Point(500, 200 + slots[1]));
+        Point[] Route(double row, Point target) => [new Point(126, row), new Point(300, row), new Point(300, target.Y), new Point(474, target.Y)];
+        var first = WireCurve.Of(new Point(100, 100), Route(100, upper), upper, []);
+        var second = WireCurve.Of(new Point(100, 300), Route(300, lower), lower, []);
 
-        Assert.Equal(WireCurve.Fan / 2, fans[0].Exit);
-        Assert.Equal(-WireCurve.Fan / 2, fans[1].Exit);
-        Assert.Equal(0, fans[2].Exit);
-        Assert.Equal(-WireCurve.Fan / 2, fans[0].Entry);
-        Assert.Equal(WireCurve.Fan / 2, fans[2].Entry);
-    }
-
-    [Fact]
-    public void Two_wires_into_one_port_stay_apart_up_to_the_port()
-    {
-        var target = new Point(500, 200);
-        Point[] Route(double row) => [new Point(126, row), new Point(300, row), new Point(300, 200), new Point(474, 200)];
-        var upper = WireCurve.Of(new Point(100, 100), Route(100), target, 0, -WireCurve.Fan / 2, []);
-        var lower = WireCurve.Of(new Point(100, 300), Route(300), target, 0, WireCurve.Fan / 2, []);
-
-        var gap = lower[^1].At(0.9).Y - upper[^1].At(0.9).Y;
-
-        Assert.True(gap > 3, $"The wires lie {gap} px apart near the port.");
+        Assert.Equal(PortSlots.Pitch, second[^1].End.Y - first[^1].End.Y);
+        Assert.True(second[^1].At(0.9).Y - first[^1].At(0.9).Y > 3);
     }
 
     [Fact]
