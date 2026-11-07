@@ -10,7 +10,7 @@ Round 5 of the review found that the shown workflow could sit collapsed or below
 - **Node names.** A node's row takes two lines with an ellipsis, and the tooltip and the selected row hold the whole name. This changes issue #108's rule for node rows only. Workflow and project rows keep full names.
 - **Step numbers.** They are gone from the tree. The tree keeps its reading order.
 - **A workflow's row.** The completion count ends the first line in every state. A line under the name says what failed, waits, runs, and is stale, in a glyph and words. The ring is gone.
-- **Selection.** The shown workflow's row is filled. While a node of it is selected, the node holds the selected fill and the workflow a quiet fill. The edge bar is gone.
+- **Selection.** The shown workflow's row is filled. While a node of it is selected, the node holds the selected fill and the workflow a quiet fill (ADR 0060 removes that fill). The edge bar is gone.
 - **State glyphs.** Approval and Interrupted use the glyphs and colors of a card's badge on every row.
 - **Activity.** The heading counts what runs too, so the counts add up to the list. Below a 700 px panel the list starts folded to the heading, and the heading opens it. A row's reason and workflow have a dot between them.
 - **Pinned rows.** A row slides under the pinned rows, flush with their edge, so the top cover is gone. The pinned workflow keeps its completion count.

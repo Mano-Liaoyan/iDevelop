@@ -690,10 +690,10 @@
     <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
   </Style>
 
-  <!-- The selected node's row holds the one accent fill. Its workflow keeps its name's weight and a quiet neutral fill, so the
-       row reads as the shown workflow and as the selection's parent, as a layers panel marks a selected layer's group. -->
+  <!-- The selected node's row holds the one accent fill. Its workflow keeps its name's weight and its open chevron with no
+       fill, so it never reads as a row under the pointer, whose fill is neutral (ADR 0060). -->
   <Style Selector="Button.nav.workflow.selected.holdsNode:not(:pointerover) /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <!-- UI Automation reads which workflow the window shows from its row's status. -->
