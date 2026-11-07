@@ -36,7 +36,7 @@ internal static class WireRouting
     private static readonly Thickness[] Tight = [new(4, 6), new(0, 2)];
 
     // How much longer a wide detour may run than a close one, so it never goes around a whole group of cards for clearance.
-    private const double WideDetour = 100;
+    private const double WideDetour = 320;
 
     // One turn weighs as much as this much length, so a detour turns no more than it has to.
     private const double TurnCost = 60;
@@ -59,7 +59,7 @@ internal static class WireRouting
             return step;
         }
 
-        var wideRows = new Thickness(WideColumns, Math.Max(Clearance, (RowGap - reach) / 2 - 1));
+        var wideRows = new Thickness(WideColumns, Math.Max(Math.Max(Clearance, (RowGap - reach) / 2 - 1), PassRoom(reach)));
         var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance)), Detour(start, end, cards, wideRows));
         if (wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour))
         {
@@ -69,6 +69,10 @@ internal static class WireRouting
         // Cards that stand too close for a wire's clear space still leave it a way between them, so a wire never takes a card's body.
         return close ?? Tight.Select(gap => Detour(start, end, cards, gap)).FirstOrDefault(detour => detour is not null) ?? step;
     }
+
+    // About 12 px on screen at the zooms where cards draw this far under their boxes. A row gap that leaves less than twice
+    // this between the drawn cards takes no wire, so a wire never reads as a card's border, and the wire goes around instead.
+    private static double PassRoom(double reach) => reach >= 90 ? 30 : reach > 0 ? 20 : 14;
 
     private static double Length(ImmutableArray<Point> path) => path.Zip(path.Skip(1)).Sum(run => Point.Distance(run.First, run.Second));
 
