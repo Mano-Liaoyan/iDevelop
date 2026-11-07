@@ -20,20 +20,29 @@ public sealed class WindowCleanupAttribute : BeforeAfterTestAttribute
 {
     private static readonly HashSet<Window> Open = [];
 
+    // The thread that opens windows. A plain test runs elsewhere, while a headless test may still use its window.
+    private static Thread? _headless;
+
     static WindowCleanupAttribute()
     {
-        Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) => { lock (Open) Open.Add(window); });
+        Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) => { lock (Open) { Open.Add(window); _headless = Thread.CurrentThread; } });
         Window.WindowClosedEvent.AddClassHandler<Window>((window, _) => { lock (Open) Open.Remove(window); });
     }
 
-    // A headless test runs on the headless thread, which owns its windows. A plain test runs elsewhere and leaves them.
+    // A headless test runs on the headless thread, which owns its windows. Avalonia's own thread check can pass on a plain test's
+    // thread, and the cleanup then ended another test's window while that test ran, so only the thread that opened the windows counts.
     public override void After(MethodInfo methodUnderTest)
     {
         Window[] windows;
         lock (Open)
         {
-            windows = [.. Open.Where(window => window.CheckAccess())];
-            Open.ExceptWith(windows);
+            if (_headless != Thread.CurrentThread)
+            {
+                return;
+            }
+
+            windows = [.. Open];
+            Open.Clear();
         }
 
         foreach (var window in windows)
@@ -46,10 +55,7 @@ public sealed class WindowCleanupAttribute : BeforeAfterTestAttribute
             window.PlatformImpl?.Dispose();
         }
 
-        if (Dispatcher.UIThread.CheckAccess())
-        {
-            Shell.Forget();
-        }
+        Shell.Forget();
     }
 
     private static void Leave(MainWindow window)
