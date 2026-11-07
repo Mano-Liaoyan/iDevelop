@@ -310,6 +310,11 @@
   <Style Selector="PathIcon.badgeGlyph.state-idle:not(.role-proposing)">
     <Setter Property="IsVisible" Value="False" />
   </Style>
+  <!-- A list's Idle mark is the empty ring, so a row with no run still says its state. -->
+  <Style Selector="theme|StateBadge Ellipse.badgeDisc.state-idle:not(.role-proposing)">
+    <Setter Property="Stroke" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+  </Style>
   <Style Selector="Ellipse.badgeDisc.state-running">
     <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
   </Style>

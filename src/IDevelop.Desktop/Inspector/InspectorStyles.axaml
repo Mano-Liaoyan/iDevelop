@@ -305,7 +305,7 @@
     <Setter Property="Margin" Value="4,0" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
   <Style Selector="Button.sectionHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.sectionHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">

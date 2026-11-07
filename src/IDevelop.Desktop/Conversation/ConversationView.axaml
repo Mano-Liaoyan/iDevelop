@@ -314,9 +314,9 @@
               <KeyBinding Gesture="Meta+Shift+Enter" Command="{Binding Node.StopAndSendCommand}" />
             </TextBox.KeyBindings>
           </TextBox>
-          <Grid Classes="composerBar" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="4">
+          <Grid Classes="composerBar" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
             <Button x:Name="ModelChip" Classes="modelChip"
-                    ToolTip.Tip="{Binding ModelChip, StringFormat='Change the model and effort: {0}'}"
+                    ToolTip.Tip="{Binding ModelChip, StringFormat='The agent, its terminal, and what its client can do: {0}'}"
                     AutomationProperties.AutomationId="ConversationModel" AutomationProperties.Name="{Binding ModelChip, StringFormat='Agent: {0}'}">
               <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" Width="12" Height="12" />
@@ -340,18 +340,8 @@
                               AutomationProperties.AutomationId="ConversationPickReasoning" AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource WrappedChoice}" />
                     <TextBlock Classes="caption" Text="A change stops the running turn, and the node waits for your Run." TextWrapping="Wrap"
                                IsVisible="{Binding Node.ShowsNextRunNote}" AutomationProperties.AutomationId="ConversationNextRunNote" />
-                  </StackPanel>
-                </Flyout>
-              </Button.Flyout>
-            </Button>
-            <!-- What a person seldom needs: the session in a terminal, and what this client can do. -->
-            <Button x:Name="ComposerMore" Grid.Column="1" Classes="icon composerMore" ToolTip.Tip="More"
-                    AutomationProperties.AutomationId="ConversationMore" AutomationProperties.Name="More">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" Width="14" Height="14" />
-              <Button.Flyout>
-                <Flyout Placement="TopEdgeAlignedLeft">
-                  <StackPanel Spacing="8">
-                    <Button Classes="ghost terminal" Height="28" Command="{Binding Node.OpenInTerminalCommand}" Click="OnCloseMore"
+                    <!-- What a person seldom needs: the session in a terminal, and what this client can do. -->
+                    <Button Classes="ghost terminal" Height="28" Command="{Binding Node.OpenInTerminalCommand}" Click="OnCloseModel"
                             ToolTip.Tip="Copies the command that continues the session in a terminal"
                             AutomationProperties.AutomationId="ConversationTerminal" AutomationProperties.Name="Open in terminal">
                       <StackPanel Orientation="Horizontal" Spacing="6">
@@ -364,7 +354,7 @@
                 </Flyout>
               </Button.Flyout>
             </Button>
-            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
               <TextBlock Classes="keyHint" Text="Ctrl+Enter to send" VerticalAlignment="Center" Margin="0,0,4,0" IsVisible="{Binding !ShowsComposerStop}"
                          AutomationProperties.AutomationId="ComposerKeyHint" />
               <!-- A draft during a turn waits for the turn's end unless the person ends the turn first. -->

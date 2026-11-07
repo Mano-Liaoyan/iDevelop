@@ -387,7 +387,7 @@ public partial class ConversationView : UserControl
 
     private void OnChangeModel(object? sender, RoutedEventArgs e) => ModelChip.Flyout?.ShowAt(ModelChip);
 
-    private void OnCloseMore(object? sender, RoutedEventArgs e) => ComposerMore.Flyout?.Hide();
+    private void OnCloseModel(object? sender, RoutedEventArgs e) => ModelChip.Flyout?.Hide();
 
     private void OnAgentChosen(object? sender, SelectionChangedEventArgs e) => AgentPicker.OnChosen(sender);
 

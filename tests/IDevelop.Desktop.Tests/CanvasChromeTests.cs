@@ -214,10 +214,10 @@ public sealed class CanvasChromeTests : IDisposable
             .Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 })
             .Select(shell.Bounds));
         Assert.True(lines <= 2, $"The docked header has {lines} lines.");
-        // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit in the composer's menu.
+        // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit behind the model chip.
         Assert.False(shell.Find<Control>("ConversationBreadcrumb").IsEffectivelyVisible);
         Assert.False(shell.Has<Control>("ClientLimitations"));
-        Assert.True(shell.Find<Control>("ConversationMore").IsEffectivelyVisible);
+        Assert.True(shell.Find<Control>("ConversationModel").IsEffectivelyVisible);
         var box = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer")).Deflate(1);
         foreach (var id in new[] { "ConversationComposer", "ConversationModel", "ConversationSend" })
         {

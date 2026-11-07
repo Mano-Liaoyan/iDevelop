@@ -154,7 +154,6 @@
                    theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
         <!-- The selection line sits on the card's edge, and the keyboard's ring outside it. -->
         <Border Classes="ring" CornerRadius="11" IsHitTestVisible="False" />
-        <Border Classes="keyRing" CornerRadius="13" IsHitTestVisible="False" />
         <!-- The zoomed out card's last line, under its title, which leaves the state's badge its place at the end. -->
         <DockPanel Classes="cardFar farLine" VerticalAlignment="Top" IsHitTestVisible="False">
           <theme:KindTile Classes="farTile" DockPanel.Dock="Left" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" VerticalAlignment="Center"

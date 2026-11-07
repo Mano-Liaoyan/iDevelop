@@ -692,9 +692,9 @@
     <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
   </Style>
 
-  <!-- The selected node's row holds the selected fill, and its workflow keeps a quiet one. -->
-  <Style Selector="Button.nav.workflow.selected.holdsNode /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  <!-- The selected node's row holds the one selected fill, and its workflow keeps its mark and its name's weight. -->
+  <Style Selector="Button.nav.workflow.selected.holdsNode:not(:pointerover) /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <!-- The shown workflow's mark stays apart from the grey of a hover. -->

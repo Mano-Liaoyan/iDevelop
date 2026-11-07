@@ -112,12 +112,6 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="FontStyle" Value="Italic" />
   </Style>
-  <Style Selector="Button.composerMore">
-    <Setter Property="Width" Value="24" />
-    <Setter Property="Height" Value="24" />
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="HorizontalContentAlignment" Value="Center" />
-  </Style>
   <!-- A line longer than the block keeps a thin scroll bar in view, so the block says that the line goes on. A short block has none. -->
   <Style Selector="ScrollViewer.mdScroll /template/ ScrollBar">
     <Setter Property="Height" Value="10" />

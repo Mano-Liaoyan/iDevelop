@@ -120,7 +120,7 @@ public sealed class ConversationTests
         shell.WaitForState("Say hi", NodeState.Completed);
 
         shell.Talk();
-        var more = shell.Find<Button>("ConversationMore");
+        var more = shell.Find<Button>("ConversationModel");
         shell.Click(more);
         Assert.True(shell.Has<Control>("ClientLimitations"));
         more.Flyout!.Hide();

@@ -7,7 +7,7 @@
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:theme="using:IDevelop.Desktop.Theme">
   <!-- One accent line outside the card says selected, as the app's accent does everywhere, and it leaves the state's own edge
-       whole inside it. The keyboard's ring, the app's one focus ring, sits outside it while the canvas has the keyboard's focus.
+       whole inside it. The canvas's own ring says that it has the keyboard's focus, so a card keeps one outline.
        A running node never looks like this: its title band fills with color (Kinds.axaml and runBand below). -->
   <Style Selector="Border.ring">
     <Setter Property="Margin" Value="8,-2" />
@@ -18,14 +18,6 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-  </Style>
-  <Style Selector="Border.keyRing">
-    <Setter Property="Margin" Value="4,-6" />
-    <Setter Property="BorderThickness" Value="2" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-  </Style>
-  <Style Selector=":is(Control).keyboardFocus nodify|ItemContainer:selected Border.keyRing">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <!-- A card is 240 wide in its 260 wide container, and an expanded card 320 in 340 (ADR 0024). An expanded card's state
@@ -407,18 +399,6 @@
     <Setter Property="Margin" Value="1,-9" />
     <Setter Property="BorderThickness" Value="9" />
   </Style>
-  <Style Selector=":is(Control).tier-detail Border.keyRing, :is(Control).tier-compact Border.keyRing">
-    <Setter Property="Margin" Value="2,-8" />
-    <Setter Property="BorderThickness" Value="3" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Border.keyRing">
-    <Setter Property="Margin" Value="-4,-14" />
-    <Setter Property="BorderThickness" Value="5" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Border.keyRing, :is(Control).tier-block Border.keyRing">
-    <Setter Property="Margin" Value="-14,-24" />
-    <Setter Property="BorderThickness" Value="10" />
-  </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
        show through it (#85). Its dashed edge and faded tile say it is a proposal. -->
   <Style Selector="Border.ghost">
@@ -699,11 +679,10 @@
   <Style Selector="Button.zoomValue">
     <Setter Property="Width" Value="40" />
   </Style>
-  <!-- A thin, quiet line inside the canvas's edge, so no panel covers it and it never reads as a mode. The card's own ring says the rest. -->
+  <!-- The app's one focus ring, inside the canvas's edge, so no panel covers it. -->
   <Style Selector="Border.canvasFocus">
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="Opacity" Value="0.5" />
   </Style>
   <Style Selector="TextBlock.cardTitle.running, TextBlock.farTitle.running">
     <Setter Property="Foreground" Value="{DynamicResource OnStateBrush}" />
