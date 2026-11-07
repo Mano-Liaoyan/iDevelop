@@ -27,7 +27,7 @@ public static class ZoomTiers
     private const double TitleRoom = 106;
 
     /// <summary>The height in canvas units for the title of a Block tier card, which has no agent's line and no badge.</summary>
-    private const double BlockRoom = 136;
+    private const double BlockRoom = 142;
 
     /// <summary>The most title lines of a Block tier card.</summary>
     private const int BlockLines = 2;
@@ -73,7 +73,7 @@ public static class ZoomTiers
     {
         var least = 2 * Math.Ceiling(ReadablePixels / zoom / 2);
         var size = tier == ZoomTier.Block ? Math.Max(least, 30) : Math.Clamp(least, 30, 44);
-        var line = Math.Ceiling(size * 1.08);
+        var line = Math.Ceiling(size * (tier == ZoomTier.Block ? 1.04 : 1.08));
         return tier == ZoomTier.Block
             ? (size, line, Math.Clamp((int)(BlockRoom / line), 1, BlockLines))
             : (size, line, (int)(TitleRoom / line));

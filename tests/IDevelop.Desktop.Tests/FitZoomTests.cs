@@ -21,7 +21,8 @@ public sealed class ZoomTitleTextTests
     [Theory]
     [InlineData(0.22, 2)]
     [InlineData(0.152, 2)]
-    [InlineData(0.12, 1)]
+    [InlineData(0.144, 2)]
+    [InlineData(0.13, 1)]
     [InlineData(0.1, 1)]
     public void A_block_tier_card_keeps_its_title_in_one_or_two_lines_at_9_px(double zoom, int lines)
     {
@@ -29,7 +30,7 @@ public sealed class ZoomTitleTextTests
 
         Assert.Equal(lines, text.Lines);
         Assert.True(text.Size * zoom >= 9, $"The text draws at {text.Size * zoom} px.");
-        Assert.True(text.Line * text.Lines <= 136, "The title fits the card's room.");
+        Assert.True(text.Line * text.Lines <= 142, "The title fits the card's room.");
     }
 }
 

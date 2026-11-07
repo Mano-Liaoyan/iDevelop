@@ -9,7 +9,8 @@ namespace IDevelop.Desktop.Canvas;
 /// Lays out the band along the canvas's bottom edge: the zoom controls at the left and the run bar after them, at
 /// <see cref="CanvasChrome.Spacing"/> from the zoom controls, and it never gets wider than the room left, so it never covers them.
 /// A bar that needs more than its width takes the tightView class, whose styles move the view's own controls to the overflow
-/// menu, then the tightFollow class, whose styles move Follow to the overflow menu, then the tightChips class, whose chips
+/// menu, then the tightFollow class, whose styles move Follow to the overflow menu, then the tightNext class, whose Next
+/// says only "Next" and keeps its whole name in its tooltip and accessible name, so the chips keep their words longer, then the tightChips class, whose chips
 /// show their badge and count and keep their words in their tooltips (ADR 0065), and then the ownRow class: the run bar takes
 /// a row of its own across the whole canvas above the zoom controls, which take back their view controls and Follow. Last the
 /// tightOwnRow class moves Follow to the overflow menu again, and the bar wraps its groups to a second line when they still do
@@ -26,7 +27,7 @@ public sealed class CanvasBottomBar : Panel
     public static void SetSlot(Control control, ChromeSlot value) => control.SetValue(SlotProperty, value);
 
     // Each step gives the run bar less to show. The first step is no class.
-    private static readonly string[] Steps = ["tightView", "tightFollow", "tightChips", OwnRow, "tightOwnRow"];
+    private static readonly string[] Steps = ["tightView", "tightFollow", "tightNext", "tightChips", OwnRow, "tightOwnRow"];
 
     private const string OwnRow = "ownRow";
 

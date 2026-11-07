@@ -294,7 +294,7 @@
                      AutomationProperties.Name="{Binding BarSummary}">
           <DockPanel MinHeight="28">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Top">
-              <!-- Next keeps its words at every width. -->
+              <!-- Next keeps its words until the chips need their room; then it says "Next" and its tooltip names what it selects. -->
               <Panel x:Name="NextSlot" Classes="barNext">
               <Button Classes="action bar" Command="{Binding NextWaitingCommand}" IsVisible="{Binding HasAttention}"
                       ToolTip.Tip="{x:Static canvas:WorkflowCanvasView.NextHelp}"
@@ -302,6 +302,7 @@
                       AutomationProperties.Name="{Binding NextLabel}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <TextBlock Classes="label nextLabel" Text="{Binding NextLabel}" VerticalAlignment="Center" />
+                  <TextBlock Classes="label nextShort" Text="Next" VerticalAlignment="Center" />
                   <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
                 </StackPanel>
               </Button>
