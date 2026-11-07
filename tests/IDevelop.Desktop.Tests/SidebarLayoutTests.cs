@@ -330,6 +330,28 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Opening_a_nodes_conversation_opens_its_large_tree_group_even_after_the_person_folded_it()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Render();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var group = canvas.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted);
+        canvas.SelectedNode = canvas.Outline[5];
+        shell.Render();
+        group.Toggle();
+        shell.Render();
+        Assert.True(group.IsFolded);
+
+        canvas.Outline[5].OpenConversationCommand.Execute(null);
+        shell.Render();
+
+        Assert.False(group.IsFolded);
+    }
+
+    [AvaloniaFact]
     public void Selecting_a_node_of_a_large_folded_group_opens_the_group_and_shows_its_row_selected()
     {
         var reports = _temp.Create(Reports);

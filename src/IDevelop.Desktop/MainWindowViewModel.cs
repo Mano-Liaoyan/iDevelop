@@ -498,9 +498,14 @@ public sealed class MainWindowViewModel : ObservableObject
             ShowConversation(target);
         }
 
-        if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } found && target.Canvas.SelectedNode != found)
+        if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } found)
         {
-            target.Canvas.Inspect(found);
+            // The open node's row shows in the tree, so its group opens at any size (ADR 0067).
+            target.Canvas.Groups.First(group => group.Kind == NodeGroup.Of(found)).Open();
+            if (target.Canvas.SelectedNode != found)
+            {
+                target.Canvas.Inspect(found);
+            }
         }
     }
 
