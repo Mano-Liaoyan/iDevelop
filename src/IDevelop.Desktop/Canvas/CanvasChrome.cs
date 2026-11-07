@@ -12,8 +12,7 @@ internal static class CanvasChrome
     public const double Spacing = 12;
 
     /// <summary>
-    /// Below this canvas width the canvas is compact: Run Workflow and Stop Workflow show only their glyphs and the tooltip names them,
-    /// and the breadcrumb shows only the workflow's name.
+    /// Below this canvas width the canvas is compact: the breadcrumb shows only the workflow's name, so Run Workflow and Stop Workflow keep their words.
     /// </summary>
     public const double CompactWidth = 680;
 
