@@ -554,21 +554,21 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
-  <!-- The status line, the attention card, and the composer. -->
+  <!-- The status line, the attention card, and the composer. The column reaches into the room under the transcript's last row, so the gap over a card is the transcript's own gap. -->
   <Style Selector="StackPanel.bottomColumn">
     <Setter Property="MaxWidth" Value="808" />
-    <Setter Property="Margin" Value="24,4,24,16" />
+    <Setter Property="Margin" Value="24,-4,24,16" />
     <Setter Property="Spacing" Value="12" />
   </Style>
   <Style Selector="Grid.docked StackPanel.bottomColumn">
-    <Setter Property="Margin" Value="24,4,24,12" />
+    <Setter Property="Margin" Value="24,-4,24,12" />
   </Style>
   <Style Selector="Grid.narrow StackPanel.bottomColumn">
     <Setter Property="MaxWidth" Value="792" />
-    <Setter Property="Margin" Value="16,4,16,16" />
+    <Setter Property="Margin" Value="16,-4,16,16" />
   </Style>
   <Style Selector="Grid.narrow.docked StackPanel.bottomColumn">
-    <Setter Property="Margin" Value="16,4,16,12" />
+    <Setter Property="Margin" Value="16,-4,16,12" />
   </Style>
   <Style Selector="Border.workingLine">
     <Setter Property="Height" Value="24" />
