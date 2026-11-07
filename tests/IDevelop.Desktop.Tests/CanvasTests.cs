@@ -148,6 +148,28 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Docking_the_conversation_keeps_the_node_and_its_direct_neighbours_in_view()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 105, 700),
+            TaskAt(Review, "Review", 105, 1310),
+            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
+            new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency)));
+        var build = shell.NodeModel("Build");
+        shell.Window.ViewModel.Canvas!.SelectedNode = build;
+        build.OpenConversationCommand.Execute(null);
+        shell.Render();
+
+        shell.Window.ViewModel.IsConversationDocked = true;
+        shell.Render();
+
+        var editor = new Rect(shell.Editor.Bounds.Size);
+        shell.WaitUntil(() => new[] { "Design", "Build", "Review" }.All(title => editor.Contains(shell.CardRect(title))),
+            "the node and its predecessor and successor show whole above the dock");
+    }
+
+    [AvaloniaFact]
     public void Fit_to_screen_stops_at_the_least_zoom_and_keeps_the_selected_task_in_view()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 24000, 16000)));

@@ -33,8 +33,17 @@ public sealed partial class TaskNodeViewModel
     public int TitleKeep
     {
         get;
-        internal set => SetProperty(ref field, value);
+        internal set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(FarTitleKeep));
+            }
+        }
     }
+
+    /// <summary><see cref="TitleKeep"/> in the zoomed out card's title, whose hyphenated tokens such as 2024-Q3 never break.</summary>
+    public int FarTitleKeep => TitleKeep <= 0 || TitleKeep > Title.Length ? 0 : Theme.NameBreaks.Keep(Title[..TitleKeep])!.Length;
 
     /// <summary>
     /// The card's model text: the end of the model's name as the inspector's Model field shows it, without the family word that

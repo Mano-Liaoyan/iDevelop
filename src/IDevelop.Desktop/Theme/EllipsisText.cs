@@ -9,8 +9,8 @@ namespace IDevelop.Desktop.Theme;
 /// Wrapped text that keeps to <see cref="TextBlock.MaxLines"/> and ends in an ellipsis when it loses text. Avalonia's own
 /// trimming adds no ellipsis to text that its line limit cuts at a word's end, and it cuts a long last line short, so
 /// this control finds the longest start of <see cref="Whole"/> that fits, ellipsis included. When <see cref="KeepFrom"/> marks
-/// the part of the text that tells it from a similar one and that whole part fits after a start of the text, the cut falls in
-/// the shared words before that part, so the whole part stays in view. The text always starts with its own first word and is cut in one place only. Under
+/// the part of the text that tells it from a similar one and that whole part fits after an ellipsis, the text starts with the
+/// ellipsis and ends whole, so the part that differs reads first. The text is cut in one place only. Under
 /// <see cref="TextWrapping.WrapWithOverflow"/> no word breaks across lines. It styles as a <see cref="TextBlock"/>.
 /// </summary>
 public sealed class EllipsisText : TextBlock
@@ -89,37 +89,38 @@ public sealed class EllipsisText : TextBlock
             return whole;
         }
 
-        // The part that differs shows whole after the start's first words where it fits, so a title never loses the words that
-        // tell it from a similar one. The cut drops at least one shared word, or it would only add an ellipsis.
+        // The part that differs leads where the whole text does not fit: an ellipsis stands for the shared start, and as many of
+        // its last words as fit stay before the part, so similar titles read apart at a glance ("…partition 2024-Q3", ADR 0065).
         var end = Longest(whole.Length, length => Cut(whole, length), width);
         if (KeepFrom <= 1 || KeepFrom >= whole.Length)
         {
             return Cut(whole, end);
         }
 
-        var kept = whole[KeepFrom..];
-        var head = whole[..WholeWords(whole, Longest(KeepFrom - 2, length => Joined(whole, length, kept), width))].TrimEnd().Length;
-        return head > 0 && head < KeepFrom - 1 && whole[head] == ' ' ? Joined(whole, head, kept) : Cut(whole, end);
-    }
-
-    // A start that keeps its words reads as the same start on every similar title. A first word that is cut stays as it is.
-    private static int WholeWords(string whole, int length)
-    {
-        if (length == 0 || length >= whole.Length || whole[length] == ' ' || whole[length - 1] == ' ')
+        foreach (var start in WordStarts(whole, KeepFrom))
         {
-            return length;
+            var tail = Ellipsis + whole[start..];
+            if (Fits(tail, width))
+            {
+                return tail;
+            }
         }
 
-        var space = whole.LastIndexOf(' ', length - 1);
-        return space > 0 ? space : length;
+        return Cut(whole, end);
     }
 
-    private static string Joined(string whole, int length, string kept) => whole[..length].TrimEnd() + Ellipsis + " " + kept;
-
-    private static int WordEnd(string text, int from)
+    // The starts of the words after the first one, up to and with the start of the kept part, the earliest first.
+    private static IEnumerable<int> WordStarts(string whole, int keep)
     {
-        var space = text.IndexOf(' ', from);
-        return space < 0 ? text.Length : space;
+        for (var at = 1; at < keep; at++)
+        {
+            if (whole[at - 1] == ' ' && whole[at] != ' ')
+            {
+                yield return at;
+            }
+        }
+
+        yield return keep;
     }
 
     // The most characters, under the limit, whose text fits. No text fits at 0.

@@ -29,15 +29,34 @@ public sealed class TitlePartsTests
 
         text.Measure(new Avalonia.Size(120, double.PositiveInfinity));
 
-        Assert.EndsWith("… 2025-Q1", text.Text);
-        Assert.True(text.Text!.Length > "… 2025-Q1".Length);
+        Assert.StartsWith("…", text.Text);
+        Assert.EndsWith(" 2025-Q1", text.Text);
+        Assert.EndsWith(text.Text![1..], "Backfill ledger partition 2025-Q1");
     }
 
     [AvaloniaFact]
-    public void A_cut_title_keeps_the_whole_part_that_differs_and_not_only_its_first_word()
+    public void The_backfill_partitions_of_the_large_fixture_read_apart_when_their_titles_are_cut()
+    {
+        string[] titles = [.. new[] { "2023-Q4", "2024-Q1", "2024-Q2", "2024-Q3", "2024-Q4", "2025-Q1", "2025-Q2", "2025-Q3" }
+            .Select(quarter => "Backfill ledger partition " + quarter)];
+        var keeps = TitleParts.KeepFrom(titles);
+
+        var shown = titles.Zip(keeps, (title, keep) =>
+        {
+            var text = new EllipsisText { Whole = title, KeepFrom = keep, FontSize = 13, MaxLines = 2, TextWrapping = Avalonia.Media.TextWrapping.WrapWithOverflow };
+            text.Measure(new Avalonia.Size(90, double.PositiveInfinity));
+            return text.Text!;
+        }).ToArray();
+
+        Assert.All(shown.Zip(titles), pair => Assert.True(pair.First.StartsWith('…') && pair.Second.EndsWith(pair.First[1..]), pair.First));
+        Assert.Equal(titles.Length, shown.Distinct().Count());
+    }
+
+    [AvaloniaFact]
+    public void A_cut_title_starts_with_an_ellipsis_and_keeps_the_whole_part_that_differs()
     {
         const string Title = "Move the account statement query";
-        const string Shown = "Move… account statement query";
+        const string Shown = "…the account statement query";
         var text = new EllipsisText { Whole = Title, KeepFrom = "Move the ".Length, FontSize = 13, MaxLines = 1, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
         using var layout = new Avalonia.Media.TextFormatting.TextLayout(Shown, new Avalonia.Media.Typeface(text.FontFamily), 13, null);
 

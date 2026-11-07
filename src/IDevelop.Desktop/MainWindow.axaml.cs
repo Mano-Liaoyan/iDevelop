@@ -188,10 +188,11 @@ public partial class MainWindow : Window
         {
             dock.Height = new GridLength(MainArea.Bounds.Height >= TallWindow ? TallDockHeight : DockHeight);
             LimitDock();
-            // Once the dock has its height, the canvas above it fits again if a card that showed whole would be cut.
+            // Once the dock has its height, the canvas above it keeps the conversation's node and its direct neighbours in view.
             // Resizing later never moves the person's view.
             var shown = CanvasView?.CardsInView() ?? [];
-            Dispatcher.UIThread.Post(() => CanvasView?.FitIfCut(shown), DispatcherPriority.Background);
+            var node = ViewModel.Canvas?.SelectedNode ?? ViewModel.DockedConversation.Node;
+            Dispatcher.UIThread.Post(() => CanvasView?.KeepBranchInView(node, shown), DispatcherPriority.Background);
         }
     }
 

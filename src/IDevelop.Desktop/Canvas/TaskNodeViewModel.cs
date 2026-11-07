@@ -26,12 +26,11 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
         [nameof(AgentLabel)] = [nameof(AgentClient), nameof(CardClient), nameof(AgentModel), nameof(CardModel), nameof(HasModel), nameof(CardLine), nameof(ClientMark), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
         [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
         [nameof(Preview)] = [nameof(TaskChanges), nameof(SystemPrompt), nameof(HasSystemPrompt)],
-        [nameof(Title)] = [nameof(SystemPrompt)],
+        [nameof(Title)] = [nameof(SystemPrompt), nameof(ExpandName), nameof(FarTitleKeep)],
         [nameof(PermissionNote)] = [nameof(PermissionSummary)],
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
         [nameof(Location)] = [nameof(DisplayLocation)],
         [nameof(IsRenaming)] = [nameof(ShowsPeek)],
-        [nameof(Title)] = [nameof(ExpandName)],
     };
 
     private readonly WorkflowCanvasViewModel _canvas;

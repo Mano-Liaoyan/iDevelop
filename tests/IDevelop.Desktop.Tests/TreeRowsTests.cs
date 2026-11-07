@@ -36,15 +36,19 @@ public sealed class TreeRowsTests
     }
 
     [Fact]
-    public void Done_starts_folded_above_5_nodes_and_the_other_groups_start_open()
+    public void A_group_starts_folded_above_8_nodes_except_Needs_you()
     {
-        Assert.False(new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 5 }.IsFolded);
-        Assert.True(new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 6 }.IsFolded);
-        Assert.False(new NodeGroup(NodeGroupKind.NotStarted, () => { }) { Count = 40 }.IsFolded);
+        foreach (var kind in new[] { NodeGroupKind.Running, NodeGroupKind.NotStarted, NodeGroupKind.Done })
+        {
+            Assert.False(new NodeGroup(kind, () => { }) { Count = 8 }.IsFolded, $"{kind} 8");
+            Assert.True(new NodeGroup(kind, () => { }) { Count = 9 }.IsFolded, $"{kind} 9");
+        }
 
-        var done = new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 6 };
+        Assert.False(new NodeGroup(NodeGroupKind.NeedsYou, () => { }) { Count = 40 }.IsFolded);
+
+        var done = new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 9 };
         done.Toggle();
-        done.Count = 9;
+        done.Count = 12;
         Assert.False(done.IsFolded);
     }
 

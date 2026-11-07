@@ -7,13 +7,13 @@ public enum NodeGroupKind { NeedsYou, Running, NotStarted, Done }
 
 /// <summary>
 /// A group header in an expanded workflow's node list: the group's name, how many nodes it holds, and whether it is folded.
-/// "Done" starts folded when it holds more than <see cref="DoneFoldsAbove"/> nodes, and the others start open. A fold that the
-/// person sets stays until the person changes it.
+/// A group with more than <see cref="FoldsAbove"/> nodes starts folded, so a large workflow leaves the tree room for the other
+/// workflows and projects. "Needs you" always starts open (ADR 0065). A fold that the person sets stays until the person changes it.
 /// </summary>
 public sealed class NodeGroup(NodeGroupKind kind, Action changed) : ObservableObject
 {
-    /// <summary>"Done" with more nodes than this starts folded.</summary>
-    public const int DoneFoldsAbove = 5;
+    /// <summary>A group other than "Needs you" with more nodes than this starts folded.</summary>
+    public const int FoldsAbove = 8;
 
     private bool? _folded;
 
@@ -42,7 +42,7 @@ public sealed class NodeGroup(NodeGroupKind kind, Action changed) : ObservableOb
     }
 
     /// <summary>The group lists no node rows under its header.</summary>
-    public bool IsFolded => _folded ?? (Kind == NodeGroupKind.Done && Count > DoneFoldsAbove);
+    public bool IsFolded => _folded ?? (Kind != NodeGroupKind.NeedsYou && Count > FoldsAbove);
 
     /// <summary>What a click on the header does, such as "Show 21 done nodes".</summary>
     public string ToggleLabel => IsFolded ? $"Show {Name} ({Count})" : $"Fold {Name} ({Count})";

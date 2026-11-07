@@ -44,6 +44,20 @@ public sealed class FitZoomTests
     }
 
     [Fact]
+    public void A_large_graph_fits_whole_below_the_readable_zoom()
+    {
+        // About the size of the 50 node fixture: ten columns of eight rows.
+        var extent = new Rect(0, 0, 2600, 1500);
+
+        var zoom = CanvasChrome.FitZoom(extent, Room);
+        var location = CanvasChrome.ViewOn(extent, Room, zoom, new Point(0, 0));
+
+        Assert.True(zoom < ZoomTiers.ReadableZoom);
+        var seen = new Rect(location + (Vector)Room.Position / zoom, Room.Size / zoom);
+        Assert.True(seen.Inflate(0.5).Contains(extent), $"{seen} cuts {extent}.");
+    }
+
+    [Fact]
     public void A_huge_graph_stops_at_the_least_zoom_around_its_focus()
     {
         var extent = new Rect(0, 0, 40000, 20000);

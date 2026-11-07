@@ -282,6 +282,37 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
+    /// <summary>
+    /// Keeps <paramref name="node"/> and its direct predecessors and successors whole in view after the canvas got shorter, as
+    /// when the conversation docks under it. A view that already shows them stays. Otherwise the view frames them, never closer
+    /// than it was, so the person keeps the node's branch while they talk to its agent. Without a node, a view that cut a card
+    /// that showed whole fits again.
+    /// </summary>
+    internal void KeepBranchInView(TaskNodeViewModel? node, IReadOnlyCollection<Rect> shown)
+    {
+        if (!IsEffectivelyVisible || _viewModel is not { } canvas)
+        {
+            return;
+        }
+
+        if (node is null || !canvas.Nodes.Contains(node))
+        {
+            FitIfCut(shown);
+            return;
+        }
+
+        var reach = ZoomTiers.CardReach(canvas.Tier);
+        var branch = canvas.Connections.Where(wire => wire.From == node).Select(wire => wire.To)
+            .Concat(canvas.Connections.Where(wire => wire.To == node).Select(wire => wire.From))
+            .Append(node).Distinct()
+            .Select(each => new Rect(each.DisplayRect.Position, each.DisplayRect.Size + new Size(0, reach)))
+            .Aggregate((union, rect) => union.Union(rect));
+        if (!Room().Contains(new Rect((branch.Position - Editor.ViewportLocation) * Editor.ViewportZoom, branch.Size * Editor.ViewportZoom)))
+        {
+            Fit(branch, node.DisplayRect.Center, Math.Min(Editor.ViewportZoom, CanvasChrome.FitZoom(branch, Room(FitMargin))));
+        }
+    }
+
     /// <summary>The cards and an open proposal's ghost cards, in canvas units.</summary>
     private IEnumerable<Rect> Cards()
     {

@@ -133,8 +133,8 @@
               </Grid>
             </Grid>
             <!-- The zoomed out card's title. A hyphenated token such as 2023-Q4 stays on one line, and a long title ends in an ellipsis
-                 at its end only. The name tag shows the selected card's whole title (ADR 0064). -->
-            <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" IsHitTestVisible="False"
+                 at its end, or, beside a similar title, starts with one before the part that differs (ADR 0065). The name tag shows the selected card's whole title (ADR 0064). -->
+            <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" KeepFrom="{Binding FarTitleKeep}" IsHitTestVisible="False"
                                 AutomationProperties.AccessibilityView="Raw">
               <Classes.agentWraps>
                 <MultiBinding Converter="{x:Static canvas:CardText.AgentWraps}">
