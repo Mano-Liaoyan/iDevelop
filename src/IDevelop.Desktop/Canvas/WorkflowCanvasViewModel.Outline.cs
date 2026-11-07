@@ -51,11 +51,12 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>
     /// The rows of the left tree under an expanded workflow: for each group that holds a node ("Needs you", "Running",
     /// "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The selected node's group
-    /// opens, so the selected node always has its row.
+    /// opens when it holds at most <see cref="NodeGroup.FoldsAbove"/> nodes. A larger group opens only when the person opens it,
+    /// so a selection does not fill the tree (ADR 0066).
     /// </summary>
     public ObservableCollection<object> TreeRows { get; } = [];
 
-    /// <summary>The tree's rows in their order, with each node in <paramref name="keep"/> in an open group.</summary>
+    /// <summary>The tree's rows in their order, with each node in <paramref name="keep"/> in an open group unless its group is large.</summary>
     internal static IReadOnlyList<object> TreeOrder(IReadOnlyList<TaskNodeViewModel> outline, IReadOnlyList<NodeGroup> groups, params TaskNodeViewModel?[] keep)
     {
         var members = outline.ToLookup(NodeGroup.Of);
@@ -64,9 +65,12 @@ public sealed partial class WorkflowCanvasViewModel
             group.Count = members[group.Kind].Count();
         }
 
-        foreach (var node in keep.OfType<TaskNodeViewModel>())
+        foreach (var group in keep.OfType<TaskNodeViewModel>().Select(node => groups.First(group => group.Kind == NodeGroup.Of(node))))
         {
-            groups.First(group => group.Kind == NodeGroup.Of(node)).Open();
+            if (group.Count <= NodeGroup.FoldsAbove)
+            {
+                group.Open();
+            }
         }
 
         var rows = new List<object>(outline.Count + groups.Count);
@@ -123,7 +127,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         // A list forgets its selection when the selected row leaves it, even to come straight back, and tells the canvas.
         // So the selected row stays, and the other rows take their places around it.
-        var stays = SelectedNode is T selected && order.Contains(selected) ? selected : null;
+        var stays = SelectedNode is T selected && rows.Contains(selected) && order.Contains(selected) ? selected : null;
         foreach (var row in rows.Where(row => row != stays).ToList())
         {
             rows.Remove(row);

@@ -341,6 +341,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
         node.Canvas.Project.IsExpanded = true;
         node.Canvas.IsExpanded = true;
+        // Showing a node is a request for its row, so its group opens even when it is large.
+        node.Canvas.Groups.First(group => group.Kind == NodeGroup.Of(node)).Open();
         node.Canvas.Inspect(node);
         NodeShown?.Invoke(node);
         TreeReveal?.Invoke(node.Canvas, node);

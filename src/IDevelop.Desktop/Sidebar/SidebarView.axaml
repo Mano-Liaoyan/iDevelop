@@ -346,7 +346,7 @@
                               <!-- The nodes group by state under a header with its count, as a list of issues does (ADR 0064). A header folds its group. -->
                               <ListBox Classes="tasks" Classes.hidden="{Binding !IsSelected}"
                                        ItemsSource="{Binding TreeRows}"
-                                       SelectedItem="{Binding SelectedNode}"
+                                       SelectedItem="{Binding SelectedNode, Mode=OneWay}"
                                        SelectionChanged="OnSidebarSelectionChanged"
                                        Tapped="OnSidebarTapped"
                                        KeyDown="OnSidebarKeyDown"

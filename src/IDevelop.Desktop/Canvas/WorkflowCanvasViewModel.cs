@@ -90,7 +90,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         get;
         set
         {
-            // The tree's list needs the node's row before it takes the selection, or it would let the selection go.
+            // The tree's list needs the node's row before it takes the selection. A node in a large folded group has no row,
+            // and the list then shows no selection.
             if (value is not null && !TreeRows.Contains(value))
             {
                 ArrangeTreeRows(value);

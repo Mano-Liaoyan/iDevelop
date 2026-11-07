@@ -208,6 +208,18 @@ public partial class SidebarView : UserControl
         {
             e.Container.ClearValue(AutomationProperties.NameProperty);
         }
+
+        // The canvas's selected node gets its row back when the person opens its group, and the row shows the selection.
+        if (sender is ListBox { DataContext: WorkflowCanvasViewModel { SelectedNode: { } selected } } rows && rows.ItemsView[e.Index] == selected)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (rows.DataContext is WorkflowCanvasViewModel { SelectedNode: { } node } && node == selected && rows.SelectedItem != node && rows.ItemsView.Contains(node))
+                {
+                    rows.SetCurrentValue(SelectingItemsControl.SelectedItemProperty, node);
+                }
+            });
+        }
     }
 
     private static void OnGroupPressed(object? sender, PointerPressedEventArgs e)
@@ -491,9 +503,17 @@ public partial class SidebarView : UserControl
     }
 
     // The list also follows its canvas's selection, so only a change made while the list has focus is a choice in it.
+    // The list chooses a node for the canvas. The canvas can select a node that has no row, in a large folded group, so the
+    // list's own loss of its selection does not clear the canvas's selection.
     private void OnSidebarSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is ListBox { IsKeyboardFocusWithin: true, SelectedItem: TaskNodeViewModel task })
+        if (sender is not ListBox { SelectedItem: TaskNodeViewModel task, DataContext: WorkflowCanvasViewModel canvas } list)
+        {
+            return;
+        }
+
+        canvas.SelectedNode = task;
+        if (list.IsKeyboardFocusWithin)
         {
             Window?.BringIntoViewIfHidden(task);
         }

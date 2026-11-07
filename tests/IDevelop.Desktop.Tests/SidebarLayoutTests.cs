@@ -327,6 +327,37 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Selecting_a_node_of_a_large_folded_group_keeps_the_group_folded_and_the_selection()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Render();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var group = canvas.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted);
+        var list = shell.Window.GetVisualDescendants().OfType<ListBox>().Single(list => list.DataContext == canvas && list.Classes.Contains("tasks"));
+        Assert.True(group.IsFolded);
+
+        foreach (var node in new[] { canvas.Outline[3], canvas.Outline[7] })
+        {
+            canvas.SelectedNode = node;
+            shell.Render();
+            Assert.True(group.IsFolded);
+            Assert.Same(node, canvas.SelectedNode);
+            Assert.Null(list.SelectedItem);
+        }
+
+        // The person opens the group, and the selected node's row shows selected.
+        group.Toggle();
+        shell.Render();
+        Assert.Same(canvas.Outline[7], list.SelectedItem);
+        list.SelectedItem = canvas.Outline[2];
+        shell.Render();
+        Assert.Same(canvas.Outline[2], canvas.SelectedNode);
+    }
+
+    [AvaloniaFact]
     public void No_row_shows_cut_at_the_tree_s_bottom_edge_and_the_rows_workflow_stays_pinned()
     {
         var reports = _temp.Create(Reports);
