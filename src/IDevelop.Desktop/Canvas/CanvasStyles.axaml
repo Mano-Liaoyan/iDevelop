@@ -289,18 +289,19 @@
   <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
     <Setter Property="FontSize" Value="26" />
   </Style>
-  <!-- A model name that does not fit ends at a whole word and an ellipsis, as "Opus…", never "Opus …" or "Qwen 4 …". -->
   <Style Selector="TextBlock.farAgent">
     <Setter Property="FontSize" Value="17" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="WordEllipsis" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector=":is(Control).tier-compact TextBlock.farAgent">
     <Setter Property="FontSize" Value="20" />
   </Style>
+  <!-- At the Label tier the first word of a model name always fits, so a cut name ends at a whole word, as "GPT-6.1…". -->
   <Style Selector=":is(Control).tier-label TextBlock.farAgent">
+    <Setter Property="TextTrimming" Value="WordEllipsis" />
     <Setter Property="FontSize" Value="25" />
     <Setter Property="LineHeight" Value="30" />
     <Setter Property="TextWrapping" Value="NoWrap" />
