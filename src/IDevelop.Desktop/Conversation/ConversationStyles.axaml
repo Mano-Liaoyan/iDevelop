@@ -93,7 +93,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- A long line wraps at a space or after a comma, so the block never cuts a character at its edge. -->
+  <!-- CodeText continues a long line on an indented line, so the block never cuts a character and each source line still shows where it starts. -->
   <Style Selector="SelectableTextBlock.mdCodeText">
     <Setter Property="Margin" Value="12,0,12,12" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -184,7 +184,7 @@
     <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="MaxLines" Value="2" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.limitsText">
@@ -342,6 +342,18 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <!-- A short transcript sits on the composer while the node waits for words, so a question stays beside its answer. -->
+  <Style Selector="StackPanel.nearComposer">
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+  </Style>
+  <!-- While the inspector shows the model and its pickers, the composer's chip only names them. -->
+  <Style Selector="Button.modelChip.readOnly">
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+  <Style Selector="Button.modelChip.readOnly PathIcon.chipChevron">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Border.resultNote">
     <Setter Property="Padding" Value="8,4" />

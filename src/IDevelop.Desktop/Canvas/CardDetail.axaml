@@ -239,7 +239,7 @@
                 AutomationProperties.AutomationId="CardApprove" AutomationProperties.Name="Approve">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" />
-            <TextBlock Text="Approve" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ApproveLabel}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
         <!-- Send back takes a note, which the inspector's box holds. -->

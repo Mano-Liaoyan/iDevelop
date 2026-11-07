@@ -315,13 +315,14 @@
             </TextBox.KeyBindings>
           </TextBox>
           <Grid Classes="composerBar" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="4">
-            <Button x:Name="ModelChip" Classes="modelChip" ToolTip.Tip="{Binding ModelChip, StringFormat='Change the model and effort: {0}'}"
+            <Button x:Name="ModelChip" Classes="modelChip"
+                    Classes.readOnly="{Binding $parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=False}" ToolTip.Tip="{Binding ModelChip, StringFormat='Change the model and effort: {0}'}"
                     AutomationProperties.AutomationId="ConversationModel" AutomationProperties.Name="{Binding ModelChip, StringFormat='Agent: {0}'}">
               <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" Width="12" Height="12" />
                 <TextBlock Grid.Column="1" Text="{Binding ModelChip}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                            AutomationProperties.AutomationId="ConversationModelLabel" />
-                <PathIcon Grid.Column="2" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronUp}" Width="10" Height="10" />
+                <PathIcon Grid.Column="2" Classes="chipChevron" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronUp}" Width="10" Height="10" />
               </Grid>
               <Button.Flyout>
                 <Flyout Placement="TopEdgeAlignedLeft">
@@ -379,7 +380,7 @@
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
               </Button>
               <Button Classes="round send" Command="{Binding Node.SendCommand}" IsVisible="{Binding ShowsSend}"
-                      ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True" ToolTip.Placement="Top" ToolTip.VerticalOffset="-8"
+                      ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True"
                       AutomationProperties.AutomationId="ConversationSend"
                       AutomationProperties.Name="Send">
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
@@ -393,8 +394,8 @@
     <Panel Grid.Row="2">
       <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
-        <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
-        <StackPanel Margin="0,0,0,12">
+        <!-- The room under the last row keeps one gap between the transcript and what sits over the composer. -->
+        <StackPanel Margin="0,0,0,4" Classes.nearComposer="{Binding WaitsForWords}">
           <Button Classes="action" HorizontalAlignment="Center" Height="28" Margin="0,12,0,0"
                   Command="{Binding LoadEarlierCommand}" IsVisible="{Binding HasEarlier}"
                   AutomationProperties.AutomationId="LoadEarlier"
@@ -407,11 +408,15 @@
               <StackPanel>
                 <ToggleButton Classes="steps" IsChecked="{Binding IsTaskOpen}"
                               AutomationProperties.AutomationId="ConversationTaskToggle" AutomationProperties.Name="Task">
-                  <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6">
+                  <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
                     <PathIcon Theme="{StaticResource Glyph}" />
                     <TextBlock Grid.Column="1" Classes="taskLabel" Text="Task" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="{Binding TaskPreview}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                IsVisible="{Binding !IsTaskOpen}" AutomationProperties.AutomationId="ConversationTaskPreview" />
+                    <!-- What the agent read from earlier nodes. Opening the task names them. -->
+                    <TextBlock Grid.Column="3" Classes="caption" Text="{Binding TaskInputCount}" VerticalAlignment="Center"
+                               IsVisible="{Binding ShowsTaskInputCount}" ToolTip.Tip="{Binding TaskInputLine}"
+                               AutomationProperties.AutomationId="ConversationTaskInputCount" />
                   </Grid>
                 </ToggleButton>
                 <TextBlock Classes="caption" Text="{Binding TaskInputLine}" IsVisible="{Binding ShowsTaskInputLine}" TextWrapping="Wrap" Margin="24,2,8,0"
@@ -483,7 +488,13 @@
                       <StackPanel>
                         <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
                           <TextBlock Classes="resultHeading" Text="{Binding Result.Heading, FallbackValue={x:Null}}" AutomationProperties.AutomationId="ResultCardHeading" />
-                          <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Result.Commit, FallbackValue={x:Null}}" />
+                          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" IsVisible="{Binding Result.HasDetail, FallbackValue=False}">
+                            <TextBlock Classes="resultCommit" Text="{Binding Result.Commit, FallbackValue={x:Null}}" />
+                            <Button Classes="icon small" Command="{Binding CopyCommitCommand}" ToolTip.Tip="Copy the commit's id"
+                                    AutomationProperties.AutomationId="ResultCopyCommit" AutomationProperties.Name="Copy the commit's id">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCopy}" Width="14" Height="14" />
+                            </Button>
+                          </StackPanel>
                           <Button Grid.Column="3" Classes="ghost" Height="24" Click="OnShowResult"
                                   IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=True}"
                                   ToolTip.Tip="Selects the node, whose Output section holds the result"
@@ -505,15 +516,21 @@
                           <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="execution:ChangeRow">
                               <StackPanel>
-                                <ToggleButton Classes="steps" IsChecked="{Binding IsOpen}" IsEnabled="{Binding HasDiff}" ToolTip.Tip="{Binding OpenLabel}"
-                                              AutomationProperties.AutomationId="ResultFile" AutomationProperties.Name="{Binding OpenLabel}">
-                                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
-                                    <PathIcon Theme="{StaticResource Glyph}" />
-                                    <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Path}" TextTrimming="PrefixCharacterEllipsis" />
-                                    <TextBlock Grid.Column="2" Classes="lineCount added" Text="{Binding Added}" />
-                                    <TextBlock Grid.Column="3" Classes="lineCount deleted" Text="{Binding Deleted}" />
-                                  </Grid>
-                                </ToggleButton>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                  <ToggleButton Classes="steps" IsChecked="{Binding IsOpen}" IsEnabled="{Binding HasDiff}" ToolTip.Tip="{Binding OpenLabel}"
+                                                AutomationProperties.AutomationId="ResultFile" AutomationProperties.Name="{Binding OpenLabel}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                                      <PathIcon Theme="{StaticResource Glyph}" />
+                                      <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Path}" TextTrimming="PrefixCharacterEllipsis" />
+                                      <TextBlock Grid.Column="2" Classes="lineCount added" Text="{Binding Added}" />
+                                      <TextBlock Grid.Column="3" Classes="lineCount deleted" Text="{Binding Deleted}" />
+                                    </Grid>
+                                  </ToggleButton>
+                                  <Button Grid.Column="1" Classes="icon small" VerticalAlignment="Center" Click="OnOpenFile" ToolTip.Tip="Open the file in the node's folder"
+                                          AutomationProperties.AutomationId="ResultOpenFile" AutomationProperties.Name="Open the file">
+                                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                                  </Button>
+                                </Grid>
                                 <!-- The file's own lines, in the same mono face as the code in the transcript. -->
                                 <ItemsControl Classes="diff" ItemsSource="{Binding Lines}" IsVisible="{Binding IsOpen}"
                                               AutomationProperties.AutomationId="ResultDiff">

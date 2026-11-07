@@ -69,7 +69,7 @@ internal static class NodeActions
         : null;
 
     private static NodeAction Approve(TaskNodeViewModel node, bool primary) =>
-        new("Approve", "Approve", "IconCheckmark", node.ApproveCommand, primary, null);
+        new("Approve", node.ApproveLabel, "IconCheckmark", node.ApproveCommand, primary, null);
 
     private static NodeAction SendBack(TaskNodeViewModel node) =>
         new("SendBack", "Send back", "IconUndo", node.SendBackCommand, false, "Write a note first. It goes to the nodes before this one.");

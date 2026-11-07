@@ -39,6 +39,7 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
         _agent = agent;
         _owner = owner;
         CopyCommand = new RelayCommand(() => _ = _owner.CopyAsync(_text));
+        CopyCommitCommand = new RelayCommand(() => _ = _owner.CopyAsync(Result?.CommitId ?? ""));
     }
 
     public bool IsPerson => _agent is null;
@@ -90,6 +91,9 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 
     /// <summary>Copies the whole message source, result block included.</summary>
     public ICommand CopyCommand { get; }
+
+    /// <summary>Copies the whole id of the commit that the message's result names.</summary>
+    public ICommand CopyCommitCommand { get; }
 }
 
 /// <summary>A notice from the client, which stands alone, or one step of a group.</summary>

@@ -59,7 +59,7 @@ public sealed class CardIdentityTests
     public void The_replys_action_stays_a_button_while_the_person_writes()
     {
         using var f = new NodeFixture(Task(A, "A", 105, ConversationMode.Chat));
-        f.Install(Reply("s-1", "Which fruit?"));
+        f.Install(Reply("s-1", "Pears are ripe."));
         var shell = f.Open();
         shell.RunNode("A");
         shell.WaitForState("A", NodeState.InputRequired);
@@ -75,7 +75,23 @@ public sealed class CardIdentityTests
         Assert.True(action.IsEffectivelyVisible);
         Assert.Equal(empty, shell.Bounds(action));
         Assert.Contains("action", action.Classes);
-        Assert.Equal("Accept the agent's message as the result", shell.Window.ViewModel.Conversation!.ApproveLabel);
+        Assert.Equal("Use this message as the result", shell.Window.ViewModel.Conversation!.ApproveLabel);
+    }
+
+    [AvaloniaFact]
+    public void An_open_question_takes_no_card_and_the_composer_answers_it()
+    {
+        using var f = new NodeFixture(Task(A, "A", 105, ConversationMode.Chat));
+        f.Install(Reply("s-1", "Which fruit?"));
+        var shell = f.Open();
+        shell.RunNode("A");
+        shell.WaitForState("A", NodeState.InputRequired);
+        shell.NodeModel("A").OpenConversationCommand.Execute(null);
+        shell.Render();
+        var model = shell.Window.ViewModel.Conversation!;
+
+        Assert.Equal((AttentionCard.Reply, false, false), (model.Card, model.ShowsCard, model.ShowsCardApprove));
+        Assert.True(model.WaitsForWords);
     }
 
     [AvaloniaFact]

@@ -78,18 +78,33 @@ public sealed class InspectorHeaderTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_node_that_waits_for_a_reply_leads_with_Reply_and_Approve_and_keeps_Retry_in_the_menu()
+    public void A_node_that_waits_for_a_reply_leads_with_Reply_and_offers_the_message_as_its_result()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105, ConversationMode.Chat));
-        f.Install(Reply("s-1", "Which fruit?"));
+        f.Install(Reply("s-1", "Pears are ripe."));
         var shell = f.Open();
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.RunNode("Say hi");
         shell.WaitForState("Say hi", NodeState.InputRequired);
         shell.Render();
 
-        Assert.Equal(["*Reply", "Approve"], Actions(shell));
+        Assert.Equal(["*Reply", "Use as result"], Actions(shell));
         Assert.True(shell.NodeModel("Say hi").RetryIsInMenu);
+    }
+
+    [AvaloniaFact]
+    public void An_open_question_is_no_result_so_the_header_offers_only_Reply()
+    {
+        using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105, ConversationMode.Chat));
+        f.Install(Reply("s-1", "Which **fruit?**"));
+        var shell = f.Open();
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.RunNode("Say hi");
+        shell.WaitForState("Say hi", NodeState.InputRequired);
+        shell.Render();
+
+        Assert.Equal(["*Reply"], Actions(shell));
+        Assert.False(shell.NodeModel("Say hi").ApproveCommand.CanExecute(null));
     }
 
     [AvaloniaFact]

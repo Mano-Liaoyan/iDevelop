@@ -81,7 +81,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     public string BreadcrumbTip => Canvas.ShowsBar ? $"{Breadcrumb}\n{Canvas.BarSummary}" : Breadcrumb;
 
     /// <summary>The composer takes the keys when the conversation opens only while the node waits for the person's words.</summary>
-    internal bool WaitsForWords => Card is AttentionCard.Reply or AttentionCard.Question or AttentionCard.Interrupted;
+    public bool WaitsForWords => Card is AttentionCard.Reply or AttentionCard.Question or AttentionCard.Interrupted;
 
     public string AgentName => Node.Definition.Execution?.Client is { } client ? ClientCatalog.Name(client) : "The agent";
 
@@ -108,8 +108,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         : Node.State == NodeState.Running ? "Your message waits for this turn to end. Stop and send ends the turn first."
         : null;
 
-    /// <summary>Send's tooltip. While a draft shows the key beside the button, the tooltip leaves it out.</summary>
-    public string SendHelp => string.Join("\n", new[] { HasDraft ? "Send" : "Send (Ctrl+Enter)", ComposerHint }.OfType<string>());
+    /// <summary>Send's tooltip. The key's hint sits beside the button, so the tooltip only says what is not plain, and it says nothing while Send is plain.</summary>
+    public string? SendHelp => ComposerHint;
 
     /// <summary>The composer's placeholder, which says what a message does now.</summary>
     public string Watermark => Node.IsAsking ? "Answer in your own words"
@@ -141,7 +141,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _ => AttentionCard.None,
     };
 
-    public bool ShowsCard => Card != AttentionCard.None;
+    /// <summary>A wait for words with no action and no words of its own needs no card: the message above asks, and the composer answers.</summary>
+    public bool ShowsCard => Card != AttentionCard.None && !(IsCompactCard && CardBody is null && !ShowsCardApprove);
 
     public bool IsQuestionCard => Card == AttentionCard.Question;
 
@@ -160,8 +161,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public string CardTitle => Card switch
     {
-        AttentionCard.Question => Node.Questions is [var only] ? only.Header : Node.Questions.Count == 0 ? "The agent asks. Answer below." : "Question",
-        AttentionCard.Reply => HasOwnReason ? "The agent asks. Answer below." : "The agent waits for your reply",
+        AttentionCard.Question => Node.Questions is [var only] ? only.Header : "Question",
+        AttentionCard.Reply => HasOwnReason ? "Question" : "Reply",
         AttentionCard.Approval => "Approval",
         AttentionCard.Conflict => "Conflict",
         AttentionCard.Interrupted => "Interrupted",
@@ -181,8 +182,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>A reply's card says what its action does in the action's words and tooltip, so it holds no hint.</summary>
     public string? CardHint => null;
 
-    /// <summary>Approve's words: on a wait for a reply it ends the node with the agent's message, and never the draft, so it says so.</summary>
-    public string ApproveLabel => Card == AttentionCard.Reply ? "Accept the agent's message as the result" : "Approve";
+    /// <summary>Approve's words, which say what it does: on a wait for a reply it ends the node with the agent's message, and never the draft.</summary>
+    public string ApproveLabel => Card == AttentionCard.Reply ? "Use this message as the result" : Node.ApproveLabel;
 
     /// <summary>The card's action ends the node on the agent's words, so it stays quiet beside the composer.</summary>
     public bool IsReplyCard => Card == AttentionCard.Reply;
@@ -201,7 +202,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     /// <summary>What Approve hands on, and to which nodes.</summary>
     public string ApproveHelp => Card == AttentionCard.Reply
-        ? $"Accepting completes the node and hands the agent's message above to {Recipients}."
+        ? $"Completes the node and hands the agent's message above to {Recipients}."
         : $"Makes the agent's last reply the result for {Recipients}.";
 
     // "A and B", "A, B, and 2 more", or the node itself when nothing reads it.
@@ -260,6 +261,12 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The earlier nodes that the agent read, by name, or null.</summary>
     public string? TaskInputLine => HasInputs ? $"Input: {string.Join(", ", Node.Inputs.Select(link => link.Node.Title))}" : null;
 
+    /// <summary>"2 inputs", which stands beside the folded task.</summary>
+    public string TaskInputCount => Node.Inputs.Count == 1 ? "1 input" : $"{Node.Inputs.Count} inputs";
+
+    /// <summary>The folded task says that the agent read earlier nodes.</summary>
+    public bool ShowsTaskInputCount => !IsTaskOpen && HasInputs;
+
     /// <summary>The opened task names the earlier nodes it read.</summary>
     public bool ShowsTaskInputLine => IsTaskOpen && HasInputs;
 
@@ -278,6 +285,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(ShowsTaskInputLine));
+                OnPropertyChanged(nameof(ShowsTaskInputCount));
             }
         }
     }
@@ -395,6 +403,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CardBody));
         OnPropertyChanged(nameof(CardHint));
         OnPropertyChanged(nameof(ShowsCardBody));
+        OnPropertyChanged(nameof(ShowsCard));
         _loadEarlier.NotifyCanExecuteChanged();
     }
 
@@ -551,6 +560,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             case nameof(TaskNodeViewModel.EngineState) or nameof(TaskNodeViewModel.IsAsking):
                 RaiseState();
                 break;
+            case nameof(TaskNodeViewModel.ShowsApprove):
+                OnPropertyChanged(nameof(ShowsCardApprove));
+                OnPropertyChanged(nameof(ShowsCard));
+                break;
             case nameof(TaskNodeViewModel.Latest):
                 OnPropertyChanged(nameof(WorkingLine));
                 break;
@@ -560,6 +573,9 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
                 break;
             case nameof(TaskNodeViewModel.Inputs) or nameof(TaskNodeViewModel.Outputs):
                 RaiseStrip();
+                OnPropertyChanged(nameof(TaskInputCount));
+                OnPropertyChanged(nameof(TaskInputLine));
+                OnPropertyChanged(nameof(ShowsTaskInputCount));
                 OnPropertyChanged(nameof(CardHint));
                 OnPropertyChanged(nameof(ApproveHelp));
                 break;
@@ -571,7 +587,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         nameof(ComposerHint), nameof(SendHelp), nameof(Watermark), nameof(IsReplyCard), nameof(ShowsCardApprove),
         nameof(ShowsComposerStop), nameof(ShowsSend), nameof(ShowsStopAndSend), nameof(ShowsEmpty), nameof(ShowsWorking), nameof(WorkingLabel), nameof(WorkingLine),
         nameof(Card), nameof(ShowsCard), nameof(IsQuestionCard), nameof(IsProblemCard), nameof(IsWarningCard), nameof(IsApprovalCard),
-        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody),
+        nameof(ShowsCardRetry), nameof(IsRetryPrimary), nameof(ShowsChangeModel), nameof(CardTitle), nameof(CardBody), nameof(CardHint), nameof(ApproveLabel), nameof(ApproveHelp), nameof(CardOffered), nameof(IsCompactCard), nameof(ShowsCardBody), nameof(WaitsForWords),
     ];
 
     private static readonly string[] StripProperties =

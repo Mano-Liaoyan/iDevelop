@@ -41,6 +41,7 @@ public partial class MainWindow : Window
         AddHandler(GotFocusEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Bubble, handledEventsToo: true);
         ConversationLinkRouter.SetRouter(this, new ConversationLinkRouter(uri => Launcher.LaunchUriAsync(uri), text => Copy(text)));
         ViewModel.OpenFolder = folder => Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folder));
+        ViewModel.OpenFile = file => Launcher.LaunchFileInfoAsync(new FileInfo(file));
         ViewModel.LayOut = UpdateLayout;
         ViewModel.NodeShown += BringIntoViewIfHidden;
         ViewModel.ComposerRequested += FocusComposer;

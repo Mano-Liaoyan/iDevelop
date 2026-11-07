@@ -40,6 +40,9 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
     internal Func<string, Task<bool>> OpenFolder { get; set; } = _ => Task.FromResult(false);
 
+    /// <summary>Opens a file with the program that the system chooses.</summary>
+    internal Func<string, Task<bool>> OpenFile { get; set; } = _ => Task.FromResult(false);
+
     /// <param name="clients">The coding-agent clients on this machine and what each offers.</param>
     /// <param name="copy">Puts text on the clipboard.</param>
     /// <param name="personalBlueprints">The personal blueprint library's folder, or null for none.</param>
@@ -314,6 +317,8 @@ public sealed class MainWindowViewModel : ObservableObject
         ShowNode(node);
         if (node.HasAgent)
         {
+            // A jump to what a node needs keeps its graph in view. A conversation that is already open keeps its layout.
+            IsConversationDocked |= Conversation is null;
             node.OpenConversationCommand.Execute(null);
         }
     }
@@ -652,6 +657,7 @@ public sealed class MainWindowViewModel : ObservableObject
         var canvas = new WorkflowCanvasViewModel(project, document, _clients, notice => Status = notice, _copy, _personalBlueprints, GitEnvironment)
         {
             OpenFolder = folder => OpenFolder(folder),
+            OpenFile = file => OpenFile(file),
         };
         document.Changed += (_, _) =>
         {

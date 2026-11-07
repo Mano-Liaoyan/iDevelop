@@ -26,6 +26,8 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
     internal Func<string, Task<bool>> OpenFolder { get; init; } = _ => Task.FromResult(false);
 
+    internal Func<string, Task<bool>> OpenFile { get; init; } = _ => Task.FromResult(false);
+
     /// <summary>The engine that runs this workflow's nodes and routes their results.</summary>
     internal WorkflowEngine Engine { get; private set; } = null!;
 

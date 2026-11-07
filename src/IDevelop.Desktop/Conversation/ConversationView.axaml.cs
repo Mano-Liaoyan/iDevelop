@@ -26,12 +26,12 @@ public partial class ConversationView : UserControl
     /// <summary>The column of Copy, whose styles place it beside each kind of message.</summary>
     public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 0 : 1);
 
-    // Text fades as it leaves the view's top, so a block under the header reads as scrolled and not as cut. A mask reads only
+    // Text softens at the view's top edge, so a block under the header reads as scrolled, and a whole line resting there stays whole. A mask reads only
     // each stop's alpha, so these stops are opacities and no part of the palette.
     private static readonly LinearGradientBrush TopFade = new()
     {
         StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute),
-        EndPoint = new RelativePoint(0, 12, RelativeUnit.Absolute),
+        EndPoint = new RelativePoint(0, 4, RelativeUnit.Absolute),
         GradientStops = { new GradientStop(default, 0), new GradientStop(new Color(255, 0, 0, 0), 1) },
     };
 
@@ -390,6 +390,14 @@ public partial class ConversationView : UserControl
     private void OnCloseMore(object? sender, RoutedEventArgs e) => ComposerMore.Flyout?.Hide();
 
     private void OnAgentChosen(object? sender, SelectionChangedEventArgs e) => AgentPicker.OnChosen(sender);
+
+    private void OnOpenFile(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is Execution.ChangeRow row)
+        {
+            _model?.Node.OpenFile(row.Path);
+        }
+    }
 
     private void OnShowResult(object? sender, RoutedEventArgs e)
     {

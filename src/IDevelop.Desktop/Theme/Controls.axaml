@@ -440,7 +440,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
 
-  <!-- A name's type. A row of the left tree or of Activity cuts its name to one line, and the row's tooltip holds all of it. -->
+  <!-- A name's type. A row of Activity cuts its name to one line and a node's row to two, and the row's tooltip holds all of it. -->
   <Style Selector="TextBlock.rowName">
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="FontSize" Value="13" />

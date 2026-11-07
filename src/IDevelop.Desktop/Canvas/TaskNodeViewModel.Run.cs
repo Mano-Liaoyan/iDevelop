@@ -18,7 +18,7 @@ public sealed partial class TaskNodeViewModel
     private static readonly string[] RunDependents =
     [
         nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StateDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
-        nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
+        nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(LastReplyAsks), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(HasResults), nameof(ShowsResults), nameof(ShowsOutputSection), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
         nameof(Actions), nameof(RetryIsInMenu), nameof(ConversationIsInMenu),
@@ -97,7 +97,13 @@ public sealed partial class TaskNodeViewModel
     /// Approve accepts what an Approval node or a reviewer at its round limit offers, or a Chat node's last reply. While a
     /// planner's proposal is open, Accept and Finish approves it instead.
     /// </summary>
-    public bool ShowsApprove => Waits(EngineState.Approval, EngineState.RoundLimit, EngineState.Reply) && Role != NodeRole.Proposing;
+    public bool ShowsApprove => (Waits(EngineState.Approval, EngineState.RoundLimit) || Waits(EngineState.Reply) && !LastReplyAsks) && Role != NodeRole.Proposing;
+
+    /// <summary>The agent's last message ends in a question, so it waits for an answer and is no result yet.</summary>
+    public bool LastReplyAsks => LastReply is { } reply && ResultViewModel.Plain(reply).TrimEnd(' ', '\n', '\r', '\t', ')', '"', '\'', '_').EndsWith('?');
+
+    /// <summary>What Approve does in words: on a wait for a reply it makes the agent's message the node's result.</summary>
+    public string ApproveLabel => Waits(EngineState.Reply) ? "Use as result" : "Approve";
 
     /// <summary>Send back returns the person's note to the nodes before an Approval node or a reviewer at its round limit.</summary>
     public bool ShowsSendBack => Waits(EngineState.Approval, EngineState.RoundLimit);
@@ -403,6 +409,15 @@ public sealed partial class TaskNodeViewModel
             _canvas.Notice("Couldn't open the node's worktree.");
         }
     }
+
+    /// <summary>Opens a file of the node's result from the folder the node works in.</summary>
+    internal void OpenFile(string path) => UiWork.Start(async () =>
+    {
+        if (_canvas.Engine.Folder(Id) is not { } folder || !File.Exists(Path.Combine(folder, path)) || !await _canvas.OpenFile(Path.Combine(folder, path)))
+        {
+            _canvas.Notice($"Couldn't open {path}. The node's folder may no longer hold it.");
+        }
+    }, _canvas.Notice);
 
     private async Task OpenInTerminal()
     {

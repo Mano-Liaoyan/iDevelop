@@ -64,7 +64,7 @@ public sealed class ConversationLayoutTests
         {
             window.IsConversationDocked = docked;
             shell.Render();
-            Assert.Equal((AttentionCard.Reply, "The agent waits for your reply", true), (model.Card, model.CardTitle, model.IsCompactCard));
+            Assert.Equal((AttentionCard.Reply, "Reply", true), (model.Card, model.CardTitle, model.IsCompactCard));
             Assert.Equal("Reply to Antigravity CLI", model.Watermark);
             var card = shell.Bounds(shell.Find<Control>("ConversationAttention"));
             var composer = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer"));

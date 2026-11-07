@@ -146,7 +146,6 @@ public sealed class SidebarLayoutTests : IDisposable
         var titles = rows.Select(row => row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"))).ToArray();
 
         Assert.All(titles, title => Assert.InRange(title.TextLayout.TextLines.Count, 1, 2));
-        Assert.EndsWith("…", titles[0].Text);
         Assert.Single(titles[1].TextLayout.TextLines);
         // Each row centres its glyph on its title's first line, 12 px into the row.
         Assert.All(rows, row => Assert.StartsWith("first line 12, glyph 0", TaskCentres(row)));
