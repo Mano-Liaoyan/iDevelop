@@ -94,6 +94,12 @@ public sealed class ConnectionViewModel : ObservableObject
     /// <summary>Where the wire enters its target card: its own point on the input side.</summary>
     public Point TargetPoint => To.Input.Anchor + new Vector(0, _slots.Entry);
 
+    /// <summary>The wire leaves its card at its own point, away from the port's socket, so it starts at the card's edge.</summary>
+    public bool LeavesOwnPoint => _slots.Exit != 0;
+
+    /// <summary>The wire enters its card at its own point, away from the port's socket, so it ends at the card's edge.</summary>
+    public bool EntersOwnPoint => _slots.Entry != 0;
+
     /// <summary>The corners of the wire's plan, from the end of its source stub to the start of its target stub.</summary>
     public IReadOnlyList<Point> Route => _route;
 
@@ -133,6 +139,8 @@ public sealed class ConnectionViewModel : ObservableObject
             _slots = slots;
             OnPropertyChanged(nameof(SourcePoint));
             OnPropertyChanged(nameof(TargetPoint));
+            OnPropertyChanged(nameof(LeavesOwnPoint));
+            OnPropertyChanged(nameof(EntersOwnPoint));
         }
 
         var route = WireRouting.Route(SourcePoint, TargetPoint, cards, ZoomTiers.CardReach(_canvas.Tier));

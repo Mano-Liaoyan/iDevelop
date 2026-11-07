@@ -216,6 +216,7 @@
     <canvas:RoutedConnection Classes="wire" Source="{Binding SourcePoint}"
                              Target="{Binding TargetPoint}"
                              Curve="{Binding Curve}"
+                             SourceOnEdge="{Binding LeavesOwnPoint}" TargetOnEdge="{Binding EntersOwnPoint}"
                              theme:StyleClass.Flow="{Binding Flow}"
                              ToolTip.Tip="{Binding Tip}"
                              Classes.highlighted="{Binding IsHighlighted}"

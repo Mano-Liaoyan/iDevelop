@@ -13,8 +13,13 @@ public sealed class RoutedConnection : StepConnection
     public static readonly StyledProperty<IReadOnlyList<WirePiece>?> CurveProperty =
         AvaloniaProperty.Register<RoutedConnection, IReadOnlyList<WirePiece>?>(nameof(Curve));
 
+    public static readonly StyledProperty<bool> SourceOnEdgeProperty = AvaloniaProperty.Register<RoutedConnection, bool>(nameof(SourceOnEdge));
+
+    public static readonly StyledProperty<bool> TargetOnEdgeProperty = AvaloniaProperty.Register<RoutedConnection, bool>(nameof(TargetOnEdge));
+
     static RoutedConnection()
     {
+        AffectsGeometry<RoutedConnection>(SourceOnEdgeProperty, TargetOnEdgeProperty);
         AffectsGeometry<RoutedConnection>(CurveProperty);
         AffectsRender<RoutedConnection>(CurveProperty);
         NodifyEditor.CuttingConnectionTypes.Add(typeof(RoutedConnection));
@@ -30,6 +35,20 @@ public sealed class RoutedConnection : StepConnection
     {
         get => GetValue(CurveProperty);
         set => SetValue(CurveProperty, value);
+    }
+
+    /// <summary>The wire leaves at its own point on the card's edge, where no socket is, so it starts at the edge, past the offset.</summary>
+    public bool SourceOnEdge
+    {
+        get => GetValue(SourceOnEdgeProperty);
+        set => SetValue(SourceOnEdgeProperty, value);
+    }
+
+    /// <summary>The wire enters at its own point on the card's edge, so it ends at the edge.</summary>
+    public bool TargetOnEdge
+    {
+        get => GetValue(TargetOnEdgeProperty);
+        set => SetValue(TargetOnEdgeProperty, value);
     }
 
     protected override Type StyleKeyOverride => typeof(StepConnection);
@@ -82,8 +101,8 @@ public sealed class RoutedConnection : StepConnection
         }
 
         WirePiece[] pieces = [.. curve];
-        pieces[0] = pieces[0] with { Start = source };
-        pieces[^1] = pieces[^1] with { End = target };
+        pieces[0] = pieces[0] with { Start = SourceOnEdge ? source - new Vector(SourceOffset.Width, 0) : source };
+        pieces[^1] = pieces[^1] with { End = TargetOnEdge ? target + new Vector(TargetOffset.Width, 0) : target };
         return pieces;
     }
 }
