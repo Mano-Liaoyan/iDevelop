@@ -732,7 +732,17 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <!-- Every chip says its group in words at every width (ADR 0063). A tight bar takes its own row and wraps instead. -->
+  <!-- A chip says its group in words. Where the words do not fit beside the zoom controls, a chip shows its badge and count,
+       and its tooltip keeps the words, so the bar keeps one row (ADR 0065). -->
+  <Style Selector="TextBlock.barCount">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.barCount">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.barWords">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
   <Style Selector="ItemsControl.barChips ContentPresenter > StackPanel">
     <Setter Property="Spacing" Value="4" />
     <Setter Property="MinHeight" Value="28" />

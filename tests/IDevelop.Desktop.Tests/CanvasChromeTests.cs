@@ -259,7 +259,7 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Docking_keeps_the_persons_zoom_and_pan_when_no_card_in_view_would_hide_and_resizing_never_moves_them()
+    public void Docking_frames_the_node_s_branch_and_resizing_keeps_it_in_view()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
@@ -271,20 +271,32 @@ public sealed class CanvasChromeTests : IDisposable
         shell.Editor.ViewportZoom = 1.5;
         shell.Editor.ViewportLocation = new Point(-220, 90);
         shell.Render();
-        var view = (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation);
+        var zoom = shell.Editor.ViewportZoom;
 
         shell.Click(shell.Find<Button>("ConversationLayout"));
-        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        shell.Render();
+        // The conversation's node and its direct neighbours show whole, never closer than the person's zoom (ADR 0065).
+        var node = shell.NodeModel("Write docs");
+        var branch = shell.Window.ViewModel.Canvas!.Connections.Where(wire => wire.To == node).Select(wire => wire.From.Title).Append("Write docs");
+        var editor = new Rect(shell.Editor.Bounds.Size);
+        Assert.All(branch, title => Assert.True(editor.Contains(shell.CardRect(title)), $"{title} at {shell.CardRect(title)} leaves {editor}."));
+        Assert.True(shell.Editor.ViewportZoom <= zoom);
+        void BranchShows()
+        {
+            shell.Render();
+            var room = new Rect(shell.Editor.Bounds.Size);
+            Assert.All(branch, title => Assert.True(room.Contains(shell.CardRect(title)), $"{title} at {shell.CardRect(title)} leaves {room}."));
+        }
 
-        // Narrowing the window by 10 px, which cuts the two cards at the edge further, and dragging the splitters move nothing.
+        // A view that the dock framed fits again when the window or a splitter changes the canvas, so the branch stays whole.
         Resize(shell, 1590, 1000);
-        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        BranchShows();
         var inspector = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 3);
         shell.Drag(shell.Center(inspector) + new Vector(0, 150), shell.Center(inspector) + new Vector(-40, 150));
-        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        BranchShows();
         shell.Drag(shell.Center(shell.Window.DockSplitter), shell.Center(shell.Window.DockSplitter) - new Vector(0, 30));
         Assert.True(shell.Window.MainArea.RowDefinitions[2].ActualHeight > 400, "The dock's splitter did not move.");
-        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        BranchShows();
     }
 
     [AvaloniaFact]

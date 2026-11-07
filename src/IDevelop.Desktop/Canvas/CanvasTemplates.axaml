@@ -209,7 +209,8 @@
         <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
       </Panel>
-      <TextBlock Classes="barText" Text="{Binding Label}" />
+      <TextBlock Classes="barText barWords" Text="{Binding Label}" />
+      <TextBlock Classes="barText barCount" Text="{Binding Count}" />
     </StackPanel>
   </DataTemplate>
 
