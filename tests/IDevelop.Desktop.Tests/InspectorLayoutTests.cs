@@ -146,7 +146,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         Assert.Equal("actions at 12, values at 12", Edges(shell));
         AssertNothingCutShort(shell);
-        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue").FindAncestorOfType<Border>()!));
+        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue").FindAncestorOfType<ToggleButton>()!));
     }
 
     [AvaloniaFact]

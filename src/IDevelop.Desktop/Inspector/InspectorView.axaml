@@ -103,13 +103,13 @@
                 </ItemsControl>
               </StackPanel>
               <theme:KindTile Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" />
-              <!-- Until the box has focus, a text block over it shows the title in up to four lines, so the header reads as a
+              <!-- Until the box has focus, a text block over it shows the title in up to two lines, with the whole title in its tooltip, so the header reads as a
                    title rather than a field. The box takes the title's whole length once it has focus. -->
               <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0" ToolTip.Tip="{Binding Title}">
                 <TextBox Classes="headerTitle" Text="{Binding Title}"
                          AutomationProperties.AutomationId="TaskTitle"
                          AutomationProperties.Name="Title" />
-                <theme:EllipsisText Classes="headerTitle" Whole="{Binding Title}" MaxLines="4" IsHitTestVisible="False"
+                <theme:EllipsisText Classes="headerTitle" Whole="{Binding Title}" MaxLines="2" IsHitTestVisible="False"
                                     AutomationProperties.AccessibilityView="Raw" />
               </Panel>
               <!-- The status and the kind share a line. The status is a plain word with its glyph, so it never reads as a button.
@@ -276,15 +276,14 @@
                                         AutomationProperties.Name="Skills">
                             <TextBlock Text="{Binding Skills.Summary}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
                           </ToggleButton>
-                          <!-- A client that takes no choice shows a plain value, with no box and no arrow. Its glyph and tooltip say why. -->
-                          <Border Classes="fixedValue" IsVisible="{Binding !Skills.CanChoose}" ToolTip.Tip="{Binding Skills.FixedNote}">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                              <TextBlock Classes="value" Text="{Binding Skills.Summary}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                         AutomationProperties.AutomationId="TaskSkillsValue" />
-                              <PathIcon Grid.Column="1" Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" Width="14" Height="14"
-                                        Foreground="{DynamicResource TextMutedBrush}" />
-                            </Grid>
-                          </Border>
+                          <!-- A client that takes no choice shows the same field, disabled, so the row keeps the rhythm of the rows around
+                               it. Its tooltip and the row's info glyph say why. -->
+                          <ToggleButton Classes="picker" IsEnabled="False" IsVisible="{Binding !Skills.CanChoose}"
+                                        ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding Skills.FixedNote}"
+                                        AutomationProperties.Name="Skills">
+                            <TextBlock Classes="value" Text="{Binding Skills.Summary}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                       AutomationProperties.AutomationId="TaskSkillsValue" />
+                          </ToggleButton>
                         </Panel>
                       </inspector:InspectorRow>
                       <!-- The picker opens its list in place, under the row at the section's whole width, so each name wraps in full. -->

@@ -885,12 +885,6 @@
     <Setter Property="Margin" Value="0,0,0,4" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- A value that a node cannot change is plain text at a value's edge, with no box, so it cannot read as a control that broke. -->
-  <Style Selector="Border.fixedValue">
-    <Setter Property="MinHeight" Value="26" />
-    <Setter Property="Padding" Value="8,0,10,0" />
-    <Setter Property="Background" Value="Transparent" />
-  </Style>
   <!-- A row's disclosure sits on the value column, at a value's text edge. -->
   <Style Selector="ToggleButton.disclosure.rowDisclosure">
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />

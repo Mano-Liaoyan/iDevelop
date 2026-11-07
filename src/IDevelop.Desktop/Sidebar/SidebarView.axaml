@@ -138,9 +138,17 @@
       </ScrollViewer>
     </Grid>
 
-    <!-- Nothing is open: the canvas holds Open folder, and this panel the folders the person closed. -->
+    <!-- Nothing is open: the canvas holds Open folder as its primary action, and this panel a quiet Open folder row and the folders the person closed. -->
     <StackPanel Grid.Row="3" Margin="16,12" Spacing="8" IsVisible="{Binding !HasProjects}">
       <TextBlock Classes="rowName strong" Text="No project open" AutomationProperties.AutomationId="NoProject" />
+      <!-- The panel's own way in, the same action as the Projects heading's folder glyph, so the empty panel says what to do. -->
+      <Button Classes="nav" Margin="-8,0" Click="OnOpenFolder" ToolTip.Tip="Open a project folder"
+              AutomationProperties.AutomationId="SidebarOpenFolder" AutomationProperties.Name="Open folder">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
+          <TextBlock Classes="rowName" Text="Open folder…" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
       <TextBlock Classes="section" Text="Recent" Margin="0,8,0,0" IsVisible="{Binding HasRecent}" />
       <ItemsControl ItemsSource="{Binding Recent}" IsVisible="{Binding HasRecent}" Margin="-8,0"
                     AutomationProperties.AutomationId="RecentProjects" AutomationProperties.Name="Recent projects">
