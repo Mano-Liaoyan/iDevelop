@@ -33,7 +33,8 @@ public sealed class CardIdentityTests
         shell.WaitForCard("A", "Reply");
 
         Assert.Equal(lines, node.CardLine);
-        Assert.Equal(node.Picker.SelectedModel?.Label ?? node.CardModel, node.CardModel);
+        // The card shows the end of the inspector's model name, so the name it shows is never a different one.
+        Assert.Contains(node.CardModel, node.AgentModel);
         Assert.Equal("AG", mark);
         Assert.Equal(mark, node.ClientMark);
         Assert.Equal("Antigravity", node.CardClient);
@@ -175,5 +176,42 @@ public sealed class CardIdentityTests
     [InlineData("-gone", DiffLineKind.Deleted)]
     [InlineData(" kept", DiffLineKind.Context)]
     public void A_diff_line_says_what_it_is(string text, DiffLineKind kind) => Assert.Equal(kind, DiffLine.Of(text).Kind);
+
+    /// <summary>Each model in the app's model lists, and the card's text for it.</summary>
+    [Theory]
+    // Claude Code's own list. CC says "Claude".
+    [InlineData(ClientId.ClaudeCode, "Claude Fable 5.1", "Fable 5.1")]
+    [InlineData(ClientId.ClaudeCode, "Claude Opus 5.5", "Opus 5.5")]
+    [InlineData(ClientId.ClaudeCode, "Claude Sonnet 5.5", "Sonnet 5.5")]
+    [InlineData(ClientId.ClaudeCode, "Claude Haiku 4.5", "Haiku 4.5")]
+    // Codex's list. Cx names no family, and "GPT-6.1" holds the version, so the name stays whole.
+    [InlineData(ClientId.Codex, "GPT-6.1-Sol", "GPT-6.1-Sol")]
+    [InlineData(ClientId.Codex, "GPT-6-Sol", "GPT-6-Sol")]
+    [InlineData(ClientId.Codex, "GPT-5.5", "GPT-5.5")]
+    [InlineData(ClientId.Codex, "GPT-6.1 Sol", "GPT-6.1 Sol")]
+    [InlineData(ClientId.Codex, "GPT-6.1 Terra", "GPT-6.1 Terra")]
+    [InlineData(ClientId.Codex, "GPT-5.9 Mini", "GPT-5.9 Mini")]
+    // Antigravity's list. AG says "Gemini", and the Claude models it offers keep "Claude".
+    [InlineData(ClientId.Antigravity, "Gemini 4 Argon", "4 Argon")]
+    [InlineData(ClientId.Antigravity, "Gemini 3.8 Flash", "3.8 Flash")]
+    [InlineData(ClientId.Antigravity, "Gemini 3.7 Flash", "3.7 Flash")]
+    [InlineData(ClientId.Antigravity, "Gemini 3.6 Flash", "3.6 Flash")]
+    [InlineData(ClientId.Antigravity, "Gemini 3.1 Pro", "3.1 Pro")]
+    [InlineData(ClientId.Antigravity, "Claude Sonnet 4.6 (Thinking)", "Claude Sonnet 4.6 (Thinking)")]
+    [InlineData(ClientId.Antigravity, "Claude Opus 4.6 (Thinking)", "Claude Opus 4.6 (Thinking)")]
+    [InlineData(ClientId.Antigravity, "GPT-OSS 120B", "GPT-OSS 120B")]
+    // Pi's list. Pi serves many makers, so each name keeps its family.
+    [InlineData(ClientId.Pi, "DeepSeek V4.1 Flash", "DeepSeek V4.1 Flash")]
+    [InlineData(ClientId.Pi, "DeepSeek V4 Pro", "DeepSeek V4 Pro")]
+    [InlineData(ClientId.Pi, "DeepSeek V5", "DeepSeek V5")]
+    [InlineData(ClientId.Pi, "GPT-5.5", "GPT-5.5")]
+    [InlineData(ClientId.Pi, "GPT-6 Astra", "GPT-6 Astra")]
+    [InlineData(ClientId.Pi, "GPT-6 Luna", "GPT-6 Luna")]
+    [InlineData(ClientId.Pi, "Qwen 4 Max", "Qwen 4 Max")]
+    [InlineData(ClientId.Pi, "GLM 6", "GLM 6")]
+    // A model name that is only the family word keeps it.
+    [InlineData(ClientId.ClaudeCode, "Claude", "Claude")]
+    public void A_card_shows_the_end_of_the_model_name_without_the_family_its_badge_gives(ClientId client, string name, string card) =>
+        Assert.Equal(card, CardText.ModelName(client, name));
 
 }

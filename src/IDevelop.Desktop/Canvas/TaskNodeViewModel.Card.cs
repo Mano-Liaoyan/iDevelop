@@ -37,10 +37,12 @@ public sealed partial class TaskNodeViewModel
     }
 
     /// <summary>
-    /// The card's model text: the model's name as the inspector's Model field shows it, so a card always names the model the
-    /// person picked. A narrow card ends it in an ellipsis and never drops a version (ADR 0063). Its tooltip adds the level.
+    /// The card's model text: the end of the model's name as the inspector's Model field shows it, without the family word that
+    /// the client's badge gives, so "Claude Opus 5.5" reads "Opus 5.5" beside CC (ADR 0063). The tooltip and the inspector keep
+    /// the full name.
     /// </summary>
-    public string CardModel => RunText.AgentNames(_task.Execution, Status).Model ?? "";
+    public string CardModel => _task.Execution is { } settings && RunText.AgentNames(settings, Status).Model is { } model
+        ? CardText.ModelName(settings.Client, model) : "";
 
     /// <summary>
     /// The zoomed out card's last line: the model in every state, or the type of a node with no agent. State never takes the

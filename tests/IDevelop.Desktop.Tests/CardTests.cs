@@ -171,9 +171,9 @@ public sealed class CardTests : IDisposable
         Assert.Equal(
             [
                 ["Design", "Codex", "GPT-5.5", "Idle"],
-                ["Build", "Claude Code", "Claude Sonnet 5.5", "Idle"],
+                ["Build", "Claude Code", "Sonnet 5.5", "Idle"],
                 ["Review", "Antigravity", "Claude Opus 4.6 (Thinking)", "Idle"],
-                ["Fourth", "Antigravity", "Gemini 3.8 Flash", "Idle"],
+                ["Fourth", "Antigravity", "3.8 Flash", "Idle"],
                 // Pi names its model's provider, which goes on the client's line.
                 ["Fifth", "Pi · deepseek", "DeepSeek V4.1 Flash", "Idle"],
             ],
@@ -210,7 +210,7 @@ public sealed class CardTests : IDisposable
 
         var ring = shell.CardLayer("Design", "stateStroke");
         // The status takes the client's line, and the model and level stay on the line under it.
-        Assert.Equal(["Design", "Antigravity", "Gemini 3.8 Flash", "Running"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Antigravity", "3.8 Flash", "Running"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-running", ring.Classes);
         Assert.Equal(Color.Parse("#E5E5E5"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         Assert.Same(Application.Current!.FindResource("IconStateRunning"), shell.CardGlyph("Design").Data);
@@ -230,7 +230,7 @@ public sealed class CardTests : IDisposable
         shell.WaitForCard("Design", "Reply");
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Antigravity", "Gemini 3.8 Flash", "Reply"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Antigravity", "3.8 Flash", "Reply"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-inputrequired", ring.Classes);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
     }
@@ -251,7 +251,7 @@ public sealed class CardTests : IDisposable
         // come a render tick after the status text, so the test waits for the pixel too.
         shell.WaitUntil(() => shell.ColorAt(shell.Node("Design"), new Point(130, 0)) == Color.Parse(ring), $"the ring turns {ring}");
 
-        Assert.Equal(["Design", "Antigravity", "Gemini 3.8 Flash", label], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Antigravity", "3.8 Flash", label], Shell.Texts(shell.Node("Design")));
     }
 
     [AvaloniaFact]
@@ -297,7 +297,7 @@ public sealed class CardTests : IDisposable
         shell.WaitForProposal();
 
         var ring = shell.CardLayer("Plan export", "stateStroke");
-        Assert.Equal(["Plan export", "Antigravity", "Gemini 3.8 Flash", "Proposal · 2 tasks"], Shell.Texts(shell.Node("Plan export")));
+        Assert.Equal(["Plan export", "Antigravity", "3.8 Flash", "Proposal · 2 tasks"], Shell.Texts(shell.Node("Plan export")));
         Assert.Same(Application.Current!.FindResource("IconSparkle"), shell.CardGlyph("Plan export").Data);
         Assert.Contains("role-proposing", ring.Classes);
         Assert.Equal(Color.Parse("#1E6EF4"), ((ISolidColorBrush)ring.BorderBrush!).Color);

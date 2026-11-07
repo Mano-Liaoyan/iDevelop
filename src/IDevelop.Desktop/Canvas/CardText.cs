@@ -23,4 +23,23 @@ public static class CardText
         ClientId.Pi => "Pi",
         _ => "AG",
     };
+
+    /// <summary>
+    /// A card's model text: the model's display name without the leading family word that the client's badge already gives
+    /// ("Claude" beside CC, "Gemini" beside AG), so the words that tell models apart show. It is the end of the full name and
+    /// never cuts a word. A card too narrow for it ends it in an ellipsis (ADR 0063).
+    /// </summary>
+    public static string ModelName(ClientId client, string name)
+    {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(' ', words.Length > 1 && words[0] == Family(client) ? words[1..] : words);
+    }
+
+    /// <summary>The model family that a client's own maker names, which its badge stands for.</summary>
+    private static string? Family(ClientId client) => client switch
+    {
+        ClientId.ClaudeCode => "Claude",
+        ClientId.Antigravity => "Gemini",
+        _ => null,
+    };
 }
