@@ -43,7 +43,7 @@ internal static class NodeActions
 
         if (node.ShowsContinue)
         {
-            return Row(Conversation(node, "Conversation", primary: false), new("ContinueTask", "Continue", "IconRun", node.ContinueCommand, true, "Resumes the same session where the agent stopped"), Retry(node, primary: false));
+            return Row(new NodeAction("ContinueTask", "Continue", "IconRun", node.ContinueCommand, true, "Resumes the same session where the agent stopped"), Retry(node, primary: false));
         }
 
         if (node.IsAsking || node.IsWaiting)

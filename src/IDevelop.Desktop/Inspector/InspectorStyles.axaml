@@ -29,7 +29,7 @@
   </Style>
   <!-- The title as text over the box, at the box's border and padding, so it wraps where the box wraps. The box sits 6 px
        before the column, so the text starts where a connection's or a workflow's name starts. The text's first line sits beside
-       the tile, and beyond three lines the box waits for the focus, so a long title never pushes the actions down. -->
+       the tile, and beyond two lines the box waits for the focus, so a long title never pushes the actions down. -->
   <Style Selector="TextBlock.headerTitle">
     <Setter Property="FontSize" Value="14" />
     <Setter Property="LineHeight" Value="20" />
@@ -43,7 +43,7 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Panel.headerTitle:not(:focus-within) > TextBox.headerTitle">
-    <Setter Property="MaxHeight" Value="64" />
+    <Setter Property="MaxHeight" Value="44" />
   </Style>
   <Style Selector="Panel.headerTitle:not(:focus-within) > TextBox.headerTitle /template/ TextPresenter#PART_TextPresenter">
     <Setter Property="Opacity" Value="0" />

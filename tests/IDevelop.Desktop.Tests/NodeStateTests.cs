@@ -54,7 +54,7 @@ public sealed class NodeStateTests
         Assert.Equal("Exited with code 2.", NodeStates.Detail(new EngineState.Failed("Exited with code 2.")));
         Assert.StartsWith("Approve what the nodes before it handed on", NodeStates.Detail(new EngineState.InputRequired(EngineState.Approval)));
         Assert.Contains("mark it resolved", NodeStates.Detail(new EngineState.InputRequired(EngineState.Conflict)));
-        Assert.Contains("Continue resumes the same session. Retry starts a new attempt.", NodeStates.Detail(new EngineState.InputRequired(EngineState.Interrupted)));
+        Assert.Contains("Continue resumes the session. Retry starts a new attempt.", NodeStates.Detail(new EngineState.InputRequired(EngineState.Interrupted)));
         Assert.Contains("Run it again", NodeStates.Detail(new EngineState.Stale()));
     }
 

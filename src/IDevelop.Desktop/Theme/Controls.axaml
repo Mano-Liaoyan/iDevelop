@@ -620,10 +620,11 @@
     <Setter Property="Padding" Value="46,0,16,0" />
   </Style>
   <!-- A section heading that folds its list. -->
+  <!-- One line is 28 px high. A row whose counts wrap grows, so no count is cut. -->
   <Style Selector="ToggleButton.sectionFold">
     <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Height" Value="28" />
-    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="Padding" Value="8,4" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
