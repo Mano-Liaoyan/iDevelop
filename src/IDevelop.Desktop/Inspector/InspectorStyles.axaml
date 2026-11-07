@@ -160,7 +160,7 @@
     <Setter Property="FontSize" Value="12" />
   </Style>
   <!-- A short inspector keeps its header to three lines: the title, the state, and the actions. -->
-  <Style Selector="inspector|InspectorView.short Border.detailRule.stateDetail">
+  <Style Selector="inspector|InspectorView.short Panel.stateDetail">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="inspector|InspectorView.short TextBlock.headerTitle">

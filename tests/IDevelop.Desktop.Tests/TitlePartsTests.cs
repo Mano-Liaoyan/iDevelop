@@ -19,7 +19,13 @@ public sealed class TitlePartsTests
     [Fact]
     public void A_title_that_another_one_repeats_or_merely_continues_keeps_nothing()
     {
-        Assert.Equal([0, 0, "Review ".Length], TitleParts.KeepFrom(["Review", "Review", "Review the plan"]));
+        Assert.Equal([0, 0, "Plan the rollout ".Length], TitleParts.KeepFrom(["Plan the rollout", "Plan the rollout", "Plan the rollout now"]));
+    }
+
+    [Fact]
+    public void A_shared_start_of_fewer_than_three_words_keeps_the_title_s_own_start()
+    {
+        Assert.Equal([0, 0], TitleParts.KeepFrom(["Mirror the refund postings", "Mirror the invoice postings"]));
     }
 
     [AvaloniaFact]

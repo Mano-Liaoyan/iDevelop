@@ -153,7 +153,8 @@
                 </Button.Flyout>
               </Button>
               <StackPanel Grid.Row="4" Grid.ColumnSpan="4">
-                <Border Classes="detailRule stateDetail" IsVisible="{Binding ShowsStateDetail}"
+                <Panel Classes="stateDetail">
+                <Border Classes="detailRule" IsVisible="{Binding ShowsStateDetail}"
                 Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                 Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                 Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
@@ -172,6 +173,7 @@
                     </Button>
                   </StackPanel>
                 </Border>
+                </Panel>
                 <Border Classes="detailRule warning" IsVisible="{Binding RunRefusal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                   <StackPanel>
                     <theme:EllipsisText x:Name="RefusalText" Classes="detail clamped" Whole="{Binding RunRefusal}" ToolTip.Tip="{Binding RunRefusal}"

@@ -5,7 +5,7 @@ public static class TitleParts
 {
     /// <summary>
     /// For each title, where the word starts that differs from the title that shares the longest start with it. That is 0 for a
-    /// title that shares no first word, and for a title that another one repeats or merely continues, which keeps no part to show.
+    /// title that shares fewer than <see cref="LongStart"/> words, and for a title that another one repeats or merely continues, which keeps no part to show.
     /// </summary>
     public static int[] KeepFrom(IReadOnlyList<string> titles)
     {
@@ -17,11 +17,17 @@ public static class TitleParts
             var shared = Math.Max(
                 at > 0 ? Shared(title, titles[order[at - 1]]) : 0,
                 at < order.Length - 1 ? Shared(title, titles[order[at + 1]]) : 0);
-            keeps[order[at]] = shared < title.Length ? WordStart(title, shared) : 0;
+            var keep = shared < title.Length ? WordStart(title, shared) : 0;
+            keeps[order[at]] = Words(title[..keep]) >= LongStart ? keep : 0;
         }
 
         return keeps;
     }
+
+    /// <summary>A shared start of fewer words leaves the title's own start in view, as "Mirror the" does.</summary>
+    public const int LongStart = 3;
+
+    private static int Words(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
 
     private static int Shared(string first, string second)
     {
