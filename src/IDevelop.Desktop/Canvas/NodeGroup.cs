@@ -50,10 +50,10 @@ public sealed class NodeGroup(NodeGroupKind kind, Action changed) : ObservableOb
     /// <summary>Folds an open group, or opens a folded one.</summary>
     public void Toggle() => SetFolded(!IsFolded);
 
-    /// <summary>Opens the group, so a node in it has its row.</summary>
+    /// <summary>Opens the group, so a node in it has its row, and keeps it open as it grows, until the person folds it.</summary>
     public void Open()
     {
-        if (IsFolded)
+        if (_folded != false)
         {
             SetFolded(false);
         }

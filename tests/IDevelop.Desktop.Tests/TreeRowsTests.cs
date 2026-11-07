@@ -52,6 +52,17 @@ public sealed class TreeRowsTests
         Assert.False(done.IsFolded);
     }
 
+    [Fact]
+    public void A_group_opened_while_it_is_small_stays_open_as_it_grows()
+    {
+        var done = new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 0 };
+
+        done.Open();
+        done.Count = 21;
+
+        Assert.False(done.IsFolded);
+    }
+
     [AvaloniaFact]
     public void A_header_folds_and_opens_its_group()
     {
