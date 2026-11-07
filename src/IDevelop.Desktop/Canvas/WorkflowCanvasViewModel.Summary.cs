@@ -20,10 +20,9 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>
     /// What a folded row says under the name in one line: the run bar's groups, most urgent first, so the row and the bar give
-    /// one number for one group. Past <see cref="RowChipLimit"/> groups, each keeps its badge and its count, and its tooltip has its words.
+    /// one number for one group. Past <see cref="RowChipLimit"/> groups, the less urgent ones fold into one "+N more" chip.
     /// </summary>
-    public IReadOnlyList<StateChip> RowChips =>
-        BarChips.Count <= RowChipLimit ? BarChips : [.. BarChips.Select(chip => chip with { IsCounted = true })];
+    public IReadOnlyList<StateChip> RowChips => StateChip.Fold(BarChips, BarChips.Count <= RowChipLimit ? RowChipLimit : RowChipLimit - 1);
 
     /// <summary>A folded row says its groups. The node rows of an open workflow show the same states one by one.</summary>
     public bool ShowsRowChips => !IsExpanded && BarChips.Count > 0;

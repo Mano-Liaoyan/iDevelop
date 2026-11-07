@@ -242,6 +242,15 @@
                         theme:MenuGlyph.Data="{StaticResource IconExpandAll}" />
               <MenuItem Header="Minimap" Click="OnMinimapMenu" AutomationProperties.AutomationId="MinimapMenu"
                         theme:MenuGlyph.Data="{StaticResource IconMinimap}" />
+              <MenuItem Header="Follow running nodes" ToggleType="CheckBox" IsChecked="{Binding IsFollowing}"
+                        AutomationProperties.AutomationId="FollowMenu" theme:MenuGlyph.Data="{StaticResource IconFollow}">
+                <MenuItem.IsVisible>
+                  <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="!!RunningCount" />
+                    <Binding ElementName="FollowSlot" Path="!IsVisible" />
+                  </MultiBinding>
+                </MenuItem.IsVisible>
+              </MenuItem>
             </MenuFlyout>
           </Button.Flyout>
         </Button>
@@ -274,6 +283,8 @@
                   <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
                 </StackPanel>
               </Button>
+              <!-- The tightest bar moves Follow to the overflow menu, so the chips keep their words. -->
+              <Panel x:Name="FollowSlot" Classes="barFollow">
               <ToggleButton Classes="bar follow" IsChecked="{Binding IsFollowing}" IsVisible="{Binding !!RunningCount}"
                             ToolTip.Tip="{Binding FollowLabel}"
                             AutomationProperties.AutomationId="FollowRunning"
@@ -283,6 +294,7 @@
                   <TextBlock Classes="followLabel" Text="Follow" VerticalAlignment="Center" />
                 </StackPanel>
               </ToggleButton>
+              </Panel>
               <Button Classes="primary glyph bar"
                       Command="{Binding MergeIntoBranchCommand}" IsVisible="{Binding CanMergeIntoBranch}"
                       ToolTip.Tip="Merge into my branch&#10;Merge the end nodes' work into the branch you have checked out"
@@ -307,6 +319,13 @@
                   </ItemsControl.ItemsPanel>
                 </ItemsControl>
                 <ItemsControl Classes="barChips barLeastChips" ItemsSource="{Binding BarLeast}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunLeastChips">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <ItemsControl Classes="barChips barTightestChips" ItemsSource="{Binding BarTightest}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunTightestChips">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel Orientation="Horizontal" />

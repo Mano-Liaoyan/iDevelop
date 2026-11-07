@@ -308,8 +308,8 @@
                                     <ItemsControl.ItemTemplate>
                                       <DataTemplate DataType="canvas:StateChip">
                                         <StackPanel Orientation="Horizontal" Spacing="4" AutomationProperties.Name="{Binding Label}">
-                                          <theme:StateBadge Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" />
-                                          <TextBlock Classes="caption" Text="{Binding RowText}" ToolTip.Tip="{Binding Label}" VerticalAlignment="Center" />
+                                          <theme:StateBadge Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" IsVisible="{Binding !IsMore}" />
+                                          <TextBlock Classes="caption" Text="{Binding RowText}" ToolTip.Tip="{Binding Tip}" VerticalAlignment="Center" />
                                         </StackPanel>
                                       </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -344,7 +344,7 @@
                                 </ListBox.ItemsPanel>
                                 <ListBox.ItemTemplate>
                                   <DataTemplate DataType="canvas:TaskNodeViewModel">
-                                    <!-- A name takes one line, so a long list stays in view. The tooltip holds the whole name. -->
+                                    <!-- A name shows in full and wraps (issue #108), one type size under its workflow's. -->
                                     <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">
                                       <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
                                       <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title}"

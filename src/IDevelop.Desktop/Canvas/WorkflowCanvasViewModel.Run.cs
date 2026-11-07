@@ -126,9 +126,14 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
-    /// <summary>The chips of the tightest bar: every group keeps its badge and its count, and its tooltip has its words.</summary>
-    public IReadOnlyList<StateChip> BarLeast =>
-        [.. BarChips.Select(chip => chip with { IsCounted = true })];
+    /// <summary>
+    /// The chips of a tight bar: the groups that need the person keep their words, and one "+N more" chip sums the less urgent
+    /// groups. Its tooltip names them. With no urgent group, the first group keeps its words.
+    /// </summary>
+    public IReadOnlyList<StateChip> BarLeast => StateChip.Fold(BarChips, Math.Max(1, BarChips.Count(chip => chip.IsUrgent)));
+
+    /// <summary>The chips of the tightest bar: the most urgent group in words, and "+N more" for all the others.</summary>
+    public IReadOnlyList<StateChip> BarTightest => StateChip.Fold(BarChips, 1);
 
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
     public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Interrupted > 0 && Counts.Failed == 0 ? "Next interrupted" : "Next failed";
@@ -240,8 +245,8 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(BarIdle));
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(BarChips));
-        OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(BarLeast));
+        OnPropertyChanged(nameof(BarTightest));
         OnPropertyChanged(nameof(RunWork));
         OnPropertyChanged(nameof(CanStartRun));
         OnPropertyChanged(nameof(HasAttention));

@@ -129,8 +129,12 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
         Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], canvas.BarChips.Select(chip => chip.Label));
-        Assert.Equal(["1", "2", "2"], canvas.BarLeast.Select(chip => chip.RowText));
+        // A tight bar keeps words: the groups that need the person, then "+N more" for the rest, which its tooltip names.
+        Assert.Equal(["1 failed", "2 waiting", "+2 more"], canvas.BarLeast.Select(chip => chip.RowText));
         Assert.Equal("1 question, 1 reply", canvas.BarLeast[1].Tip);
+        Assert.Equal("2 interrupted", canvas.BarLeast[2].Tip);
+        Assert.Equal(["1 failed", "+4 more"], canvas.BarTightest.Select(chip => chip.RowText));
+        Assert.Equal("2 waiting, 2 interrupted", canvas.BarTightest[1].Tip);
 
         void Sweep()
         {

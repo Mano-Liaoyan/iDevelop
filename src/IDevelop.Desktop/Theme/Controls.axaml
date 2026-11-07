@@ -410,10 +410,10 @@
   <Style Selector="ListBox.tasks:not(.hidden) ListBoxItem:selected TextBlock.rowName">
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- A node's row is one line, selected or not, so a long list keeps one rhythm. The tooltip and the inspector hold the name. -->
+  <!-- A node's name shows in full and wraps, selected or not (issue #108). Its smaller type keeps the tree easy to scan. -->
   <Style Selector="TextBlock.nodeName">
-    <Setter Property="MaxLines" Value="1" />
-    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+    <Setter Property="MaxLines" Value="0" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <!-- A workflow that is not shown keeps its node selection for when it is shown again, without a selected look. -->
   <Style Selector="ListBox.tasks.hidden ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
@@ -441,7 +441,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
 
-  <!-- A name's type. A row of Activity cuts its name to one line and a node's row to two, and the row's tooltip holds all of it. -->
+  <!-- A name's type. A row of Activity cuts its name to one line, and the row's tooltip holds all of it. A tree row shows its whole name. -->
   <Style Selector="TextBlock.rowName">
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="FontSize" Value="13" />

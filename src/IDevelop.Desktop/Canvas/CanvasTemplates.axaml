@@ -199,11 +199,11 @@
     </Panel>
   </DataTemplate>
 
-  <!-- A group of the run bar: its state's badge and its words, or its count on a tight bar. -->
+  <!-- A group of the run bar: its state's badge and its words. "+N more" has no badge, and its tooltip names its groups. -->
   <DataTemplate x:Key="BarChipTemplate" DataType="canvas:StateChip">
     <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip.Tip="{Binding Tip}"
                 AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
-      <Panel Width="16" Height="16" VerticalAlignment="Center">
+      <Panel Width="16" Height="16" VerticalAlignment="Center" IsVisible="{Binding !IsMore}">
         <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
         <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />

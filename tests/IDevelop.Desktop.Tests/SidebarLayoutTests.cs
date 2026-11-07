@@ -135,7 +135,7 @@ public sealed class SidebarLayoutTests : IDisposable
     [AvaloniaTheory]
     [InlineData(240)]
     [InlineData(400)]
-    public void Task_titles_take_at_most_two_lines_with_their_tile_on_the_first(double width)
+    public void Task_titles_show_in_full_with_their_tile_on_the_first_line(double width)
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, LongTask, "Ship");
@@ -145,7 +145,8 @@ public sealed class SidebarLayoutTests : IDisposable
         var rows = new[] { LongTask, "Ship" }.Select(title => shell.TaskRow(Reports, ReleaseNotes, title)).ToArray();
         var titles = rows.Select(row => row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"))).ToArray();
 
-        Assert.All(titles, title => Assert.InRange(title.TextLayout.TextLines.Count, 1, 2));
+        Assert.Equal(LongTask, titles[0].Text);
+        Assert.True(titles[0].TextLayout.TextLines.Count > 1, $"The long title fits on one line at {width} px, so nothing here wraps.");
         Assert.Single(titles[1].TextLayout.TextLines);
         // Each row centres its glyph on its title's first line, 12 px into the row.
         Assert.All(rows, row => Assert.StartsWith("first line 12, glyph 0", TaskCentres(row)));
@@ -288,7 +289,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_node_s_name_takes_one_line_with_a_tooltip_also_while_it_is_selected()
+    public void A_node_s_name_shows_in_full_also_while_it_is_selected()
     {
         const string Long = "Backfill the ledger partition for every tenant that opened an account before the migration began and keep it online";
         var reports = _temp.Create(Reports);
@@ -300,15 +301,15 @@ public sealed class SidebarLayoutTests : IDisposable
         var view = shell.Window.ViewModel;
         var node = view.Canvas!.Outline.Single(item => item.Title == Long);
 
-        Assert.EndsWith("…", name.Text);
-        Assert.Single(name.TextLayout.TextLines);
-        Assert.Equal(Long, ToolTip.GetTip(name.GetVisualParent<Grid>()!));
+        // Issue #108: every name in the left tree shows in full and wraps.
+        Assert.Equal(Long, name.Text);
+        Assert.True(name.TextLayout.TextLines.Count > 2, "The long name does not wrap past two lines.");
 
         view.Canvas.Inspect(node);
         shell.Render();
 
-        Assert.EndsWith("…", name.Text);
-        Assert.Single(name.TextLayout.TextLines);
+        Assert.Equal(Long, name.Text);
+        Assert.True(name.TextLayout.TextLines.Count > 2, "The selected name does not wrap past two lines.");
     }
 
     [AvaloniaFact]
