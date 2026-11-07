@@ -216,8 +216,8 @@
        and the layout moves the cards under it down, so it covers none of them (ADR 0060). -->
   <Style Selector=":is(Control).tier-label nodify|ItemContainer:selected Panel.taskCard:not(.expanded) Panel.cardHead">
     <Setter Property="Height" Value="NaN" />
-    <Setter Property="MinHeight" Value="112" />
-    <Setter Property="Margin" Value="0,0,0,42" />
+    <Setter Property="MinHeight" Value="108" />
+    <Setter Property="Margin" Value="0,0,0,46" />
   </Style>
   <Style Selector="DockPanel.farLine">
     <Setter Property="VerticalAlignment" Value="Top" />
