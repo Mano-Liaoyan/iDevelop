@@ -427,6 +427,12 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
+  <!-- The task's row grows to its second line and to the source's wrapped name, so neither is cut without an ellipsis (ADR 0064). -->
+  <Style Selector="Border.taskTurn ToggleButton.steps">
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="4,2" />
+  </Style>
   <Style Selector="ToggleButton.steps /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.steps:checked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
