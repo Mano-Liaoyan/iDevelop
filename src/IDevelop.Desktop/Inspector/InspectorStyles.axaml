@@ -302,7 +302,8 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
-    <Setter Property="Padding" Value="4,0" />
+    <Setter Property="Margin" Value="4,0" />
+    <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
     <Setter Property="BorderThickness" Value="0" />
