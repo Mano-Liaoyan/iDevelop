@@ -109,7 +109,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         : null;
 
     /// <summary>Send's tooltip: its name and key, and then what Send does while that is not plain.</summary>
-    public string SendHelp => ComposerHint is { } hint ? $"Send\n{hint}" : "Send";
+    public string SendHelp => ComposerHint is { } hint ? $"Send ({CanvasKeys.Hint(CanvasKeys.Run)})\n{hint}" : $"Send ({CanvasKeys.Hint(CanvasKeys.Run)})";
 
     /// <summary>The composer's placeholder, which says what a message does now.</summary>
     public string Watermark => Node.IsAsking ? "Answer in your own words"

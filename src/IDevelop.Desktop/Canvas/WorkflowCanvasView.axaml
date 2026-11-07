@@ -309,7 +309,7 @@
                 <ItemsControl Classes="barChips barLeastChips" ItemsSource="{Binding BarLeast}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunLeastChips">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                      <StackPanel Orientation="Horizontal" Spacing="6" />
+                      <StackPanel Orientation="Horizontal" />
                     </ItemsPanelTemplate>
                   </ItemsControl.ItemsPanel>
                 </ItemsControl>

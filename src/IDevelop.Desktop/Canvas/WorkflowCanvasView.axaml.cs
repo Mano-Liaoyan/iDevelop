@@ -322,7 +322,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         ShowAdd();
     }
 
-    // The tag stands under the bar in screen pixels, clear of its badge, and over it where the canvas's bottom edge leaves no room.
+    // The tag stands in screen pixels in the gap under the bar, or in the gap over it, with NameTagInset clear of each bar, so
+    // it covers no other bar. Where neither gap holds it, it stands on its own bar, which it then names in place.
     private void ShowNameTag()
     {
         var node = _viewModel is { Tier: ZoomTier.Block, SelectedNodes.Count: 1 } canvas ? canvas.SelectedNode : null;
@@ -337,9 +338,25 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         var at = (node.DisplayLocation - Editor.ViewportLocation) * zoom;
         NameTag.Measure(Size.Infinity);
         var width = NameTag.DesiredSize.Width - NameTag.Margin.Left;
-        var below = at.Y + WorkflowCanvasViewModel.TaskCardHeight * zoom + 3;
-        var y = below + NameTag.Height <= Editor.Bounds.Height - NameTagInset ? below : at.Y - NameTag.Height - 8;
-        NameTag.Margin = new Thickness(Math.Max(NameTagInset, Math.Min(at.X, Editor.Bounds.Width - width - NameTagInset)), y, 0, 0);
+        var x = Math.Max(NameTagInset, Math.Min(at.X, Editor.Bounds.Width - width - NameTagInset));
+        var height = WorkflowCanvasViewModel.TaskCardHeight * zoom;
+        NameTag.Margin = new Thickness(x, NameTagTop(node, at.Y, at.Y + height, x, width), 0, 0);
+    }
+
+    private double NameTagTop(TaskNodeViewModel node, double top, double bottom, double left, double width)
+    {
+        var zoom = Editor.ViewportZoom;
+        var tag = NameTag.Height + 2 * NameTagInset;
+        var bars = _viewModel!.Nodes.Where(other => other != node)
+            .Select(other => new Rect(((other.DisplayLocation - Editor.ViewportLocation) * zoom),
+                new Size(WorkflowCanvasViewModel.TaskCardWidth * zoom, WorkflowCanvasViewModel.TaskCardHeight * zoom)))
+            .Where(bar => bar.Right > left && bar.Left < left + width)
+            .ToArray();
+        var next = bars.Where(bar => bar.Top >= bottom).Select(bar => bar.Top).DefaultIfEmpty(Editor.Bounds.Height).Min();
+        var last = bars.Where(bar => bar.Bottom <= top).Select(bar => bar.Bottom).DefaultIfEmpty(0).Max();
+        return next - bottom >= tag ? bottom + NameTagInset
+            : top - last >= tag ? top - NameTagInset - NameTag.Height
+            : (top + bottom - NameTag.Height) / 2;
     }
 
     // The selection comes back once the editor has laid out its cards, as a selection made on the canvas would.

@@ -64,11 +64,6 @@
   <Style Selector=":is(Control).tier-title Border.runBand">
     <Setter Property="Height" Value="14" />
   </Style>
-  <!-- The pointer over a card keeps its surface and draws one thin accent line. -->
-  <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-  </Style>
   <!-- The selection line replaces a quiet state's edge, so a selected card has one outline. -->
   <Style Selector="nodify|ItemContainer:selected Border.stateStroke.state-idle, nodify|ItemContainer:selected Border.stateStroke.state-completed">
     <Setter Property="Opacity" Value="0" />
@@ -355,6 +350,21 @@
   <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
     <Setter Property="Margin" Value="1,-9" />
     <Setter Property="BorderThickness" Value="9" />
+  </Style>
+  <!-- The pointer over a card keeps its surface and draws one neutral line of one screen pixel at each zoom, so only the
+       selection draws the accent ring. -->
+  <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-compact nodify|ItemContainer:pointerover:not(:selected) Border.ring">
+    <Setter Property="BorderThickness" Value="1.6" />
+  </Style>
+  <Style Selector=":is(Control).tier-label nodify|ItemContainer:pointerover:not(:selected) Border.ring">
+    <Setter Property="BorderThickness" Value="2.5" />
+  </Style>
+  <Style Selector=":is(Control).tier-title nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-block nodify|ItemContainer:pointerover:not(:selected) Border.ring">
+    <Setter Property="BorderThickness" Value="4" />
   </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
        show through it (#85). Its dashed edge and faded tile say it is a proposal. -->
@@ -657,11 +667,10 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The canvas has the keys: one thin line, so the selected card keeps the one strong ring. -->
+  <!-- The canvas has the keys: the app's 2 px focus ring, as on every field. -->
   <Style Selector="Border.canvasFocus">
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="Opacity" Value="0.5" />
   </Style>
   <Style Selector="Button.zoomValue TextBlock">
     <Setter Property="FontSize" Value="12" />
@@ -709,7 +718,14 @@
   <Style Selector="ItemsControl.barChips ContentPresenter > StackPanel">
     <Setter Property="Spacing" Value="4" />
   </Style>
-  <Style Selector="ItemsControl.barLeastChips StackPanel">
+  <!-- A tight chip keeps its badge close to its count, and the chips keep 6 px between them, so each count reads with its badge. Only the tightest bar closes them up. -->
+  <Style Selector="ItemsControl.barLeastChips ContentPresenter > StackPanel">
+    <Setter Property="Spacing" Value="1" />
+  </Style>
+  <Style Selector="ItemsControl.barLeastChips ItemsPresenter > StackPanel">
+    <Setter Property="Spacing" Value="6" />
+  </Style>
+  <Style Selector=":is(Control).tightNext ItemsControl.barLeastChips ItemsPresenter > StackPanel">
     <Setter Property="Spacing" Value="1" />
   </Style>
   <Style Selector=":is(Control).tightChips TextBlock.followLabel">
