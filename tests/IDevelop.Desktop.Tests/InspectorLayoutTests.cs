@@ -62,7 +62,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         shell.Click(shell.ConnectionInto("Build"));
 
-        Assert.Equal("actions at 12, values at 12", Edges(shell));
+        Assert.Equal("actions at , values at 12", Edges(shell));
     }
 
     [AvaloniaTheory]
@@ -157,7 +157,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var note = shell.Find<TextBlock>("EmptyLibrary");
 
-        Assert.Equal("No project or personal blueprints yet. Derive one from a blueprint's More menu.", note.Text);
+        Assert.Equal("No project or personal blueprints yet. To add one, choose Derive Blueprint in a blueprint's More menu.", note.Text);
         Assert.DoesNotContain(note.TextLayout.TextLines, line => line.HasCollapsed);
     }
 
@@ -175,7 +175,9 @@ public sealed class InspectorLayoutTests : IDisposable
             Assert.True(top < bottom, $"{id} starts at {top}, and its label ends at {bottom}.");
             var content = shell.Bounds(shell.Find<Control>("Inspector")).Left + Inset;
             // Beside its label, a value starts at the value column, after the glyph column, its gap, and the label column.
-            Assert.Equal(content + InspectorGrid.GlyphWidth + InspectorGrid.GlyphGap + InspectorGrid.LabelWidth, shell.Bounds(editor).Left, 0.5);
+            var around = InspectorGrid.GlyphWidth + InspectorGrid.GlyphGap;
+            var labels = Math.Max(InspectorGrid.LabelWidth, shell.Find<Control>("Inspector").Bounds.Width - 2 * Inset - around - InspectorGrid.MaxValueWidth);
+            Assert.Equal(content + around + labels, shell.Bounds(editor).Left, 0.5);
         }
     }
 
@@ -223,7 +225,7 @@ public sealed class InspectorLayoutTests : IDisposable
         var edge = shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset;
 
         var counts = Shell.ById<TextBlock>(shell.Window, "StateCount").Where(count => count.IsEffectivelyVisible).ToArray();
-        var more = Shell.ById<Button>(shell.Window, "PlaceBlueprint").Where(button => button.IsEffectivelyVisible).ToArray();
+        var more = Shell.ById<Button>(shell.Window, "BlueprintMore").Where(button => button.IsEffectivelyVisible).ToArray();
 
         Assert.NotEmpty(counts);
         Assert.Equal(6, more.Length);
@@ -265,7 +267,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Pick("TaskConversation", "May ask");
 
         var badge = shell.Section("Agent").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("sectionBadge"));
-        Assert.Equal("1 changed", badge.Text);
+        Assert.Equal("1 override", badge.Text);
         var (ink, filter) = (InkRight(shell, badge), shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset - InspectorGrid.GlyphInkInset);
         Assert.True(Math.Abs(ink - filter) <= 2, $"The count's ink ends at {ink}, and the filter glyph's at {filter}.");
     }
@@ -320,12 +322,12 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal("labels at 12, values at 108", Columns(shell));
+        Assert.Equal($"labels at 12, values at {Math.Max(116, width - 332)}", Columns(shell));
 
         shell.Click(shell.ConnectionInto("Build"));
 
         Assert.Equal(["From", "To", "Kind"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal("labels at 32, values at 108", Columns(shell));
+        Assert.Equal($"labels at 32, values at {Math.Max(116, width - 332)}", Columns(shell));
     }
 
     [AvaloniaTheory]
@@ -619,7 +621,7 @@ public sealed class InspectorLayoutTests : IDisposable
         bool InRow(Control control) => control.FindAncestorOfType<InspectorRow>() is not null;
         string? Id(Control control) => AutomationProperties.GetAutomationId(control);
 
-        var actions = shown.Where(control => Id(control) is "InspectorMore" or "InspectorTools" or "RemoveField" || control.Name == "PART_Trail");
+        var actions = shown.Where(control => Id(control) is "InspectorMore" or "RemoveField" || control.Name == "PART_Trail");
         var values = shown.Where(control =>
             control is ComboBox
             || control is TextBox && InRow(control)

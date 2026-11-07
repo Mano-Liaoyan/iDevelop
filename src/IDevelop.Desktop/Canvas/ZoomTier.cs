@@ -14,6 +14,9 @@ public static class ZoomTiers
     /// <summary>The least zoom at which a card's title reads at a glance.</summary>
     public const double ReadableZoom = LabelFrom;
 
+    /// <summary>The zoom that the bar calls 100%: a card here reads at the app's body size, title and agent, at a size that fits a workflow.</summary>
+    public const double ActualSize = 0.4;
+
     /// <summary>A zoom that rises enters the larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
     private const double Gap = 0.02;
 

@@ -77,8 +77,13 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     public string Heading => IsNew ? "NEW BLUEPRINT" : "EDIT BLUEPRINT";
 
     public string Caption => _editing is { } library
-        ? $"Version {_source.Key.Version} in the {LibraryName(library.Kind)} library. Saving makes version {_source.Key.Version + 1}, and nodes placed before keep their version."
-        : $"A new blueprint from {_source.Name}, version {_source.Key.Version}. Its own versions start at 1.";
+        ? $"Version {_source.Key.Version} in the {LibraryName(library.Kind)} library."
+        : $"A new blueprint from {_source.Name}, version {_source.Key.Version}.";
+
+    /// <summary>What saving does to versions, which the caption's tooltip holds.</summary>
+    public string CaptionTip => _editing is not null
+        ? $"Saving makes version {_source.Key.Version + 1}, and nodes placed before keep their version."
+        : "Its own versions start at 1.";
 
     public bool IsNew => _editing is null;
 
@@ -153,7 +158,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         set => Set(ref _fixTemplate, value);
     }
 
-    /// <summary>The template with each field's default, or its label where it has none, or null while the template does not parse.</summary>
+    /// <summary>The template with each field's default, or its label as a code mark where it has none, or null while the template does not parse.</summary>
     public string? TemplatePreview
     {
         get
@@ -162,8 +167,8 @@ public sealed class BlueprintEditorViewModel : ObservableObject
             {
                 var values = Fields.GroupBy(row => row.Key).ToDictionary(group => group.Key, group => group.First());
                 return PromptTemplate.Parse(_template).Render(name => values.TryGetValue(name, out var row)
-                    ? string.IsNullOrEmpty(row.Default) ? $"[{row.Label}]" : row.Default
-                    : $"[{name}]").Trim();
+                    ? string.IsNullOrEmpty(row.Default) ? $"`{row.Label}`" : row.Default
+                    : $"`{Title(name)}`").Trim();
             }
             catch (FormatException)
             {
@@ -172,12 +177,11 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         }
     }
 
+    private static string Title(string name) => name.Length == 0 ? name : $"{char.ToUpperInvariant(name[0])}{name[1..]}";
+
     /// <summary>What a template can insert: the node's title and each field.</summary>
     public IReadOnlyList<TemplateToken> TemplateTokens =>
         [new TemplateToken("Title", "{{title}}"), .. Fields.Select(row => new TemplateToken(row.Label, $"{{{{{row.Key}}}}}"))];
-
-    /// <summary>The template's syntax in one sentence, beside the box.</summary>
-    public string TemplateHint => "Double braces insert a value. {{#key}} ... {{/key}} keeps text only when that value is set.";
 
     public string TemplateHelp =>
         "{{title}} inserts the node's title, {{inputs}} what earlier nodes handed on, and {{key}} a field's value. " +

@@ -149,7 +149,7 @@ public sealed class MarkdownViewTests
 
     [Theory]
     [InlineData("short", 20, "short")]
-    [InlineData("    call(first, second, third)", 20, "    call(first,\n        second, third)")]
+    [InlineData("    call(first, second, third)", 20, "    call(first,\n        second,\n        third)")]
     [InlineData("abcdefghijkl", 8, "abcdefgh\n    ijkl")]
     public void A_long_code_line_continues_past_its_own_indent(string source, int columns, string shown) =>
         Assert.Equal(shown, Conversation.CodeText.Wrapped(source, columns));

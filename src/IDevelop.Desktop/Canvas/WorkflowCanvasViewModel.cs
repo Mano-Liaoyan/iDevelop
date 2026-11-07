@@ -153,7 +153,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     internal (Point Location, double Zoom)? FittedView { get; set; }
 
     /// <summary>The zoom as a percent, on the control that resets it.</summary>
-    public string ZoomLabel => $"{Math.Round(ViewportZoom * 100)}%";
+    public string ZoomLabel => $"{Math.Round(ViewportZoom / ZoomTiers.ActualSize * 100)}%";
 
     /// <summary>How much a card shows at this zoom.</summary>
     public ZoomTier Tier

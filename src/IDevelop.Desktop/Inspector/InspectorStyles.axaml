@@ -82,7 +82,7 @@
   </Style>
   <!-- The actions and the detail sit apart, one row each, under the title and the status. -->
   <Style Selector="StackPanel.headerState">
-    <Setter Property="Margin" Value="0,6,0,0" />
+    <Setter Property="Margin" Value="0,4,0,0" />
     <Setter Property="Spacing" Value="6" />
   </Style>
   <!-- A status is a glyph and a word in every state, on the panel's own surface, so it never reads as a button. -->
@@ -202,15 +202,22 @@
     <Setter Property="FontSize" Value="13" />
   </Style>
   <Style Selector="Border.filterBar">
-    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Padding" Value="12,4" />
   </Style>
+  <!-- The filter is a field of the panel: the same quiet fill, hover tint, and focus edge as the rows' fields. -->
   <Style Selector="Border.filterBar TextBox">
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
-  </Style>
-  <Style Selector="Border.filterBar Button.action">
-    <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
-    <Setter Property="Padding" Value="8,0" />
     <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.filterBar TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.filterBar TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <Style Selector="Button.glyph">
@@ -346,7 +353,17 @@
                               IsVisible="{TemplateBinding Lead, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </Panel>
           <Panel Name="PART_LabelLine" Grid.Row="0" Grid.Column="2" VerticalAlignment="Top" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" Background="Transparent">
-            <TextBlock Name="PART_Label" Classes="rowLabel" Text="{TemplateBinding Label}" />
+            <!-- One place for a revert arrow in every row: right after the label. -->
+            <WrapPanel VerticalAlignment="Center">
+              <TextBlock Name="PART_Label" Classes="rowLabel" Text="{TemplateBinding Label}" />
+              <Button Name="PART_Revert" Classes="glyph revert" Margin="2,0,0,0"
+                      Command="{TemplateBinding RevertCommand}" IsVisible="{TemplateBinding CanRevert}"
+                      ToolTip.Tip="{TemplateBinding RevertTip}"
+                      AutomationProperties.AutomationId="{TemplateBinding RevertId}"
+                      AutomationProperties.Name="Revert">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRevert}" Width="14" Height="14" />
+              </Button>
+            </WrapPanel>
           </Panel>
           <ContentPresenter Name="PART_ContentPresenter" Grid.Row="0" Grid.Column="3" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
                             VerticalAlignment="Top" VerticalContentAlignment="Center" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
@@ -355,14 +372,6 @@
             <ContentPresenter Content="{TemplateBinding Actions}" VerticalAlignment="Center"
                               IsVisible="{TemplateBinding Actions, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </StackPanel>
-          <!-- One column for every row: in a box the arrow stands just before the chevron, and over a stacked value it keeps that place on the label's line. -->
-          <Button Name="PART_Revert" Classes="glyph revert" Grid.Row="0" Grid.Column="3" ZIndex="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,26,0"
-                  Command="{TemplateBinding RevertCommand}" IsVisible="{TemplateBinding CanRevert}"
-                  ToolTip.Tip="{TemplateBinding RevertTip}"
-                  AutomationProperties.AutomationId="{TemplateBinding RevertId}"
-                  AutomationProperties.Name="Revert">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRevert}" Width="14" Height="14" />
-          </Button>
         </inspector:InspectorGrid>
         </Border>
       </ControlTemplate>
@@ -371,16 +380,6 @@
   <!-- Only a row that is a name takes a hover fill. A row with a box has the box's own hover, and a fill would show past its corners. -->
   <Style Selector="inspector|InspectorRow:title:pointerover /template/ Border#PART_Row">
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-  </Style>
-  <Style Selector="inspector|InspectorRow:stacked /template/ Button#PART_Revert">
-    <Setter Property="Margin" Value="0,0,26,0" />
-  </Style>
-  <!-- A changed value's text ends before the arrow. -->
-  <Style Selector="inspector|InspectorRow:changed ComboBox">
-    <Setter Property="Padding" Value="8,3,24,3" />
-  </Style>
-  <Style Selector="inspector|InspectorRow:changed ToggleButton.picker /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Margin" Value="0,0,24,0" />
   </Style>
   <!-- A value that differs from its default names itself in strong text beside its revert arrow. -->
   <Style Selector="inspector|InspectorRow:changed /template/ TextBlock#PART_Label">
@@ -409,9 +408,9 @@
     <Setter Property="Grid.ColumnSpan" Value="2" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
   </Style>
-  <Style Selector="inspector|InspectorRow:stacked /template/ TextBlock#PART_Label">
-    <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="0,0,0,4" />
+  <Style Selector="Button.glyph.revert">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Row" Value="1" />
@@ -495,7 +494,7 @@
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
     <!-- Its text starts 8 px in and its chevron ends 10 px in, where a ComboBox draws them. With its 1 px border, its text
          starts 4 px down and ends 4 px up, as in a ComboBox of a row. -->
-    <Setter Property="Padding" Value="7,3,9,3" />
+    <Setter Property="Padding" Value="7,2,9,2" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
@@ -586,25 +585,25 @@
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="inspector|InspectorRow ComboBox:pointerover /template/ Border#Background, inspector|InspectorRow ComboBox:pressed /template/ Border#Background">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:pointerover /template/ Border#PART_BorderElement">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:not(.multiline)">
-    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="Padding" Value="8,2" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
-  <!-- Fluent pads a ComboBox 5 px above its text and 7 px below. On Windows, Inter's line at 13 px takes 18 px. With 3 px above
+  <!-- Fluent pads a ComboBox 5 px above its text and 7 px below. On Windows, Inter's line at 13 px takes 18 px. With 2 px above
        and below and its border, it is one line high, as the skill picker is. -->
   <Style Selector="inspector|InspectorRow ComboBox">
-    <Setter Property="Padding" Value="8,3,0,3" />
+    <Setter Property="Padding" Value="8,2,0,2" />
     <Setter Property="MaxDropDownHeight" Value="320" />
   </Style>
   <!-- The closed box ends a long name in an ellipsis. Its list opens at the box's own width, over no label, and wraps each name
@@ -640,7 +639,7 @@
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
   </Style>
   <Style Selector="Panel.fieldText.multiline:not(:focus-within) > TextBox.multiline">
-    <Setter Property="MaxHeight" Value="48" />
+    <Setter Property="MaxHeight" Value="84" />
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
   </Style>
   <Style Selector="Panel.fieldText.multiline.open:not(:focus-within) > TextBox.multiline">
@@ -653,7 +652,7 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="TextBlock.fieldReading">
-    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="MaxLines" Value="4" />
     <Setter Property="Margin" Value="9,6" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="LineHeight" Value="18" />
@@ -888,7 +887,7 @@
   </Style>
   <!-- A row's disclosure sits on the value column, at a value's text edge. -->
   <Style Selector="ToggleButton.disclosure.rowDisclosure">
-    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
     <Setter Property="Padding" Value="8,0" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />

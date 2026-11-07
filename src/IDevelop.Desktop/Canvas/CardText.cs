@@ -8,13 +8,13 @@ public static class CardText
     /// <summary>"Proposal · 3 tasks", the subtitle of a planner whose proposal is open.</summary>
     public static string Proposal(int tasks) => tasks == 1 ? "Proposal · 1 task" : $"Proposal · {tasks} tasks";
 
-    /// <summary>The letter that stands for a client where its name has no room.</summary>
+    /// <summary>The two letters that stand for a client where its name has no room.</summary>
     public static string ClientMark(ClientId client) => client switch
     {
-        ClientId.ClaudeCode => "C",
-        ClientId.Codex => "X",
-        ClientId.Pi => "P",
-        _ => "A",
+        ClientId.ClaudeCode => "CC",
+        ClientId.Codex => "Cx",
+        ClientId.Pi => "Pi",
+        _ => "AG",
     };
 
     /// <summary>A zoomed out card's model lines: a model's card lines, and last its family, which fits whole where its version does not.</summary>

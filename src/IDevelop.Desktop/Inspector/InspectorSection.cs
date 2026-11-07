@@ -65,7 +65,7 @@ public sealed class InspectorSection : InspectorPart
         set => SetValue(ChangesProperty, value);
     }
 
-    /// <summary>"2 changed" while two of the section's values differ from their defaults, otherwise empty.</summary>
+    /// <summary>"2 overrides" while two of the section's values differ from their defaults, otherwise empty.</summary>
     public string Badge
     {
         get;
@@ -93,7 +93,7 @@ public sealed class InspectorSection : InspectorPart
     {
         var folded = IsFolded;
         PseudoClasses.Set(":folded", folded);
-        Badge = Changes > 0 ? $"{Changes} changed" : "";
+        Badge = Changes switch { 0 => "", 1 => "1 override", _ => $"{Changes} overrides" };
         IsVisible = IsShown;
         PseudoClasses.Set(":unmatched", !TitleMatches && !_rows.Any(row => row is { IsShown: true, LabelMatches: true }));
         foreach (var row in _rows)

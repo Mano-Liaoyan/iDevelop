@@ -101,7 +101,7 @@ public sealed class MainWindowTests : IDisposable
             [
                 "Workflow", "0 nodes", "Select a node to edit it.", "Library",
                 "Built-in", "Implement", "Plan", "Architect", "Review", "Approval", "Merge",
-                "No project or personal blueprints yet. Derive one from a blueprint's More menu.",
+                "No project or personal blueprints yet. To add one, choose Derive Blueprint in a blueprint's More menu.",
                 "Reload Libraries",
             ],
             Shell.Texts(shell.Find<Control>("Inspector")));

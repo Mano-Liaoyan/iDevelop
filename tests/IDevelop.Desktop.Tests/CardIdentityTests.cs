@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Execution;
 using IDevelop.Nodes;
 using IDevelop.TestSupport;
@@ -32,7 +33,7 @@ public sealed class CardIdentityTests
         shell.WaitForCard("A", "Reply");
 
         Assert.Equal(lines, node.CardLines);
-        Assert.Equal("A", mark);
+        Assert.Equal("AG", mark);
         Assert.Equal(mark, node.ClientMark);
         Assert.Equal("Antigravity", node.CardClient);
     }
@@ -95,7 +96,7 @@ public sealed class CardIdentityTests
     }
 
     [AvaloniaFact]
-    public void The_open_conversation_holds_the_result_so_the_output_section_lists_only_where_it_goes()
+    public void The_inspector_keeps_the_title_and_the_result_beside_the_open_conversation()
     {
         using var f = new NodeFixture(Task(A, "A", 105));
         f.Install(Reply("s-1", "Done."));
@@ -103,13 +104,42 @@ public sealed class CardIdentityTests
         shell.RunNode("A");
         shell.WaitForCard("A", "Completed");
         var node = shell.NodeModel("A");
-        Assert.True((node.ShowsResults, node.ShowsOutputSection) == (true, true));
 
         node.OpenConversationCommand.Execute(null);
         shell.Render();
 
-        Assert.False(node.ShowsResults);
-        Assert.False(node.ShowsOutputSection);
+        Assert.True(shell.Find<TextBox>("TaskTitle").IsEffectivelyVisible);
+        Assert.Contains("Done.", shell.Find<TextBlock>("ResultSummary").Text);
+        Assert.True(shell.Find<TextBlock>("ResultSummary").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_node_with_no_result_leads_with_its_Agent_and_one_with_a_result_with_its_Output()
+    {
+        using var f = new NodeFixture(Task(A, "A", 105));
+        f.Install(Reply("s-1", "Done."));
+        var shell = f.Open();
+        shell.Click(shell.Header(shell.Node("A")));
+        shell.Render();
+        Assert.True(shell.Bounds(shell.Section("Agent")).Top < shell.Bounds(shell.Section("Output")).Top);
+
+        shell.RunNode("A");
+        shell.WaitForCard("A", "Completed");
+        shell.Render();
+
+        Assert.True(shell.Bounds(shell.Section("Output")).Top < shell.Bounds(shell.Section("Agent")).Top);
+        Assert.True(shell.Bounds(shell.Section("Agent")).Top < shell.Bounds(shell.Section("Input")).Top);
+    }
+
+    [AvaloniaFact]
+    public void The_zoom_label_calls_the_reading_size_100_percent()
+    {
+        using var f = new NodeFixture(Task(A, "A", 105));
+        var canvas = f.Open().Window.ViewModel.Canvas!;
+
+        canvas.ViewportZoom = ZoomTiers.ActualSize;
+
+        Assert.Equal("100%", canvas.ZoomLabel);
     }
 
     [Theory]

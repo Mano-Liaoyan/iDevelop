@@ -29,8 +29,7 @@ public sealed class BlueprintTests : IDisposable
         Assert.Equal(["Implement", "Plan", "Architect", "Review", "Approval", "Merge"], EntryNames(shell, "BUILT-IN"));
         Assert.All(["Implement", "Plan", "Architect", "Review", "Approval", "Merge"], name =>
         {
-            Assert.True(Button(shell, name, "PlaceBlueprint").IsEffectivelyVisible);
-            Assert.Equal(["Derive Blueprint…"], MenuEntries(shell, name));
+            Assert.Equal(["Place in View", "Derive Blueprint…"], MenuEntries(shell, name));
         });
         Assert.Empty(EntryNames(shell, "PROJECT"));
     }
@@ -42,7 +41,7 @@ public sealed class BlueprintTests : IDisposable
         var shell = Shell.Open(project);
 
         Press(shell, "Implement", "DeriveBlueprint");
-        Assert.Equal("A new blueprint from Implement, version 1. Its own versions start at 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
+        Assert.Equal("A new blueprint from Implement, version 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
         shell.Find<TextBox>("BlueprintName").Text = "Bug fix";
         shell.Click(shell.InView<Button>("SaveBlueprint"));
 
@@ -58,7 +57,7 @@ public sealed class BlueprintTests : IDisposable
 
         Press(shell, "Bug fix", "EditBlueprint");
         Assert.Equal(
-            "Version 1 in the project library. Saving makes version 2, and nodes placed before keep their version.",
+            "Version 1 in the project library.",
             shell.Find<TextBlock>("BlueprintCaption").Text);
         shell.Find<TextBox>("BlueprintTemplate").Text = "Fix it: {{instructions}}";
         shell.Click(shell.InView<Button>("SaveBlueprint"));
@@ -195,11 +194,11 @@ public sealed class BlueprintTests : IDisposable
             shell.Render();
 
             var glyphs = host.GetVisualDescendants().OfType<Button>()
-                .Where(button => AutomationProperties.GetAutomationId(button) is "PlaceBlueprint" or "BlueprintMore" or "RemoveField")
+                .Where(button => AutomationProperties.GetAutomationId(button) is "BlueprintMore" or "RemoveField")
                 .ToLookup(button => AutomationProperties.GetAutomationId(button)!);
             Assert.Equal(
-                (true, true, 2),
-                (glyphs["PlaceBlueprint"].Any(), glyphs["BlueprintMore"].Any(), glyphs["RemoveField"].Count()));
+                (true, 2),
+                (glyphs["BlueprintMore"].Any(), glyphs["RemoveField"].Count()));
             Assert.Equal([new Size(24, 24)], glyphs.SelectMany(group => group).Select(button => button.Bounds.Size).Distinct().ToArray());
         }
         finally
@@ -226,18 +225,9 @@ public sealed class BlueprintTests : IDisposable
             Containers(shell.Find<StackPanel>("Palette")).Single(container => container.DataContext is BlueprintEntryViewModel entry && entry.Name == name),
             automationId);
 
-    /// <summary>Clicks Place, or chooses Derive or Edit from the entry's More menu. A headless popup takes no clicks, so the entry raises its own.</summary>
+    /// <summary>Chooses Place, Derive, or Edit from the entry's More menu. A headless popup takes no clicks, so the entry raises its own.</summary>
     private static void Press(Shell shell, string name, string automationId)
     {
-        if (automationId == "PlaceBlueprint")
-        {
-            var button = Button(shell, name, automationId);
-            button.BringIntoView();
-            shell.Render();
-            shell.Click(button);
-            return;
-        }
-
         var more = OpenMore(shell, name);
         var item = ById<MenuItem>(shell.Window, automationId);
         Assert.True(item.IsVisible, $"{automationId} is not in {name}'s More menu.");

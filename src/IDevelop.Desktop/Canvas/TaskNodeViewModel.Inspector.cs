@@ -137,17 +137,9 @@ public sealed partial class TaskNodeViewModel
             {
                 OnPropertyChanged(nameof(Actions));
                 OnPropertyChanged(nameof(ShowsStateDetail));
-                OnPropertyChanged(nameof(ShowsResults));
-                OnPropertyChanged(nameof(ShowsOutputSection));
             }
         }
     }
-
-    /// <summary>The Output section lists the results, unless the open conversation shows them beside it.</summary>
-    public bool ShowsResults => HasResults && !IsConversationShown;
-
-    /// <summary>The Output section has something the open conversation does not: where the result goes, or a review's findings.</summary>
-    public bool ShowsOutputSection => !IsConversationShown || !HasResults || HasOutputs || ReviewSummary is not null;
 
     /// <summary>The header states what the node needs, unless the open conversation asks it in full. A failure's reason always shows.</summary>
     public bool ShowsStateDetail => !string.IsNullOrEmpty(StateDetail) && !(IsConversationShown && Proposal is null && State is NodeState.InputRequired or NodeState.Failed or NodeState.Stale);
@@ -196,7 +188,6 @@ public sealed partial class TaskNodeViewModel
         OnPropertyChanged(nameof(HasNoInputs));
         OnPropertyChanged(nameof(Outputs));
         OnPropertyChanged(nameof(HasOutputs));
-        OnPropertyChanged(nameof(ShowsOutputSection));
     }
 
     private void WatchProposal()

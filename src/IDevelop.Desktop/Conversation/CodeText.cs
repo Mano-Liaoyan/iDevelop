@@ -46,9 +46,9 @@ public sealed class CodeText : SelectableTextBlock
             var indent = line[..(line.Length - line.TrimStart().Length)] + Continuation;
             var room = columns;
             var left = line;
-            while (left.Length > room && room > indent.Length)
+            while (left.Length > room && room > 0)
             {
-                var cut = left.LastIndexOfAny([' ', ','], room - 1, room - indent.Length) + 1;
+                var cut = left.LastIndexOfAny([' ', ','], room - 1, room) + 1;
                 cut = cut > 0 && left[..cut].Trim().Length > 0 ? cut : room;
                 shown.Append(left[..cut].TrimEnd()).Append('\n').Append(indent);
                 left = left[cut..].TrimStart();

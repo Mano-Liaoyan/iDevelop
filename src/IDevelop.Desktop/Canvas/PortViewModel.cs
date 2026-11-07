@@ -11,6 +11,11 @@ public sealed class PortViewModel(TaskNodeViewModel node, PortSide side) : Obser
 
     public PortSide Side { get; } = side;
 
+    public bool IsInput => Side == PortSide.Input;
+
+    /// <summary>The name that a card shows beside the port while it has room.</summary>
+    public string Label => IsInput ? "Input" : "Output";
+
     public Point Anchor
     {
         get;

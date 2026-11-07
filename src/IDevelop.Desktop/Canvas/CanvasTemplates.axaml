@@ -14,10 +14,11 @@
             <ControlTemplate>
               <!-- The transparent panel lets the whole 20 px square take the pointer, not only the 10 px handle. -->
               <Panel Background="Transparent" x:DataType="canvas:PortViewModel" ToolTip.Tip="{Binding Tip}">
-                <Ellipse Classes="port"
+                <Ellipse Classes="port" Classes.input="{Binding IsInput}" Classes.output="{Binding !IsInput}"
                          Classes.connected="{Binding IsConnected}"
                          Fill="{TemplateBinding Background}" />
-                <Ellipse Classes="portDot" IsVisible="{Binding IsLive}" IsHitTestVisible="False" />
+                <Ellipse Classes="portDot" Classes.input="{Binding IsInput}" Classes.output="{Binding !IsInput}" IsVisible="{Binding IsLive}" IsHitTestVisible="False" />
+                <TextBlock Classes="portLabel" Classes.input="{Binding IsInput}" Classes.output="{Binding !IsInput}" Text="{Binding Label}" />
               </Panel>
             </ControlTemplate>
           </TemplatedControl.Template>

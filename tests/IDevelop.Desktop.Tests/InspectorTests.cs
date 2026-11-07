@@ -196,8 +196,8 @@ public sealed class InspectorTests : IDisposable
 
         shell.Fold("Agent");
 
-        Assert.Equal("1 changed", shell.Section("Agent").Badge);
-        Assert.Contains("1 changed", Shell.Texts(shell.Section("Agent")));
+        Assert.Equal("1 override", shell.Section("Agent").Badge);
+        Assert.Contains("1 override", Shell.Texts(shell.Section("Agent")));
         Assert.False(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
 
         shell.Click(shell.Header(shell.Node("Build")));
@@ -505,10 +505,10 @@ public sealed class InspectorTests : IDisposable
 
     private static bool Shows(Shell shell, string automationId) => shell.Has<Control>(automationId) && shell.Find<Control>(automationId).IsEffectivelyVisible;
 
-    /// <summary>Opens the sections menu and chooses the entry. A headless popup takes no clicks, so the entry raises its own.</summary>
+    /// <summary>Opens the More menu and chooses the entry. A headless popup takes no clicks, so the entry raises its own.</summary>
     private static void Choose(Shell shell, string automationId)
     {
-        var tools = shell.Find<Button>("InspectorTools");
+        var tools = shell.Find<Button>("InspectorMore");
         shell.Click(tools);
         var item = shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(menu => AutomationProperties.GetAutomationId(menu) == automationId);
         item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));

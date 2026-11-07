@@ -253,30 +253,31 @@
   </Style>
   <!-- The letter of the client that runs the node, in the tile's place. -->
   <Style Selector="Border.farClient">
-    <Setter Property="Width" Value="20" />
+    <Setter Property="MinWidth" Value="20" />
     <Setter Property="Height" Value="20" />
+    <Setter Property="Padding" Value="3,0" />
     <Setter Property="Margin" Value="0,0,6,0" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
   <Style Selector="Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector=":is(Control).tier-compact Border.farClient">
-    <Setter Property="Width" Value="22" />
+    <Setter Property="MinWidth" Value="22" />
     <Setter Property="Height" Value="22" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.farClient">
-    <Setter Property="Width" Value="28" />
+    <Setter Property="MinWidth" Value="28" />
     <Setter Property="Height" Value="28" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
     <Setter Property="FontSize" Value="22" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient">
-    <Setter Property="Width" Value="34" />
+    <Setter Property="MinWidth" Value="34" />
     <Setter Property="Height" Value="36" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
@@ -494,6 +495,48 @@
     <Setter Property="StrokeThickness" Value="0" />
     <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
   </Style>
+  <!-- A socket sits outside the card's edge, clear of the kind's stripe and the selection line, and a wire ends at its outer edge. -->
+  <Style Selector="Ellipse.port.input, Ellipse.portDot.input">
+    <Setter Property="RenderTransform" Value="translateX(-5px)" />
+  </Style>
+  <Style Selector="Ellipse.port.output, Ellipse.portDot.output">
+    <Setter Property="RenderTransform" Value="translateX(5px)" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Ellipse.port.input, :is(Control).tier-detail Ellipse.portDot.input, :is(Control).tier-compact Ellipse.port.input, :is(Control).tier-compact Ellipse.portDot.input">
+    <Setter Property="RenderTransform" Value="translateX(-7px)" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail Ellipse.port.output, :is(Control).tier-detail Ellipse.portDot.output, :is(Control).tier-compact Ellipse.port.output, :is(Control).tier-compact Ellipse.portDot.output">
+    <Setter Property="RenderTransform" Value="translateX(7px)" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Ellipse.port.input, :is(Control).tier-label Ellipse.portDot.input, :is(Control).tier-title Ellipse.port.input, :is(Control).tier-title Ellipse.portDot.input">
+    <Setter Property="RenderTransform" Value="translateX(-8px)" />
+  </Style>
+  <Style Selector=":is(Control).tier-label Ellipse.port.output, :is(Control).tier-label Ellipse.portDot.output, :is(Control).tier-title Ellipse.port.output, :is(Control).tier-title Ellipse.portDot.output">
+    <Setter Property="RenderTransform" Value="translateX(8px)" />
+  </Style>
+  <!-- A pin's name sits over its wire, outside the card, while a card has room for it, and on a far card only while it is selected. -->
+  <Style Selector="TextBlock.portLabel">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="-60,-10,-60,0" />
+  </Style>
+  <Style Selector="TextBlock.portLabel.input">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="TextAlignment" Value="Right" />
+    <Setter Property="Margin" Value="-60,-10,10,0" />
+  </Style>
+  <Style Selector="TextBlock.portLabel.output">
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="Margin" Value="10,-10,-60,0" />
+  </Style>
+  <Style Selector=":is(Control).tier-detail TextBlock.portLabel, :is(Control).tier-compact TextBlock.portLabel">
+    <Setter Property="FontSize" Value="15" />
+  </Style>
+  <Style Selector=":is(Control).tier-label TextBlock.portLabel, :is(Control).tier-title TextBlock.portLabel, :is(Control).tier-block TextBlock.portLabel">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
   <!-- A port's ring is faint until a connection uses it. -->
   <Style Selector="Ellipse.port">
     <Setter Property="Stroke" Value="{DynamicResource Border100Brush}" />
@@ -509,12 +552,11 @@
   <Style Selector="nodify|StepConnection">
     <Setter Property="StrokeThickness" Value="2" />
     <Setter Property="Opacity" Value="1" />
-    <!-- A routed wire ignores the spacing. WireRouting.Stub is the spacing plus the offset, one value for both ends, so
-         a change to the spacing or to both offsets needs the same change in Stub. -->
+    <!-- A routed wire ignores the spacing. WireRouting.Stub reaches past the spacing and the offset, one value for both ends. -->
     <Setter Property="Spacing" Value="20" />
-    <!-- Half a handle's width, so each end meets the edge of its 10 px handle. -->
-    <Setter Property="SourceOffset" Value="5,0" />
-    <Setter Property="TargetOffset" Value="5,0" />
+    <!-- A handle's width, so each end meets the outer edge of its 10 px socket. -->
+    <Setter Property="SourceOffset" Value="10,0" />
+    <Setter Property="TargetOffset" Value="10,0" />
     <!-- A small arrowhead at the input says which way a wire runs. -->
     <Setter Property="ArrowSize" Value="7,6" />
     <!-- An invisible solid outline gives the pointer a 12 px target around the line, gaps in a dash included. -->
@@ -526,6 +568,15 @@
         <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
       </Transitions>
     </Setter>
+  </Style>
+  <!-- A wire keeps to the outer edge of its socket as the sockets grow at each tier. -->
+  <Style Selector=":is(Control).tier-detail nodify|StepConnection, :is(Control).tier-compact nodify|StepConnection">
+    <Setter Property="SourceOffset" Value="14,0" />
+    <Setter Property="TargetOffset" Value="14,0" />
+  </Style>
+  <Style Selector=":is(Control).tier-label nodify|StepConnection, :is(Control).tier-title nodify|StepConnection">
+    <Setter Property="SourceOffset" Value="16,0" />
+    <Setter Property="TargetOffset" Value="16,0" />
   </Style>
   <!-- A wire's color shows what happens on it, never the kinds of its nodes (ADR 0045). It is quiet while it is idle or done,
        and only the wire into a running node is loud: bright and moving, at the weight of a wire. The neutral brushes keep 3:1 with the

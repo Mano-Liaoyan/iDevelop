@@ -243,7 +243,7 @@ public sealed class NodeMenuTests : IDisposable
         shell.Window.Height = 320;
         shell.Click(shell.Header(shell.Node("Build")));
         var viewport = shell.Find<ComboBox>("TaskClient").FindAncestorOfType<ScrollViewer>()!;
-        viewport.ScrollToHome();
+        viewport.ScrollToEnd();
         shell.Render();
         Assert.False(shell.Bounds(viewport).Contains(shell.Bounds(shell.Find<ComboBox>("TaskClient"))), "The picker is already in view.");
         Rect? placedAgainst = null;

@@ -205,14 +205,13 @@ public sealed class InspectorHeaderTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Tab_reaches_the_first_action_two_stops_after_the_filter()
+    public void Tab_reaches_the_first_action_right_after_the_filter()
     {
         // No client is installed here, so Run is off, and the first action that takes the focus is the conversation.
         var shell = Linked();
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Find<TextBox>("InspectorFilter").Focus();
 
-        shell.Press(Key.Tab);
         shell.Press(Key.Tab);
 
         Assert.Same(shell.Find<Button>("OpenConversation"), shell.Window.FocusManager!.GetFocusedElement());

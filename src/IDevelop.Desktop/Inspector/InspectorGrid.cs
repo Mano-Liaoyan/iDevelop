@@ -12,10 +12,10 @@ namespace IDevelop.Desktop.Inspector;
 public sealed class InspectorGrid : Grid
 {
     /// <summary>The label column, which holds "Conversation", the longest label beside a value.</summary>
-    public const double LabelWidth = 76;
+    public const double LabelWidth = 84;
 
     /// <summary>The widest a value's box grows. In a wider panel the label column takes the rest, so a box never stretches.</summary>
-    public const double MaxValueWidth = 420;
+    public const double MaxValueWidth = 320;
 
     /// <summary>A 24 px glyph button, such as a revert arrow, in the trailing column of a stacked row.</summary>
     public const double TrailWidth = 24;
@@ -27,7 +27,7 @@ public sealed class InspectorGrid : Grid
     public const double GlyphGap = 6;
 
     /// <summary>The height of a row's first line, a picker's height. A row's glyph, label, buttons, and a short value centre on it.</summary>
-    public const double LineHeight = 26;
+    public const double LineHeight = 24;
 
     /// <summary>
     /// The height of a label's line over its value, a glyph button's height, so the label sits 4 px above the value rather

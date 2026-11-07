@@ -41,7 +41,7 @@ internal static class FanOut
         f.Install(On().Choose(
             (Fresh("Design the API"), Reply("s-design", "The design is ready.")),
             (Fresh("Build the API"), Reply("s-build", "Built.", On().WaitForFile(f.Gate("build")))),
-            (Fresh("Write docs"), Reply("s-docs", "Here is a first draft of the export docs. Should they cover large reports too?")),
+            (Fresh("Write docs"), Reply("s-docs", "Here is a first draft of the export docs. It leaves large reports out.")),
             (Fresh(Goal), Reply("s-plan", Proposal))));
         return f;
     }

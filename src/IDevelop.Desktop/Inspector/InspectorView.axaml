@@ -13,8 +13,8 @@
     <StyleInclude Source="/Inspector/InspectorStyles.axaml" />
   </UserControl.Styles>
   <UserControl.Resources>
-    <!-- An overlay scroll bar 10 px wide, expanded, fits in the panel's 12 px right inset, so it never covers a row's
-         buttons, and the rows never move for it. -->
+    <!-- A scroll bar 10 px wide stays in view whenever the sections overflow. It fits in the panel's 12 px right inset, so it
+         never covers a row's buttons, and the rows never move for it. -->
     <x:Double x:Key="ScrollBarSize">10</x:Double>
     <!-- One finding of a review's verdict: its heading, with its severity at the card's right edge where every card keeps
          it, then its location, the reviewer's words, and the change that would settle it. A verdict that gave no severity
@@ -60,32 +60,10 @@
     <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
       <!-- With nothing selected, the panel holds the overview and the library, and nothing to filter. -->
       <Border Grid.Row="1" Classes="filterBar" IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNotNull}}">
-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-          <TextBox x:Name="Filter" Classes="search clearButton" Watermark="Filter properties"
-                   TextChanged="OnFilterChanged" KeyDown="OnFilterKeyDown"
-                   AutomationProperties.AutomationId="InspectorFilter"
-                   AutomationProperties.Name="Filter properties" />
-          <!-- Direct access to each section, as the sections keep one order and Agent comes last. -->
-          <Button Grid.Column="1" Classes="action" ToolTip.Tip="Go to a section, or fold every section"
-                  AutomationProperties.AutomationId="InspectorTools"
-                  AutomationProperties.Name="Go to a section">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock Text="Go to" VerticalAlignment="Center" />
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronUpDown}" Width="12" Height="12" />
-            </StackPanel>
-            <Button.Flyout>
-              <MenuFlyout Placement="BottomEdgeAlignedRight">
-                <MenuItem Header="Output" Tag="Output" Click="OnGoToSection" AutomationProperties.AutomationId="GoToOutput" />
-                <MenuItem Header="Input" Tag="Input" Click="OnGoToSection" AutomationProperties.AutomationId="GoToInput" />
-                <MenuItem Header="Task" Tag="Task" Click="OnGoToSection" AutomationProperties.AutomationId="GoToTask" />
-                <MenuItem Header="Agent" Tag="Agent" Click="OnGoToSection" AutomationProperties.AutomationId="GoToAgent" />
-                <Separator />
-                <MenuItem Header="Expand All" Click="OnExpandAll" AutomationProperties.AutomationId="ExpandAllSections" theme:MenuGlyph.Data="{StaticResource IconChevronDown}" />
-                <MenuItem Header="Collapse All" Click="OnCollapseAll" AutomationProperties.AutomationId="CollapseAllSections" theme:MenuGlyph.Data="{StaticResource IconChevronRight}" />
-              </MenuFlyout>
-            </Button.Flyout>
-          </Button>
-        </Grid>
+        <TextBox x:Name="Filter" Classes="search clearButton" Watermark="Filter properties"
+                 TextChanged="OnFilterChanged" KeyDown="OnFilterKeyDown"
+                 AutomationProperties.AutomationId="InspectorFilter"
+                 AutomationProperties.Name="Filter properties" />
       </Border>
 
       <Border Grid.Row="0" Classes="pinnedHeader">
@@ -98,7 +76,7 @@
         </ContentControl.Content>
         <ContentControl.DataTemplates>
           <DataTemplate DataType="canvas:TaskNodeViewModel">
-            <inspector:InspectorHeader IsBrief="{Binding IsConversationShown}">
+            <inspector:InspectorHeader>
               <!-- The node's next steps have their own row, so the sections start at one height in every state. -->
               <StackPanel Grid.Row="2" Grid.ColumnSpan="4" Classes="headerState">
                 <!-- The node's next steps, primary first. -->
@@ -124,10 +102,10 @@
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
               </StackPanel>
-              <theme:KindTile Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" IsVisible="{Binding !IsConversationShown}" />
+              <theme:KindTile Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" />
               <!-- Until the box has focus, a text block over it shows the title in up to two lines, so the header reads as a
                    title rather than a field. The box takes the title's whole length once it has focus. -->
-              <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0" ToolTip.Tip="{Binding Title}" IsVisible="{Binding !IsConversationShown}">
+              <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0" ToolTip.Tip="{Binding Title}">
                 <TextBox Classes="headerTitle" Text="{Binding Title}"
                          AutomationProperties.AutomationId="TaskTitle"
                          AutomationProperties.Name="Title" />
@@ -136,10 +114,7 @@
               </Panel>
               <!-- The status and the kind share a line. The status is a plain word with its glyph, so it never reads as a button.
                    Where they do not fit, the kind goes under the status, without the dot. -->
-              <!-- The open conversation's header holds the tile and the title, so this line takes their place beside it. -->
-              <inspector:SeparatedLine Grid.Row="{Binding IsConversationShown, Converter={x:Static inspector:InspectorConverters.HeaderStateRow}}"
-                                       Grid.Column="{Binding IsConversationShown, Converter={x:Static inspector:InspectorConverters.HeaderStateColumn}}"
-                                       Grid.ColumnSpan="{Binding IsConversationShown, Converter={x:Static inspector:InspectorConverters.HeaderStateSpan}}" VerticalAlignment="Center"
+              <inspector:SeparatedLine Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center"
                                        AutomationProperties.AutomationId="InspectorKind">
                 <Border Classes="pill headerPill" HorizontalAlignment="Left"
                         Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
@@ -176,6 +151,9 @@
                               AutomationProperties.AutomationId="DeriveTaskType" theme:MenuGlyph.Data="{StaticResource IconDerive}" />
                     <MenuItem Header="Save as Blueprint…" Command="{Binding SaveAsBlueprintCommand}" ToolTip.Tip="A new blueprint whose defaults are this node's values and agent"
                               AutomationProperties.AutomationId="SaveAsBlueprint" theme:MenuGlyph.Data="{StaticResource IconSaveAs}" />
+                    <Separator />
+                    <MenuItem Header="Expand All Sections" Click="OnExpandAll" AutomationProperties.AutomationId="ExpandAllSections" theme:MenuGlyph.Data="{StaticResource IconChevronDown}" />
+                    <MenuItem Header="Collapse All Sections" Click="OnCollapseAll" AutomationProperties.AutomationId="CollapseAllSections" theme:MenuGlyph.Data="{StaticResource IconChevronRight}" />
                   </MenuFlyout>
                 </Button.Flyout>
               </Button>
@@ -246,8 +224,8 @@
 
       <!-- A short row that the bottom edge would cut hides under the cover until it comes in whole. -->
       <Border x:Name="SectionsFoot" Grid.Row="2" Classes="scrollFoot" ZIndex="1" IsVisible="False" />
-      <ScrollViewer x:Name="SectionScroller" Grid.Row="2" ScrollChanged="OnSectionsScrolled">
-        <StackPanel x:Name="SectionList" Margin="8,8,8,16">
+      <ScrollViewer x:Name="SectionScroller" Grid.Row="2" AllowAutoHide="False" VerticalScrollBarVisibility="Visible" ScrollChanged="OnSectionsScrolled">
+        <StackPanel x:Name="SectionList" Margin="8,8,-2,16">
           <!-- Over the sections, and outside the swapped content, so the hint stays in the tree, hidden, while something is selected. -->
           <TextBlock Classes="note" Text="Select a node to edit it." Margin="4,0,4,8"
                      IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
@@ -261,8 +239,9 @@
             </ContentControl.Content>
             <ContentControl.DataTemplates>
               <DataTemplate DataType="canvas:TaskNodeViewModel">
-                <!-- One order for every node and state, so a section stays where the person last found it. -->
-                <StackPanel>
+                <!-- A node with a result leads with its Output, and its Agent follows, so the state, the result, and the model share the first screen.
+                     A node with no result leads with its Agent. Input and Task keep their places. -->
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                   <inspector:InspectorSection Key="Proposal" Title="Proposal" IsShown="{Binding Proposal, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <StackPanel>
                       <ContentControl Content="{Binding Proposal}">
@@ -433,13 +412,13 @@
                   </inspector:InspectorSection>
 
                   <!-- What the node hands on: its results, newest first, a review's findings, and the nodes that read them. -->
-                  <inspector:InspectorSection Key="Output" Title="Output" IsShown="{Binding ShowsOutputSection}">
+                  <inspector:InspectorSection Grid.Row="{Binding HasNoOutput, Converter={x:Static inspector:InspectorConverters.OutputRow}}" Key="Output" Title="Output">
                     <StackPanel>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasNoOutput}">
                         <TextBlock Classes="note" Text="No result yet."
                                    AutomationProperties.AutomationId="NoResult" />
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Buttons" Label="Results" IsShown="{Binding ShowsResults}">
+                      <inspector:InspectorRow Layout="Buttons" Label="Results" IsShown="{Binding HasResults}">
                         <ItemsControl ItemsSource="{Binding Results}" AutomationProperties.AutomationId="Results">
                           <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -522,7 +501,7 @@
                   </inspector:InspectorSection>
 
                   <!-- What the node reads: each incoming connection's node. A person's own input is a field under Task. -->
-                  <inspector:InspectorSection Key="Input" Title="Input">
+                  <inspector:InspectorSection Grid.Row="3" Key="Input" Title="Input">
                     <StackPanel>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasNoInputs}">
                         <TextBlock Classes="note" Text="No input. This node starts first."
@@ -568,7 +547,7 @@
                   </inspector:InspectorSection>
 
                   <!-- The open conversation holds the task, so this section rests folded beside it, and a click opens it to edit. -->
-                  <inspector:InspectorSection Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
+                  <inspector:InspectorSection Grid.Row="4" Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}" RestsFolded="{Binding IsConversationShown}">
                     <ItemsControl ItemsSource="{Binding Fields}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="canvas:FieldViewModel">
@@ -576,7 +555,7 @@
                                                   Layout="{Binding IsMultiline, Converter={x:Static inspector:InspectorConverters.StackedWhen}}"
                                                   RevertCommand="{Binding RevertCommand}" CanRevert="{Binding CanRevert}" RevertId="{Binding RevertId}" RevertTip="Back to the blueprint's default">
                             <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box.
-                                 Until the box has focus, long text reads as text over it, in up to two lines with an ellipsis, and More opens the
+                                 Until the box has focus, long text reads as text over it, in up to four lines with an ellipsis, and More opens the
                                  rest in place. A click on the text edits the source. -->
                             <StackPanel>
                             <Panel Classes="fieldText" Classes.multiline="{Binding IsMultiline}" Classes.open="{Binding IsReadingOpen}">
@@ -604,7 +583,7 @@
                     </ItemsControl>
                   </inspector:InspectorSection>
 
-                  <inspector:InspectorSection Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
+                  <inspector:InspectorSection Grid.Row="{Binding HasNoOutput, Converter={x:Static inspector:InspectorConverters.AgentRow}}" Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
                                               Changes="{Binding AgentChanges}" IsShown="{Binding HasAgent}">
                     <StackPanel>
                       <inspector:InspectorRow Label="Client" Info="{Binding PermissionNote}" InfoName="{Binding PermissionSummary}" InfoId="PermissionNote"
@@ -709,7 +688,7 @@
                       </inspector:InspectorRow>
                     </StackPanel>
                   </inspector:InspectorSection>
-                </StackPanel>
+                </Grid>
               </DataTemplate>
 
               <DataTemplate DataType="canvas:ConnectionViewModel">
