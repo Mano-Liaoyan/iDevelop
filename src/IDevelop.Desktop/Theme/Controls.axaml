@@ -713,15 +713,20 @@
   </Style>
 
   <!-- The selected node's row holds the one accent fill. Its workflow has no fill, so it never reads as a row under the
-       pointer, whose fill is neutral (ADR 0060), and a 2 px accent line on its leading edge keeps it marked as the shown one. -->
+       pointer, whose fill is neutral (ADR 0060), and a 2 px accent line before its name keeps it marked as the shown one. -->
   <Style Selector="Button.nav.workflow.selected.holdsNode:not(:pointerover) /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
   </Style>
-  <!-- The line is straight: a rounded corner would bend a one-sided edge into a bracket. -->
+  <!-- The line is straight: a rounded corner would bend a one-sided edge into a bracket. It stands just before the name, after
+       the chevron, and the name keeps its place (ADR 0066). -->
   <Style Selector="Button.nav.workflow.selected.holdsNode /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="BorderThickness" Value="2,0,0,0" />
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Margin" Value="32,0,0,0" />
+  </Style>
+  <Style Selector="Button.nav.workflow.selected.holdsNode">
+    <Setter Property="Padding" Value="4,5,8,5" />
   </Style>
 
   <!-- UI Automation reads which workflow the window shows from its row's status. -->

@@ -29,7 +29,7 @@
   </Style>
   <!-- The title as text over the box, at the box's border and padding, so it wraps where the box wraps. The box sits 6 px
        before the column, so the text starts where a connection's or a workflow's name starts. The text's first line sits beside
-       the tile, and beyond two lines the box waits for the focus, so a long title never pushes the actions down. -->
+       the tile, and the text keeps two lines, with the whole title in the tooltip, so a long title never pushes the sections down (ADR 0066). -->
   <Style Selector="TextBlock.headerTitle">
     <Setter Property="FontSize" Value="14" />
     <Setter Property="LineHeight" Value="20" />
@@ -38,7 +38,7 @@
     <Setter Property="TextWrapping" Value="WrapWithOverflow" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Margin" Value="6,2" />
-    <Setter Property="MaxLines" Value="3" />
+    <Setter Property="MaxLines" Value="2" />
   </Style>
   <Style Selector="Panel.headerTitle:focus-within > TextBlock.headerTitle">
     <Setter Property="IsVisible" Value="False" />
