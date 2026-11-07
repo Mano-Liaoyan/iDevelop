@@ -17,7 +17,7 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StateWord), nameof(StateDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
+        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StatusTip), nameof(StateWord), nameof(StateDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(LastReplyAsks), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
@@ -58,6 +58,9 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>"Running", "Completed", or what the node needs, such as "Input required · Approval".</summary>
     public string StatusLabel => NodeStates.Label(_engineState, _background);
+
+    /// <summary>The status's tooltip: its label and, where the state has one, its sentence, which a short inspector shows only here.</summary>
+    public string StatusTip => StateDetail is { Length: > 0 } detail ? $"{StatusLabel}\n{detail}" : StatusLabel;
 
     /// <summary>The one word for the state: while the node waits, what it waits for, as Activity and the run bar say it.</summary>
     public string StateWord => State != NodeState.InputRequired ? StatusLabel : WaitReason == WaitReason.Interrupted ? "Interrupted" : "Waiting";
@@ -135,10 +138,12 @@ public sealed partial class TaskNodeViewModel
     public string? HandsOn => _results.Count > 0 ? _results[0].PlainSummary : null;
 
     /// <summary>
-    /// The folded Output section's line: the latest result's heading and commit, such as "Result 1 · Current · Commit acc31d9",
-    /// or "No result yet".
+    /// The folded Output section's line: the first line of the latest result's own summary, such as "Added POST /usage with
+    /// idempotency keys", or, for a result without a report, its heading and commit, such as "Result 1 · Current · Commit
+    /// acc31d9", or "No result yet" (ADR 0065).
     /// </summary>
     public string OutputSummary => _results.Count == 0 ? "No result yet"
+        : _results[0].HasReport ? CardText.Line(_results[0].PlainSummary, 200)
         : string.Join(" · ", new[] { _results[0].Heading, _results[0].Commit }.OfType<string>());
 
     public bool HasResults => _history.Count > 0;

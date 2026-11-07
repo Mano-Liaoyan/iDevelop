@@ -17,6 +17,9 @@ public partial class InspectorView : UserControl
     /// <summary>The tallest row that the list's bottom edge covers rather than cuts. A taller one, such as a box, may show in part.</summary>
     private const double ShortRow = 40;
 
+    /// <summary>Below this height the inspector is short.</summary>
+    internal const double ShortHeight = 700;
+
     // The height of the foot's mark that more waits below.
     private const double FootHeight = 20;
 
@@ -26,6 +29,9 @@ public partial class InspectorView : UserControl
         InspectorState.SetCurrent(this, _state);
         InspectorState.SetCurrent(EditorHost, new InspectorState());
         AddHandler(KeyDownEvent, OnKeyDownInPanel, RoutingStrategies.Bubble);
+        // A short inspector keeps its header to the title, the state, and the actions, so the Agent section shows in the first
+        // screen. The state's sentence moves to the state's tooltip (ADR 0065).
+        SizeChanged += (_, e) => Classes.Set("short", e.NewSize.Height < ShortHeight);
         EditorHost.PropertyChanged += (_, change) =>
         {
             if (change.Property == ContentProperty)

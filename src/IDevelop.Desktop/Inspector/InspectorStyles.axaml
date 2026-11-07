@@ -38,6 +38,7 @@
     <Setter Property="TextWrapping" Value="WrapWithOverflow" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Margin" Value="6,2" />
+    <Setter Property="MaxLines" Value="3" />
   </Style>
   <Style Selector="Panel.headerTitle:focus-within > TextBlock.headerTitle">
     <Setter Property="IsVisible" Value="False" />
@@ -157,6 +158,16 @@
   <Style Selector="SelectableTextBlock.promptWhole">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
     <Setter Property="FontSize" Value="12" />
+  </Style>
+  <!-- A short inspector keeps its header to three lines: the title, the state, and the actions. -->
+  <Style Selector="inspector|InspectorView.short Border.detailRule.stateDetail">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="inspector|InspectorView.short TextBlock.headerTitle">
+    <Setter Property="MaxLines" Value="1" />
+  </Style>
+  <Style Selector="inspector|InspectorView.short Panel.headerTitle:not(:focus-within) > TextBox.headerTitle">
+    <Setter Property="MaxHeight" Value="24" />
   </Style>
   <Style Selector="TextBlock.detail.clamped">
     <Setter Property="MaxLines" Value="2" />

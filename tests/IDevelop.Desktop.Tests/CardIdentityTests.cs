@@ -70,8 +70,8 @@ public sealed class CardIdentityTests
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Completed");
-        // The folded Output section names the latest result.
-        Assert.StartsWith("Result 1 · Current", shell.NodeModel("A").OutputSummary);
+        // The folded Output section shows the latest result's own summary.
+        Assert.Equal("Done.", shell.NodeModel("A").OutputSummary);
 
         Assert.Contains("run 1 of 2 nodes", canvas.RunWorkflowTip);
         // The button keeps its one name, and only its tooltip says that the run is partial (ADR 0064).

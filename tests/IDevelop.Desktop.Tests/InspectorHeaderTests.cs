@@ -37,6 +37,23 @@ public sealed class InspectorHeaderTests : IDisposable
         new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
 
     [AvaloniaFact]
+    public void A_short_inspector_keeps_its_header_to_the_title_the_state_and_the_actions()
+    {
+        var shell = Linked();
+        shell.Click(shell.Header(shell.Node("Design")));
+        var view = shell.Window.GetVisualDescendants().OfType<InspectorView>().Single();
+
+        foreach (var (height, isShort) in new[] { (600.0, true), (1000.0, false) })
+        {
+            shell.Window.Height = height;
+            shell.Render();
+            Assert.Equal(isShort, view.Classes.Contains("short"));
+            var title = view.GetVisualDescendants().OfType<Theme.EllipsisText>().Single(text => text.Classes.Contains("headerTitle"));
+            Assert.Equal(isShort ? 1 : 3, title.MaxLines);
+        }
+    }
+
+    [AvaloniaFact]
     public void An_idle_node_keeps_Conversation_first_and_makes_Run_primary()
     {
         var shell = Linked();

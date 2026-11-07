@@ -15,6 +15,9 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
 
     public string Heading => current ? $"Result {number} · Current" : $"Result {number}";
 
+    /// <summary>The result has a report of its own, so <see cref="Summary"/> says what the agent did.</summary>
+    public bool HasReport => CardNow.FirstParagraph(ResultBlock.Prose(result.Report)) is not null;
+
     /// <summary>The report's first paragraph, which the row's tooltip gives whole.</summary>
     public string Summary => CardNow.FirstParagraph(ResultBlock.Prose(result.Report)) ?? "No report.";
 
