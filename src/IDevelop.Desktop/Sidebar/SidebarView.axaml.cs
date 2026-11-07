@@ -264,6 +264,7 @@ public partial class SidebarView : UserControl
     private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         PinRows();
+        RestOnWholeRow(e.OffsetDelta.Y);
         CoverCutRows();
     }
 
@@ -293,15 +294,39 @@ public partial class SidebarView : UserControl
     private double ListBottom(Button row) =>
         row.FindAncestorOfType<StackPanel>() is { } block ? TopOf(block) + block.Bounds.Height : 0;
 
-    // A row that the tree's bottom edge would cut hides under a cover until it shows whole.
+    // The height of the pinned rows that show now, with the hairline under them.
+    private double PinnedHeight => (StickyProject.IsVisible ? PinnedRowHeight : 0) + (StickyWorkflow.IsVisible ? PinnedRowHeight : 0) + (TreeHead.IsVisible ? 1 : 0);
+
+    // Every row in the tree in view order, measured from the tree's top edge.
+    private List<(double Top, double Bottom)> ShownRows() =>
+        [.. TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
+            .Select(row => (Top: TopOf(row) - Tree.Offset.Y, Bottom: TopOf(row) - Tree.Offset.Y + row.Bounds.Height)).OrderBy(row => row.Top)];
+
+    // The tree rests on a row's top under the pinned rows. It goes on in the direction it moved, so a small step never goes back.
+    private void RestOnWholeRow(double moved)
+    {
+        var (rows, head) = (ShownRows(), PinnedHeight);
+        if (moved == 0 || !rows.Any(row => row.Top < head - 0.5 && row.Bottom > head + 0.5))
+        {
+            return;
+        }
+
+        var row = moved > 0 ? rows.FirstOrDefault(row => row.Top >= head - 0.5, (Top: head, Bottom: head)) : rows.Last(row => row.Top < head - 0.5);
+        Tree.Offset = Tree.Offset.WithY(Tree.Offset.Y + row.Top - head);
+    }
+
+    // At the end of its range the tree cannot rest on a row, and a row that an edge would cut hides under a cover until it shows whole.
     private void CoverCutRows()
     {
-        var rows = TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow).Select(row => (Top: TopOf(row) - Tree.Offset.Y, row.Bounds.Height)).ToList();
-        var height = Tree.Viewport.Height;
-        var cut = rows.Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5).Select(row => height - row.Top).DefaultIfEmpty(0).Max();
-        TreeFootCover.Height = cut;
+        var (rows, head, height) = (ShownRows(), PinnedHeight, Tree.Viewport.Height);
+        var foot = rows.Where(row => row.Top < height - 0.5 && row.Bottom > height + 0.5).Select(row => height - row.Top).DefaultIfEmpty(0).Max();
+        TreeFootCover.Height = foot;
         TreeFootCover.Margin = new Thickness(0, 0, 8, 0);
-        TreeFootCover.IsVisible = cut > 0;
+        TreeFootCover.IsVisible = foot > 0;
+        var top = rows.Where(row => row.Top < head - 0.5 && row.Bottom > head + 0.5).Select(row => row.Bottom - head).DefaultIfEmpty(0).Max();
+        TreeHeadCover.Height = top;
+        TreeHeadCover.Margin = new Thickness(0, head, 8, 0);
+        TreeHeadCover.IsVisible = top > 0;
     }
 
     private static bool IsTreeRow(Control control) => control.IsEffectivelyVisible && control switch

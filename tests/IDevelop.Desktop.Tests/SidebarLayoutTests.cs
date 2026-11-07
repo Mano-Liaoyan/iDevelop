@@ -356,6 +356,34 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_tree_rests_on_a_whole_row_under_its_pinned_rows()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Window.Width = 900;
+        shell.Window.Height = 600;
+        shell.Render();
+        T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+        var (tree, head, cover) = (Named<ScrollViewer>("Tree"), Named<Border>("TreeHead"), Named<Border>("TreeHeadCover"));
+        var end = tree.Extent.Height - tree.Viewport.Height;
+
+        foreach (var offset in new[] { 53.0, 171, 182, 299, 310, 433, 120, 60, end, end - 7, end })
+        {
+            tree.Offset = tree.Offset.WithY(offset);
+            shell.Render();
+            var edge = head.IsVisible ? head.Bounds.Bottom : 0;
+            foreach (var row in tree.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible))
+            {
+                var at = row.TranslatePoint(default, tree)!.Value.Y;
+                var bottom = at + row.Bounds.Height;
+                Assert.True(!(at < edge - 0.5 && bottom > edge + 0.5) || (cover.IsVisible && edge + cover.Height >= bottom - 0.5), $"The row at {at} is cut at {edge} with the tree at {tree.Offset.Y}.");
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void A_project_s_buttons_show_on_hover_and_end_at_the_tree_s_edge()
     {
         var shell = OpenBoth();

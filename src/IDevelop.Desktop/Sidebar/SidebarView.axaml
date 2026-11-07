@@ -165,7 +165,7 @@
            shown workflow is the selected row. A name takes one line and is cut at its end, and its tooltip holds all of it. The scroll bar draws in
            the gutter at the rows' end, so every row keeps one right edge. -->
       <Panel Grid.Row="1">
-      <ScrollViewer x:Name="Tree" Classes="quietBar" Margin="8,0,0,0" HorizontalScrollBarVisibility="Disabled"
+      <ScrollViewer x:Name="Tree" Margin="8,0,0,0" HorizontalScrollBarVisibility="Disabled"
                     ScrollChanged="OnTreeScrollChanged">
         <StackPanel x:Name="TreeRows" Margin="0,0,8,8" Spacing="2">
           <ItemsControl ItemsSource="{Binding Projects}"
@@ -397,9 +397,10 @@
           </ItemsControl>
         </StackPanel>
       </ScrollViewer>
-      <!-- A row slides under the pinned rows at the top. What it reaches past the bottom edge would show cut through its letters, so
-           the panel's own color covers that row until it comes in whole. The cover takes no pointer. -->
+      <!-- The tree rests on a whole row under the pinned rows. What an edge would still cut shows through its letters, so the
+           panel's own color covers that row until it comes in whole. A cover takes no pointer. -->
       <Border x:Name="TreeFootCover" Classes="treeCover" VerticalAlignment="Bottom" IsVisible="False" />
+      <Border x:Name="TreeHeadCover" Classes="treeCover" VerticalAlignment="Top" IsVisible="False" />
       <!-- The project and the workflow of the rows under the top edge stay in view while they scroll. A click goes back to its row. -->
       <Border x:Name="TreeHead" Classes="treeHead" IsVisible="False">
         <StackPanel>

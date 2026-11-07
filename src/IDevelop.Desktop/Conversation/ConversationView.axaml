@@ -392,7 +392,7 @@
     </StackPanel>
 
     <Panel Grid.Row="2">
-      <ScrollViewer x:Name="Scroller" Classes="transcript quietBar" Focusable="True" HorizontalScrollBarVisibility="Disabled"
+      <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
         <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
         <StackPanel Margin="0,0,0,12">

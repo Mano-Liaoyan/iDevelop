@@ -14,7 +14,7 @@
   </UserControl.Styles>
   <UserControl.Resources>
     <!-- An overlay scroll bar 10 px wide, expanded, fits in the panel's 12 px right inset, so it never covers a row's
-         buttons, and the rows never move for it. Its quiet thumb stays in view whenever the sections overflow. -->
+         buttons, and the rows never move for it. Its thumb stays in view whenever the sections overflow. -->
     <x:Double x:Key="ScrollBarSize">10</x:Double>
     <!-- One finding of a review's verdict: its heading, with its severity at the card's right edge where every card keeps
          it, then its location, the reviewer's words, and the change that would settle it. A verdict that gave no severity
@@ -217,9 +217,11 @@
       </ContentControl>
       </Border>
 
-      <!-- A short row that the bottom edge would cut hides under the cover until it comes in whole. -->
-      <Border x:Name="SectionsFoot" Grid.Row="2" Classes="scrollFoot" ZIndex="1" IsVisible="False" />
-      <ScrollViewer x:Name="SectionScroller" Grid.Row="2" Classes="quietBar" ScrollChanged="OnSectionsScrolled">
+      <!-- While more waits below, the foot says so, and a short row that the bottom edge would cut hides under it until it comes in whole. -->
+      <Border x:Name="SectionsFoot" Grid.Row="2" Classes="scrollFoot" ZIndex="1" IsVisible="False">
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" Width="12" Height="12" />
+      </Border>
+      <ScrollViewer x:Name="SectionScroller" Grid.Row="2" ScrollChanged="OnSectionsScrolled">
         <StackPanel x:Name="SectionList" Margin="8,8,8,16">
           <!-- Over the sections, and outside the swapped content, so the hint stays in the tree, hidden, while something is selected. -->
           <TextBlock Classes="note" Text="Select a node to edit it." Margin="4,0,4,8"

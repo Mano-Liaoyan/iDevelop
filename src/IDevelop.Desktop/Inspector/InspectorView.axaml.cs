@@ -17,6 +17,9 @@ public partial class InspectorView : UserControl
     /// <summary>The tallest row that the list's bottom edge covers rather than cuts. A taller one, such as a box, may show in part.</summary>
     private const double ShortRow = 40;
 
+    // The height of the foot's mark that more waits below.
+    private const double FootHeight = 20;
+
     public InspectorView()
     {
         InitializeComponent();
@@ -115,17 +118,19 @@ public partial class InspectorView : UserControl
     private IEnumerable<string> Sections() =>
         this.GetLogicalDescendants().OfType<InspectorSection>().Where(section => !EditorHost.IsLogicalAncestorOf(section)).Select(section => section.Key);
 
-    // A short row that the bottom edge would cut hides under a cover until it comes in whole.
+    // While more waits below, the foot's mark says so. A short row that would touch the foot hides under it until it comes in whole,
+    // so the last row in view is whole.
     private void OnSectionsScrolled(object? sender, ScrollChangedEventArgs e)
     {
         var height = SectionScroller.Viewport.Height;
+        var more = SectionScroller.Extent.Height - SectionScroller.Offset.Y - height > 0.5;
         var cut = SectionList.GetVisualDescendants().OfType<Control>()
             .Where(control => control is InspectorRow || control.Classes.Contains("sectionHeader"))
             .Where(control => control.IsEffectivelyVisible && control.Bounds.Height <= ShortRow)
             .Select(control => (Top: control.TranslatePoint(default, SectionScroller)?.Y ?? 0, control.Bounds.Height))
-            .Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5)
+            .Where(row => row.Top < height - 0.5 && row.Top + row.Height > height - FootHeight + 0.5)
             .Select(row => height - row.Top).DefaultIfEmpty(0).Max();
-        SectionsFoot.Height = cut;
-        SectionsFoot.IsVisible = cut > 0;
+        SectionsFoot.Height = Math.Max(cut, FootHeight);
+        SectionsFoot.IsVisible = more;
     }
 }

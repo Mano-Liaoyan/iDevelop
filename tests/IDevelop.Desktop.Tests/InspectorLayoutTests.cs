@@ -522,6 +522,37 @@ public sealed class InspectorLayoutTests : IDisposable
         Assert.True(shell.Bounds(shell.Find<Button>("RevertInstructions")).Right <= shell.Bounds(bar).Left - 2);
     }
 
+    [AvaloniaFact]
+    public void The_foot_marks_more_below_and_the_last_row_in_view_is_whole_until_the_end()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        shell.Window.Height = shell.Window.MinHeight;
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Render();
+        var inspector = shell.Find<Control>("Inspector");
+        var scroller = inspector.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "SectionScroller");
+        var foot = inspector.GetVisualDescendants().OfType<Border>().Single(control => control.Name == "SectionsFoot");
+        var height = scroller.Viewport.Height;
+        Assert.True(scroller.Extent.Height > height, "The sections must overflow for this test.");
+
+        var end = scroller.Extent.Height - height;
+        foreach (var offset in new[] { 0, end / 3, 2 * end / 3 })
+        {
+            scroller.Offset = scroller.Offset.WithY(offset);
+            shell.Render();
+            Assert.True(foot.IsVisible);
+            foreach (var row in inspector.GetVisualDescendants().OfType<Inspector.InspectorRow>().Where(row => row.IsEffectivelyVisible && row.Bounds.Height <= 40))
+            {
+                var top = row.TranslatePoint(default, scroller)!.Value.Y;
+                Assert.True(top >= height - foot.Height - 0.5 || top + row.Bounds.Height <= height - foot.Height + 0.5, $"The row at {top} meets the foot at {height - foot.Height}.");
+            }
+        }
+
+        scroller.Offset = scroller.Offset.WithY(scroller.Extent.Height);
+        shell.Render();
+        Assert.False(foot.IsVisible);
+    }
+
     private const double Inset = 12;
 
     /// <summary>

@@ -592,13 +592,6 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- A tree's scroll bar stays under the rows' text until the pointer reaches it. -->
-  <Style Selector="ScrollViewer.quietBar /template/ ScrollBar">
-    <Setter Property="Opacity" Value="0.4" />
-  </Style>
-  <Style Selector="ScrollViewer.quietBar /template/ ScrollBar:pointerover">
-    <Setter Property="Opacity" Value="1" />
-  </Style>
   <Style Selector="Border.treeHead">
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />

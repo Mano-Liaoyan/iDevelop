@@ -880,6 +880,11 @@
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
   </Style>
+  <Style Selector="Border.scrollFoot > PathIcon">
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
   <!-- A value that a node cannot change is plain text at a value's edge, with no box, so it cannot read as a control that broke. -->
   <Style Selector="Border.fixedValue">
     <Setter Property="MinHeight" Value="26" />
