@@ -136,12 +136,12 @@
                  at its end only. The name tag shows the selected card's whole title (ADR 0064). -->
             <theme:EllipsisText Classes="cardFar farTitle" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" IsHitTestVisible="False"
                                 AutomationProperties.AccessibilityView="Raw">
-              <theme:EllipsisText.MaxLines>
-                <MultiBinding Converter="{x:Static canvas:CardText.TitleLinesBesideAgent}">
+              <Classes.agentWraps>
+                <MultiBinding Converter="{x:Static canvas:CardText.AgentWraps}">
                   <Binding ElementName="FarAgent" Path="Bounds.Height" />
                   <Binding ElementName="FarAgent" Path="FontSize" />
                 </MultiBinding>
-              </theme:EllipsisText.MaxLines>
+              </Classes.agentWraps>
             </theme:EllipsisText>
             <Border Classes="cardBlock stateBlock" CornerRadius="{StaticResource RadiusLg}" IsHitTestVisible="False"
                     theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />

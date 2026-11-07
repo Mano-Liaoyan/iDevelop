@@ -164,6 +164,10 @@
     <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
+  <!-- A model's name that wraps takes the room of the title's third line (ADR 0064). -->
+  <Style Selector=":is(Control).tier-label TextBlock.farTitle.agentWraps">
+    <Setter Property="MaxLines" Value="2" />
+  </Style>
   <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
        text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
