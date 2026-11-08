@@ -78,10 +78,13 @@ public partial class SidebarView : UserControl
         }));
     }
 
+    // A row that misses the limit by this little still shows whole, so the last few pixels of the section's room are not wasted.
+    private const double WholeRowSlack = 6;
+
     // A section that scrolls ends on a whole row, so the row after it never shows cut or as a blank band. Nodes takes what is left over.
     private double WholeRows(double limit) => TreeRows.DesiredSize.Height <= limit ? limit
         : TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
-            .Select(row => TopOf(row) + row.Bounds.Height).Where(bottom => bottom <= limit).DefaultIfEmpty(limit).Max();
+            .Select(row => TopOf(row) + row.Bounds.Height).Where(bottom => bottom <= limit + WholeRowSlack).DefaultIfEmpty(limit).Max();
 
     private void FoldActivity()
     {

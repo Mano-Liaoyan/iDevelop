@@ -335,7 +335,7 @@ public sealed class SidebarLayoutTests : IDisposable
         var (tree, sections, list) = (Named<ScrollViewer>("Tree"), Named<Grid>("Sections"), shell.Find<ListBox>("SidebarTasks"));
 
         Assert.True(tree.Extent.Height > tree.Viewport.Height, "Projects does not scroll.");
-        Assert.InRange(tree.Bounds.Height, sections.Bounds.Height / 2 - 40, sections.Bounds.Height / 2);
+        Assert.InRange(tree.Bounds.Height, sections.Bounds.Height / 2 - 40, sections.Bounds.Height / 2 + 6);
         Assert.True(list.Bounds.Height > sections.Bounds.Height / 2 - 60, $"Nodes has {list.Bounds.Height} px.");
         Assert.True(list.Bounds.Bottom <= sections.Bounds.Height + 0.5, "Nodes goes past the panel.");
     }
