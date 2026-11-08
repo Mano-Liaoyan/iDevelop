@@ -292,6 +292,32 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void No_node_row_shows_cut_at_the_Nodes_section_s_bottom_edge()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.Window.Height = 600;
+        shell.Render();
+        var list = shell.Find<ListBox>("SidebarTasks");
+        var cover = shell.Window.GetVisualDescendants().OfType<Border>().Single(control => control.Name == "NodesFootCover");
+        var scroll = list.GetVisualDescendants().OfType<ScrollViewer>().First();
+
+        foreach (var offset in new[] { 0.0, 13, 50, 97, 211 })
+        {
+            scroll.Offset = scroll.Offset.WithY(offset);
+            shell.Render();
+            var height = list.Bounds.Height;
+            foreach (var row in list.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible))
+            {
+                var at = row.TranslatePoint(default, list)!.Value.Y;
+                var cut = at < height - 0.5 && at + row.Bounds.Height > height + 0.5;
+                Assert.True(!cut || (cover.IsVisible && height - cover.Height <= at + 0.5), $"The row at {at} is cut at {height}.");
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public void Projects_takes_at_most_half_of_the_room_and_Nodes_takes_the_rest()
     {
         var reports = _temp.Create(Reports);

@@ -440,6 +440,8 @@
           </DataTemplate>
         </ListBox.DataTemplates>
       </ListBox>
+      <!-- A row that the bottom edge would cut hides under the panel's color until it comes in whole. It takes no pointer. -->
+      <Border x:Name="NodesFootCover" Classes="treeCover" VerticalAlignment="Bottom" Margin="0,0,8,0" IsVisible="False" />
       </Panel>
     </Grid>
 

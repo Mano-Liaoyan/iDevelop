@@ -48,6 +48,8 @@ public partial class SidebarView : UserControl
         };
         TreeRows.LayoutUpdated += (_, _) => FoldActivity();
         Sections.SizeChanged += (_, _) => SplitSections();
+        NodeRows.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => CoverCutNodeRows());
+        NodeRows.LayoutUpdated += (_, _) => CoverCutNodeRows();
         DataContextChanged += (_, _) => WatchReveals();
     }
 
@@ -405,6 +407,21 @@ public partial class SidebarView : UserControl
         TreeHeadCover.Height = top;
         TreeHeadCover.Margin = new Thickness(0, head, 8, 0);
         TreeHeadCover.IsVisible = top > 0;
+    }
+
+    // The Nodes section's row that its bottom edge would cut hides under a cover, as the Projects section's does.
+    private void CoverCutNodeRows()
+    {
+        var height = NodeRows.Bounds.Height;
+        var foot = NodeRows.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible)
+            .Select(row => (Top: row.TranslatePoint(default, NodeRows)?.Y ?? 0, row.Bounds.Height))
+            .Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5)
+            .Select(row => height - row.Top).DefaultIfEmpty(0).Max();
+        if (NodesFootCover.Height != foot || NodesFootCover.IsVisible != foot > 0)
+        {
+            NodesFootCover.Height = foot;
+            NodesFootCover.IsVisible = foot > 0;
+        }
     }
 
     private static bool IsTreeRow(Control control) => control.IsEffectivelyVisible && control switch
