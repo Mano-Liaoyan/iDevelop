@@ -272,7 +272,7 @@ public sealed class WorkspaceTests : IDisposable
         var reopened = shell.Window.ViewModel.Canvas!;
         Assert.Equal(NodeStates.InterruptedDetailInMenu, shell.NodeModel("Design").InspectorDetail);
         Assert.Equal((0, 1), (reopened.Counts.Waiting, reopened.Counts.Interrupted));
-        Assert.Equal("1 interrupted", Assert.Single(reopened.RowChips).Label);
+        Assert.Equal("1\u00a0interrupted", Assert.Single(reopened.RowChips).Label);
         Assert.Equal("Next interrupted", reopened.NextLabel);
         Assert.Equal((0, 1), (shell.Window.ViewModel.Activity.WaitingCount, shell.Window.ViewModel.Activity.InterruptedCount));
     }

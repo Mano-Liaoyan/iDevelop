@@ -226,7 +226,9 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
-        Assert.Equal(canvas.BarChips.Count > 1 ? $"{canvas.BarChips[0].Label} \u00b7 {canvas.BarChips.Skip(1).Sum(chip => chip.Count)} more" : canvas.BarChips[0].Label, Assert.Single(canvas.RowChips).Label);
+        Assert.Equal(string.Join("\u00a0\u00b7 ", canvas.BarChips.Select(chip => chip.Label.Replace(' ', '\u00a0'))), Assert.Single(canvas.RowChips).Label);
+        var status = alert.GetVisualDescendants().OfType<TextBlock>().Single();
+        Assert.Equal((TextWrapping.Wrap, TextTrimming.None), (status.TextWrapping, status.TextTrimming));
         Assert.Equal(canvas.RowChips.Select(chip => chip.Label), alert.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
         Assert.Equal(canvas.RowChips.Select(chip => chip.Tip), alert.GetVisualDescendants().OfType<DockPanel>().Where(chip => chip.DataContext is Canvas.StateChip).Select(chip => (string)ToolTip.GetTip(chip)!));
         Assert.Single(canvas.RowChips);

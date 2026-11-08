@@ -4,7 +4,7 @@ Round 33's reviewers reported the same faults in the left area and the canvas. T
 
 ## How it works
 
-- **Workflow row.** The line under a workflow's name names each group that has nodes, most urgent first, as "1 failed · 2 waiting". It stays on one line at every panel width and ends in an ellipsis if it must. The row's tooltip holds every group, and the run bar and Activity say them. This replaces the wrapped line of ADR 0053 and ADR 0058.
+- **Workflow row.** The line under a workflow's name names each group that has nodes, most urgent first, as "1 failed · 2 waiting". It wraps to as many lines as it needs at every panel width and never ends in an ellipsis, so the row shows every count. A line breaks only between two groups, so a count stays with its word. The row's tooltip holds every group. This replaces the two groups and "+N" chip of ADR 0053.
 - **Cut title.** A title cut on a card keeps its first word and the last words that differ, as "Create… partition 2024-Q3". A line too short for the first word keeps only what differs, as ADR 0065 says.
 - **Fit.** A canvas from 1600 px wide fits a graph that can take it at 86%, which the bar calls 215%, and which is the Full tier's card. The zooms from 120% to 210% hold less text on a card, so a fit does not stop in them. A narrower canvas keeps the limit of ADR 0059.
 - **Run bar.** Next keeps "Next waiting" until the bar's chips and zoom controls have given up their room. The word goes last.
@@ -18,4 +18,4 @@ Round 33's reviewers reported the same faults in the left area and the canvas. T
 
 ## Consequences
 
-- A workflow row ends in an ellipsis when its states do not fit. The person reads them all in the tooltip or the run bar.
+- A workflow row grows by a line when its states do not fit on one, so rows in a run can differ in height.

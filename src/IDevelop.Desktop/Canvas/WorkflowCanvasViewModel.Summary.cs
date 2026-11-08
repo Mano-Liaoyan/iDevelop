@@ -18,10 +18,10 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>
     /// What a workflow row says under its name: the most urgent group's badge and every group of the run bar in the bar's own words and
-    /// groups, such as "1 failed · 3 more", on one line at every panel width. The tooltip holds every group, and the run bar and Activity say them (ADR 0074).
+    /// groups, such as "1 failed · 2 waiting". The line wraps as far as it needs and breaks only between groups, so no count is cut (ADR 0074).
     /// </summary>
     public IReadOnlyList<StateChip> RowChips => BarChips is [var first, ..]
-        ? [first with { Label = string.Join(" · ", BarChips.Select(chip => chip.Label)), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
+        ? [first with { Label = string.Join("\u00a0· ", BarChips.Select(chip => chip.Label.Replace(' ', '\u00a0'))), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
         : [];
 
     /// <summary>The row has its status line while any group shows in the run bar. The Nodes section lists the states one by one (ADR 0071).</summary>
