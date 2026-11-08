@@ -192,7 +192,7 @@ public sealed class TitlePartsTests
         string Shown(string model)
         {
             var text = new EllipsisText { Whole = model, EndWords = 1, FontSize = 25, MaxLines = 1, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
-            text.Measure(new Avalonia.Size(140, double.PositiveInfinity));
+            text.Measure(new Avalonia.Size(180, double.PositiveInfinity));
             return text.Text!;
         }
 
@@ -200,6 +200,6 @@ public sealed class TitlePartsTests
 
         Assert.EndsWith("… Solstice", sol);
         Assert.EndsWith("… Terrapin", terra);
-        Assert.StartsWith("G", sol);
+        Assert.StartsWith("GPT", sol);
     }
 }

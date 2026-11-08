@@ -94,7 +94,15 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             var (before, after) = (new Rect(Editor.ViewportLocation, e.PreviousSize / zoom), new Rect(Editor.ViewportLocation, e.NewSize / zoom));
             if (IsFitted || Cards().Any(card => before.Contains(card) && !after.Contains(card)))
             {
-                Dispatcher.UIThread.Post(FitToView, DispatcherPriority.Background);
+                // A view that something else framed in the meantime, as the dock frames the node's branch, stays.
+                var view = (Editor.ViewportLocation, Editor.ViewportZoom);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if ((Editor.ViewportLocation, Editor.ViewportZoom) == view)
+                    {
+                        FitToView();
+                    }
+                }, DispatcherPriority.Background);
             }
         };
         MinimapToggle.IsCheckedChanged += (_, _) => ShowMinimap();

@@ -156,6 +156,9 @@ public sealed class EllipsisText : TextBlock
         return Cut(whole, end);
     }
 
+    // A start shorter than this reads as no name at all, as "G… Terra" does, so the text ends in the ellipsis instead.
+    private const int LeastHead = 3;
+
     // The longest start of the text before its last EndWords words that fits with them after an ellipsis, or null.
     private string? KeepEnd(string whole, double width)
     {
@@ -169,7 +172,7 @@ public sealed class EllipsisText : TextBlock
         var tail = whole[from..];
         var head = whole[..from].TrimEnd();
         var fits = Longest(head.Length, length => Cut(head, length) + " " + tail, width);
-        return fits > 0 ? Cut(head, fits) + " " + tail : null;
+        return fits >= Math.Min(LeastHead, head.Length) && fits > 0 ? Cut(head, fits) + " " + tail : null;
     }
 
     // The most characters, under the limit, whose text fits. No text fits at 0.
