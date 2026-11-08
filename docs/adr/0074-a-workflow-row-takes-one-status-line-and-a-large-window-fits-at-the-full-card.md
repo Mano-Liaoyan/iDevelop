@@ -9,7 +9,7 @@ Round 33's reviewers reported the same faults in the left area and the canvas. T
 - **Fit.** A canvas from 1600 px wide fits a graph that can take it at 86%, which the bar calls 215%, and which is the Full tier's card. The zooms from 120% to 210% hold less text on a card, so a fit does not stop in them. A narrower canvas keeps the limit of ADR 0059.
 - **Run bar.** Next keeps "Next waiting" until the bar's chips and zoom controls have given up their room. The word goes last.
 - **Group labels.** A Nodes group's label takes the regular weight, one level under a section's semibold label.
-- **Interrupted node.** The inspector's action row keeps Conversation in this state too, first, as in every other state.
+- **Interrupted node.** The inspector's action row keeps Conversation in this state too, first, as in every other state. Conversation and Continue take the one row, and Retry goes to the More menu.
 
 ## Considered options
 
