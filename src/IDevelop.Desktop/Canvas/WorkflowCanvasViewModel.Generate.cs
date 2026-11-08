@@ -40,6 +40,9 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>The workflow has no task, so the canvas offers to start from a description.</summary>
     public bool IsEmpty => Nodes.Count == 0;
 
+    /// <summary>What the inspector says with nothing selected: a workflow with no node has nothing to select.</summary>
+    public string InspectorHint => IsEmpty ? "Add a node to start." : "Select a node to edit it.";
+
     public GenerateProgress GenerateProgress
     {
         get;
@@ -143,6 +146,7 @@ public sealed partial class WorkflowCanvasViewModel
         Nodes.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(InspectorHint));
             OnPropertyChanged(nameof(CanStartRun));
             OnPropertyChanged(nameof(ShowsGenerate));
             OnPropertyChanged(nameof(RunWorkflowTip));

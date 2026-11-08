@@ -308,11 +308,11 @@
   </Style>
   <!-- The client's letters on an overview card, without the model's words beside them. -->
   <Style Selector=":is(Control).tier-title Border.farClient">
-    <Setter Property="MinWidth" Value="34" />
+    <Setter Property="MinWidth" Value="44" />
     <Setter Property="Height" Value="36" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontSize" Value="34" />
   </Style>
   <Style Selector="TextBlock.farAgent">
     <Setter Property="FontSize" Value="17" />

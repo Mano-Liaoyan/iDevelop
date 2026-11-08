@@ -232,7 +232,7 @@
       <ScrollViewer x:Name="SectionScroller" Grid.Row="2" ScrollChanged="OnSectionsScrolled">
         <StackPanel x:Name="SectionList" Margin="8,8,8,16">
           <!-- Over the sections, and outside the swapped content, so the hint stays in the tree, hidden, while something is selected. -->
-          <TextBlock Classes="note" Text="Select a node to edit it." Margin="4,0,4,8"
+          <TextBlock Classes="note" Text="{Binding InspectorHint}" Margin="4,0,4,8"
                      IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
                      AutomationProperties.AutomationId="InspectorHint" />
           <ContentControl>

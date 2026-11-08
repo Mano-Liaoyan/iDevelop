@@ -144,9 +144,9 @@ public sealed class TitlePartsTests
 
         text.Measure(new Avalonia.Size(120, double.PositiveInfinity));
 
-        Assert.StartsWith("…", text.Text);
+        Assert.StartsWith("Backfill… ", text.Text);
         Assert.EndsWith(" 2025-Q1", text.Text);
-        Assert.EndsWith(text.Text![1..], "Backfill ledger partition 2025-Q1");
+        Assert.EndsWith(text.Text!["Backfill… ".Length..], "Backfill ledger partition 2025-Q1");
     }
 
     [AvaloniaFact]
@@ -174,7 +174,7 @@ public sealed class TitlePartsTests
             return text.Text!;
         }).ToArray();
 
-        Assert.All(shown.Zip(titles), pair => Assert.True(pair.First.StartsWith('…') && pair.Second.EndsWith(pair.First[1..]), pair.First));
+        Assert.All(shown.Zip(titles), pair => Assert.True(pair.First.StartsWith("Backfill… ") && pair.Second.EndsWith(pair.First["Backfill… ".Length..]), pair.First));
         Assert.Equal(titles.Length, shown.Distinct().Count());
     }
 

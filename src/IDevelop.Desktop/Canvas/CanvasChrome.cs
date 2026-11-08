@@ -38,8 +38,13 @@ internal static class CanvasChrome
     /// above <see cref="ZoomTiers.LargestFitZoom"/>, so a small graph in a large window grows into it with the cards it has at
     /// 100%, and rests at that size in the middle of the canvas (ADR 0059).
     /// </summary>
-    public static double FitZoom(Rect extent, Rect room) =>
-        Math.Clamp(Math.Min(room.Width / extent.Width, room.Height / extent.Height), LeastFitZoom, ZoomTiers.LargestFitZoom);
+    public static double FitZoom(Rect extent, Rect room)
+    {
+        var fit = Math.Min(room.Width / extent.Width, room.Height / extent.Height);
+        return room.Width >= ZoomTiers.LargeWindowWidth && fit >= ZoomTiers.LargeWindowFitZoom
+            ? ZoomTiers.LargeWindowFitZoom
+            : Math.Clamp(fit, LeastFitZoom, ZoomTiers.LargestFitZoom);
+    }
 
     /// <summary>
     /// The viewport location that shows the most of <paramref name="extent"/> around <paramref name="focus"/> in

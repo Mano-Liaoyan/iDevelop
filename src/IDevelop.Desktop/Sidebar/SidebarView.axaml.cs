@@ -99,7 +99,9 @@ public partial class SidebarView : UserControl
     {
         if (DataContext is MainWindowViewModel view && Rows.Bounds.Height > 0)
         {
-            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight || TreeRows.Children.Sum(child => child.DesiredSize.Height) > Rows.Bounds.Height * ActivityFoldShare;
+            // What needs the person keeps the list open whatever the tree's length, because it starts the Reply path (ADR 0074).
+            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight
+                || (!view.Activity.HasWaiting && !view.Activity.HasFailed && TreeRows.Children.Sum(child => child.DesiredSize.Height) > Rows.Bounds.Height * ActivityFoldShare);
         }
     }
 

@@ -129,11 +129,11 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
         Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], canvas.BarChips.Select(chip => chip.Label));
-        // Every group keeps its words in the bar and in the folded row, and the waiting chip's tooltip names its reasons.
+        // Every group keeps its words in the bar, and the waiting chip's tooltip names its reasons.
         Assert.Equal("1 question, 1 reply", canvas.BarChips[1].Tip);
-        // The row's status line holds the most urgent group's badge and every group in the bar's words and numbers.
+        // The row's status line holds the most urgent group's badge and word and counts the rest. Its tooltip holds every group.
         var row = Assert.Single(canvas.RowChips);
-        Assert.Equal((NodeState.Failed, 1, "1\u00a0failed \u00b7 2\u00a0waiting \u00b7 2\u00a0interrupted"), (row.State, row.Count, row.Label));
+        Assert.Equal((NodeState.Failed, 1, "1 failed \u00b7 4 more"), (row.State, row.Count, row.Label));
         Assert.Equal("1 failed\n1 question, 1 reply\n2 interrupted", row.Tip);
 
         void Sweep()

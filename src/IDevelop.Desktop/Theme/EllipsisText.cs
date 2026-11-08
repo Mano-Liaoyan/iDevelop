@@ -117,11 +117,18 @@ public sealed class EllipsisText : TextBlock
             return Cut(whole, end);
         }
 
-        // Else the last words that differ lead after an ellipsis, with as many words before them as fit, so similar titles read
-        // apart at a glance ("…partition 2024-Q3", ADR 0065).
+        // Else the title's first word and the last words that differ show around an ellipsis, with as many words before them as fit, so
+        // similar titles read apart and each still says what it does ("Create… partition 2024-Q3", ADR 0074). A line too short for the first word
+        // keeps only what differs ("…partition 2024-Q3", ADR 0065).
         if (key.Tail is > 0 and var tail && tail < count)
         {
             var from = starts[count - tail];
+            var verb = whole[..TitleKey.WordEnd(whole, 0)] + Ellipsis + " ";
+            foreach (var start in starts.Skip(1).Where(start => start <= from && Fits(verb + whole[start..], width)))
+            {
+                return verb + whole[start..];
+            }
+
             foreach (var start in starts.Skip(1).Where(start => start <= from))
             {
                 if (Fits(Ellipsis + whole[start..], width))

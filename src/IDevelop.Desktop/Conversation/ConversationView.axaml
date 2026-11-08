@@ -65,7 +65,7 @@
                     IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
                     AutomationProperties.AutomationId="ConversationRun"
                     AutomationProperties.Name="{Binding Canvas.BarSummary}">
-          <Button Classes="ghost" Height="24" Command="{Binding Canvas.NextWaitingCommand}" IsVisible="{Binding Canvas.HasAttention}"
+          <Button Classes="action" Height="24" Command="{Binding Canvas.NextWaitingCommand}" IsVisible="{Binding Canvas.HasAttention}"
                   ToolTip.Tip="{x:Static canvas:WorkflowCanvasView.NextHelp}"
                   AutomationProperties.AutomationId="ConversationNext"
                   AutomationProperties.Name="Next">

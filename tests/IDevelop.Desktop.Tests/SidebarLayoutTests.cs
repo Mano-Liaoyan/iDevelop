@@ -226,7 +226,7 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
-        Assert.Equal(StateCounts.KeepCountsWhole(string.Join(" \u00b7 ", canvas.BarChips.Select(chip => chip.Label))), Assert.Single(canvas.RowChips).Label);
+        Assert.Equal(canvas.BarChips.Count > 1 ? $"{canvas.BarChips[0].Label} \u00b7 {canvas.BarChips.Skip(1).Sum(chip => chip.Count)} more" : canvas.BarChips[0].Label, Assert.Single(canvas.RowChips).Label);
         Assert.Equal(canvas.RowChips.Select(chip => chip.Label), alert.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
         Assert.Equal(canvas.RowChips.Select(chip => chip.Tip), alert.GetVisualDescendants().OfType<DockPanel>().Where(chip => chip.DataContext is Canvas.StateChip).Select(chip => (string)ToolTip.GetTip(chip)!));
         Assert.Single(canvas.RowChips);
@@ -600,21 +600,6 @@ public sealed class SidebarLayoutTests : IDisposable
                     $"{scene}: {pinned.Name} is pinned with no row under it at offset {scroller.Offset.Y}: the first row is {first.DataContext}.");
             }
         }
-    }
-
-    [AvaloniaFact]
-    public void A_wrapped_status_line_never_ends_in_a_separator()
-    {
-        var line = new Theme.PartsLine { Whole = "1\u00a0failed · 2\u00a0waiting · 2\u00a0interrupted · 1\u00a0stale", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
-
-        line.Measure(new Size(120, double.PositiveInfinity));
-
-        Assert.Contains('\n', line.Text!);
-        Assert.All(line.Text!.Split('\n'), row => Assert.False(row.EndsWith('·') || row.EndsWith(' ') || row.StartsWith('·'), $"The line \"{row}\" holds a loose separator."));
-        Assert.Equal(line.Whole, line.Text.Replace("\n", " · "));
-
-        line.Measure(new Size(1000, double.PositiveInfinity));
-        Assert.Equal(line.Whole, line.Text);
     }
 
     [AvaloniaFact]

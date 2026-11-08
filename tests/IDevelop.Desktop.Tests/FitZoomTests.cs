@@ -82,6 +82,17 @@ public sealed class FitZoomTests
     }
 
     [Fact]
+    public void A_large_window_fits_a_graph_that_can_take_it_at_the_full_card()
+    {
+        var large = new Rect(0, 0, 1900, 1200);
+
+        Assert.Equal(ZoomTiers.LargeWindowFitZoom, CanvasChrome.FitZoom(new Rect(0, 0, 1700, 500), large));
+        Assert.Equal(ZoomTier.Full, ZoomTiers.Next(ZoomTier.Label, ZoomTiers.LargeWindowFitZoom));
+        // A graph too wide for the full card stays at the Label form's limit, past which a card's text shrinks.
+        Assert.Equal(ZoomTiers.LargestFitZoom, CanvasChrome.FitZoom(new Rect(0, 0, 3000, 500), large));
+    }
+
+    [Fact]
     public void A_large_graph_fits_whole_below_the_readable_zoom()
     {
         // About the size of the 50 node fixture: ten columns of eight rows.

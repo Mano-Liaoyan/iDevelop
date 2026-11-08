@@ -26,6 +26,12 @@ public static class ZoomTiers
     /// <summary>The largest zoom of a fit: 120%, the last zoom at which a card keeps the form it has at 100%.</summary>
     public const double LargestFitZoom = 0.48;
 
+    /// <summary>The zoom of a fit in a large window: the Full tier's whole card, a size past the zooms whose cards hold less (ADR 0074).</summary>
+    public const double LargeWindowFitZoom = 0.86;
+
+    /// <summary>The width in screen pixels of a canvas from which a fit may take <see cref="LargeWindowFitZoom"/>.</summary>
+    public const double LargeWindowWidth = 1600;
+
     /// <summary>The least size in screen pixels of a Title or Block tier card's text.</summary>
     public const double ReadablePixels = 9;
 
