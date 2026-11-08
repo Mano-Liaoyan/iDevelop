@@ -12,7 +12,9 @@ internal static class WireLanes
 {
     private const double Lane = 22;
 
-    private const double EdgeClearance = 2;
+    // A lane keeps this far from a card's top and bottom edges at the Full tier, and farther where wires draw thicker, so a
+    // spread wire never runs along a card's border (ADR 0069).
+    private const double EdgeClearance = 12;
 
     private const double Tolerance = 0.01;
 
@@ -31,7 +33,7 @@ internal static class WireLanes
         return [.. wires.Select((wire, index) =>
         {
             var moved = wire.Route.Select((point, at) => point + moves[index][at]).ToImmutableArray();
-            return Crosses(moved, cards) ? wire.Route : moved;
+            return Crosses(moved, cards, EdgeClearance * scale) ? wire.Route : moved;
         })];
     }
 
@@ -93,8 +95,8 @@ internal static class WireLanes
     }
 
     // A lane also keeps off a card's top and bottom edges, or the wire would run along the card's border.
-    private static bool Crosses(ImmutableArray<Point> route, IReadOnlyList<Rect> cards) =>
-        route.Zip(route.Skip(1)).Any(run => cards.Select(card => card.Inflate(new Thickness(0, EdgeClearance))).Any(card =>
+    private static bool Crosses(ImmutableArray<Point> route, IReadOnlyList<Rect> cards, double clearance) =>
+        route.Zip(route.Skip(1)).Any(run => cards.Select(card => card.Inflate(new Thickness(0, clearance))).Any(card =>
             Math.Max(run.First.X, run.Second.X) > card.Left + Tolerance && Math.Min(run.First.X, run.Second.X) < card.Right - Tolerance
             && Math.Max(run.First.Y, run.Second.Y) > card.Top + Tolerance && Math.Min(run.First.Y, run.Second.Y) < card.Bottom - Tolerance));
 }

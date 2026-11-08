@@ -96,6 +96,19 @@ public sealed class ExecutionLanguageTests
     }
 
     [Fact]
+    public void A_lane_that_would_run_along_a_card_s_top_edge_keeps_the_wire_where_the_router_put_it()
+    {
+        // Two wires share the run at row 100. The lower lane, 11 under it, would pass 9 above a card whose top is at 120.
+        var routes = WireLanes.Spread(
+        [
+            Wire(1, 0, (0, 0), (50, 0), (50, 100), (400, 100), (400, 300), (450, 300)),
+            Wire(2, 1, (0, 20), (60, 20), (60, 100), (390, 100), (390, 320), (450, 320)),
+        ], [new Rect(150, 120, 100, 64)]);
+
+        Assert.Equal(100, routes[1][2].Y);
+    }
+
+    [Fact]
     public void Lanes_and_port_points_widen_as_much_as_the_tier_thickens_the_wires_so_they_stay_apart_on_screen()
     {
         var routes = WireLanes.Spread(
