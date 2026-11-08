@@ -13,14 +13,16 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>"5 of 9 · 1 running · 3 waiting", "9 nodes" before anything runs, or "No nodes yet", then "Unsaved" while it applies.</summary>
     public string Summary => string.Join(" · ", new[] { Counts.Summary(), HasUnsavedChanges ? "Unsaved" : null }.OfType<string>());
 
-    /// <summary>How far the work went, at the row's end. The chips under the name hold the other states.</summary>
+    /// <summary>How far the work went, at the row's end. The chip before it holds the most urgent state.</summary>
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
 
     /// <summary>
-    /// What a folded row says under the name: the run bar's groups, most urgent first and each in its words, so the row and the
-    /// bar give one number for one group. The row wraps its groups rather than shorten them (ADR 0063).
+    /// What a folded row says on the name's line: the run bar's most urgent group as a badge and its count, so every row keeps one
+    /// height. Its tooltip and name list every group in words, as the run bar says them (ADR 0070).
     /// </summary>
-    public IReadOnlyList<StateChip> RowChips => BarChips;
+    public IReadOnlyList<StateChip> RowChips => BarChips is [var first, ..]
+        ? [first with { Label = string.Join(", ", BarChips.Select(chip => chip.Label)), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
+        : [];
 
     /// <summary>A folded row says its groups. The node rows of an open workflow show the same states one by one.</summary>
     public bool ShowsRowChips => !IsExpanded && BarChips.Count > 0;

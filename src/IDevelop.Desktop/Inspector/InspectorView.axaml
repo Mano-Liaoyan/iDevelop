@@ -103,7 +103,7 @@
                 </ItemsControl>
               </StackPanel>
               <theme:KindTile Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" />
-              <!-- Until the box has focus, a text block over it shows the title in up to four lines, two in a short inspector,, with the whole title in its tooltip, so the header reads as a
+              <!-- Until the box has focus, a text block over it shows the title in up to two lines at every height (ADR 0070), with the whole title in its tooltip, so the header reads as a
                    title rather than a field. The box takes the title's whole length once it has focus. -->
               <Panel Grid.Row="0" Grid.Column="2" Classes="headerTitle" Margin="-6,0,0,0" ToolTip.Tip="{Binding Title}">
                 <TextBox Classes="headerTitle" Text="{Binding Title}"

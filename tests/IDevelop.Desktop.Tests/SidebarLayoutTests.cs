@@ -234,7 +234,8 @@ public sealed class SidebarLayoutTests : IDisposable
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
         var alert = Of<Control>(row.GetVisualParent()!, "WorkflowAlert");
         Assert.Equal(canvas.RowChips.Select(chip => chip.Count.ToString()), alert.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
-        Assert.Equal(canvas.RowChips.Select(chip => chip.Tip), alert.GetVisualDescendants().OfType<StackPanel>().Select(chip => (string)ToolTip.GetTip(chip)!));
+        Assert.Equal(canvas.RowChips.Select(chip => chip.Tip), alert.GetVisualDescendants().OfType<StackPanel>().Where(chip => chip.DataContext is Canvas.StateChip).Select(chip => (string)ToolTip.GetTip(chip)!));
+        Assert.Single(canvas.RowChips);
     }
 
     [Theory]

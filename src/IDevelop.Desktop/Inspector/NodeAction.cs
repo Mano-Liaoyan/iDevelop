@@ -21,8 +21,9 @@ internal static class NodeActions
 
     private static IReadOnlyList<NodeAction> For(TaskNodeViewModel node)
     {
-        // The open conversation holds what the state needs next, and the row must not offer it twice.
-        if (node is { IsConversationShown: true, Proposal: null, State: NodeState.Running or NodeState.InputRequired or NodeState.Failed or NodeState.Stale })
+        // The open conversation holds what the state needs next, and the row must not offer it twice. A failed node keeps Retry
+        // in the header, as an interrupted node keeps Continue, so recovery reads in one place in the inspector (ADR 0070).
+        if (node is { IsConversationShown: true, Proposal: null, State: NodeState.Running or NodeState.InputRequired or NodeState.Stale })
         {
             return [];
         }

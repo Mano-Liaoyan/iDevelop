@@ -248,7 +248,7 @@
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="32" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="22,0,55,4" />
+    <Setter Property="Margin" Value="22,0,52,4" />
   </Style>
   <Style Selector="DockPanel.farLine > :is(Control)">
     <Setter Property="VerticalAlignment" Value="Center" />
@@ -294,12 +294,12 @@
   </Style>
   <!-- The client's letters keep the agent's text size on screen, so they read at every zoom with text. -->
   <!-- At the Label tier, where a fit rests, the letters and the model's name share the line with the badge, so both keep a size
-       at which a name such as "GPT-6.1 Sol" or "Sonnet 5.5" fits whole (ADR 0066). -->
+       at which a name such as "GPT-6.1 Terra" or "Sonnet 5.5" fits whole, and the model's words a step under the title's (ADR 0066, ADR 0070). -->
   <Style Selector=":is(Control).tier-label Border.farClient">
     <Setter Property="MinWidth" Value="28" />
     <Setter Property="Height" Value="30" />
     <Setter Property="Padding" Value="2,0" />
-    <Setter Property="Margin" Value="0,0,5,0" />
+    <Setter Property="Margin" Value="0,0,4,0" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
     <Setter Property="FontSize" Value="24" />
@@ -323,7 +323,7 @@
     <Setter Property="FontSize" Value="20" />
   </Style>
   <Style Selector=":is(Control).tier-label TextBlock.farAgent">
-    <Setter Property="FontSize" Value="25" />
+    <Setter Property="FontSize" Value="24" />
     <Setter Property="LineHeight" Value="30" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
@@ -772,6 +772,17 @@
     <Setter Property="IsVisible" Value="True" />
   </Style>
   <Style Selector=":is(Control).tightNext:not(.ownRow) TextBlock.nextLabel">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <!-- The zoom's steps and Fit leave the bar for the overflow menu before the run bar takes its own row, so the band keeps one row (ADR 0070). -->
+  <Style Selector=":is(Control).tightZoom:not(.ownRow) Button.zoomStep, :is(Control).tightZoom:not(.ownRow) Button.barSpare">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).tightZoom:not(.ownRow) Button.barTight">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <!-- On its own row the run bar is not after the zoom controls, so no rule ends them. -->
+  <Style Selector=":is(Control).ownRow Border.barRule">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).tightFollow:not(.ownRow) Panel.barFollow, :is(Control).tightOwnRow Panel.barFollow">

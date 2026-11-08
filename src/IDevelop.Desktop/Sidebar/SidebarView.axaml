@@ -140,17 +140,9 @@
       </ScrollViewer>
     </Grid>
 
-    <!-- Nothing is open: the canvas holds Open folder as its primary action, and this panel a quiet Open folder row and the folders the person closed. -->
+    <!-- Nothing is open: the canvas holds Open folder as the one way in, and this panel the folders the person closed (ADR 0070). -->
     <StackPanel Grid.Row="3" Margin="16,12" Spacing="8" IsVisible="{Binding !HasProjects}">
       <TextBlock Classes="rowName strong" Text="No project open" AutomationProperties.AutomationId="NoProject" />
-      <!-- The panel's own way in, the same action as the Projects heading's folder glyph, so the empty panel says what to do. -->
-      <Button Classes="nav" Margin="-8,0" Click="OnOpenFolder" ToolTip.Tip="Open a project folder"
-              AutomationProperties.AutomationId="SidebarOpenFolder" AutomationProperties.Name="Open folder">
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
-          <TextBlock Classes="rowName" Text="Open folder…" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
       <TextBlock Classes="section" Text="Recent" Margin="0,8,0,0" IsVisible="{Binding HasRecent}" />
       <ItemsControl ItemsSource="{Binding Recent}" IsVisible="{Binding HasRecent}" Margin="-8,0"
                     AutomationProperties.AutomationId="RecentProjects" AutomationProperties.Name="Recent projects">
@@ -304,24 +296,17 @@
                                               AutomationProperties.Name="Rename" theme:MenuGlyph.Data="{StaticResource IconRename}" />
                                   </ContextMenu>
                                 </Button.ContextMenu>
-                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
-                                  <!-- A workflow's name shows in full at every panel width, so a long one wraps. Its state chips stand
-                                       after the name on its line where the whole name fits beside them, and under it otherwise (ADR 0068). -->
-                                  <theme:TrailingPanel Spacing="8">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
+                                  <!-- A workflow's name shows in full at every panel width, so a long one wraps. The most urgent state's
+                                       badge and count stand at the end of the name's first line, before the progress, so every row
+                                       keeps one rhythm; the chip's tooltip and name list every state in words (ADR 0070). -->
                                   <TextBlock Classes="rowName workflowName" Classes.shown="{Binding IsSelected}" Text="{Binding Name}" TextWrapping="Wrap"
                                              AutomationProperties.AutomationId="WorkflowName" />
-                                  <ItemsControl Margin="0,0,0,0" VerticalAlignment="Top" ItemsSource="{Binding RowChips}" IsVisible="{Binding ShowsRowChips}"
+                                  <ItemsControl Grid.Column="1" Margin="4,0,0,0" VerticalAlignment="Top" ItemsSource="{Binding RowChips}" IsVisible="{Binding ShowsRowChips}"
                                                 AutomationProperties.AutomationId="WorkflowAlert">
-                                    <ItemsControl.ItemsPanel>
-                                      <ItemsPanelTemplate>
-                                        <WrapPanel ItemSpacing="8" LineSpacing="2" />
-                                      </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                       <DataTemplate DataType="canvas:StateChip">
-                                        <!-- A badge and its count keep the row's state to one short line. Activity says the states in
-                                             words, and the chip's tooltip and name keep them here (ADR 0066). -->
-                                        <StackPanel Orientation="Horizontal" Spacing="3" Background="Transparent" ToolTip.Tip="{Binding Tip}"
+                                        <StackPanel Orientation="Horizontal" Spacing="3" Height="18" Background="Transparent" ToolTip.Tip="{Binding Tip}"
                                                     AutomationProperties.Name="{Binding Label}">
                                           <theme:StateBadge Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" />
                                           <TextBlock Classes="caption" Text="{Binding Count}" VerticalAlignment="Center" />
@@ -329,10 +314,9 @@
                                       </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                   </ItemsControl>
-                                  </theme:TrailingPanel>
-                                  <Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Top" Margin="0,6,0,0" Fill="{DynamicResource AccentBrush}"
+                                  <Ellipse Grid.Column="2" Width="6" Height="6" VerticalAlignment="Top" Margin="0,6,0,0" Fill="{DynamicResource AccentBrush}"
                                            IsVisible="{Binding HasUnsavedChanges}" AutomationProperties.AutomationId="WorkflowUnsaved" />
-                                  <TextBlock Grid.Column="2" Classes="caption" Text="{Binding RowProgress}" VerticalAlignment="Top" Margin="0,1,0,0"
+                                  <TextBlock Grid.Column="3" Classes="caption" Text="{Binding RowProgress}" VerticalAlignment="Top" Margin="0,1,0,0"
                                              AutomationProperties.AutomationId="WorkflowSummary" />
                                 </Grid>
                               </Button>

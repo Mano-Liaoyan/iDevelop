@@ -40,6 +40,22 @@ public sealed class RunRetryTests
     }
 
     [AvaloniaFact]
+    public void A_failed_node_keeps_Retry_in_the_inspector_header_while_its_conversation_is_open()
+    {
+        using var f = new NodeFixture(Plan(A, "A", 105));
+        f.Install(On().Choose((Fresh("A"), On().Stderr("The model is busy.").Exit(2))));
+        var shell = f.Open();
+        shell.RunNode("A");
+        shell.WaitForState("A", NodeState.Failed);
+
+        shell.NodeModel("A").OpenConversationCommand.Execute(null);
+        shell.Render();
+
+        Assert.True(shell.NodeModel("A").IsConversationShown);
+        Assert.Contains(shell.NodeModel("A").Actions, action => action is { Id: "RetryTask", IsPrimary: true });
+    }
+
+    [AvaloniaFact]
     public void Retry_of_a_completed_node_gives_it_a_new_result_and_the_node_after_it_runs_again_on_it()
     {
         using var f = new NodeFixture(Plan(A, "A", 105), Plan(B, "B", 405), Dependency(A, B));

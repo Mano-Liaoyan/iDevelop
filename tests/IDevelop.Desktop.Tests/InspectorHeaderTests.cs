@@ -49,7 +49,7 @@ public sealed class InspectorHeaderTests : IDisposable
             shell.Render();
             Assert.Equal(isShort, view.Classes.Contains("short"));
             var title = view.GetVisualDescendants().OfType<Theme.EllipsisText>().Single(text => text.Classes.Contains("headerTitle"));
-            Assert.Equal(isShort ? 2 : 4, title.MaxLines);
+            Assert.Equal(2, title.MaxLines);
             var detail = view.GetVisualDescendants().OfType<Panel>().Single(panel => panel.Classes.Contains("stateDetail"));
             Assert.Equal(!isShort, detail.IsVisible);
         }
