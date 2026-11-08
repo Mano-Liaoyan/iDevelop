@@ -8,6 +8,7 @@ An agent that asks in its reply can write its options as a list. The conversatio
 - **A list of options.** A Markdown bullet list or numbered list with two to nine items, and with no check boxes. It is the message's last list, and at most one paragraph follows it. An indented line belongs to the item above it, and a list in a code fence does not count.
 - **A question beside the list.** The paragraph before the list ends in a question mark, or ends in a colon and names a choice ("Please choose one:"). Otherwise the paragraph after the list ends in a question mark and names a choice ("Which do you prefer?"). "I changed these files:" and "Shall I go on?" offer nothing.
 - **Fill, not send.** An option replaces an empty draft or another option. After the person's own words, it goes on a new line, so a click never deletes what the person wrote. A digit works only while the composer is empty.
+- **Shown once.** While the message asks, the list shows only as the buttons. The bubble keeps the question's words, unless an option has detail lines that a button cannot show.
 - **Display only.** The parse decides what the buttons show. It changes no state, no card, and no log line.
 
 ## Considered options

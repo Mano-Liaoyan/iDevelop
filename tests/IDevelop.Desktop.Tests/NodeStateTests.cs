@@ -57,14 +57,4 @@ public sealed class NodeStateTests
         Assert.Contains("Continue resumes the session. Retry starts a new attempt.", NodeStates.Detail(new EngineState.InputRequired(EngineState.Interrupted)));
         Assert.Contains("Run it again", NodeStates.Detail(new EngineState.Stale()));
     }
-
-    [Fact]
-    public void A_short_inspector_keeps_one_short_line_that_says_what_Continue_and_Retry_do()
-    {
-        var line = NodeStates.ShortDetail(new EngineState.InputRequired(EngineState.Interrupted));
-
-        Assert.Equal("Continue resumes. Retry starts again.", line);
-        Assert.True(line!.Length <= 40);
-        Assert.Null(NodeStates.ShortDetail(new EngineState.Idle()));
-    }
 }

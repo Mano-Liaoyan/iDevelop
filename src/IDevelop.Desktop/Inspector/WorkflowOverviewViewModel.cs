@@ -32,8 +32,8 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
 
     public string Name => _canvas.Name;
 
-    /// <summary>"2 of 9 · 1 running · 2 waiting" once a node ran, "9 nodes" before, as the workflow's tooltip says it.</summary>
-    public string StateLine => StateCounts.KeepCountsWhole(_canvas.Counts.Summary());
+    /// <summary>"2 of 9 done" once a node ran, "9 nodes" before. The run bar names the states, so the header does not repeat them.</summary>
+    public string StateLine => StateCounts.KeepCountsWhole(_canvas.Counts.HasRun ? $"{_canvas.Counts.Progress} done" : _canvas.Counts.Summary());
 
     /// <summary>The libraries, which the workflow inspector lists.</summary>
     public BlueprintsViewModel Blueprints => _canvas.Blueprints;

@@ -68,7 +68,7 @@ public sealed class ConversationViewTests : IDisposable
         Assert.All(cells, cell => Assert.True(double.IsPositiveInfinity(cell.MaxWidth)));
         var prose = texts.Except(cells).ToList();
         Assert.Equal(3, prose.Count);
-        Assert.All(prose, text => Assert.Equal(520, text.MaxWidth));
+        Assert.All(prose, text => Assert.Equal(double.PositiveInfinity, text.MaxWidth));
     }
 
     [AvaloniaFact]

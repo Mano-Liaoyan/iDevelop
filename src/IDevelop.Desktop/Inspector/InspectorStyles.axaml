@@ -160,19 +160,6 @@
   <Style Selector="inspector|InspectorView.short Panel.stateDetail">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <!-- The short line shows only in a short inspector, in one line, and its tooltip holds the whole sentence. -->
-  <Style Selector="Panel.shortDetail">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector="inspector|InspectorView.short Panel.shortDetail">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector="TextBlock.shortDetail">
-    <Setter Property="Margin" Value="0,2,0,0" />
-    <Setter Property="TextWrapping" Value="NoWrap" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
   <Style Selector="TextBlock.detail.clamped">
     <Setter Property="MaxLines" Value="2" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />

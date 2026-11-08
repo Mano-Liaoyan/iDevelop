@@ -125,4 +125,14 @@ public sealed class QuickRepliesTests
         Assert.DoesNotContain(Shell.ById<Button>(shell.Window, "ConversationQuickReply"), button => button.IsEffectivelyVisible);
         Assert.False(model.PickChoice(1));
     }
+    [Fact]
+    public void A_message_that_offers_its_options_shows_them_only_as_the_rows()
+    {
+        const string message = "Which window should the keys use?\n\n- Follow the longer window\n- Keep one for each provider";
+
+        Assert.Equal(2, QuickReplies.Read(message).Count);
+        Assert.Equal("Which window should the keys use?", QuickReplies.WithoutOptions(message));
+        Assert.Null(QuickReplies.WithoutOptions("Which window should the keys use?"));
+        Assert.Null(QuickReplies.WithoutOptions("Which one?\n\n- First\n  with more words\n- Second"));
+    }
 }

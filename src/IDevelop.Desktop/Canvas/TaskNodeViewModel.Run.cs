@@ -17,7 +17,7 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StatusTip), nameof(StateWord), nameof(StateDetail), nameof(ShortStateDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
+        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StatusTip), nameof(StateWord), nameof(StateDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(LastReplyAsks), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
@@ -69,8 +69,6 @@ public sealed partial class TaskNodeViewModel
     public string? StateDetail => NodeStates.Detail(_engineState);
 
     /// <summary>The state's sentence in one short line, which a short inspector shows in place of <see cref="StateDetail"/>.</summary>
-    public string? ShortStateDetail => NodeStates.ShortDetail(_engineState);
-
     public StatusTone Tone => NodeStates.Tone(State, WaitReason);
 
     /// <summary>The node waits for the person.</summary>

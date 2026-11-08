@@ -477,7 +477,7 @@
                               Classes="message" Classes.person="{Binding IsPerson}" Classes.subagent="{Binding IsSubagent}" Classes.asking="{Binding IsAsking}"
                               AutomationProperties.AutomationId="Message"
                               AutomationProperties.Name="{Binding AuthorLabel}">
-                        <conversation:MarkdownView Markdown="{Binding Text}" />
+                        <conversation:MarkdownView Markdown="{Binding ShownText}" />
                       </Border>
                       <!-- Copy floats on the message's top right edge, or beside a person's message, while the pointer is on the row. -->
                       <Button Grid.Column="{Binding IsPerson, Converter={x:Static conversation:ConversationView.CopyColumn}}"

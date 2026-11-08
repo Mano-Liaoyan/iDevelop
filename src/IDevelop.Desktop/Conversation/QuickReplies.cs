@@ -15,23 +15,42 @@ internal static partial class QuickReplies
 
     private enum BlockKind { Paragraph, Bullets, Numbers, Other }
 
-    private sealed record Block(BlockKind Kind, List<string> Lines);
+    private sealed record Block(BlockKind Kind, List<string> Lines, int First)
+    {
+        /// <summary>The block's last line in the message.</summary>
+        public int Last { get; set; } = First;
+
+        /// <summary>An indented line under an item gives it more words than its button shows.</summary>
+        public bool HasDetail { get; set; }
+    }
 
     /// <summary>The list's options in order, without their markers and inline Markdown, or none.</summary>
-    internal static IReadOnlyList<string> Read(string? message)
+    internal static IReadOnlyList<string> Read(string? message) =>
+        OptionList(Blocks(message ?? ""))?.Lines.Select(ResultViewModel.Plain).ToList() ?? [];
+
+    /// <summary>The message without the list that <see cref="Read"/> offers, or null if it offers none or an option has its own detail lines.</summary>
+    internal static string? WithoutOptions(string? message)
     {
-        var blocks = Blocks(message ?? "");
+        if (message is null || OptionList(Blocks(message)) is not { HasDetail: false } list)
+        {
+            return null;
+        }
+
+        var lines = message.Split('\n');
+        return string.Join('\n', lines.Where((_, at) => at < list.First || at > list.Last)).Trim();
+    }
+
+    private static Block? OptionList(List<Block> blocks)
+    {
         var last = blocks.Count - 1;
         var (list, lead, close) = last >= 0 && IsList(blocks[last]) ? (last, last - 1, -1) : last >= 1 && IsList(blocks[last - 1]) ? (last - 1, last - 2, last) : (-1, -1, -1);
         if (list < 0 || !Asks(lead >= 0 ? blocks[lead] : null, close >= 0 ? blocks[close] : null))
         {
-            return [];
+            return null;
         }
 
         var options = blocks[list].Lines;
-        return options.Count is >= 2 and <= MostOptions && options.All(option => option.Length > 0 && !CheckBox().IsMatch(option))
-            ? [.. options.Select(ResultViewModel.Plain)]
-            : [];
+        return options.Count is >= 2 and <= MostOptions && options.All(option => option.Length > 0 && !CheckBox().IsMatch(option)) ? blocks[list] : null;
     }
 
     private static bool IsList(Block block) => block.Kind is BlockKind.Bullets or BlockKind.Numbers;
@@ -57,12 +76,12 @@ internal static partial class QuickReplies
         List<Block> blocks = [];
         var fenced = false;
         var afterBlank = true;
-        foreach (var line in message.Split('\n').Select(text => text.TrimEnd('\r')))
+        foreach (var (at, line) in message.Split('\n').Select((text, at) => (at, text.TrimEnd('\r'))))
         {
             if (line.TrimStart().StartsWith("```", StringComparison.Ordinal) || line.TrimStart().StartsWith("~~~", StringComparison.Ordinal))
             {
                 fenced = !fenced;
-                if (fenced) blocks.Add(new Block(BlockKind.Other, []));
+                if (fenced) blocks.Add(new Block(BlockKind.Other, [], at));
                 afterBlank = false;
                 continue;
             }
@@ -83,12 +102,15 @@ internal static partial class QuickReplies
             if (item.Success)
             {
                 var kind = char.IsDigit(item.Groups["marker"].Value[0]) ? BlockKind.Numbers : BlockKind.Bullets;
-                if (open?.Kind != kind) blocks.Add(open = new Block(kind, []));
+                if (open?.Kind != kind) blocks.Add(open = new Block(kind, [], at));
                 open.Lines.Add(item.Groups["text"].Value.Trim());
+                open.Last = at;
             }
             else if (open is not null && IsList(open) && line.StartsWith("  ", StringComparison.Ordinal))
             {
                 // An indented line belongs to the item above it: its detail, or a nested list.
+                open.HasDetail = true;
+                open.Last = at;
             }
             else if (open?.Kind == BlockKind.Paragraph && !afterBlank)
             {
@@ -96,7 +118,7 @@ internal static partial class QuickReplies
             }
             else
             {
-                blocks.Add(new Block(line.TrimStart().StartsWith('|') || line.TrimStart().StartsWith('#') ? BlockKind.Other : BlockKind.Paragraph, [line.Trim()]));
+                blocks.Add(new Block(line.TrimStart().StartsWith('|') || line.TrimStart().StartsWith('#') ? BlockKind.Other : BlockKind.Paragraph, [line.Trim()], at));
             }
 
             afterBlank = false;

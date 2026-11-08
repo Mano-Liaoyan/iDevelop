@@ -56,6 +56,9 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
         internal set => SetProperty(ref _showsAuthor, value);
     }
 
+    /// <summary>The message as it shows. While it asks, its option list shows only as the rows over the composer (ADR 0073).</summary>
+    public string ShownText => IsAsking ? QuickReplies.WithoutOptions(Text) ?? Text : Text;
+
     /// <summary>The node waits for the person's reply to this message, so it reads as a question and not as narration.</summary>
     public bool IsAsking
     {
@@ -66,6 +69,7 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
             {
                 OnPropertyChanged(nameof(ShowsAuthor));
                 OnPropertyChanged(nameof(AuthorLine));
+                OnPropertyChanged(nameof(ShownText));
             }
         }
     }

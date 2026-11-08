@@ -273,9 +273,9 @@
   <Style Selector="Border.message">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
   </Style>
-  <!-- Prose keeps a reading measure of about 75 characters. Code and tables take the column's whole width. -->
-  <Style Selector="Border.message conversation|MarkdownView SelectableTextBlock.md">
-    <Setter Property="MaxWidth" Value="520" />
+  <!-- Prose, code, and tables share one measure of 640 px, so a message has one right edge. -->
+  <Style Selector="Border.message conversation|MarkdownView">
+    <Setter Property="MaxWidth" Value="640" />
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
   <Style Selector="Border.message Border.mdCell > SelectableTextBlock.md">
