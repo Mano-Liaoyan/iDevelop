@@ -19,7 +19,7 @@ public sealed class RoutedConnection : StepConnection
 
     static RoutedConnection()
     {
-        AffectsGeometry<RoutedConnection>(SourceOnEdgeProperty, TargetOnEdgeProperty);
+        AffectsGeometry<RoutedConnection>(SourceOnEdgeProperty, TargetOnEdgeProperty, StrokeThicknessProperty);
         AffectsGeometry<RoutedConnection>(CurveProperty);
         AffectsRender<RoutedConnection>(CurveProperty);
         NodifyEditor.CuttingConnectionTypes.Add(typeof(RoutedConnection));
@@ -30,7 +30,7 @@ public sealed class RoutedConnection : StepConnection
     // How many straight steps stand for one piece while the moving arrows find their places.
     private const int Steps = 12;
 
-    // The socket's radius as a part of the wire's stroke, so it stays a dot at every zoom tier.
+    // The socket's radius as a part of the wire's stroke, so it stays a dot at every zoom tier. A change of the stroke draws the geometry again.
     private const double SocketSize = 1.5;
 
     /// <summary>The wire's pieces, from its output port to its input port.</summary>
