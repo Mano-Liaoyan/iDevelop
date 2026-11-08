@@ -603,6 +603,21 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_wrapped_status_line_never_ends_in_a_separator()
+    {
+        var line = new Theme.PartsLine { Whole = "1\u00a0failed · 2\u00a0waiting · 2\u00a0interrupted · 1\u00a0stale", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+
+        line.Measure(new Size(120, double.PositiveInfinity));
+
+        Assert.Contains('\n', line.Text!);
+        Assert.All(line.Text!.Split('\n'), row => Assert.False(row.EndsWith('·') || row.EndsWith(' ') || row.StartsWith('·'), $"The line \"{row}\" holds a loose separator."));
+        Assert.Equal(line.Whole, line.Text.Replace("\n", " · "));
+
+        line.Measure(new Size(1000, double.PositiveInfinity));
+        Assert.Equal(line.Whole, line.Text);
+    }
+
+    [AvaloniaFact]
     public void The_tree_rests_on_a_whole_row_under_its_pinned_rows()
     {
         var reports = _temp.Create(Reports);
