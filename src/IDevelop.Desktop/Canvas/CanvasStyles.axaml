@@ -405,6 +405,9 @@
     <Setter Property="Margin" Value="1,-9" />
     <Setter Property="BorderThickness" Value="7" />
   </Style>
+  <Style Selector=":is(Control).tier-title Border.ring">
+    <Setter Property="BorderThickness" Value="5" />
+  </Style>
   <!-- The pointer over a card draws a thin neutral line of one screen pixel outside its edge, with the selection's gap, at each
        zoom. It is lighter than the selection line and never accent, so hover never competes with a selection (ADR 0064). It
        draws in the full muted text color, which stands apart from the card's own border (ADR 0069). -->
@@ -420,6 +423,9 @@
   </Style>
   <Style Selector=":is(Control).tier-title nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-block nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderThickness" Value="4" />
+  </Style>
+  <Style Selector=":is(Control).tier-title nodify|ItemContainer:pointerover:not(:selected) Border.ring">
+    <Setter Property="BorderThickness" Value="3" />
   </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
        show through it (#85). Its dashed edge and faded tile say it is a proposal. -->

@@ -13,6 +13,8 @@ Round 24 found that the chip row cut the last title line of overview cards at 61
 - **Selection.** A selected card's ring and its highlighted wires use the strong text color, dark in the light theme and light in the dark theme. Blue marks a running node and a wire that a node reads now.
 - **Inspector title.** The header shows the whole title and wraps it without a line limit. This replaces ADR 0070's two lines.
 
+- **Docked canvas.** When the conversation docks and the smaller canvas cuts a card that showed whole, the canvas fits the whole graph if every title still reads at that zoom. Otherwise a running node's frame holds the nodes downstream of it, while they fit at a readable zoom. This amends the docked branch of ADR 0069.
+
 ## Considered options
 
 - **A splitter between the sections.** A fixed split at half needs no new control and no saved width. A splitter stays open for a later round.
