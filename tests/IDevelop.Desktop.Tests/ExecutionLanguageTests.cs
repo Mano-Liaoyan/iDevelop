@@ -166,6 +166,42 @@ public sealed class ExecutionLanguageTests
         Assert.Equal(22, squeezed[^1], 3);
     }
 
+    [Fact]
+    public void A_port_near_the_cards_top_keeps_one_wire_on_its_own_point_and_the_points_a_full_pitch_apart()
+    {
+        // At the Title tier the port stands 32 under the top of a 150-high card: the fan cannot center on it.
+        var slots = PortSlots.Of([-500, 100, 200, 300], 32, 0, 150, 3);
+
+        Assert.Contains(0.0, slots);
+        var points = slots.Order().ToList();
+        Assert.All(points.Zip(points.Skip(1)), pair => Assert.Equal(PortSlots.Pitch * 3, pair.Second - pair.First, 3));
+    }
+
+    [Fact]
+    public void A_fan_that_has_too_little_room_still_keeps_one_wire_on_the_port()
+    {
+        var slots = PortSlots.Of([0, 1, 2, 3, 4], 32, 0, 64);
+
+        Assert.Contains(0.0, slots);
+        Assert.Equal(22, slots.Max(), 3);
+    }
+
+    [AvaloniaFact]
+    public void A_grouped_line_breaks_between_groups_and_no_line_ends_in_a_separator()
+    {
+        const string whole = "1\u00a0failed\u00a0· 2\u00a0waiting\u00a0· 2\u00a0interrupted\u00a0· 1\u00a0stale";
+        var line = new GroupedLine { Whole = whole, TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+
+        line.Measure(new Size(130, double.PositiveInfinity));
+        var lines = line.Text!.Split('\n');
+        Assert.True(lines.Length >= 2, line.Text);
+        Assert.All(lines, text => Assert.False(text.EndsWith('·') || text.StartsWith('·'), text));
+        Assert.Equal(whole.Replace("\u00a0· ", "|"), string.Join('|', lines.SelectMany(text => text.Split("\u00a0· "))));
+
+        line.Measure(new Size(2000, double.PositiveInfinity));
+        Assert.Equal(whole, line.Text);
+    }
+
     [AvaloniaTheory]
     [InlineData("A long title that a line limit cuts", 2)]
     [InlineData("Averyveryveryverylongwordwithoutanybreakopportunity at all", 1)]
