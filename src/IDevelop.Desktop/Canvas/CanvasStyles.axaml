@@ -11,7 +11,7 @@
        that it has the keyboard's focus, so a card keeps one outline. -->
   <Style Selector="Border.ring">
     <Setter Property="Margin" Value="5,-5" />
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderThickness" Value="1.5" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
@@ -395,18 +395,18 @@
        keeps them apart from a failed, waiting, or stale card's own edge, so the state's color stays whole inside them. -->
   <Style Selector=":is(Control).tier-detail Border.ring, :is(Control).tier-compact Border.ring">
     <Setter Property="Margin" Value="4,-6" />
-    <Setter Property="BorderThickness" Value="3" />
+    <Setter Property="BorderThickness" Value="2.5" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.ring">
     <Setter Property="Margin" Value="1,-9" />
-    <Setter Property="BorderThickness" Value="5" />
+    <Setter Property="BorderThickness" Value="4" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
     <Setter Property="Margin" Value="1,-9" />
-    <Setter Property="BorderThickness" Value="9" />
+    <Setter Property="BorderThickness" Value="7" />
   </Style>
   <!-- The pointer over a card draws a thin neutral line of one screen pixel outside its edge, with the selection's gap, at each
-       zoom. It is half the selection line's weight and never accent, so hover never competes with a selection (ADR 0064). It
+       zoom. It is lighter than the selection line and never accent, so hover never competes with a selection (ADR 0064). It
        draws in the full muted text color, which stands apart from the card's own border (ADR 0069). -->
   <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderThickness" Value="1" />

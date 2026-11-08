@@ -80,7 +80,7 @@ public sealed class ConnectionViewModel : ObservableObject
     } = WireFlow.Idle;
 
     /// <summary>The wire's stroke in canvas units. It shows a selection by weight, and it follows the zoom tier.</summary>
-    public double Stroke => (WireFlows.Stroke(Flow) + (IsHighlighted ? 1 : 0)) * ZoomTiers.WireScale(_canvas.Tier);
+    public double Stroke => (WireFlows.Stroke(Flow) + (IsHighlighted ? 0.5 : 0)) * ZoomTiers.WireScale(_canvas.Tier);
 
     /// <summary>The stroke under the pointer and while the wire is selected.</summary>
     public double HotStroke => Math.Max(Stroke, 3 * ZoomTiers.WireScale(_canvas.Tier));
