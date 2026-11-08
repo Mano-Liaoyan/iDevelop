@@ -108,6 +108,10 @@ public partial class ConversationView : UserControl
 
     private double _aroundCard;
 
+    // The extent where the view last moved above the end to rest on a whole line, and the extent where such a move changed the end.
+    private double? _restedAt;
+    private double? _restMovedEnd;
+
     /// <summary>Raised, after a layout, when <see cref="RequiredHeight"/> changed.</summary>
     public static readonly RoutedEvent<RoutedEventArgs> RequiredHeightChangedEvent =
         RoutedEvent.Register<ConversationView, RoutedEventArgs>("RequiredHeightChanged", RoutingStrategies.Bubble);
@@ -219,7 +223,7 @@ public partial class ConversationView : UserControl
         {
             if (_follow)
             {
-                ScrollTo(OnWholeLine(End));
+                RestAtEnd();
             }
             else if (_anchor is { } anchor)
             {
@@ -236,7 +240,7 @@ public partial class ConversationView : UserControl
                 {
                     _follow = true;
                     _anchor = null;
-                    ScrollTo(OnWholeLine(End));
+                    RestAtEnd();
                 }
             }
         }
@@ -247,6 +251,28 @@ public partial class ConversationView : UserControl
     }
 
     private double End => Scroller.Extent.Height - Scroller.Viewport.Height;
+
+    // The list estimates a row that left the view, and a row the card holds has no height, so a small move up can change the
+    // extent and the end with it. A move to that new end brings the old extent back, and the two would repeat until the layout
+    // aborts. An extent where this happened keeps the end itself.
+    private void RestAtEnd()
+    {
+        var extent = Scroller.Extent.Height;
+        if (_restedAt is { } before && Math.Abs(before - extent) >= 0.5)
+        {
+            _restMovedEnd = before;
+            _restedAt = null;
+        }
+
+        var end = End;
+        var wanted = _restMovedEnd is { } moved && Math.Abs(moved - extent) < 0.5 ? end : OnWholeLine(end);
+        if (wanted < end && Math.Abs(Scroller.Offset.Y - wanted) > 0.5)
+        {
+            _restedAt = extent;
+        }
+
+        ScrollTo(wanted);
+    }
 
     // The height at or above y where the view's top edge cuts no line. The space under the last row takes up the difference at the end.
     private double OnWholeLine(double y) => Scroller.Content is Control content ? WholeLine.Rest(content, y, down: false) : y;

@@ -94,6 +94,26 @@ public sealed class QuickRepliesTests
         Assert.Equal("Ask finance first.\nThe longer one", model.Draft);
     }
 
+    // A card holds the last marker, so the last row has no height, and the list estimates that row once it leaves the view.
+    [AvaloniaFact]
+    public void A_waiting_conversation_rests_at_its_end_at_every_height()
+    {
+        var words = string.Join(" ", Enumerable.Repeat("The sandbox and the provider disagree on the retry timing of the idempotency keys.", 24));
+        using var f = Asking($"{words}\n\nWhich window should I use?\n\n- The longer one\n- Each provider's own");
+        var (shell, _) = Waiting(f);
+        var scroller = shell.Find<ScrollViewer>("TranscriptScroller");
+
+        for (var height = 500; height < 760; height++)
+        {
+            shell.Window.Height = height;
+            shell.Render();
+
+            var end = scroller.Extent.Height - scroller.Viewport.Height;
+            Assert.True(end > 0, $"At height {height} the transcript has nothing to scroll.");
+            Assert.InRange(scroller.Offset.Y, end - 40, end + 0.5);
+        }
+    }
+
     [AvaloniaFact]
     public void A_question_without_a_list_shows_no_buttons_and_a_digit_types()
     {
