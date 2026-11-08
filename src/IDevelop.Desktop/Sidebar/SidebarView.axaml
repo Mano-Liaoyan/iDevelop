@@ -304,15 +304,13 @@
                                               AutomationProperties.Name="Rename" theme:MenuGlyph.Data="{StaticResource IconRename}" />
                                   </ContextMenu>
                                 </Button.ContextMenu>
-                                <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="4">
-                                  <!-- A workflow's name shows in full at every panel width, so a long one wraps. -->
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                                  <!-- A workflow's name shows in full at every panel width, so a long one wraps. Its state chips stand
+                                       after the name on its line where the whole name fits beside them, and under it otherwise (ADR 0068). -->
+                                  <theme:TrailingPanel Spacing="8">
                                   <TextBlock Classes="rowName workflowName" Classes.shown="{Binding IsSelected}" Text="{Binding Name}" TextWrapping="Wrap"
                                              AutomationProperties.AutomationId="WorkflowName" />
-                                  <Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Top" Margin="0,6,0,0" Fill="{DynamicResource AccentBrush}"
-                                           IsVisible="{Binding HasUnsavedChanges}" AutomationProperties.AutomationId="WorkflowUnsaved" />
-                                  <TextBlock Grid.Column="2" Classes="caption" Text="{Binding RowProgress}" VerticalAlignment="Top" Margin="0,1,0,0"
-                                             AutomationProperties.AutomationId="WorkflowSummary" />
-                                  <ItemsControl Grid.Row="1" Grid.ColumnSpan="3" Margin="0,2,0,0" ItemsSource="{Binding RowChips}" IsVisible="{Binding ShowsRowChips}"
+                                  <ItemsControl Margin="0,0,0,0" VerticalAlignment="Top" ItemsSource="{Binding RowChips}" IsVisible="{Binding ShowsRowChips}"
                                                 AutomationProperties.AutomationId="WorkflowAlert">
                                     <ItemsControl.ItemsPanel>
                                       <ItemsPanelTemplate>
@@ -331,6 +329,11 @@
                                       </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                   </ItemsControl>
+                                  </theme:TrailingPanel>
+                                  <Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Top" Margin="0,6,0,0" Fill="{DynamicResource AccentBrush}"
+                                           IsVisible="{Binding HasUnsavedChanges}" AutomationProperties.AutomationId="WorkflowUnsaved" />
+                                  <TextBlock Grid.Column="2" Classes="caption" Text="{Binding RowProgress}" VerticalAlignment="Top" Margin="0,1,0,0"
+                                             AutomationProperties.AutomationId="WorkflowSummary" />
                                 </Grid>
                               </Button>
                               <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="38,2,4,2"

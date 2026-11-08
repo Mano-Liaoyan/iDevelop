@@ -296,7 +296,7 @@ public sealed class InspectorTests : IDisposable
             "the retry completes");
         shell.Render();
 
-        Assert.Equal("Completed", shell.Find<TextBlock>("RunTaskStatus").Text);
+        Assert.Equal("Done", shell.Find<TextBlock>("RunTaskStatus").Text);
         Assert.Equal(["Result 2 · Current", "Said hi.", "Result 1", "Said hi."], Shell.Texts(shell.InView<ItemsControl>("Results")));
     }
 
@@ -352,7 +352,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Single(shell.Window.ViewModel.Canvas!.Workflow.Tasks.Values, task => task.Title == "Wire export");
         Assert.Equal("Added 1 task.", shell.Status);
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Completed", "the planner is done");
+        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Done", "the planner is done");
         Assert.False(shell.Has<StackPanel>("Proposal"));
     }
 
@@ -366,7 +366,7 @@ public sealed class InspectorTests : IDisposable
         Assert.Equal("Waiting", shell.InView<TextBlock>("RunTaskStatus").Text);
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Completed", "the planner is done");
+        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Done", "the planner is done");
 
         Assert.Equal(["OpenConversation"], PrimaryButtons(shell));
         Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "RetryTask")));

@@ -204,7 +204,7 @@ public sealed class SidebarLayoutTests : IDisposable
     [AvaloniaTheory]
     [InlineData(240)]
     [InlineData(400)]
-    public void Rows_keep_one_height_while_their_names_fit_and_state_shows_as_counts_under_the_name(double width)
+    public void Rows_keep_one_height_while_their_names_fit_and_state_shows_as_counts_after_the_name(double width)
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var shell = OpenBoth(_fakes.DiscoverAsync().Result);
@@ -222,10 +222,13 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.False(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
         ((Canvas.WorkflowCanvasViewModel)row.DataContext!).IsExpanded = false;
         shell.Render();
-        Assert.True(row.Bounds.Height > 28, "The state takes no line of its own.");
+        // A short name leaves room on its line, so the state's counts stand after it and the row keeps its height (ADR 0068).
+        Assert.Equal(28.0, row.Bounds.Height);
+        var nameTop = Of<Control>(row.GetVisualParent()!, "WorkflowName").TranslatePoint(default, row)!.Value.Y;
+        Assert.True(Math.Abs(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").TranslatePoint(default, row)!.Value.Y - nameTop) < 2, "The counts stand on the name's line.");
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
-        // The progress keeps the row's end in every state, and the state is a badge and a count under the name, with its words
+        // The progress keeps the row's end in every state, and the state is a badge and a count after the name, with its words
         // in the chip's tooltip and name.
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;

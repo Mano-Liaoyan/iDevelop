@@ -176,12 +176,13 @@
   <Style Selector="Grid.docked Border.conversationHeader">
     <Setter Property="MinHeight" Value="40" />
   </Style>
+  <!-- The header keeps the title on one line, and its tooltip and the inspector hold the whole title (ADR 0068). -->
   <Style Selector="TextBlock.conversationTitle">
     <Setter Property="FontSize" Value="14" />
     <Setter Property="LineHeight" Value="20" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="TextWrapping" Value="WrapWithOverflow" />
-    <Setter Property="MaxLines" Value="3" />
+    <Setter Property="MaxLines" Value="1" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.limitsText">

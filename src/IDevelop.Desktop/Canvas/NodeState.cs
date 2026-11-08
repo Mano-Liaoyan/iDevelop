@@ -38,16 +38,16 @@ public static class NodeStates
         _ => WaitReason.None,
     };
 
-    /// <summary>The node's status, which names why it needs the person, such as "Input required · Approval". An interrupted node needs nothing yet, so it says only that.</summary>
+    /// <summary>The node's status, in the words of the left tree's groups (ADR 0068), which names why it needs the person, such as "Input required · Approval". An interrupted node needs nothing yet, so it says only that.</summary>
     public static string Label(EngineState state) => state switch
     {
         EngineState.Running => "Running",
         EngineState.InputRequired { Why: EngineState.Interrupted } => "Interrupted",
         EngineState.InputRequired => $"Input required · {Need(Why(state))}",
-        EngineState.Completed => "Completed",
+        EngineState.Completed => "Done",
         EngineState.Failed => "Failed",
         EngineState.Stale => "Stale",
-        _ => "Idle",
+        _ => "Not started",
     };
 
     /// <summary>What a waiting node needs, in the one word that a zoomed out card has room for.</summary>

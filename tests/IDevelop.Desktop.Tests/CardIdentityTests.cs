@@ -51,7 +51,7 @@ public sealed class CardIdentityTests
         Assert.True(canvas.CanStartRun);
 
         shell.RunNode("A");
-        shell.WaitForCard("A", "Completed");
+        shell.WaitForCard("A", "Done");
 
         Assert.Equal(0, canvas.RunWork);
         Assert.False(canvas.CanStartRun);
@@ -69,7 +69,7 @@ public sealed class CardIdentityTests
         Assert.Equal("No result yet", shell.NodeModel("A").OutputSummary);
 
         shell.RunNode("A");
-        shell.WaitForCard("A", "Completed");
+        shell.WaitForCard("A", "Done");
         // The folded Output section shows the latest result's own summary.
         Assert.Equal("Done.", shell.NodeModel("A").OutputSummary);
 
@@ -128,7 +128,7 @@ public sealed class CardIdentityTests
         f.Install(Reply("s-1", "Done."));
         var shell = f.Open();
         shell.RunNode("A");
-        shell.WaitForCard("A", "Completed");
+        shell.WaitForCard("A", "Done");
         var node = shell.NodeModel("A");
 
         node.OpenConversationCommand.Execute(null);
@@ -150,7 +150,7 @@ public sealed class CardIdentityTests
         Assert.Equal(["Agent", "Output", "Input"], Order());
 
         shell.RunNode("A");
-        shell.WaitForCard("A", "Completed");
+        shell.WaitForCard("A", "Done");
         shell.Render();
 
         Assert.Equal(["Agent", "Output", "Input"], Order());

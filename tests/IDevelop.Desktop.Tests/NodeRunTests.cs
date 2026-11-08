@@ -37,7 +37,7 @@ public sealed class NodeRunTests
         Assert.Equal(NodeState.Completed, shell.NodeModel("A").State);
         Assert.Equal("B ready.", Assert.Single(b.Results).Summary);
         Assert.Null(b.RunRefusal);
-        Assert.Equal(("Completed", "Completed"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Done", "Done"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
     }
 
     [AvaloniaFact]

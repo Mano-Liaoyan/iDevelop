@@ -102,7 +102,7 @@ public sealed class CardTests : IDisposable
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
 
-        Assert.Equal(["Design", "Codex", "GPT-5.5", "Idle"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Codex", "GPT-5.5", "Not started"], Shell.Texts(shell.Node("Design")));
         Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
         Assert.Equal(["Design", "Implement · Codex · GPT-5.5 · high", "Instructions", "Draft it.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Design")!);
     }
@@ -170,12 +170,12 @@ public sealed class CardTests : IDisposable
 
         Assert.Equal(
             [
-                ["Design", "Codex", "GPT-5.5", "Idle"],
-                ["Build", "Claude Code", "Sonnet 5.5", "Idle"],
-                ["Review", "Antigravity", "Claude Opus 4.6 (Thinking)", "Idle"],
-                ["Fourth", "Antigravity", "3.8 Flash", "Idle"],
+                ["Design", "Codex", "GPT-5.5", "Not started"],
+                ["Build", "Claude Code", "Sonnet 5.5", "Not started"],
+                ["Review", "Antigravity", "Claude Opus 4.6 (Thinking)", "Not started"],
+                ["Fourth", "Antigravity", "3.8 Flash", "Not started"],
                 // Pi names its model's provider, which goes on the client's line.
-                ["Fifth", "Pi · deepseek", "DeepSeek V4.1 Flash", "Idle"],
+                ["Fifth", "Pi · deepseek", "DeepSeek V4.1 Flash", "Not started"],
             ],
             titles.Select(title => Shell.Texts(shell.Node(title))));
         // Each line sits at the same height on every card, and only the model gives way, whose tooltip holds it whole.
@@ -191,7 +191,7 @@ public sealed class CardTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
 
-        Assert.Equal(["Build", "No agent", "Idle"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "No agent", "Not started"], Shell.Texts(shell.Node("Build")));
         Assert.False(shell.CardGlyph("Build").IsEffectivelyVisible);
         var node = shell.NodeModel("Build");
         Assert.Equal(("Instructions is empty.", false), (node.RunRefusal, node.RunCommand.CanExecute(null)));
@@ -215,7 +215,7 @@ public sealed class CardTests : IDisposable
         Assert.Equal(Color.Parse("#E5E5E5"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         Assert.Same(Application.Current!.FindResource("IconStateRunning"), shell.CardGlyph("Design").Data);
         f.Release("go");
-        shell.WaitForCard("Design", "Completed");
+        shell.WaitForCard("Design", "Done");
     }
 
     [AvaloniaFact]
@@ -236,7 +236,7 @@ public sealed class CardTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(false, "Completed", "#E5E5E5")]
+    [InlineData(false, "Done", "#E5E5E5")]
     [InlineData(true, "Failed", "#E9152D")]
     public void A_finished_card_shows_its_ending_in_its_ring(bool fails, string label, string ring)
     {
@@ -262,7 +262,7 @@ public sealed class CardTests : IDisposable
         var shell = f.Open();
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.RunNode("Design");
-        shell.WaitForCard("Design", "Completed");
+        shell.WaitForCard("Design", "Done");
 
         shell.Window.ViewModel.Canvas!.Edit(new SetField(Design, "goal", "Plan it again."));
         shell.Render();

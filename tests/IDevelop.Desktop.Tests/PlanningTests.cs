@@ -145,13 +145,13 @@ public sealed class PlanningTests : IDisposable
             """,
             ConversationMode.Autonomous,
             Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "The wire task calls the endpoint.")));
-        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed", "the first run succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Done", "the first run succeeds");
 
         var planner = shell.Window.ViewModel.Canvas!.SelectedNode!;
         planner.Draft = "Why the wire task?";
         planner.SendCommand.Execute(null);
 
-        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed" && planner.LastReply == "The wire task calls the endpoint.", "the continuation succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Done" && planner.LastReply == "The wire task calls the endpoint.", "the continuation succeeds");
         Assert.Equal(["New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
     }
@@ -173,7 +173,7 @@ public sealed class PlanningTests : IDisposable
             new WorkflowEdit.Delete([], [new ConnectionKey(Architect, Backend)])]));
         shell.Click(shell.Header(shell.Node("Backend")));
         shell.RunNode();
-        shell.WaitUntil(() => shell.CardText("Backend", "CardStatus") == "Completed", "the drawn task runs");
+        shell.WaitUntil(() => shell.CardText("Backend", "CardStatus") == "Done", "the drawn task runs");
         shell.Click(shell.Header(shell.Node("Design export")));
 
         var backend = Items(shell).First();

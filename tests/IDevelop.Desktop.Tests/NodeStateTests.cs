@@ -10,7 +10,7 @@ public sealed class NodeStateTests
 {
     public static TheoryData<EngineState, NodeState, string, StatusTone> States() => new()
     {
-        { new EngineState.Idle(), NodeState.Idle, "Idle", StatusTone.Neutral },
+        { new EngineState.Idle(), NodeState.Idle, "Not started", StatusTone.Neutral },
         { new EngineState.Running(), NodeState.Running, "Running", StatusTone.Running },
         { new EngineState.InputRequired(EngineState.Approval), NodeState.InputRequired, "Input required · Approval", StatusTone.Waiting },
         { new EngineState.InputRequired(EngineState.Reply), NodeState.InputRequired, "Input required · Reply", StatusTone.Waiting },
@@ -18,7 +18,7 @@ public sealed class NodeStateTests
         { new EngineState.InputRequired(EngineState.Interrupted), NodeState.InputRequired, "Interrupted", StatusTone.Neutral },
         { new EngineState.InputRequired(EngineState.RoundLimit), NodeState.InputRequired, "Input required · Round limit", StatusTone.Waiting },
         { new EngineState.InputRequired("Which file?"), NodeState.InputRequired, "Input required · Question", StatusTone.Waiting },
-        { new EngineState.Completed(), NodeState.Completed, "Completed", StatusTone.Complete },
+        { new EngineState.Completed(), NodeState.Completed, "Done", StatusTone.Complete },
         { new EngineState.Failed("Exited with code 2."), NodeState.Failed, "Failed", StatusTone.Problem },
         { new EngineState.Stale(), NodeState.Stale, "Stale", StatusTone.Warning },
     };
@@ -42,7 +42,7 @@ public sealed class NodeStateTests
         Assert.Equal("Waiting for a background subagent", NodeStates.Label(running,
             [new BackgroundTask("Run the tests", IsSubagent: false), new BackgroundTask("Survey the files", IsSubagent: true)]));
         Assert.Equal("Waiting for background work", NodeStates.Label(running, [new BackgroundTask("Run the tests", IsSubagent: false)]));
-        Assert.Equal("Completed", NodeStates.Label(new EngineState.Completed(), [new BackgroundTask("Survey the files", IsSubagent: true)]));
+        Assert.Equal("Done", NodeStates.Label(new EngineState.Completed(), [new BackgroundTask("Survey the files", IsSubagent: true)]));
     }
 
     [Fact]
