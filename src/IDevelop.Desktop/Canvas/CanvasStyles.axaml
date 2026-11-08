@@ -168,7 +168,7 @@
   </Style>
   <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="14,6,8,0" />
+    <Setter Property="Margin" Value="24,6,8,0" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="LineHeight" Value="31" />
@@ -250,7 +250,7 @@
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="32" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="24,0,52,4" />
+    <Setter Property="Margin" Value="24,0,62,4" />
   </Style>
   <Style Selector="DockPanel.farLine > :is(Control)">
     <Setter Property="VerticalAlignment" Value="Center" />
