@@ -15,7 +15,6 @@ public sealed class ConnectionViewModel : ObservableObject
     private readonly WorkflowCanvasViewModel _canvas;
     private readonly RelayCommand<ConnectionKind> _setKind;
     private ConnectionKind _kind;
-    private ImmutableArray<Point> _ownRoute = [];
     private ImmutableArray<Point> _route = [];
     private IReadOnlyList<WirePiece> _curve = [];
     private (double Exit, double Entry) _slots;
@@ -34,7 +33,6 @@ public sealed class ConnectionViewModel : ObservableObject
         from.PropertyChanged += OnSourceChanged;
         from.Output.PropertyChanged += OnEndMoved;
         to.Input.PropertyChanged += OnEndMoved;
-        Reroute();
     }
 
     public ConnectionKey Key { get; }
@@ -75,9 +73,13 @@ public sealed class ConnectionViewModel : ObservableObject
             {
                 OnStrokeChanged();
                 OnPropertyChanged(nameof(Tip));
+                OnPropertyChanged(nameof(Layer));
             }
         }
     } = WireFlow.Idle;
+
+    /// <summary>The wire's layer: a context connection draws under the dependencies, and a wire into a running node over them.</summary>
+    public int Layer => Kind == ConnectionKind.Context ? -1 : Flow == WireFlow.Feeding ? 1 : 0;
 
     /// <summary>The wire's stroke in canvas units. It shows a selection by weight, and it follows the zoom tier.</summary>
     public double Stroke => (WireFlows.Stroke(Flow) + (IsHighlighted ? 0.5 : 0)) * ZoomTiers.WireScale(_canvas.Tier);
@@ -115,58 +117,34 @@ public sealed class ConnectionViewModel : ObservableObject
         if (SetProperty(ref _kind, kind, nameof(Kind)))
         {
             _setKind.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(Layer));
             ShowFlow();
             From.OnLinksChanged();
             To.OnLinksChanged();
         }
     }
 
-    /// <summary>Finds the wire's path again, as any card may have moved into it or out of it.</summary>
-    internal void Reroute()
+    /// <summary>Shows what <see cref="WireRouter"/> found: where the wire meets its cards, its lane, and its curve.</summary>
+    internal void Show(WireRouter.Drawn drawn)
     {
-        // Every card stands where it shows and at the size it draws, so a wire goes around an expanded card (ADR 0024) and a
-        // zoomed out card's last line. The
-        // wire's own two cards stand where their ports are, which Nodify keeps current while a card is dragged.
-        Rect[] cards =
-        [
-            .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => node.DrawnRect),
-            new(From.Output.Anchor - new Vector(From.CardSize.Width - WorkflowCanvasViewModel.InputPortCenter.X, WorkflowCanvasViewModel.InputPortCenter.Y), From.DrawnSize),
-            new(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter, To.DrawnSize),
-        ];
-        var slots = _canvas.Slots(this);
-        if (slots != _slots)
+        if ((drawn.Exit, drawn.Entry) != _slots)
         {
-            _slots = slots;
+            _slots = (drawn.Exit, drawn.Entry);
             OnPropertyChanged(nameof(SourcePoint));
             OnPropertyChanged(nameof(TargetPoint));
             OnPropertyChanged(nameof(LeavesOwnPoint));
             OnPropertyChanged(nameof(EntersOwnPoint));
         }
 
-        var route = WireRouting.Route(SourcePoint, TargetPoint, cards, _canvas.CardReach);
-        if (!route.SequenceEqual(_ownRoute))
+        if (!drawn.Route.SequenceEqual(_route))
         {
-            _ownRoute = route;
-            _canvas.SpreadWires();
-        }
-    }
-
-    /// <summary>The route that this wire finds alone, before it takes a lane beside other wires.</summary>
-    internal WireLanes.Wire Lane => new(_ownRoute, From.Location.Y + From.Location.X / 100000, To.Location.Y + To.Location.X / 100000);
-
-    /// <summary>Takes the route with the wire's lane, and the curve along it.</summary>
-    internal void ShowRoute(ImmutableArray<Point> route, IReadOnlyList<Rect> cards)
-    {
-        var curve = WireCurve.Of(SourcePoint, route, TargetPoint, cards);
-        if (!route.SequenceEqual(_route))
-        {
-            _route = route;
+            _route = drawn.Route;
             OnPropertyChanged(nameof(Route));
         }
 
-        if (!curve.SequenceEqual(_curve))
+        if (!drawn.Curve.SequenceEqual(_curve))
         {
-            _curve = curve;
+            _curve = drawn.Curve;
             OnPropertyChanged(nameof(Curve));
         }
     }
@@ -194,7 +172,7 @@ public sealed class ConnectionViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(SourcePoint));
             OnPropertyChanged(nameof(TargetPoint));
-            Reroute();
+            _canvas.RequestReroute();
         }
     }
 

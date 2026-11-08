@@ -82,30 +82,60 @@ public sealed class ExecutionLanguageTests
         new([.. points.Select(point => new Point(point.X, point.Y))], order, targetOrder);
 
     [Fact]
-    public void Wires_on_one_run_take_lanes_22_px_apart_in_source_order()
+    public void Wires_on_one_run_take_their_own_lanes_and_the_lower_wire_takes_the_left_lane_so_they_do_not_cross()
     {
         var routes = WireLanes.Spread(
         [
-            Wire(2, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire(1, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
-        ], []);
+            Wire(1, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
+            Wire(2, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
+        ], []).Routes;
 
-        Assert.Equal(211, routes[0][1].X);
-        Assert.Equal(189, routes[1][1].X);
+        Assert.Equal(208, routes[0][1].X);
+        Assert.Equal(192, routes[1][1].X);
         Assert.Equal(0, routes[0][1].Y);
     }
 
     [Fact]
-    public void A_lane_that_would_run_along_a_card_s_top_edge_keeps_the_wire_where_the_router_put_it()
+    public void A_full_channel_reports_the_longest_wire_that_may_leave_it()
     {
-        // Two wires share the run at row 100. The lower lane, 11 under it, would pass 9 above a card whose top is at 120.
+        // Three lanes need 16 of room at the least spacing, and this channel of 28 between margins of 14 has none.
+        Rect[] cards = [new Rect(0, 0, 100, 400), new Rect(128, 0, 100, 400)];
+        var spread = WireLanes.Spread(
+        [
+            Wire(1, 0, (110, 10), (114, 10), (114, 300), (120, 300)),
+            Wire(2, 0, (110, 20), (114, 20), (114, 100), (120, 100)),
+            Wire(3, 0, (110, 30), (114, 30), (114, 200), (120, 200)),
+        ], cards);
+
+        var overflow = Assert.Single(spread.Overflows);
+        Assert.Equal(0, overflow.Wire);
+        Assert.Equal(new Rect(100, 10, 28, 290), overflow.Channel);
+    }
+
+    [Fact]
+    public void A_wire_that_feeds_a_running_node_stays_in_a_full_channel()
+    {
+        Rect[] cards = [new Rect(0, 0, 100, 400), new Rect(128, 0, 100, 400)];
+        WireLanes.Wire Active(double order, params (double X, double Y)[] points) => Wire(order, 0, points) with { Stays = true };
+        var spread = WireLanes.Spread(
+        [
+            Active(1, (110, 10), (114, 10), (114, 300), (120, 300)),
+            Wire(2, 0, (110, 20), (114, 20), (114, 100), (120, 100)),
+            Wire(3, 0, (110, 30), (114, 30), (114, 200), (120, 200)),
+        ], cards);
+
+        Assert.Equal(2, Assert.Single(spread.Overflows).Wire);
+    }
+
+    [Fact]
+    public void A_lane_stays_in_the_middle_of_its_channel()
+    {
         var routes = WireLanes.Spread(
         [
-            Wire(1, 0, (0, 0), (50, 0), (50, 100), (400, 100), (400, 300), (450, 300)),
-            Wire(2, 1, (0, 20), (60, 20), (60, 100), (390, 100), (390, 320), (450, 320)),
-        ], [new Rect(150, 120, 100, 64)]);
+            Wire(1, 0, (0, 0), (50, 0), (50, 50), (400, 50), (400, 0), (450, 0)),
+        ], [new Rect(150, -100, 100, 64), new Rect(150, 120, 100, 64)]).Routes;
 
-        Assert.Equal(100, routes[1][2].Y);
+        Assert.Equal(42, routes[0][2].Y);
     }
 
     [Fact]
@@ -113,11 +143,12 @@ public sealed class ExecutionLanguageTests
     {
         var routes = WireLanes.Spread(
         [
-            Wire(2, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire(1, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
-        ], [], scale: 2);
+            Wire(1, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
+            Wire(2, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
+        ], [], scale: 2).Routes;
 
-        Assert.Equal([222.0, 178.0], routes.Select(route => route[1].X));
+        Assert.Equal(216, routes[0][1].X);
+        Assert.Equal(184, routes[1][1].X);
         Assert.Equal(PortSlots.Of([0, 50], 80, 0, 154).Select(slot => slot * 2), PortSlots.Of([0, 50], 80, 0, 154, 2));
     }
 
@@ -133,36 +164,6 @@ public sealed class ExecutionLanguageTests
         var squeezed = PortSlots.Of([.. Enumerable.Range(0, 9).Select(row => (double)row)], 32, 0, 64);
         Assert.Equal(-22, squeezed[0], 3);
         Assert.Equal(22, squeezed[^1], 3);
-    }
-
-    [Fact]
-    public void Wires_from_one_output_or_into_one_input_keep_their_own_lanes_so_none_shares_a_trunk()
-    {
-        var (fanOut, fanIn) = (WireLanes.Spread(
-        [
-            Wire(1, 1, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire(1, 2, (100, 0), (200, 0), (200, 150), (300, 150)),
-        ], []), WireLanes.Spread(
-        [
-            Wire(1, 1, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire(2, 1, (100, 50), (200, 50), (200, 100), (300, 100)),
-        ], []));
-
-        Assert.Equal([189.0, 211.0], fanOut.Select(route => route[1].X));
-        Assert.Equal([189.0, 211.0], fanIn.Select(route => route[1].X));
-    }
-
-    [Fact]
-    public void A_wire_stays_where_it_was_when_its_lane_would_cross_a_card()
-    {
-        var routes = WireLanes.Spread(
-        [
-            Wire(2, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire(1, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
-        ], [new Rect(201, 20, 40, 40)]);
-
-        Assert.Equal(200, routes[0][1].X);
-        Assert.Equal(189, routes[1][1].X);
     }
 
     [AvaloniaTheory]

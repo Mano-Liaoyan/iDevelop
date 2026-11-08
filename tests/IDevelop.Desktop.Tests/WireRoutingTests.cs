@@ -120,7 +120,7 @@ public sealed class WireRoutingTests : IDisposable
         Point[] Plan() => [.. canvas.Connections.Single(wire => wire.Key == new ConnectionKey(Design, Review)).Route];
 
         // The plan turns on the wire's own stub column, so it never runs through Build.
-        Assert.Equal(396, Plan()[1].X);
+        Assert.Equal(400, Plan()[1].X);
 
         shell.Drag(shell.Header(shell.Node("Build")), shell.Header(shell.Node("Build")) + new Vector(0, 330));
         Assert.True(canvas.Nodes.Single(node => node.Title == "Build").Location.Y > 330, "Build moved below the wire");
@@ -130,7 +130,7 @@ public sealed class WireRoutingTests : IDisposable
         shell.Press(Key.Z, RawInputModifiers.Control);
         Assert.Equal(new Point(420, 90), canvas.Nodes.Single(node => node.Title == "Build").Location);
 
-        Assert.Equal(396, Plan()[1].X);
+        Assert.Equal(400, Plan()[1].X);
     }
 
     private static Rect Card(double x, double y) => new(x, y, 260, 64);

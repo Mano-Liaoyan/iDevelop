@@ -224,7 +224,7 @@
                              Classes.highlighted="{Binding IsHighlighted}"
                              Classes.dimmed="{Binding IsDimmed}"
                              Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
-                             canvas:WireLayer.IsBelow="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
+                             canvas:WireLayer.Level="{Binding Layer}"
                              nodify:BaseConnection.IsSelectable="True" />
   </DataTemplate>
 

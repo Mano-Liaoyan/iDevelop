@@ -30,6 +30,9 @@ public sealed class RoutedConnection : StepConnection
     // How many straight steps stand for one piece while the moving arrows find their places.
     private const int Steps = 12;
 
+    // The socket's radius as a part of the wire's stroke, so it stays a dot at every zoom tier.
+    private const double SocketSize = 1.5;
+
     /// <summary>The wire's pieces, from its output port to its input port.</summary>
     public IReadOnlyList<WirePiece>? Curve
     {
@@ -64,7 +67,22 @@ public sealed class RoutedConnection : StepConnection
         }
 
         context.EndFigure(false);
+        if (SourceOnEdge)
+        {
+            // A wire that leaves at its own point meets its card at its own small socket, as the wire on the port does.
+            DrawSocket(context, pieces[0].Start);
+        }
+
         return ((pieces[0].First, pieces[0].Start), (pieces[^1].Second, pieces[^1].End));
+    }
+
+    private void DrawSocket(StreamGeometryContext context, Point center)
+    {
+        var radius = StrokeThickness * SocketSize;
+        context.BeginFigure(center - new Vector(radius, 0), true);
+        context.ArcTo(center + new Vector(radius, 0), new Size(radius, radius), 0, false, SweepDirection.Clockwise);
+        context.ArcTo(center - new Vector(radius, 0), new Size(radius, radius), 0, false, SweepDirection.Clockwise);
+        context.EndFigure(true);
     }
 
     /// <summary>Draws the moving arrows along the curve, evenly spaced by length. Nodify's own arrows follow its step.</summary>

@@ -1,58 +1,55 @@
 using Avalonia;
+using Avalonia.Threading;
 
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// Any card can stand in a wire's way, so every wire finds its path again once cards move, arrive, or leave. Each of those
-/// is an edit, an undo, or a redo, and a drop commits all of its moves as one edit, so Sync reroutes every wire once for
-/// all the cards rather than once for each card.
+/// Any card can stand in a wire's way, so the wires find their paths again once cards move, arrive, or leave. <see cref="WireRouter"/>
+/// plans all wires at once, because their lanes depend on one another, and keeps the routes that a change cannot reach. A card that
+/// moves changes its ports one by one during layout, so those changes ask for one plan after the layout.
 /// </summary>
 public sealed partial class WorkflowCanvasViewModel
 {
+    private readonly WireRouter _wireRouter = new();
+    private bool _rerouteRequested;
+
+    /// <summary>Asks for one plan after the current layout pass.</summary>
+    internal void RequestReroute()
+    {
+        if (!_rerouteRequested)
+        {
+            _rerouteRequested = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_rerouteRequested)
+                {
+                    Reroute();
+                }
+            }, DispatcherPriority.Default);
+        }
+    }
+
     private void Reroute()
     {
+        _rerouteRequested = false;
         ShowFarText();
-        _spreadHeld = true;
-        foreach (var connection in Connections)
+        var cardIndex = Nodes.Select((node, index) => (node, index)).ToDictionary(pair => pair.node, pair => pair.index);
+        var wires = Connections.Select(wire => new WireRouter.Wire(
+            wire.Key,
+            cardIndex[wire.From],
+            cardIndex[wire.To],
+            wire.From.Output.Anchor,
+            wire.To.Input.Anchor,
+            // The wire's own two cards stand where their ports are, which Nodify keeps current while a card is dragged.
+            new Rect(wire.From.Output.Anchor - new Vector(wire.From.CardSize.Width - InputPortCenter.X, InputPortCenter.Y), wire.From.DrawnSize),
+            new Rect(wire.To.Input.Anchor - (Vector)InputPortCenter, wire.To.DrawnSize),
+            wire.Flow == WireFlow.Feeding)).ToList();
+        // Every card stands where it shows and at the size it draws, so a wire goes around an expanded card (ADR 0024) and a
+        // zoomed out card's last line.
+        var drawn = _wireRouter.Plan([.. Nodes.Select(node => node.DrawnRect)], wires, CardReach, ZoomTiers.WireScale(Tier));
+        for (var wire = 0; wire < drawn.Count; wire++)
         {
-            connection.Reroute();
-        }
-
-        _spreadHeld = false;
-
-        SpreadWires();
-    }
-
-    /// <summary>Gives each wire its lane beside the wires that share a run with it, and its curve along that lane.</summary>
-    internal void SpreadWires()
-    {
-        if (_spreadHeld)
-        {
-            return;
-        }
-
-        Rect[] cards = [.. Nodes.Select(node => node.DrawnRect)];
-        var scale = ZoomTiers.WireScale(Tier);
-        var routes = WireLanes.Spread([.. Connections.Select(connection => connection.Lane)], cards, scale);
-        for (var wire = 0; wire < routes.Length; wire++)
-        {
-            Connections[wire].ShowRoute(routes[wire], cards);
-        }
-    }
-
-    /// <summary>How far <paramref name="wire"/> meets its source card under the output port and its target card under the input port.</summary>
-    internal (double Exit, double Entry) Slots(ConnectionViewModel wire)
-    {
-        var scale = ZoomTiers.WireScale(Tier);
-        var outs = Connections.Where(other => other.From == wire.From).Append(wire).Distinct().ToList();
-        var ins = Connections.Where(other => other.To == wire.To).Append(wire).Distinct().ToList();
-        return (Slot(outs, wire, wire.From.Output.Anchor.Y, wire.From, other => other.To.Input.Anchor.Y),
-                Slot(ins, wire, wire.To.Input.Anchor.Y, wire.To, other => other.From.Output.Anchor.Y));
-
-        double Slot(List<ConnectionViewModel> port, ConnectionViewModel own, double row, TaskNodeViewModel card, Func<ConnectionViewModel, double> far)
-        {
-            var top = row - InputPortCenter.Y;
-            return PortSlots.Of([.. port.Select(far)], row, top, top + card.DrawnSize.Height, scale)[port.IndexOf(own)];
+            Connections[wire].Show(drawn[wire]);
         }
     }
 
@@ -77,7 +74,4 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>The least distance from a collapsed card's top to the top of a collapsed card under it that it overlaps across.</summary>
     private double RowPitch() => ZoomTiers.RowPitch([.. Nodes.Where(node => !node.IsExpanded).Select(node => node.DisplayLocation)]);
-
-    // While every wire finds its path, each one need not spread them all.
-    private bool _spreadHeld;
 }

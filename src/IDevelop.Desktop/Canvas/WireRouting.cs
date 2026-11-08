@@ -47,27 +47,31 @@ internal static class WireRouting
     /// The corners of a wire from the output port centered at <paramref name="source"/> to the input port centered at
     /// <paramref name="target"/>, from the end of the source stub to the start of the target stub. <paramref name="cards"/>
     /// holds every card's bounds, the wire's own two included. <paramref name="reach"/> is how far those bounds run past a
-    /// card's 64 px box at this zoom, which the gaps between its rows lose.
+    /// card's 64 px box at this zoom, which the gaps between its rows lose. <paramref name="closed"/> holds the channels that
+    /// have no free lane for this wire (<see cref="WireRouter"/>).
     /// </summary>
-    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards, double reach = 0)
+    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards, double reach = 0, IReadOnlyList<Rect>? closed = null)
     {
         var start = new Point(source.X + Stub, source.Y);
         var end = new Point(target.X - Stub, target.Y);
         var step = Step(start, end);
-        if (!cards.Any(card => Crosses(step, card.Inflate(PassClearance))))
+        // A channel with a port in it stays open, because the wire must leave from there.
+        Rect[] shut = [.. closed?.Where(channel => !Inside(start, channel) && !Inside(end, channel)) ?? []];
+        if (!cards.Any(card => Crosses(step, card.Inflate(PassClearance))) && !shut.Any(channel => Crosses(step, channel)))
         {
             return step;
         }
 
         var wideRows = new Thickness(WideColumns, Math.Max(Math.Max(Clearance, (RowGap - reach) / 2 - 1), PassRoom(reach)));
-        var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance)), Detour(start, end, cards, wideRows));
+        var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance), shut), Detour(start, end, cards, wideRows, shut));
         if (wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour))
         {
             return clear;
         }
 
         // Cards that stand too close for a wire's clear space still leave it a way between them, so a wire never takes a card's body.
-        return close ?? Tight.Select(gap => Detour(start, end, cards, gap)).FirstOrDefault(detour => detour is not null) ?? step;
+        return close ?? Tight.Select(gap => Detour(start, end, cards, gap, shut)).FirstOrDefault(detour => detour is not null)
+            ?? (shut.Length > 0 ? Route(source, target, cards, reach) : step);
     }
 
     // About 12 px on screen at the zooms where cards draw this far under their boxes. A row gap that leaves less than twice
@@ -90,11 +94,12 @@ internal static class WireRouting
     }
 
     // A shortest path on the grid of lines through the stubs' ends and the cards' edges pushed out by the clearance.
-    private static ImmutableArray<Point>? Detour(Point start, Point end, IReadOnlyList<Rect> cards, Thickness clearance)
+    private static ImmutableArray<Point>? Detour(Point start, Point end, IReadOnlyList<Rect> cards, Thickness clearance, Rect[] shut)
     {
         // A card closer to a stub's end than the clearance gives up as much of it as it must, so the wire can still leave.
         var walls = cards.Select(card => new[] { card.Inflate(clearance), card.Inflate(Clearance) }
                 .Where(wall => !Inside(start, wall) && !Inside(end, wall)).DefaultIfEmpty(card).First())
+            .Concat(shut)
             .ToArray();
         if (walls.Any(wall => Inside(start, wall) || Inside(end, wall)))
         {

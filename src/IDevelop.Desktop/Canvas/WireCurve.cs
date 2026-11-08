@@ -33,7 +33,7 @@ internal static class WireCurve
 
     private const int Samples = 64;
 
-    // A card's body inside its container's 10 px port gutters, less 1 px, so a wire may leave its own port, and past its top and
+    // A wire's own card, inside its container's 10 px port gutters, less 1 px, so the wire may leave its own port, and past its top and
     // bottom by a wire's clear space, so a curve never runs along a card's edge where a small bend avoids it.
     private static readonly Thickness Gutter = new(11, -14);
 
@@ -45,13 +45,14 @@ internal static class WireCurve
     /// reach that keeps it off every card, first with a wire's clear space, then without it. The narrowest
     /// reach hugs the route, which already goes around every card, so a curve never crosses a card at any zoom.
     /// </summary>
-    public static ImmutableArray<WirePiece> Of(Point source, IReadOnlyList<Point> route, Point target, IReadOnlyList<Rect> cards)
+    /// <param name="ownCards">The wire's two cards in <paramref name="cards"/>, whose port gutters the wire may cross. A wire keeps off every other card's whole rectangle.</param>
+    public static ImmutableArray<WirePiece> Of(Point source, IReadOnlyList<Point> route, Point target, IReadOnlyList<Rect> cards, (int From, int To) ownCards = default)
     {
         var points = Corners([source, .. route, target]);
         ImmutableArray<WirePiece> curve = [];
         foreach (var margin in new[] { Gutter, Body })
         {
-            var near = Near(points, cards, margin);
+            var near = Near(points, cards, margin, ownCards);
             foreach (var reach in Reaches)
             {
                 curve = Pieces(points, reach);
@@ -152,12 +153,14 @@ internal static class WireCurve
     }
 
     // The card bodies a curve near these points could touch, so a long list of cards costs a wire little.
-    private static Rect[] Near(List<Point> points, IReadOnlyList<Rect> cards, Thickness margin)
+    private static Rect[] Near(List<Point> points, IReadOnlyList<Rect> cards, Thickness margin, (int From, int To) ownCards)
     {
         var (left, right) = (points.Min(point => point.X), points.Max(point => point.X));
         var (top, bottom) = (points.Min(point => point.Y), points.Max(point => point.Y));
         var around = new Rect(left, top, right - left, bottom - top).Inflate(Reaches[1]);
-        return [.. cards.Where(around.Intersects).Select(card => card.Deflate(margin))];
+        var others = new Thickness(0, margin.Top);
+        return [.. cards.Select((card, index) => (card, index)).Where(pair => around.Intersects(pair.card))
+            .Select(pair => pair.card.Deflate(pair.index == ownCards.From || pair.index == ownCards.To ? margin : others))];
     }
 
     private static bool Touches(WirePiece piece, Rect[] cards)
