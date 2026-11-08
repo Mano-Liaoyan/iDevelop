@@ -22,7 +22,8 @@ internal static class NodeActions
     private static IReadOnlyList<NodeAction> For(TaskNodeViewModel node)
     {
         // The open conversation holds what the state needs next, and the row must not offer it twice. A failed node keeps Retry
-        // in the header, as an interrupted node keeps Continue, so recovery reads in one place in the inspector (ADR 0070).
+        // in the header, as an interrupted node keeps Continue, so recovery reads in one place in the inspector (ADR 0070). The
+        // Failed card in the conversation holds the primary Retry, so the header's stays quiet while that card shows (ADR 0072).
         if (node is { IsConversationShown: true, Proposal: null, State: NodeState.Running or NodeState.InputRequired or NodeState.Stale })
         {
             return [];
@@ -57,7 +58,7 @@ internal static class NodeActions
         {
             NodeState.Idle => Row(Conversation(node, "Conversation", primary: false), new NodeAction("RunTask", "Run", "IconRun", node.RunCommand, true, node.RunRefusal ?? "Runs this node, then each node after it")),
             NodeState.Running => Row(Conversation(node, "Conversation"), Stop(node)),
-            NodeState.Failed or NodeState.Stale => Row(Conversation(node, "Conversation", primary: false), Retry(node, primary: true)),
+            NodeState.Failed or NodeState.Stale => Row(Conversation(node, "Conversation", primary: false), Retry(node, primary: !node.IsConversationShown)),
             _ => Row(Conversation(node, "Conversation"), node.ShowsRetry ? Retry(node, primary: !node.HasAgent) : null),
         };
     }

@@ -60,12 +60,12 @@
                     ToolTip.Tip="{Binding Activity.FoldLabel}"
                     AutomationProperties.AutomationId="ActivityFold"
                     AutomationProperties.Name="{Binding Activity.FoldLabel}">
-        <Grid ColumnDefinitions="Auto,Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="6">
-          <TextBlock Classes="section" Text="Activity" VerticalAlignment="Center" />
-          <PathIcon Grid.Column="1" Theme="{StaticResource Glyph}" Width="12" Height="12" />
+        <Grid ColumnDefinitions="12,*" RowDefinitions="Auto,Auto" ColumnSpacing="6">
+          <PathIcon Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Classes="section" Text="Activity" VerticalAlignment="Center" />
           <!-- Every count says its state in words, as the run bar and the workflow rows do (ADR 0063). The counts take their own
                line under the heading and wrap from its left edge, so the heading stays in one place. -->
-          <WrapPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,4,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" ItemSpacing="10" LineSpacing="2">
+          <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" ItemSpacing="10" LineSpacing="2">
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasWaiting}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting for you'}"
                         AutomationProperties.AutomationId="ActivityWaiting">
@@ -108,7 +108,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="sidebar:ActivityRow">
-                <Button Classes="activity" Classes.selected="{Binding Node.IsConversationShown}" Command="{Binding OpenCommand}"
+                <Button Classes="activity" Command="{Binding OpenCommand}"
                         ToolTip.Tip="{Binding Tip}"
                         AutomationProperties.AutomationId="ActivityRow"
                         AutomationProperties.Name="{Binding Node.Title}"
@@ -190,7 +190,7 @@
                         AutomationProperties.Name="Open projects">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
-                <StackPanel Spacing="8" />
+                <StackPanel Spacing="6" />
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
@@ -265,7 +265,7 @@
                     </StackPanel>
                   </Panel>
                   <StackPanel Spacing="2" IsVisible="{Binding IsExpanded}">
-                    <Grid ColumnDefinitions="*,Auto" Margin="38,0,8,0" IsVisible="{Binding HasNoWorkflows}">
+                    <Grid ColumnDefinitions="*,Auto" Margin="48,0,8,0" IsVisible="{Binding HasNoWorkflows}">
                       <TextBlock Classes="caption" Text="No workflows yet" VerticalAlignment="Center" />
                       <Button Grid.Column="1" Classes="ghost" Height="24" Content="New workflow" Click="OnNewWorkflow"
                               AutomationProperties.AutomationId="EmptyNewWorkflow" />
@@ -322,7 +322,7 @@
                                              AutomationProperties.AutomationId="WorkflowSummary" />
                                 </Grid>
                               </Button>
-                              <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="38,2,4,2"
+                              <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="48,2,4,2"
                                                      AutomationProperties.AutomationId="WorkflowNameBox"
                                                      AutomationProperties.Name="Workflow name" />
                             </Panel>
@@ -375,7 +375,7 @@
         <StackPanel>
           <Panel x:Name="StickyProject" IsVisible="False" x:DataType="local:ProjectViewModel" DataContext="{x:Null}">
             <Button Classes="stickyRow projectHead" Click="OnStickyProject" AutomationProperties.AutomationId="StickyProject">
-              <Grid ColumnDefinitions="16,*" ColumnSpacing="8">
+              <Grid ColumnDefinitions="16,*" ColumnSpacing="6">
                 <Border Classes="projectTile" Classes.current="{Binding IsCurrent, FallbackValue=False}">
                   <TextBlock Text="{Binding Initial, FallbackValue={x:Null}}" />
                 </Border>
@@ -417,22 +417,22 @@
         </ListBox.ItemsPanel>
         <ListBox.DataTemplates>
           <DataTemplate DataType="canvas:NodeGroup">
-            <Grid ColumnDefinitions="14,Auto,*" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding ToggleLabel}"
+            <Grid ColumnDefinitions="12,Auto,*" ColumnSpacing="6" Background="Transparent" ToolTip.Tip="{Binding ToggleLabel}"
                   AutomationProperties.Name="{Binding ToggleLabel}">
-              <PathIcon Classes="groupChevron" Classes.folded="{Binding ShowsFolded}" Width="12" Height="12" />
-              <TextBlock Grid.Column="1" Classes="groupName" Text="{Binding Name}" />
+              <PathIcon Theme="{StaticResource Glyph}" Classes="groupChevron" Classes.folded="{Binding ShowsFolded}" Width="12" Height="12" />
+              <TextBlock Grid.Column="1" Classes="groupName" Classes.stale="{Binding IsStale}" Text="{Binding Name}" />
               <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Count}" VerticalAlignment="Center"
                          AutomationProperties.AutomationId="NodeGroupCount" />
             </Grid>
           </DataTemplate>
           <DataTemplate DataType="canvas:TaskNodeViewModel">
             <!-- A name shows in full and wraps (issue 108). -->
-            <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">
-              <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
+            <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="6" Background="Transparent" ToolTip.Tip="{Binding Title}">
+              <theme:KindTile Kind="{Binding Kind}" TileSize="14" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,2,0,0" />
               <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}"
                                   AutomationProperties.AutomationId="NodeRowName" />
               <!-- One state has one badge in every list, the card's own. -->
-              <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,0,0" State="{Binding State}" Why="{Binding WaitReason}"
+              <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" State="{Binding State}" Why="{Binding WaitReason}"
                                 ToolTip.Tip="{Binding StatusLabel}"
                                 AutomationProperties.AutomationId="NodeRowState"
                                 AutomationProperties.Name="{Binding StatusLabel}" />
@@ -440,6 +440,10 @@
           </DataTemplate>
         </ListBox.DataTemplates>
       </ListBox>
+      <!-- A workflow with no node says so, and says how to add one, as the canvas's Add a node does (ADR 0072). -->
+      <TextBlock Classes="caption" Margin="16,2,16,0" VerticalAlignment="Top" TextWrapping="Wrap" Text="No nodes yet. Press N to add one."
+                 x:DataType="canvas:WorkflowCanvasViewModel" IsVisible="{Binding IsEmpty}"
+                 AutomationProperties.AutomationId="NodesEmpty" />
       <!-- A row that the bottom edge would cut hides under the panel's color until it comes in whole. It takes no pointer. -->
       <Border x:Name="NodesFootCover" Classes="treeCover" VerticalAlignment="Bottom" Margin="0,0,8,0" IsVisible="False" />
       </Panel>

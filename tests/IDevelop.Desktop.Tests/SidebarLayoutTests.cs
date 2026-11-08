@@ -148,9 +148,9 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.Equal(LongTask, titles[0].Text);
         Assert.True(titles[0].TextLayout.TextLines.Count > 1, $"The long title fits on one line at {width} px, so nothing here wraps.");
         Assert.Single(titles[1].TextLayout.TextLines);
-        // Each row centres its glyph on its title's first line, 12 px into the row.
-        Assert.All(rows, row => Assert.StartsWith("first line 12, glyph 0", TaskCentres(row)));
-        Assert.Equal(24, rows[1].Bounds.Height);
+        // Each row centres its glyph on its title's first line, 13 px into the row.
+        Assert.All(rows, row => Assert.StartsWith("first line 13, glyph 0", TaskCentres(row)));
+        Assert.Equal(26, rows[1].Bounds.Height);
     }
 
     private static string TaskCentres(ListBoxItem row)
@@ -210,7 +210,7 @@ public sealed class SidebarLayoutTests : IDisposable
         var shell = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.SizeSidebar(width);
         var row = shell.WorkflowRow(Reports, ReleaseNotes);
-        Assert.Equal((28.0, 28.0), (shell.ProjectName(Reports).FindAncestorOfType<ToggleButton>()!.Bounds.Height, row.Bounds.Height));
+        Assert.Equal((26.0, 26.0), (shell.ProjectName(Reports).FindAncestorOfType<ToggleButton>()!.Bounds.Height, row.Bounds.Height));
         Assert.Equal("0/2", shell.WorkflowText(Reports, ReleaseNotes, "WorkflowSummary"));
 
         shell.Click(row);
@@ -219,7 +219,7 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.Render();
 
         // A short name leaves room on its line, so the state's counts stand after it and the row keeps its height (ADR 0068).
-        Assert.Equal(28.0, row.Bounds.Height);
+        Assert.Equal(26.0, row.Bounds.Height);
         var nameTop = Of<Control>(row.GetVisualParent()!, "WorkflowName").TranslatePoint(default, row)!.Value.Y;
         Assert.True(Math.Abs(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").TranslatePoint(default, row)!.Value.Y - nameTop) < 2, "The counts stand on the name's line.");
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
@@ -365,7 +365,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_node_s_name_reads_one_size_under_its_workflow_s()
+    public void A_node_s_name_has_its_workflow_s_size()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, "Ship");
@@ -375,7 +375,7 @@ public sealed class SidebarLayoutTests : IDisposable
 
         var workflow = shell.WorkflowRow(Reports, ReleaseNotes).GetVisualDescendants().OfType<TextBlock>().First();
         var node = shell.TaskRow(Reports, ReleaseNotes, "Ship").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"));
-        Assert.True(node.FontSize < workflow.FontSize, $"A node's name is {node.FontSize} and its workflow's is {workflow.FontSize}.");
+        Assert.Equal(workflow.FontSize, node.FontSize);
     }
 
     [AvaloniaFact]

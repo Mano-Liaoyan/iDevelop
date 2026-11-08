@@ -27,8 +27,13 @@ public partial class SidebarView : UserControl
     // The least height of the Nodes section, so a long list of projects never hides the shown workflow's nodes.
     private const double NodesLeastHeight = 120;
 
+    // A workflow with no node keeps the Nodes heading and its one line, and Projects takes the rest (ADR 0072).
+    private const double EmptyNodesHeight = 72;
+
     private IInputElement? _beforeFind;
     private MainWindowViewModel? _revealing;
+
+    private WorkflowCanvasViewModel? _splitting;
 
     public SidebarView()
     {
@@ -58,7 +63,12 @@ public partial class SidebarView : UserControl
     private void SplitSections()
     {
         var room = Sections.Bounds.Height - ProjectsHeading.Bounds.Height;
-        Tree.MaxHeight = Math.Max(0, ViewModel.Canvas is null ? room : Math.Min(room / 2, room - NodesLeastHeight));
+        Tree.MaxHeight = Math.Max(0, _revealing?.Canvas switch
+        {
+            null => room,
+            { IsEmpty: true } => room - EmptyNodesHeight,
+            _ => Math.Min(room / 2, room - NodesLeastHeight),
+        });
     }
 
     private void FoldActivity()
@@ -77,12 +87,28 @@ public partial class SidebarView : UserControl
         _revealing = DataContext as MainWindowViewModel;
         _revealing?.TreeReveal += OnTreeReveal;
         _revealing?.PropertyChanged += OnViewChanged;
-        SplitSections();
+        WatchCanvas();
     }
 
     private void OnViewChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainWindowViewModel.Canvas))
+        {
+            WatchCanvas();
+        }
+    }
+
+    private void WatchCanvas()
+    {
+        _splitting?.PropertyChanged -= OnCanvasChanged;
+        _splitting = _revealing?.Canvas;
+        _splitting?.PropertyChanged += OnCanvasChanged;
+        SplitSections();
+    }
+
+    private void OnCanvasChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WorkflowCanvasViewModel.IsEmpty))
         {
             SplitSections();
         }
@@ -373,10 +399,10 @@ public partial class SidebarView : UserControl
         TreeHead.IsVisible = project is not null;
     }
 
-    private const double PinnedRowHeight = 28;
+    private const double PinnedRowHeight = 26;
 
-    // The height of the pinned row that shows now, with the hairline under it.
-    private double PinnedHeight => (StickyProject.IsVisible ? PinnedRowHeight : 0) + (TreeHead.IsVisible ? 1 : 0);
+    // The height of the pinned row that shows now.
+    private double PinnedHeight => StickyProject.IsVisible ? PinnedRowHeight : 0;
 
     // Every row in the tree in view order, measured from the tree's top edge.
     private List<(double Top, double Bottom)> ShownRows() =>
@@ -391,7 +417,7 @@ public partial class SidebarView : UserControl
     private void RoomAfterLastRow()
     {
         var room = TreeRows.Margin.Bottom - TreeFootInset;
-        var (end, head) = (Tree.Extent.Height - room - Tree.Viewport.Height, PinnedRowHeight + 1);
+        var (end, head) = (Tree.Extent.Height - room - Tree.Viewport.Height, PinnedRowHeight);
         var rest = end <= 0 ? end : TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
             .Select(row => TopOf(row) - head).Where(top => top >= end - 0.5).DefaultIfEmpty(end).Min();
         var wanted = Math.Max(0, rest - end);

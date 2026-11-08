@@ -2,6 +2,8 @@
 
 The left area has two sections, as VS Code's Explorer and Outline do. Projects lists the projects and their workflows. Nodes lists the shown workflow's nodes by state. An overview card keeps room for its title's descenders over its chip row and never grows into the card under it. A selected card and its wires take a strong neutral color, so blue means a run only. The inspector title shows in full. This supersedes the tree's node rows of ADR 0063, ADR 0064, ADR 0066, ADR 0067, ADR 0068, ADR 0069, and ADR 0070, and amends ADR 0068's Title tier lines.
 
+ADR 0072 adds a Stale group to the Nodes section and gives the left area one row system.
+
 Round 24 found that the chip row cut the last title line of overview cards at 61%, so "2024-Q2" read as "2024-O2", that the selection ring and a running node's wire had one blue, that the inspector title cut its distinguishing end, and that a long Done group filled the left tree and pushed the other projects out of view. Round 17 found the opposite fault, a tree that hid nodes, so a section of its own for the nodes answers both.
 
 ## How it works

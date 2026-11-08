@@ -99,6 +99,44 @@ public sealed class TitlePartsTests
         Assert.True(repeated.Length == 0, string.Join(" | ", repeated));
     }
 
+    /// <summary>The tiers of the review pack's overview Fit. Past them a word can be wider than a line, and a cut can end inside it.</summary>
+    public static TheoryData<double, int, double, bool> FitTiers => new()
+    {
+        { 13, 2, 170, false },
+        { 17, 2, 197, true },
+        { 20, 2, 197, true },
+        { 28, 3, 210, true },
+        { 30, 3, 206, true },
+    };
+
+    [AvaloniaTheory]
+    [MemberData(nameof(FitTiers))]
+    public void Every_cut_title_of_the_large_fixture_shows_the_words_that_tell_it_apart(double size, int lines, double width, bool far)
+    {
+        var keys = TitleParts.Keys(LargeTitles);
+
+        var lost = LargeTitles.Zip(keys, (title, key) =>
+        {
+            var text = new EllipsisText
+            {
+                Whole = far ? Theme.NameBreaks.Keep(title) : title, Key = key, FontSize = size, FontWeight = Avalonia.Media.FontWeight.Medium, MaxLines = lines,
+                TextWrapping = far ? Avalonia.Media.TextWrapping.WrapWithOverflow : Avalonia.Media.TextWrapping.Wrap,
+            };
+            text.Measure(new Avalonia.Size(width, double.PositiveInfinity));
+            var shown = Theme.NameBreaks.Loose(text.Text!).Replace('\n', ' ');
+            var words = title.Split(' ');
+            var head = string.Join(' ', words.Take(key.Head));
+            var tail = string.Join(' ', words.TakeLast(key.Tail));
+            var middle = string.Join(' ', words[key.MiddleFrom..key.MiddleTo]);
+            var kept = (key.Head > 0 && shown.StartsWith(head, StringComparison.Ordinal))
+                || (key.Tail > 0 && shown.EndsWith(tail, StringComparison.Ordinal))
+                || (middle.Length > 0 && shown.Contains(middle, StringComparison.Ordinal));
+            return kept ? null : $"{title} => {shown}";
+        }).OfType<string>().ToArray();
+
+        Assert.True(lost.Length == 0, string.Join(" | ", lost));
+    }
+
     [AvaloniaFact]
     public void A_cut_title_keeps_the_part_that_differs_and_as_much_of_its_start_as_fits()
     {

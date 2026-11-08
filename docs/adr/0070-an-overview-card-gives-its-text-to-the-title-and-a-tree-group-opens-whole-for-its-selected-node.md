@@ -4,6 +4,8 @@ A Title tier card does not show its model. A tree group that holds the selected 
 
 ADR 0071 moves the tree groups to the Nodes section, shows the inspector title in full, and shows a workflow row's state chip at all times.
 
+ADR 0072 makes the Retry in a failed node's inspector header a quiet action while the conversation shows the node's card.
+
 Round 23 found that overview cards showed cut titles and cut model names, that a large Done group hid twenty nodes behind a "+N more" row, that the run band took two rows, and that workflow rows had different heights.
 
 ## How it works

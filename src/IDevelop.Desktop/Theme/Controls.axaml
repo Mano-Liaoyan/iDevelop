@@ -391,11 +391,11 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
   </Style>
-  <!-- A node's row is flat, 24 px for one line, under the 28 px workflow above it. Hover and selection are its only fills, so state color stays the loudest
+  <!-- A node's row is flat and has the workflow row's 26 px and type (ADR 0072). Hover and selection are its only fills, so state color stays the loudest
        thing in the list. -->
   <Style Selector="ListBox.tasks ListBoxItem">
-    <Setter Property="MinHeight" Value="24" />
-    <Setter Property="Padding" Value="6,4,8,4" />
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="Padding" Value="8,4,8,4" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Background" Value="Transparent" />
@@ -417,10 +417,10 @@
   <!-- A group header in a workflow's node list: a quiet chevron, the group's name, and its count (ADR 0064). -->
   <!-- A group header stands one level before its node rows: a node's tile starts under the group's name, so the levels read. -->
   <Style Selector="ListBox.tasks ListBoxItem.groupRow">
-    <Setter Property="Padding" Value="2,4,8,4" />
+    <Setter Property="Padding" Value="8,5,8,5" />
   </Style>
   <Style Selector="ListBox.tasks ListBoxItem:not(.groupRow)">
-    <Setter Property="Padding" Value="21,4,8,4" />
+    <Setter Property="Padding" Value="26,4,8,4" />
   </Style>
   <Style Selector="PathIcon.groupChevron">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
@@ -438,7 +438,11 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
-  <!-- A node's name shows in full and wraps, selected or not (issue 108). Its smaller type keeps the tree easy to scan. -->
+  <!-- A stale group's name has the canvas's stale color. -->
+  <Style Selector="TextBlock.groupName.stale">
+    <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
+  </Style>
+  <!-- A node's name shows in full and wraps, selected or not (issue 108). -->
   <Style Selector="TextBlock.nodeName">
     <Setter Property="MaxLines" Value="0" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -467,11 +471,6 @@
     <Setter Property="LineHeight" Value="18" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <!-- A node's name reads one size under its workflow's, so the tree's levels show at a glance. -->
-  <Style Selector="TextBlock.rowName.nodeName">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
-  </Style>
   <!-- A workflow is the tree's middle level: plain weight under its semibold project, and strong only while it is shown. -->
   <Style Selector="TextBlock.rowName.workflowName">
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
@@ -491,10 +490,10 @@
     <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
   </Style>
 
-  <!-- A project's row, the tree's top level: 28 px, with a semibold name. Its chevron folds the project. -->
+  <!-- A project's row, the tree's top level: 26 px, with a semibold name. Its chevron folds the project. -->
   <Style Selector="ToggleButton.projectRow">
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="Padding" Value="8,4" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
@@ -611,8 +610,6 @@
   </Style>
   <Style Selector="Border.treeHead">
     <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="BorderThickness" Value="0,0,0,1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
     <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
   </Style>
   <Style Selector="Border.treeCover">
@@ -623,8 +620,8 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
-    <Setter Property="Height" Value="28" />
-    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="MinHeight" Value="26" />
     <Setter Property="Padding" Value="16,0" />
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="BorderThickness" Value="0" />
@@ -701,13 +698,10 @@
   <Style Selector="Button.activity:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.activity:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
-  <Style Selector="Button.activity.selected /template/ ContentPresenter#PART_ContentPresenter, Button.activity.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
-  </Style>
   <Style Selector="Button.nav.workflow">
     <Setter Property="Height" Value="NaN" />
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="38,5,8,5" />
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="Padding" Value="48,4,8,4" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="FontWeight" Value="Normal" />
   </Style>
@@ -751,7 +745,7 @@
   </Style>
   <!-- A pinned row's chevron folds what the row names, on the row's 28 px line. -->
   <Style Selector="ToggleButton.stickyChevron">
-    <Setter Property="Height" Value="28" />
+    <Setter Property="Height" Value="26" />
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
   <Style Selector="ToggleButton.chevron PathIcon">

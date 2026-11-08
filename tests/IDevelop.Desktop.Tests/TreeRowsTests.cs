@@ -36,6 +36,22 @@ public sealed class TreeRowsTests
     }
 
     [Fact]
+    public void Stale_is_its_own_group_after_running_and_before_not_started() =>
+        Assert.Equal(
+            ["Needs you", "Running", "Stale", "Not started", "Done"],
+            Enum.GetValues<NodeGroupKind>().Select(kind => new NodeGroup(kind, () => { }).Name));
+
+    [AvaloniaFact]
+    public void An_empty_workflow_says_how_to_add_a_node_and_the_line_goes_with_the_first_node()
+    {
+        using var f = new NodeFixture([]);
+        var shell = f.Open();
+        shell.Render();
+
+        Assert.True(shell.ShowsAny("NodesEmpty"));
+    }
+
+    [Fact]
     public void Every_group_starts_open_and_a_fold_the_person_sets_stays_as_it_grows()
     {
         foreach (var kind in Enum.GetValues<NodeGroupKind>())

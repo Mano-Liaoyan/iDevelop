@@ -45,12 +45,12 @@ public sealed partial class WorkflowCanvasViewModel
         return order;
     }
 
-    /// <summary>The group headers of the left tree, in its order (ADR 0064).</summary>
+    /// <summary>The group headers of the Nodes section, in its order (ADR 0072).</summary>
     public IReadOnlyList<NodeGroup> Groups => field ??= [.. Enum.GetValues<NodeGroupKind>().Select(kind => new NodeGroup(kind, OnGroupFolded))];
 
     /// <summary>
     /// The rows of the left tree under an expanded workflow: for each group that holds a node ("Needs you", "Running",
-    /// "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The tree shows the selected
+    /// "Stale", "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The tree shows the selected
     /// or open node's row: its group opens and lists all its rows, whatever its size (ADR 0070).
     /// </summary>
     public ObservableCollection<object> TreeRows { get; } = [];

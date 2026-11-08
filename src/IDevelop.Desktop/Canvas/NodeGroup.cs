@@ -2,8 +2,8 @@ using IDevelop.Desktop.Mvvm;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>The four groups of the left tree's node rows, in the tree's order (ADR 0064).</summary>
-public enum NodeGroupKind { NeedsYou, Running, NotStarted, Done }
+/// <summary>The groups of the Nodes section's rows, in its order (ADR 0072).</summary>
+public enum NodeGroupKind { NeedsYou, Running, Stale, NotStarted, Done }
 
 /// <summary>
 /// A group header in the Nodes section's list: the group's name, how many nodes it holds, and whether it is folded. Every group
@@ -20,9 +20,13 @@ public sealed class NodeGroup(NodeGroupKind kind, Action changed) : ObservableOb
     {
         NodeGroupKind.NeedsYou => "Needs you",
         NodeGroupKind.Running => "Running",
+        NodeGroupKind.Stale => "Stale",
         NodeGroupKind.NotStarted => "Not started",
         _ => "Done",
     };
+
+    /// <summary>The header takes the state color that a stale card has on the canvas.</summary>
+    public bool IsStale => Kind == NodeGroupKind.Stale;
 
     /// <summary>How many nodes the group holds.</summary>
     public int Count
@@ -79,11 +83,12 @@ public sealed class NodeGroup(NodeGroupKind kind, Action changed) : ObservableOb
         changed();
     }
 
-    /// <summary>The group that a node in <paramref name="node"/>'s state belongs to. A stale node has no current result, so it has not started its next run.</summary>
+    /// <summary>The group that a node in <paramref name="node"/>'s state belongs to. A stale node has its own group, because the canvas and the run bar name it stale (ADR 0072).</summary>
     public static NodeGroupKind Of(TaskNodeViewModel node) => node.State switch
     {
         NodeState.InputRequired or NodeState.Failed => NodeGroupKind.NeedsYou,
         NodeState.Running => NodeGroupKind.Running,
+        NodeState.Stale => NodeGroupKind.Stale,
         NodeState.Completed => NodeGroupKind.Done,
         _ => NodeGroupKind.NotStarted,
     };

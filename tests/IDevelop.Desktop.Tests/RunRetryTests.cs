@@ -52,7 +52,7 @@ public sealed class RunRetryTests
         shell.Render();
 
         Assert.True(shell.NodeModel("A").IsConversationShown);
-        Assert.Contains(shell.NodeModel("A").Actions, action => action is { Id: "RetryTask", IsPrimary: true });
+        Assert.Contains(shell.NodeModel("A").Actions, action => action is { Id: "RetryTask", IsPrimary: false });
     }
 
     [AvaloniaFact]
