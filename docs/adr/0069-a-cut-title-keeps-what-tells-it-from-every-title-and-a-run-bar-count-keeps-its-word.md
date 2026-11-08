@@ -4,6 +4,8 @@ A card title that does not fit keeps the words that tell it from every other tit
 
 ADR 0070 amends the run bar's steps: the zoom controls give way before the bar takes its own row.
 
+ADR 0071 moves the group headers and their chevrons to the Nodes section.
+
 Round 22 found that overview titles such as "Mirror the…" and "Create the…" read alike, that a running workflow's run bar showed bare numbers beside badges, that a folded Done group pointed its chevron right while it listed a row, that the docked conversation left a 50-node workflow at 36% with title fragments, that "GPT-6.1 Sol" and "GPT-6.1 Terra" both read "GPT-6.1…", that spread wires ran along card tops, and that the hover line was hard to see.
 
 ## How it works

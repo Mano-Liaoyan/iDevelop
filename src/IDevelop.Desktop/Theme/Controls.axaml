@@ -411,7 +411,7 @@
     <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="ListBox.tasks:not(.hidden) ListBoxItem:selected TextBlock.rowName">
+  <Style Selector="ListBox.tasks ListBoxItem:selected TextBlock.rowName">
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- A group header in a workflow's node list: a quiet chevron, the group's name, and its count (ADR 0064). -->
@@ -442,15 +442,6 @@
   <Style Selector="TextBlock.nodeName">
     <Setter Property="MaxLines" Value="0" />
     <Setter Property="TextWrapping" Value="Wrap" />
-  </Style>
-  <!-- A workflow that is not shown keeps its node selection for when it is shown again, without a selected look. -->
-  <Style Selector="ListBox.tasks.hidden ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  </Style>
-  <Style Selector="ListBox.tasks.hidden ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- Find's list takes the panel under its box, so it cuts through no row. -->
   <Style Selector="Border.findPalette">
@@ -642,8 +633,13 @@
   <Style Selector="Button.stickyRow.projectHead">
     <Setter Property="Padding" Value="34,0,16,0" />
   </Style>
-  <Style Selector="Button.stickyRow.workflowHead">
-    <Setter Property="Padding" Value="46,0,16,0" />
+  <!-- The rule over the Nodes section, with its heading. It keeps the panel's color, so the two sections read as one panel (ADR 0071). -->
+  <Style Selector="Border.sectionRule">
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Margin" Value="0,4,0,0" />
+    <Setter Property="Padding" Value="0,4,0,0" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
   <!-- A section heading that folds its list. -->
   <!-- One line is 28 px high. A row whose counts wrap grows, so no count is cut. -->
@@ -719,22 +715,6 @@
     <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
   </Style>
 
-  <!-- The selected node's row holds the one accent fill. Its workflow has no fill, so it never reads as a row under the
-       pointer, whose fill is neutral (ADR 0060), and a 2 px accent line before its name keeps it marked as the shown one. -->
-  <Style Selector="Button.nav.workflow.selected.holdsNode:not(:pointerover) /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="Transparent" />
-  </Style>
-  <!-- The line is straight: a rounded corner would bend a one-sided edge into a bracket. It stands at the row's left edge,
-       before the chevron, so it never reads as a caret at the name, and the name keeps its place (ADR 0068). -->
-  <Style Selector="Button.nav.workflow.selected.holdsNode /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="BorderThickness" Value="2,0,0,0" />
-    <Setter Property="CornerRadius" Value="0" />
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-  </Style>
-  <Style Selector="Button.nav.workflow.selected.holdsNode">
-    <Setter Property="Padding" Value="36,5,8,5" />
-  </Style>
-
   <!-- UI Automation reads which workflow the window shows from its row's status. -->
   <Style Selector="Button.nav.workflow.selected">
     <Setter Property="AutomationProperties.ItemStatus" Value="Shown" />
@@ -773,15 +753,6 @@
   <Style Selector="ToggleButton.stickyChevron">
     <Setter Property="Height" Value="28" />
     <Setter Property="HorizontalAlignment" Value="Left" />
-  </Style>
-  <!-- A workflow row's chevron: a 20 px column as tall as the row, under the project's letter, with its glyph on the first line. -->
-  <Style Selector="ToggleButton.workflowChevron">
-    <Setter Property="Width" Value="20" />
-    <Setter Property="Margin" Value="17,0,0,0" />
-    <Setter Property="Height" Value="NaN" />
-    <Setter Property="VerticalAlignment" Value="Stretch" />
-    <Setter Property="VerticalContentAlignment" Value="Top" />
-    <Setter Property="Padding" Value="0,8,0,0" />
   </Style>
   <Style Selector="ToggleButton.chevron PathIcon">
     <Setter Property="Width" Value="12" />

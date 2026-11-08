@@ -2,6 +2,8 @@
 
 A Title tier card does not show its model. A tree group that holds the selected or open node lists all its rows. The run band keeps one row because the zoom controls give way first. A folded workflow row shows one state chip. This amends ADR 0068 and ADR 0069.
 
+ADR 0071 moves the tree groups to the Nodes section, shows the inspector title in full, and shows a workflow row's state chip at all times.
+
 Round 23 found that overview cards showed cut titles and cut model names, that a large Done group hid twenty nodes behind a "+N more" row, that the run band took two rows, and that workflow rows had different heights.
 
 ## How it works

@@ -423,7 +423,7 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(280)]
     [InlineData(320)]
     [InlineData(520)]
-    public void A_long_title_takes_up_to_four_lines_and_its_tooltip_holds_all_of_it(double width)
+    public void A_long_title_shows_in_full_and_its_tooltip_holds_all_of_it(double width)
     {
         const string title = "Draft the release notes for the storage adapter and its migration and its rollback plan for every region";
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
@@ -434,7 +434,8 @@ public sealed class InspectorLayoutTests : IDisposable
         var header = shell.Find<Control>("InspectorHeader");
         var shown = header.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("headerTitle"));
         Assert.Equal((title, title), (((EllipsisText)shown).Whole, ToolTip.GetTip((Control)shown.Parent!)));
-        Assert.InRange(shown.TextLayout.TextLines.Count, 2, 4);
+        Assert.Equal(title, shown.Text);
+        Assert.True(shown.TextLayout.TextLines.Count >= 2, "The long title does not wrap.");
         AssertNothingCutShort(shell);
         // More stays on the title's first line, at the panel's action edge.
         var more = shell.Bounds(shell.Find<Button>("InspectorMore"));

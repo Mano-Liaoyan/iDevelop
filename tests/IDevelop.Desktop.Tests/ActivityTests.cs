@@ -158,22 +158,19 @@ public sealed class ActivityTests : IDisposable
         var shell = OpenWaiting(2);
         var project = shell.ProjectName("alpha").FindAncestorOfType<Avalonia.Controls.Primitives.ToggleButton>()!;
         var row = shell.WorkflowRow("alpha", "Build");
-        var canvas = shell.Window.ViewModel.Canvas!;
         project.Focus();
 
         shell.Press(Key.Down);
         Assert.True(row.IsFocused, "Down does not reach the workflow.");
 
-        shell.Press(Key.Right);
-        Assert.True(canvas.IsExpanded, "Right does not open the workflow.");
-        shell.Press(Key.Right);
+        // Down goes on from the Projects section to the Nodes section's rows (ADR 0071).
+        shell.Press(Key.Down);
+        shell.Press(Key.Down);
         shell.Press(Key.Down);
         Assert.Equal("Node 2", shell.Window.FocusManager!.GetFocusedElement() is ListBoxItem { DataContext: Canvas.TaskNodeViewModel node } ? node.Title : null);
 
         shell.Press(Key.Left);
         Assert.True(row.IsFocused, "Left does not move to the parent workflow.");
-        shell.Press(Key.Left);
-        Assert.False(canvas.IsExpanded, "Left does not close the workflow.");
         shell.Press(Key.Left);
         Assert.True(project.IsFocused, "Left does not move to the parent project.");
         shell.Press(Key.Left);

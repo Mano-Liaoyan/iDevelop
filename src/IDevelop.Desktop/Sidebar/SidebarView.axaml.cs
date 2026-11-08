@@ -12,9 +12,9 @@ using IDevelop.Desktop.Canvas;
 namespace IDevelop.Desktop.Sidebar;
 
 /// <summary>
-/// The left area, top to bottom: Find, the Activity list, the tree of projects, workflows, and nodes, and a footer with the
-/// agents' status and the theme. Up, Down, Home, and End move through its rows, Right opens a row, and Left closes it and
-/// then moves to its parent.
+/// The left area, top to bottom: Find, the Activity list, the Projects section with the projects and their workflows, the Nodes
+/// section with the shown workflow's nodes, and a footer with the agents' status and the theme (ADR 0071). Up, Down, Home, and
+/// End move through its rows, Right opens a row, and Left closes it and then moves to its parent.
 /// </summary>
 public partial class SidebarView : UserControl
 {
@@ -23,6 +23,9 @@ public partial class SidebarView : UserControl
 
     // Below this panel height Activity starts folded, so the tree keeps the room.
     private const double ActivityFoldHeight = 700;
+
+    // The least height of the Nodes section, so a long list of projects never hides the shown workflow's nodes.
+    private const double NodesLeastHeight = 120;
 
     private IInputElement? _beforeFind;
     private MainWindowViewModel? _revealing;
@@ -44,7 +47,16 @@ public partial class SidebarView : UserControl
             FoldActivity();
         };
         TreeRows.LayoutUpdated += (_, _) => FoldActivity();
+        Sections.SizeChanged += (_, _) => SplitSections();
         DataContextChanged += (_, _) => WatchReveals();
+    }
+
+    // Projects takes its rows' height up to half of the sections' room, then scrolls, and Nodes takes the rest. With no workflow
+    // shown, Projects takes all the room (ADR 0071).
+    private void SplitSections()
+    {
+        var room = Sections.Bounds.Height - ProjectsHeading.Bounds.Height;
+        Tree.MaxHeight = Math.Max(0, ViewModel.Canvas is null ? room : Math.Min(room / 2, room - NodesLeastHeight));
     }
 
     private void FoldActivity()
@@ -59,8 +71,19 @@ public partial class SidebarView : UserControl
     private void WatchReveals()
     {
         _revealing?.TreeReveal -= OnTreeReveal;
+        _revealing?.PropertyChanged -= OnViewChanged;
         _revealing = DataContext as MainWindowViewModel;
         _revealing?.TreeReveal += OnTreeReveal;
+        _revealing?.PropertyChanged += OnViewChanged;
+        SplitSections();
+    }
+
+    private void OnViewChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.Canvas))
+        {
+            SplitSections();
+        }
     }
 
     private void OnTreeReveal(WorkflowCanvasViewModel canvas, TaskNodeViewModel? node) =>
@@ -143,7 +166,7 @@ public partial class SidebarView : UserControl
         return true;
     }
 
-    // A row in the tree clears the pinned rows, and a row of the Activity list only scrolls its own list.
+    // A row of Projects clears the pinned row, and a row of Nodes or of the Activity list only scrolls its own list.
     private void InView(Control row)
     {
         if (!TreeRows.IsVisualAncestorOf(row))
@@ -152,8 +175,7 @@ public partial class SidebarView : UserControl
             return;
         }
 
-        var head = row is ListBoxItem ? 2 * PinnedRowHeight + 1 : PinnedRowHeight + 1;
-        ScrollInto(TopOf(row), TopOf(row) + row.Bounds.Height, head);
+        ScrollInto(TopOf(row), TopOf(row) + row.Bounds.Height, PinnedRowHeight + 1);
     }
 
     // The tree moves only when the block is not in view, so a click on a row in view never moves that row. A block taller than
@@ -171,17 +193,18 @@ public partial class SidebarView : UserControl
         }
     }
 
-    // A workflow shows from its row to the end of its list, and a node shows its own row.
+    // Projects shows the workflow's row, and Nodes shows the node's row.
     private void Reveal(WorkflowCanvasViewModel canvas, TaskNodeViewModel? node)
     {
         Window?.UpdateLayout();
-        if (node is not null && TreeRows.GetVisualDescendants().OfType<ListBoxItem>().FirstOrDefault(row => row.DataContext == node) is { IsEffectivelyVisible: true } item)
+        if (WorkflowRows().FirstOrDefault(row => row.DataContext == canvas) is { } row)
         {
-            InView(item);
+            ScrollInto(TopOf(row), TopOf(row) + row.Bounds.Height, PinnedRowHeight + 1);
         }
-        else if (WorkflowRows().FirstOrDefault(row => row.DataContext == canvas) is { } row)
+
+        if (node is not null && NodeRows.DataContext == canvas && NodeRows.ItemsView.Contains(node))
         {
-            ScrollInto(TopOf(row), ListBottom(row), PinnedRowHeight + 1);
+            NodeRows.ScrollIntoView(node);
         }
     }
 
@@ -292,9 +315,6 @@ public partial class SidebarView : UserControl
             case ProjectViewModel { IsExpanded: false } project:
                 project.IsExpanded = true;
                 return true;
-            case WorkflowCanvasViewModel { IsExpanded: false } canvas when row is Button:
-                canvas.IsExpanded = true;
-                return true;
             case NodeGroup { IsFolded: true } group:
                 group.Toggle();
                 return true;
@@ -309,9 +329,6 @@ public partial class SidebarView : UserControl
         {
             case ProjectViewModel { IsExpanded: true } project:
                 project.IsExpanded = false;
-                return true;
-            case WorkflowCanvasViewModel { IsExpanded: true } canvas when row is Button:
-                canvas.IsExpanded = false;
                 return true;
             case NodeGroup { IsFolded: false } group:
                 group.Toggle();
@@ -343,28 +360,20 @@ public partial class SidebarView : UserControl
 
     private double TopOf(Visual row) => row.TranslatePoint(default, TreeRows)?.Y ?? 0;
 
-    // The project whose rows meet the top edge stays pinned there, and so does the open workflow whose nodes meet it.
+    // The project whose rows meet the top edge stays pinned there.
     private void PinRows()
     {
         var top = Tree.Offset.Y;
         var project = top < 1 ? null : ProjectRows().LastOrDefault(row => TopOf(row) < top + 1);
-        var workflow = project is null ? null : WorkflowRows().LastOrDefault(row => row.DataContext is WorkflowCanvasViewModel { IsExpanded: true } && TopOf(row) + row.Bounds.Height <= top + PinnedRowHeight + 1
-            && ListBottom(row) > top + 2 * PinnedRowHeight && TopOf(row) >= TopOf(project));
         StickyProject.DataContext = project?.DataContext;
         StickyProject.IsVisible = project is not null;
-        StickyWorkflow.DataContext = workflow?.DataContext;
-        StickyWorkflow.IsVisible = workflow is not null;
         TreeHead.IsVisible = project is not null;
     }
 
     private const double PinnedRowHeight = 28;
 
-    // The bottom of the workflow's list of nodes.
-    private double ListBottom(Button row) =>
-        row.FindAncestorOfType<StackPanel>() is { } block ? TopOf(block) + block.Bounds.Height : 0;
-
-    // The height of the pinned rows that show now, with the hairline under them.
-    private double PinnedHeight => (StickyProject.IsVisible ? PinnedRowHeight : 0) + (StickyWorkflow.IsVisible ? PinnedRowHeight : 0) + (TreeHead.IsVisible ? 1 : 0);
+    // The height of the pinned row that shows now, with the hairline under it.
+    private double PinnedHeight => (StickyProject.IsVisible ? PinnedRowHeight : 0) + (TreeHead.IsVisible ? 1 : 0);
 
     // Every row in the tree in view order, measured from the tree's top edge.
     private List<(double Top, double Bottom)> ShownRows() =>
@@ -416,14 +425,6 @@ public partial class SidebarView : UserControl
 
     private void OnStickyProject(object? sender, RoutedEventArgs e) =>
         ScrollToRow(ProjectRows().FirstOrDefault(row => row.DataContext == StickyProject.DataContext));
-
-    private void OnStickyWorkflow(object? sender, RoutedEventArgs e)
-    {
-        if (WorkflowRows().FirstOrDefault(row => row.DataContext == StickyWorkflow.DataContext) is { } row)
-        {
-            Tree.Offset = Tree.Offset.WithY(TopOf(row) - PinnedRowHeight);
-        }
-    }
 
     private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e) => Window?.TitleBandPressed(e);
 

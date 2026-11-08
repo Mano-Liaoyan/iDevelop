@@ -17,11 +17,11 @@ internal readonly record struct WorkflowCards(WorkflowRef Workflow, ImmutableArr
 
 /// <summary>
 /// The projects a window had open, which it opens again at the next start, in the per-user session file beside the theme
-/// preference: <c>{"projects":[folder...],"selected":{"folder":...,"workflow":...},"expanded":[{"folder":...,"workflow":...}],
+/// preference: <c>{"projects":[folder...],"selected":{"folder":...,"workflow":...},
 /// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}],"folded":[folder...],"recent":[folder...],"activityFolded":false}</c>. Expanded cards live here, on this machine, and never in
 /// the workflow's file (ADR 0024).
 /// </summary>
-internal sealed record WorkspaceSession(ImmutableArray<string> Projects, WorkflowRef? Selected, ImmutableArray<WorkflowRef> Expanded)
+internal sealed record WorkspaceSession(ImmutableArray<string> Projects, WorkflowRef? Selected)
 {
     /// <summary>Each open workflow's expanded cards, for the workflows that have any.</summary>
     public ImmutableArray<WorkflowCards> Cards { get; init; } = [];
@@ -35,7 +35,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
     /// <summary>The left area folds its Activity list down to the heading.</summary>
     public bool ActivityFolded { get; init; }
 
-    public static readonly WorkspaceSession Empty = new([], null, []);
+    public static readonly WorkspaceSession Empty = new([], null);
 
     /// <summary>A missing or unreadable file, or one that is not this shape, reads as no session. An entry that is not
     /// this shape is skipped.</summary>
@@ -58,8 +58,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
 
         return new(
             [.. Items(session["projects"]).Select(Text).OfType<string>()],
-            Ref(session["selected"]),
-            [.. Items(session["expanded"]).Select(Ref).OfType<WorkflowRef>()])
+            Ref(session["selected"]))
         {
             Cards = [.. Items(session["cards"]).Select(CardsOf).OfType<WorkflowCards>()],
             Folded = [.. Items(session["folded"]).Select(Text).OfType<string>()],
@@ -74,7 +73,6 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
         {
             ["projects"] = new JsonArray([.. Projects.Select(folder => JsonValue.Create(folder))]),
             ["selected"] = Selected is { } selected ? Node(selected) : null,
-            ["expanded"] = new JsonArray([.. Expanded.Select(Node)]),
             ["cards"] = new JsonArray([.. Cards.Select(cards =>
             {
                 var node = Node(cards.Workflow);

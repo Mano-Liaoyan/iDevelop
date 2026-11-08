@@ -218,10 +218,6 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.AddNode();
         shell.Render();
 
-        // The node rows of an open workflow say its states one by one, so only a folded row says them.
-        Assert.False(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
-        ((Canvas.WorkflowCanvasViewModel)row.DataContext!).IsExpanded = false;
-        shell.Render();
         // A short name leaves room on its line, so the state's counts stand after it and the row keeps its height (ADR 0068).
         Assert.Equal(28.0, row.Bounds.Height);
         var nameTop = Of<Control>(row.GetVisualParent()!, "WorkflowName").TranslatePoint(default, row)!.Value.Y;
@@ -244,17 +240,19 @@ public sealed class SidebarLayoutTests : IDisposable
     public void A_hyphenated_token_stays_on_one_line(string name, string shown) => Assert.Equal(shown, Theme.NameBreaks.Keep(name));
 
     [AvaloniaFact]
-    public void The_shown_workflow_lists_its_nodes_however_long_the_list_is()
+    public void The_shown_workflow_lists_every_node_however_long_the_list_is()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 50).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
+        var canvas = shell.Window.ViewModel.Canvas!;
 
-        Assert.True(shell.WorkflowExpand(Reports, ReleaseNotes).IsChecked);
+        Assert.True(shell.ListsNodesOf(Reports, ReleaseNotes));
+        Assert.Equal(51, canvas.TreeRows.Count);
     }
 
     [AvaloniaFact]
-    public void A_shown_workflow_folds_the_others_and_the_tree_shows_it_from_its_row_down()
+    public void The_Nodes_section_lists_the_shown_workflow_and_Projects_shows_its_row()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 30).Select(index => $"Node {index}")]);
@@ -268,31 +266,52 @@ public sealed class SidebarLayoutTests : IDisposable
         view.Select(second);
         shell.Render();
 
-        Assert.Equal([second], view.Projects[0].Workflows.Where(canvas => canvas.IsExpanded));
+        Assert.True(shell.ListsNodesOf(Reports, "Second"));
         var tree = shell.Window.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Tree");
         var top = shell.WorkflowRow(Reports, "Second").TranslatePoint(default, tree)!.Value.Y;
         Assert.InRange(top, 0, tree.Viewport.Height - 28);
     }
 
     [AvaloniaFact]
-    public void Showing_a_node_opens_its_folded_workflow_and_brings_its_row_into_the_tree()
+    public void Showing_a_node_brings_its_row_into_the_Nodes_section()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
         shell.Window.Height = 600;
         var view = shell.Window.ViewModel;
-        view.Canvas!.IsExpanded = false;
         shell.Render();
 
-        view.ShowNode(view.Canvas.Outline[^1]);
+        view.ShowNode(view.Canvas!.Outline[^1]);
         shell.Render();
 
-        Assert.True(view.Canvas.IsExpanded);
-        var tree = shell.Window.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Tree");
+        var list = shell.Find<ListBox>("SidebarTasks");
         var row = shell.TaskRow(Reports, ReleaseNotes, "Node 40");
-        var top = row.TranslatePoint(default, tree)!.Value.Y;
-        Assert.InRange(top, 0, tree.Viewport.Height - row.Bounds.Height);
+        var top = row.TranslatePoint(default, list)!.Value.Y;
+        Assert.InRange(top, 0, list.Bounds.Height - row.Bounds.Height);
+    }
+
+    [AvaloniaFact]
+    public void Projects_takes_at_most_half_of_the_room_and_Nodes_takes_the_rest()
+    {
+        var reports = _temp.Create(Reports);
+        foreach (var index in Enumerable.Range(1, 30))
+        {
+            Save(reports, $"Workflow {index}", "Step");
+        }
+
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Window.Height = 800;
+        shell.Render();
+        T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+        var (tree, sections, list) = (Named<ScrollViewer>("Tree"), Named<Grid>("Sections"), shell.Find<ListBox>("SidebarTasks"));
+
+        Assert.True(tree.Extent.Height > tree.Viewport.Height, "Projects does not scroll.");
+        Assert.InRange(tree.Bounds.Height, sections.Bounds.Height / 2 - 40, sections.Bounds.Height / 2);
+        Assert.True(list.Bounds.Height > sections.Bounds.Height / 2 - 60, $"Nodes has {list.Bounds.Height} px.");
+        Assert.True(list.Bounds.Bottom <= sections.Bounds.Height + 0.5, "Nodes goes past the panel.");
     }
 
     [AvaloniaFact]
@@ -334,7 +353,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Opening_a_nodes_conversation_opens_its_large_tree_group_and_lists_every_row()
+    public void Opening_a_nodes_conversation_opens_its_folded_tree_group_and_lists_every_row()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
@@ -343,6 +362,9 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.Render();
         var canvas = shell.Window.ViewModel.Canvas!;
         var group = canvas.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted);
+        group.Toggle();
+        shell.Render();
+        Assert.True(group.IsFolded);
 
         canvas.Outline[5].OpenConversationCommand.Execute(null);
         shell.Render();
@@ -352,7 +374,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Selecting_a_node_of_a_large_folded_group_opens_the_group_and_its_header_folds_it_whole()
+    public void Every_group_starts_open_and_selecting_a_node_of_a_folded_group_opens_it()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
@@ -364,7 +386,9 @@ public sealed class SidebarLayoutTests : IDisposable
         var list = shell.Window.GetVisualDescendants().OfType<ListBox>().Single(list => list.DataContext == canvas && list.Classes.Contains("tasks"));
         bool PointsRight() => list.GetVisualDescendants().OfType<ListBoxItem>().Single(row => row.DataContext == group)
             .GetVisualDescendants().OfType<PathIcon>().Single(icon => icon.Classes.Contains("groupChevron")).Classes.Contains("folded");
-        Assert.True(group.IsFolded);
+        Assert.False(group.IsFolded, "A large group starts folded.");
+        group.Toggle();
+        shell.Render();
         Assert.True(PointsRight(), "A folded group that lists no row points its chevron right.");
 
         canvas.SelectedNode = canvas.Outline[7];
@@ -392,27 +416,29 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void No_row_shows_cut_at_the_tree_s_bottom_edge_and_the_rows_workflow_stays_pinned()
+    public void No_row_shows_cut_at_the_tree_s_bottom_edge_and_the_rows_project_stays_pinned()
     {
         var reports = _temp.Create(Reports);
-        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        foreach (var index in Enumerable.Range(1, 40))
+        {
+            Save(reports, $"Workflow {index}", "Step");
+        }
+
         var shell = Shell.Open(reports);
-        shell.OpenNodes(Reports, ReleaseNotes);
-        shell.Window.ViewModel.Canvas!.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted).Open();
-        // The tree lists every row of the large workflow, so it scrolls.
+        // Projects lists forty workflows, so it scrolls.
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();
         T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
         var tree = Named<ScrollViewer>("Tree");
-        var (foot, pinned) = (Named<Border>("TreeFootCover"), Named<Panel>("StickyWorkflow"));
+        var (foot, pinned) = (Named<Border>("TreeFootCover"), Named<Panel>("StickyProject"));
 
         foreach (var offset in new[] { 0.0, 53, 171, 182, 299, 310, 433 })
         {
             tree.Offset = tree.Offset.WithY(offset);
             shell.Render();
             var height = tree.Viewport.Height;
-            foreach (var row in tree.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible))
+            foreach (var row in tree.GetVisualDescendants().OfType<Button>().Where(row => row.Classes.Contains("workflow")).Where(row => row.IsEffectivelyVisible))
             {
                 var at = row.TranslatePoint(default, tree)!.Value.Y;
                 var bottom = at + row.Bounds.Height;
@@ -421,18 +447,20 @@ public sealed class SidebarLayoutTests : IDisposable
         }
 
         Assert.True(pinned.IsVisible);
-        Assert.Equal(ReleaseNotes, ((Canvas.WorkflowCanvasViewModel)pinned.DataContext!).Name);
+        Assert.Equal(Reports, ((ProjectViewModel)pinned.DataContext!).Name);
     }
 
     [AvaloniaFact]
     public void The_tree_rests_on_a_whole_row_under_its_pinned_rows()
     {
         var reports = _temp.Create(Reports);
-        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        foreach (var index in Enumerable.Range(1, 40))
+        {
+            Save(reports, $"Workflow {index}", "Step");
+        }
+
         var shell = Shell.Open(reports);
-        shell.OpenNodes(Reports, ReleaseNotes);
-        shell.Window.ViewModel.Canvas!.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted).Open();
-        // The tree lists every row of the large workflow, so it scrolls.
+        // Projects lists forty workflows, so it scrolls.
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();
@@ -445,7 +473,7 @@ public sealed class SidebarLayoutTests : IDisposable
             tree.Offset = tree.Offset.WithY(offset);
             shell.Render();
             var edge = head.IsVisible ? head.Bounds.Bottom : 0;
-            foreach (var row in tree.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible))
+            foreach (var row in tree.GetVisualDescendants().OfType<Button>().Where(row => row.Classes.Contains("workflow")).Where(row => row.IsEffectivelyVisible))
             {
                 var at = row.TranslatePoint(default, tree)!.Value.Y;
                 var bottom = at + row.Bounds.Height;

@@ -2,6 +2,8 @@
 
 An expanded workflow in the left tree lists every node under a folding group for its state. A zoomed out card wraps its model name to a second line rather than cut it, and keeps a title's ellipsis at its end. The name tag shows the selected card's whole title where the card cuts it. The conversation's task strip shows the whole name of the node that gave the input. This amends ADR 0062 and ADR 0063.
 
+ADR 0071 moves the node list under its state groups from an expanded workflow row to the Nodes section, and every group starts open there.
+
 Round 17 of the review found that a large workflow showed only 12 of its nodes until the person chose "Show all 50 nodes", that zoomed out cards cut model names such as "GPT-6.1 Sol" and "Qwen 4 Max", that a selected card at a fit cut its title with no way to read it on the canvas, that a cut in the middle of a title ("Move… revenue dashboard query") read as a rendering fault, that "2023-" and "Q4" broke across lines, and that the task strip cut the source node's name.
 
 ## How it works

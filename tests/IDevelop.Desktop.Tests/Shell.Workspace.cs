@@ -18,10 +18,18 @@ internal sealed partial class Shell
 
     public Button WorkflowRow(string project, string workflow) => WorkflowItem(project, workflow).Row;
 
-    public ToggleButton WorkflowExpand(string project, string workflow) => ById<ToggleButton>(WorkflowItem(project, workflow).Item, "WorkflowExpand").Single();
+    /// <summary>The Nodes section's list, which lists the nodes of the shown workflow (ADR 0071).</summary>
+    public ListBox WorkflowTasks(string project, string workflow)
+    {
+        var list = Find<ListBox>("SidebarTasks");
+        return list.DataContext is Canvas.WorkflowCanvasViewModel canvas && canvas.Project.Name == project && canvas.Name == workflow
+            ? list
+            : throw new InvalidOperationException($"The Nodes section does not list {project} / {workflow}.");
+    }
 
-    /// <summary>The workflow's task list, which shows while its row is expanded.</summary>
-    public ListBox WorkflowTasks(string project, string workflow) => ById<ListBox>(WorkflowItem(project, workflow).Item, "SidebarTasks").Single();
+    /// <summary>The Nodes section lists the workflow's nodes.</summary>
+    public bool ListsNodesOf(string project, string workflow) =>
+        Find<ListBox>("SidebarTasks") is { IsEffectivelyVisible: true, DataContext: Canvas.WorkflowCanvasViewModel canvas } && canvas.Project.Name == project && canvas.Name == workflow;
 
     public string WorkflowText(string project, string workflow, string automationId) =>
         ById<TextBlock>(WorkflowItem(project, workflow).Item, automationId).Single().Text ?? "";
@@ -29,20 +37,18 @@ internal sealed partial class Shell
     public bool WorkflowShows(string project, string workflow, string automationId) =>
         ById<Control>(WorkflowItem(project, workflow).Item, automationId).Single().IsEffectivelyVisible;
 
-    /// <summary>Expands the shown workflow's row where a long list stayed closed, so its tasks are listed.</summary>
-    public void ShowTasks()
-    {
-        var canvas = Window.ViewModel.Canvas ?? throw new InvalidOperationException("No workflow is shown.");
-        OpenNodes(canvas.Project.Name, canvas.Name);
-    }
+    /// <summary>Lays out the Nodes section, which lists the shown workflow's nodes.</summary>
+    public void ShowTasks() => Render();
 
-    /// <summary>Expands the workflow's row unless it is open.</summary>
+    /// <summary>Shows the workflow, so the Nodes section lists its nodes.</summary>
     public void OpenNodes(string project, string workflow)
     {
-        if (WorkflowExpand(project, workflow).IsChecked != true)
+        if (!ListsNodesOf(project, workflow))
         {
-            Click(WorkflowExpand(project, workflow));
+            Click(WorkflowRow(project, workflow));
         }
+
+        Render();
     }
 
     /// <summary>Sets the sidebar's width, as dragging the splitter after it does, within its 240 to 400 px range.</summary>

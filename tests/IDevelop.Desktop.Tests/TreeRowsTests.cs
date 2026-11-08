@@ -36,20 +36,17 @@ public sealed class TreeRowsTests
     }
 
     [Fact]
-    public void A_group_starts_folded_above_8_nodes_except_Needs_you()
+    public void Every_group_starts_open_and_a_fold_the_person_sets_stays_as_it_grows()
     {
-        foreach (var kind in new[] { NodeGroupKind.Running, NodeGroupKind.NotStarted, NodeGroupKind.Done })
+        foreach (var kind in Enum.GetValues<NodeGroupKind>())
         {
-            Assert.False(new NodeGroup(kind, () => { }) { Count = 8 }.IsFolded, $"{kind} 8");
-            Assert.True(new NodeGroup(kind, () => { }) { Count = 9 }.IsFolded, $"{kind} 9");
+            Assert.False(new NodeGroup(kind, () => { }) { Count = 40 }.IsFolded, $"{kind} 40");
         }
-
-        Assert.False(new NodeGroup(NodeGroupKind.NeedsYou, () => { }) { Count = 40 }.IsFolded);
 
         var done = new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 9 };
         done.Toggle();
         done.Count = 12;
-        Assert.False(done.IsFolded);
+        Assert.True(done.IsFolded);
     }
 
     [Fact]
@@ -64,9 +61,10 @@ public sealed class TreeRowsTests
     }
 
     [Fact]
-    public void A_large_group_opens_whole_for_a_node_in_it()
+    public void A_folded_group_opens_whole_for_a_node_in_it()
     {
         var done = new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 21 };
+        done.Toggle();
         Assert.True(done.IsFolded);
         done.Open();
         Assert.False(done.IsFolded);

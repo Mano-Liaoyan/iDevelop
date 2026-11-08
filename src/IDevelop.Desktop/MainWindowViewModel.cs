@@ -317,16 +317,10 @@ public sealed class MainWindowViewModel : ObservableObject
         Persist();
     }
 
-    // Only the shown workflow lists its nodes, so one row reads as current, and the tree opens to it and shows it.
+    // The Projects section opens to the shown workflow's row and shows it, and the Nodes section lists its nodes (ADR 0071).
     private void OpenShownNodes(WorkflowCanvasViewModel canvas)
     {
-        foreach (var other in Projects.SelectMany(project => project.Workflows).Where(other => other != canvas))
-        {
-            other.IsExpanded = false;
-        }
-
         canvas.Project.IsExpanded = true;
-        canvas.IsExpanded = canvas.Nodes.Count > 0;
         TreeReveal?.Invoke(canvas, null);
     }
 
@@ -340,7 +334,6 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         node.Canvas.Project.IsExpanded = true;
-        node.Canvas.IsExpanded = true;
         // Showing a node is a request for its row, so its group opens even when it is large.
         node.Canvas.Groups.First(group => group.Kind == NodeGroup.Of(node)).Open();
         node.Canvas.Inspect(node);
@@ -600,7 +593,6 @@ public sealed class MainWindowViewModel : ObservableObject
             var canvases = Projects.SelectMany(project => project.Workflows).ToList();
             foreach (var canvas in canvases)
             {
-                canvas.IsExpanded = session.Expanded.Any(saved => saved.Is(canvas.Project.Folder, canvas.Workflow.Id));
                 canvas.RestoreExpandedCards(session.Cards.Where(saved => saved.Workflow.Is(canvas.Project.Folder, canvas.Workflow.Id))
                     .SelectMany(saved => saved.Tasks));
             }
@@ -761,7 +753,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         switch (e.PropertyName)
         {
-            case nameof(WorkflowCanvasViewModel.IsExpanded) or nameof(WorkflowCanvasViewModel.ExpandedCards):
+            case nameof(WorkflowCanvasViewModel.ExpandedCards):
                 Persist();
                 break;
             case nameof(WorkflowCanvasViewModel.Summary):
@@ -831,8 +823,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         var session = new WorkspaceSession(
             [.. Projects.Select(project => project.Folder), .. Unopened.Select(unopened => unopened.Folder)],
-            Canvas is { } current ? new WorkflowRef(current.Project.Folder, current.Workflow.Id) : null,
-            [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.IsExpanded).Select(canvas => new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id))])
+            Canvas is { } current ? new WorkflowRef(current.Project.Folder, current.Workflow.Id) : null)
         {
             Cards = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.AnyCardExpanded)
                 .Select(canvas => new WorkflowCards(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ExpandedCards))],

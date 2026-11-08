@@ -106,7 +106,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
                 ArrangeTreeRows();
                 OnPropertyChanged(nameof(Inspected));
-                OnPropertyChanged(nameof(ShowsNodeSelection));
             }
         }
     }
@@ -203,22 +202,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public bool HasUnsavedChanges => Document.HasUnsavedChanges;
 
-    public bool IsExpanded
-    {
-        get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(ExpandLabel));
-                OnPropertyChanged(nameof(ShowsNodeSelection));
-                OnPropertyChanged(nameof(ShowsRowChips));
-            }
-        }
-    }
-
-    /// <summary>What the row's disclosure toggle does now, for a screen reader and the tooltip.</summary>
-    public string ExpandLabel => $"{(IsExpanded ? "Hide" : "Show")} nodes of {Name}";
 
     public bool IsSelected
     {
@@ -535,7 +518,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (!ReferenceEquals(previous?.Name, current.Name))
         {
             OnPropertyChanged(nameof(Name));
-            OnPropertyChanged(nameof(ExpandLabel));
         }
 
         OnPropertyChanged(nameof(HasUnsavedChanges));

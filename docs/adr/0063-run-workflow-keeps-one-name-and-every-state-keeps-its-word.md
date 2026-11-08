@@ -2,6 +2,8 @@
 
 Run Workflow always reads "Run Workflow". The run bar says in a plain line when it runs only part of the workflow. Every group of node states keeps its word in the run bar and in a folded workflow row at every width. A card shows the end of the model's name, without the family word that its client badge gives. The left tree lists at most 12 node rows of a large workflow until the person asks for all of them. The conversation header names the node in every layout, and a folded Output section names its latest result. This amends ADR 0062.
 
+ADR 0071 moves the node rows out of the workflow rows into the Nodes section, and a workflow row shows its most urgent state chip at all times.
+
 Round 16 of the review found that "Run 1 of 8" read as progress and made the button change its name, that the run bar and the left tree showed interrupted, running, and stale groups only as a badge and a number, that a card read "Gemini 3" for "Gemini 3.8 Flash" and "Sonnet 5" for "Claude Sonnet 5.5", and that one expanded 50-node workflow filled the left panel.
 
 ## How it works

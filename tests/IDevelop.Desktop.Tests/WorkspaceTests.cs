@@ -97,14 +97,14 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(
             ["0/2", "0/1", "0/2", "0/1"],
             new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }.Select(row => shell.WorkflowText(row.Item1, row.Item2, "WorkflowSummary")));
-        Assert.True(shell.WorkflowTasks("beta", "Build").IsEffectivelyVisible);
+        Assert.True(shell.ListsNodesOf("beta", "Build"));
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
         Assert.Equal(("alpha", "Release"), shell.Breadcrumb());
         Assert.Equal("alpha - iDevelop: Ship", Shown(shell));
         Assert.Equal(["Not started", "1", "Ship"], Shell.Texts(shell.WorkflowTasks("alpha", "Release")));
-        Assert.False(shell.WorkflowTasks("beta", "Build").IsEffectivelyVisible);
+        Assert.False(shell.ListsNodesOf("beta", "Build"));
     }
 
     [AvaloniaFact]
@@ -121,20 +121,18 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_workflow_that_is_not_shown_keeps_its_task_selection_without_the_selected_look()
+    public void A_workflow_that_is_not_shown_keeps_its_task_selection_for_when_it_is_shown_again()
     {
         var (shell, _, _) = OpenBoth();
         shell.OpenNodes("alpha", "Build");
         shell.Click(shell.TaskRow("alpha", "Build", "Implement"));
         Color? RowFill() => (shell.TaskRow("alpha", "Build", "Implement").GetVisualDescendants().OfType<ContentPresenter>().First().Background as ISolidColorBrush)?.Color;
-        var selected = RowFill();
 
         shell.Click(shell.WorkflowRow("beta", "Build"));
+        Assert.False(shell.ListsNodesOf("alpha", "Build"));
+        shell.Click(shell.WorkflowRow("alpha", "Build"));
 
         Assert.True(shell.TaskRow("alpha", "Build", "Implement").IsSelected);
-        Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), selected);
-        Assert.Equal(Colors.Transparent.A, RowFill()?.A ?? 0);
-        shell.Click(shell.WorkflowRow("alpha", "Build"));
         Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), RowFill());
     }
 
@@ -406,7 +404,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("alpha", "Release"), reopened.Breadcrumb());
         Assert.Equal(["Not started", "1", "Ship"], Shell.Texts(reopened.WorkflowTasks("alpha", "Release")));
         Assert.Equal([false, false, false], new[] { ("alpha", "Build"), ("beta", "Build"), ("beta", "Release") }
-            .Select(row => reopened.WorkflowTasks(row.Item1, row.Item2).IsEffectivelyVisible));
+            .Select(row => reopened.ListsNodesOf(row.Item1, row.Item2)));
         Assert.Null(reopened.Window.ViewModel.Status);
     }
 
@@ -609,13 +607,10 @@ public sealed class WorkspaceTests : IDisposable
     {
         var (shell, _, _) = OpenBoth();
         static AutomationPeer Peer(Control control) => ControlAutomationPeer.CreatePeerForElement(control);
-        var expand = shell.WorkflowExpand("beta", "Release");
 
         Assert.Equal(
-            ["New workflow in alpha", "Close alpha", "Show nodes of Release"],
-            new[] { ProjectButton(shell, "alpha", "NewWorkflow"), ProjectButton(shell, "alpha", "CloseProject"), expand }.Select(control => Peer(control).GetName()));
-        shell.Click(expand);
-        Assert.Equal("Hide nodes of Release", Peer(expand).GetName());
+            ["New workflow in alpha", "Close alpha", "Nodes of Build"],
+            new Control[] { ProjectButton(shell, "alpha", "NewWorkflow"), ProjectButton(shell, "alpha", "CloseProject"), shell.Find<ListBox>("SidebarTasks") }.Select(control => Peer(control).GetName()));
         Assert.Equal(
             ["", "", "Shown", ""],
             new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }
@@ -748,21 +743,16 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("seed", "Workflow 2"), shell.Breadcrumb());
     }
 
-    /// <summary>One project whose expanded workflows list more rows than the sidebar shows at once.</summary>
+    /// <summary>One project with more workflow rows than the Projects section shows at once.</summary>
     private Shell Crowded()
     {
         var alpha = Project("alpha");
-        foreach (var name in new[] { "Docs", "Tests", "Deploy", "Lint", "Package", "Publish" })
+        foreach (var name in Enumerable.Range(1, 30).Select(index => $"Flow {index}"))
         {
             Save(alpha, name, TaskAt(TaskId.New(), "One", 105, 90), TaskAt(TaskId.New(), "Two", 405, 90), TaskAt(TaskId.New(), "Three", 705, 90));
         }
 
         var shell = Shell.Open(alpha);
-        foreach (var canvas in shell.Window.ViewModel.Projects.Single().Workflows)
-        {
-            canvas.IsExpanded = true;
-        }
-
         shell.Render();
         var scroll = SidebarScroll(shell);
         Assert.True(scroll.Extent.Height > scroll.Viewport.Height, "the tree overflows the sidebar");
@@ -797,11 +787,7 @@ public sealed class WorkspaceTests : IDisposable
     public void Project_row_buttons_line_up_with_open_folder_once_the_tree_stops_overflowing()
     {
         var shell = Crowded();
-        foreach (var canvas in shell.Window.ViewModel.Projects.Single().Workflows)
-        {
-            canvas.IsExpanded = false;
-        }
-
+        shell.Window.Height = 4000;
         shell.Render();
         var close = ProjectButton(shell, "alpha", "CloseProject");
         var open = shell.Find<Button>("OpenFolder");

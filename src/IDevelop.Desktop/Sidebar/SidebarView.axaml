@@ -157,8 +157,11 @@
       </ItemsControl>
     </StackPanel>
 
-    <Grid Grid.Row="3" RowDefinitions="Auto,*" IsVisible="{Binding HasProjects}">
-      <Grid ColumnDefinitions="*,Auto" Height="28" Margin="16,0,16,0">
+    <!-- Two sections share the panel, as VS Code's Explorer and Outline do (ADR 0071). Projects lists the projects and their
+         workflows, and it takes its rows' height up to half of the room, then scrolls. Nodes lists the shown workflow's nodes by
+         state, and it scrolls in the rest. A rule divides them, and they keep one panel's color. -->
+    <Grid x:Name="Sections" Grid.Row="3" RowDefinitions="Auto,Auto,Auto,*" IsVisible="{Binding HasProjects}">
+      <Grid x:Name="ProjectsHeading" ColumnDefinitions="*,Auto" Height="28" Margin="16,0,16,0">
         <TextBlock Classes="section" Text="Projects" VerticalAlignment="Center" />
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
         <Button Classes="icon small" Click="OnNewWorkflowHere" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
@@ -176,9 +179,8 @@
         </Button>
         </StackPanel>
       </Grid>
-      <!-- Each project lists its workflows, and each workflow lists its nodes, one size smaller, while its row is expanded. The
-           shown workflow is the selected row. A name takes one line and is cut at its end, and its tooltip holds all of it. The scroll bar draws in
-           the gutter at the rows' end, so every row keeps one right edge. -->
+      <!-- Each project lists its workflows. The shown workflow is the selected row. A name shows in full and wraps (issue 108).
+           The scroll bar draws in the gutter at the rows' end, so every row keeps one right edge. -->
       <Panel Grid.Row="1">
       <ScrollViewer x:Name="Tree" Margin="8,0,0,0" HorizontalScrollBarVisibility="Disabled"
                     ScrollChanged="OnTreeScrollChanged">
@@ -280,7 +282,7 @@
                             <Panel>
                               <!-- One line for the name, and at its end how far the work went. A folded row adds one line with a badge and a
                                    count for each urgent group, and the tree rows of an open one show the rest. The tooltip holds the sum. -->
-                              <Button Classes="nav workflow" Classes.selected="{Binding IsSelected}" Classes.holdsNode="{Binding ShowsNodeSelection}" HorizontalContentAlignment="Stretch"
+                              <Button Classes="nav workflow" Classes.selected="{Binding IsSelected}" HorizontalContentAlignment="Stretch"
                                       IsVisible="{Binding !IsRenamingWorkflow}"
                                       Click="OnWorkflowClick"
                                       KeyDown="OnWorkflowKeyDown"
@@ -323,57 +325,7 @@
                               <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="38,2,4,2"
                                                      AutomationProperties.AutomationId="WorkflowNameBox"
                                                      AutomationProperties.Name="Workflow name" />
-                              <ToggleButton Classes="chevron workflowChevron" HorizontalAlignment="Left" IsTabStop="False"
-                                            IsChecked="{Binding IsExpanded}" IsVisible="{Binding !!Nodes.Count}"
-                                            ToolTip.Tip="{Binding ExpandLabel}"
-                                            AutomationProperties.AutomationId="WorkflowExpand"
-                                            AutomationProperties.Name="{Binding ExpandLabel}">
-                                <PathIcon Theme="{StaticResource Glyph}" />
-                              </ToggleButton>
                             </Panel>
-                            <Border IsVisible="{Binding IsExpanded}"
-                                    Margin="24,0,0,0" Padding="2,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border100Brush}">
-                              <!-- The nodes group by state under a header with its count, as a list of issues does (ADR 0064). A header folds its group. -->
-                              <ListBox Classes="tasks" Classes.hidden="{Binding !IsSelected}"
-                                       ItemsSource="{Binding TreeRows}"
-                                       SelectedItem="{Binding SelectedNode, Mode=OneWay}"
-                                       SelectionChanged="OnSidebarSelectionChanged"
-                                       Tapped="OnSidebarTapped"
-                                       KeyDown="OnSidebarKeyDown"
-                                       ContainerPrepared="OnTreeContainerPrepared"
-                                       AutomationProperties.AutomationId="SidebarTasks"
-                                       AutomationProperties.Name="{Binding Name}">
-                                <ListBox.ItemsPanel>
-                                  <ItemsPanelTemplate>
-                                    <StackPanel Spacing="2" />
-                                  </ItemsPanelTemplate>
-                                </ListBox.ItemsPanel>
-                                <ListBox.DataTemplates>
-                                  <DataTemplate DataType="canvas:NodeGroup">
-                                    <Grid ColumnDefinitions="14,Auto,*" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding ToggleLabel}"
-                                          AutomationProperties.Name="{Binding ToggleLabel}">
-                                      <PathIcon Classes="groupChevron" Classes.folded="{Binding ShowsFolded}" Width="12" Height="12" />
-                                      <TextBlock Grid.Column="1" Classes="groupName" Text="{Binding Name}" />
-                                      <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Count}" VerticalAlignment="Center"
-                                                 AutomationProperties.AutomationId="NodeGroupCount" />
-                                    </Grid>
-                                  </DataTemplate>
-                                  <DataTemplate DataType="canvas:TaskNodeViewModel">
-                                    <!-- A name shows in full and wraps (issue 108), one type size under its workflow's. -->
-                                    <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">
-                                      <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
-                                      <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}"
-                                                          AutomationProperties.AutomationId="NodeRowName" />
-                                      <!-- One state has one badge in every list, the card's own. -->
-                                      <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,0,0" State="{Binding State}" Why="{Binding WaitReason}"
-                                                        ToolTip.Tip="{Binding StatusLabel}"
-                                                        AutomationProperties.AutomationId="NodeRowState"
-                                                        AutomationProperties.Name="{Binding StatusLabel}" />
-                                    </Grid>
-                                  </DataTemplate>
-                                </ListBox.DataTemplates>
-                              </ListBox>
-                            </Border>
                           </StackPanel>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
@@ -437,22 +389,57 @@
               <PathIcon Theme="{StaticResource Glyph}" />
             </ToggleButton>
           </Panel>
-          <Panel x:Name="StickyWorkflow" IsVisible="False" x:DataType="canvas:WorkflowCanvasViewModel" DataContext="{x:Null}">
-            <Button Classes="stickyRow workflowHead" Click="OnStickyWorkflow" AutomationProperties.AutomationId="StickyWorkflow">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                <TextBlock Classes="rowName strong" Text="{Binding Name, FallbackValue={x:Null}}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
-                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding RowProgress, FallbackValue={x:Null}}" VerticalAlignment="Center" />
-              </Grid>
-            </Button>
-            <ToggleButton Classes="chevron stickyChevron" Margin="25,0,0,0" IsChecked="{Binding IsExpanded, FallbackValue=False}"
-                          ToolTip.Tip="{Binding ExpandLabel, FallbackValue={x:Null}}"
-                          AutomationProperties.AutomationId="StickyWorkflowFold"
-                          AutomationProperties.Name="{Binding ExpandLabel, FallbackValue={x:Null}}">
-              <PathIcon Theme="{StaticResource Glyph}" />
-            </ToggleButton>
-          </Panel>
         </StackPanel>
       </Border>
+      </Panel>
+
+      <Border Grid.Row="2" Classes="sectionRule" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Classes="section" Text="Nodes" VerticalAlignment="Center" Margin="16,0" AutomationProperties.AutomationId="NodesHeading" />
+      </Border>
+      <!-- The nodes group by state under a header with its count, as a list of issues does (ADR 0064). A header folds its group.
+           Every row shows, and the list scrolls the selected node's row into view (ADR 0071). -->
+      <Panel Grid.Row="3" DataContext="{Binding Canvas}" IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <ListBox x:Name="NodeRows" Classes="tasks" Margin="8,0,0,0" Padding="0,0,8,8"
+               x:DataType="canvas:WorkflowCanvasViewModel"
+               ItemsSource="{Binding TreeRows}"
+               SelectedItem="{Binding SelectedNode, Mode=OneWay}"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               SelectionChanged="OnSidebarSelectionChanged"
+               Tapped="OnSidebarTapped"
+               KeyDown="OnSidebarKeyDown"
+               ContainerPrepared="OnTreeContainerPrepared"
+               AutomationProperties.AutomationId="SidebarTasks"
+               AutomationProperties.Name="{Binding Name, StringFormat='Nodes of {0}'}">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="2" />
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+        <ListBox.DataTemplates>
+          <DataTemplate DataType="canvas:NodeGroup">
+            <Grid ColumnDefinitions="14,Auto,*" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding ToggleLabel}"
+                  AutomationProperties.Name="{Binding ToggleLabel}">
+              <PathIcon Classes="groupChevron" Classes.folded="{Binding ShowsFolded}" Width="12" Height="12" />
+              <TextBlock Grid.Column="1" Classes="groupName" Text="{Binding Name}" />
+              <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Count}" VerticalAlignment="Center"
+                         AutomationProperties.AutomationId="NodeGroupCount" />
+            </Grid>
+          </DataTemplate>
+          <DataTemplate DataType="canvas:TaskNodeViewModel">
+            <!-- A name shows in full and wraps (issue 108). -->
+            <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">
+              <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
+              <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}"
+                                  AutomationProperties.AutomationId="NodeRowName" />
+              <!-- One state has one badge in every list, the card's own. -->
+              <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,0,0" State="{Binding State}" Why="{Binding WaitReason}"
+                                ToolTip.Tip="{Binding StatusLabel}"
+                                AutomationProperties.AutomationId="NodeRowState"
+                                AutomationProperties.Name="{Binding StatusLabel}" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.DataTemplates>
+      </ListBox>
       </Panel>
     </Grid>
 

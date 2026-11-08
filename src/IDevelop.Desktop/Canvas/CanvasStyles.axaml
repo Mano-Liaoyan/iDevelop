@@ -6,19 +6,19 @@
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:theme="using:IDevelop.Desktop.Theme">
-  <!-- One accent line outside the card, with a gap, says selected, as the app's accent does everywhere, and it leaves the
-       state's own edge whole inside it. The canvas's own ring says that it has the keyboard's focus, so a card keeps one outline.
-       A running node never looks like this: its title band fills with color (Kinds.axaml and runBand below). -->
+  <!-- One strong neutral line outside the card, with a gap, says selected, and it leaves the state's own edge whole inside it.
+       Blue marks a running node and its wires only, so a selection never reads as a run (ADR 0071). The canvas's own ring says
+       that it has the keyboard's focus, so a card keeps one outline. -->
   <Style Selector="Border.ring">
     <Setter Property="Margin" Value="5,-5" />
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- A card is 240 wide in its 260 wide container, and an expanded card 320 in 340 (ADR 0024). An expanded card's state
        tint stays on its header, so its details read on the card's own surface. -->
@@ -589,9 +589,10 @@
   <Style Selector="nodify|StepConnection.wire">
     <Setter Property="StrokeThickness" Value="{ReflectionBinding Stroke}" />
   </Style>
+  <!-- A selected card's wires take the selection's strong neutral, so blue on a wire always means a node reads it now (ADR 0071). -->
   <Style Selector="nodify|StepConnection.wire.highlighted">
-    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="nodify|StepConnection.wire.dimmed">
     <Setter Property="Opacity" Value="0.8" />

@@ -24,14 +24,11 @@ public sealed partial class WorkflowCanvasViewModel
         ? [first with { Label = string.Join(", ", BarChips.Select(chip => chip.Label)), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
         : [];
 
-    /// <summary>A folded row says its groups. The node rows of an open workflow show the same states one by one.</summary>
-    public bool ShowsRowChips => !IsExpanded && BarChips.Count > 0;
+    /// <summary>The row says its most urgent group while any node needs a look. The Nodes section lists the states one by one (ADR 0071).</summary>
+    public bool ShowsRowChips => BarChips.Count > 0;
 
     /// <summary>The workflow row's tooltip: the whole name, which the row may cut, and the whole sum.</summary>
     public string RowTip => $"{Name}\n{Summary}";
-
-    /// <summary>The list shows a node of this workflow as selected, so the workflow's row keeps a quiet fill.</summary>
-    public bool ShowsNodeSelection => IsExpanded && SelectedNode is not null;
 
     private void OnSummaryChanged()
     {

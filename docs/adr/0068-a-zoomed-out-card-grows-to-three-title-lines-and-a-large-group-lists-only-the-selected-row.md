@@ -4,6 +4,8 @@ A Title tier card takes up to three title lines at the 9 px floor and grows in h
 
 ADR 0070 withdraws the "+N more" row and the Title tier card's model text.
 
+ADR 0071 replaces the Title tier card's line rule: the title keeps room for its descenders over the chip row, and the card takes fewer lines where the row gap is short. ADR 0071 also supersedes the large tree group's fold.
+
 Round 21 found that titles at 61% were cut to similar starts, that the eight-node workflow beside the widest inspector cut its titles at 69%, and that a selection in a large Done group filled the left tree and pushed the other workflows and projects out of view.
 
 ## How it works

@@ -2,6 +2,8 @@
 
 The canvas no longer shows a name tag for the selected card at any tier. A tree group with more than 8 nodes stays folded when the canvas selects a node in it. A Label tier card fits its whole model name. A folded workflow row in the tree shows a badge and a count for each urgent state. This amends ADR 0057, ADR 0063, ADR 0064, and ADR 0065.
 
+ADR 0071 supersedes the large tree group's fold: every group in the Nodes section starts open.
+
 Round 19 of the review found that the name tag covered its own card and the title of the next card, that the "Done" group of 21 nodes filled the left tree when its node was selected, that cards at the default zoom cut model names such as "GPT-6.1 Sol" and "Sonnet 5.5", that the state words under folded workflow rows wrapped to two or three lines, that Run Workflow and Send got lighter under the pointer in the light theme, and that the inspector title took three lines.
 
 ## How it works
