@@ -64,17 +64,12 @@ public sealed class TreeRowsTests
     }
 
     [Fact]
-    public void A_large_group_keeps_its_fold_for_a_selection_and_lists_only_that_row()
+    public void A_large_group_opens_whole_for_a_node_in_it()
     {
         var done = new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 21 };
-        done.Reveal();
         Assert.True(done.IsFolded);
-        Assert.Equal("+20 more", done.More.Label);
-
-        var small = new NodeGroup(NodeGroupKind.Done, () => { }) { Count = 8 };
-        small.Toggle();
-        small.Reveal();
-        Assert.False(small.IsFolded);
+        done.Open();
+        Assert.False(done.IsFolded);
     }
 
     [AvaloniaFact]

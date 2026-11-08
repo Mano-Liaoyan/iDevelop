@@ -333,7 +333,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Opening_a_nodes_conversation_keeps_its_large_tree_group_folded_and_lists_its_row()
+    public void Opening_a_nodes_conversation_opens_its_large_tree_group_and_lists_every_row()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
@@ -346,13 +346,12 @@ public sealed class SidebarLayoutTests : IDisposable
         canvas.Outline[5].OpenConversationCommand.Execute(null);
         shell.Render();
 
-        Assert.True(group.IsFolded);
-        Assert.Equal<object>([group, canvas.Outline[5], group.More], canvas.TreeRows);
-        Assert.Equal("+11 more", group.More.Label);
+        Assert.False(group.IsFolded);
+        Assert.Equal<object>([group, .. canvas.Outline], canvas.TreeRows);
     }
 
     [AvaloniaFact]
-    public void Selecting_a_node_of_a_large_folded_group_lists_only_its_row_selected_and_more_opens_the_group()
+    public void Selecting_a_node_of_a_large_folded_group_opens_the_group_and_its_header_folds_it_whole()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
@@ -369,25 +368,22 @@ public sealed class SidebarLayoutTests : IDisposable
 
         canvas.SelectedNode = canvas.Outline[7];
         shell.Render();
-        Assert.True(group.IsFolded);
-        Assert.Equal<object>([group, canvas.Outline[7], group.More], canvas.TreeRows);
-        // The chevron agrees with what shows: the group lists a row, so it points down.
-        Assert.False(PointsRight(), "A folded group that lists the selected row points its chevron right.");
-        Assert.Same(canvas.Outline[7], list.SelectedItem);
-
-        // Another selection takes the one row's place.
-        canvas.SelectedNode = canvas.Outline[3];
-        shell.Render();
-        Assert.Equal<object>([group, canvas.Outline[3], group.More], canvas.TreeRows);
-        Assert.Same(canvas.Outline[3], list.SelectedItem);
-
-        // The "+N more" row opens the group, and the selection stays.
-        var more = list.GetVisualDescendants().OfType<ListBoxItem>().Single(row => row.DataContext == group.More);
-        Assert.Equal("NodeGroupMore", Avalonia.Automation.AutomationProperties.GetAutomationId(more));
-        group.More.Group.Toggle();
-        shell.Render();
         Assert.False(group.IsFolded);
         Assert.Equal(13, canvas.TreeRows.Count);
+        Assert.False(PointsRight(), "An open group points its chevron down.");
+        Assert.Same(canvas.Outline[7], list.SelectedItem);
+
+        // The header folds the whole group, and the canvas keeps its selection.
+        group.Toggle();
+        shell.Render();
+        Assert.Equal<object>([group], canvas.TreeRows);
+        Assert.True(PointsRight(), "A folded group points its chevron right.");
+        Assert.Same(canvas.Outline[7], canvas.SelectedNode);
+
+        // Another selection opens the group again.
+        canvas.SelectedNode = canvas.Outline[3];
+        shell.Render();
+        Assert.False(group.IsFolded);
         Assert.Same(canvas.Outline[3], list.SelectedItem);
         list.SelectedItem = canvas.Outline[2];
         shell.Render();

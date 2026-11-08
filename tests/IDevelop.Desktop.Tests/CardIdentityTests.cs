@@ -1,3 +1,4 @@
+using Avalonia.VisualTree;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IDevelop.Desktop.Canvas;
@@ -165,6 +166,24 @@ public sealed class CardIdentityTests
         canvas.ViewportZoom = ZoomTiers.ActualSize;
 
         Assert.Equal("100%", canvas.ZoomLabel);
+    }
+
+    [AvaloniaFact]
+    public void An_overview_card_drops_the_model_and_keeps_the_client_badge()
+    {
+        using var f = new NodeFixture(Task(A, "A", 105));
+        var shell = f.Open();
+        bool Shows(string id) => shell.Window.GetVisualDescendants().OfType<Control>()
+            .Any(control => Avalonia.Automation.AutomationProperties.GetAutomationId(control) == id && control.IsEffectivelyVisible);
+
+        shell.Editor.ViewportZoom = 0.3;
+        shell.Render();
+        Assert.False(Shows("CardLine"), "A Title tier card shows no model.");
+        Assert.True(Shows("CardClientMark"), "A Title tier card keeps its client's badge.");
+
+        shell.Editor.ViewportZoom = ZoomTiers.ActualSize;
+        shell.Render();
+        Assert.True(Shows("CardLine"), "A card at 100% shows its model.");
     }
 
     [Theory]

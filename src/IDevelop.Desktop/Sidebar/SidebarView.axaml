@@ -374,13 +374,6 @@
                                                  AutomationProperties.AutomationId="NodeGroupCount" />
                                     </Grid>
                                   </DataTemplate>
-                                  <!-- A folded group lists only the selected node's row, and this row after it opens the group (ADR 0068). -->
-                                  <DataTemplate DataType="canvas:GroupMore">
-                                    <Grid ColumnDefinitions="14,*" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding ToggleLabel}">
-                                      <TextBlock Grid.Column="1" Classes="caption groupMore" Text="{Binding Label}"
-                                                 AutomationProperties.AutomationId="NodeGroupMoreLabel" />
-                                    </Grid>
-                                  </DataTemplate>
                                   <DataTemplate DataType="canvas:TaskNodeViewModel">
                                     <!-- A name shows in full and wraps (issue 108), one type size under its workflow's. -->
                                     <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding Title}">

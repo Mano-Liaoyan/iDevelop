@@ -50,16 +50,15 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>
     /// The rows of the left tree under an expanded workflow: for each group that holds a node ("Needs you", "Running",
-    /// "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The tree always shows the selected
-    /// or open node's row: its group opens, or, when it is large, stays folded and lists only that row and a "+N more" row (ADR 0068).
+    /// "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The tree shows the selected
+    /// or open node's row: its group opens and lists all its rows, whatever its size (ADR 0070).
     /// </summary>
     public ObservableCollection<object> TreeRows { get; } = [];
 
     /// <summary>
-    /// The tree's rows in their order, with a row for <paramref name="shown"/>. The group of <paramref name="reveal"/> opens
-    /// unless it is large. A folded group lists <paramref name="shown"/>'s row if the node is in it, and a "+N more" row after it.
+    /// The tree's rows in their order. The group of <paramref name="reveal"/> opens. A folded group lists no rows.
     /// </summary>
-    internal static IReadOnlyList<object> TreeOrder(IReadOnlyList<TaskNodeViewModel> outline, IReadOnlyList<NodeGroup> groups, TaskNodeViewModel? shown = null, TaskNodeViewModel? reveal = null)
+    internal static IReadOnlyList<object> TreeOrder(IReadOnlyList<TaskNodeViewModel> outline, IReadOnlyList<NodeGroup> groups, TaskNodeViewModel? reveal = null)
     {
         var members = outline.ToLookup(NodeGroup.Of);
         foreach (var group in groups)
@@ -69,25 +68,19 @@ public sealed partial class WorkflowCanvasViewModel
 
         if (reveal is not null)
         {
-            groups.First(group => group.Kind == NodeGroup.Of(reveal)).Reveal();
+            groups.First(group => group.Kind == NodeGroup.Of(reveal)).Open();
         }
 
         var rows = new List<object>(outline.Count + groups.Count);
         foreach (var group in groups.Where(group => group.Count > 0))
         {
             rows.Add(group);
-            var listed = rows.Count;
             if (!group.IsFolded)
             {
                 rows.AddRange(members[group.Kind]);
             }
-            else if (shown is not null && members[group.Kind].Contains(shown))
-            {
-                rows.Add(shown);
-                rows.Add(group.More);
-            }
 
-            group.ListsRows = rows.Count > listed;
+            group.ListsRows = !group.IsFolded;
         }
 
         return rows;
@@ -116,7 +109,7 @@ public sealed partial class WorkflowCanvasViewModel
         _arrangingTree = true;
         try
         {
-            Arrange(TreeRows, TreeOrder(Outline, Groups, shown, reveal));
+            Arrange(TreeRows, TreeOrder(Outline, Groups, reveal));
         }
         finally
         {

@@ -198,11 +198,10 @@ public partial class SidebarView : UserControl
     {
         var item = sender is ListBox list ? list.ItemsView[e.Index] : null;
         var header = item is NodeGroup;
-        var more = item is GroupMore;
         e.Container.Classes.Set("groupRow", header);
-        KeyboardNavigation.SetIsTabStop(e.Container, !header && !more);
-        AutomationProperties.SetAutomationId(e.Container, header ? "NodeGroup" : more ? "NodeGroupMore" : null);
-        if (header || more)
+        KeyboardNavigation.SetIsTabStop(e.Container, !header);
+        AutomationProperties.SetAutomationId(e.Container, header ? "NodeGroup" : null);
+        if (header)
         {
             e.Container[!AutomationProperties.NameProperty] = new Avalonia.Data.Binding(nameof(NodeGroup.ToggleLabel));
         }
@@ -224,13 +223,8 @@ public partial class SidebarView : UserControl
         }
     }
 
-    // A group header and the "+N more" row of a folded group each fold or open the group.
-    private static NodeGroup? GroupOf(object? row) => row switch
-    {
-        NodeGroup group => group,
-        GroupMore more => more.Group,
-        _ => null,
-    };
+    // A group header folds or opens its group.
+    private static NodeGroup? GroupOf(object? row) => row as NodeGroup;
 
     private static void OnGroupPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -304,9 +298,6 @@ public partial class SidebarView : UserControl
             case NodeGroup { IsFolded: true } group:
                 group.Toggle();
                 return true;
-            case GroupMore more:
-                more.Group.Toggle();
-                return true;
             default:
                 return false;
         }
@@ -333,7 +324,6 @@ public partial class SidebarView : UserControl
     private static Control? ParentRow(IReadOnlyList<Control> rows, int at) => rows[at] switch
     {
         ListBoxItem { DataContext: TaskNodeViewModel node } => rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == node.Canvas),
-        ListBoxItem { DataContext: GroupMore more } => rows.Take(at).LastOrDefault(row => row.DataContext == more.Group) ?? rows[at],
         ListBoxItem { DataContext: NodeGroup } item => item.FindAncestorOfType<ListBox>()?.DataContext is WorkflowCanvasViewModel canvas
             ? rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == canvas) : rows[at],
         Button { DataContext: WorkflowCanvasViewModel canvas } => rows.Take(at).LastOrDefault(row => row.DataContext == canvas.Project),

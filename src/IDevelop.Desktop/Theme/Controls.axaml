@@ -438,13 +438,6 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
-  <!-- The "+N more" row of a folded group reads as a row of the group: the node rows' size and column, in the muted text (ADR 0068, ADR 0069). -->
-  <Style Selector="TextBlock.groupMore">
-    <Setter Property="FontSize" Value="13" />
-    <Setter Property="LineHeight" Value="18" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-  </Style>
   <!-- A node's name shows in full and wraps, selected or not (issue 108). Its smaller type keeps the tree easy to scan. -->
   <Style Selector="TextBlock.nodeName">
     <Setter Property="MaxLines" Value="0" />

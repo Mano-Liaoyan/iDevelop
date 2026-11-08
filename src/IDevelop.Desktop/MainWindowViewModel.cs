@@ -500,8 +500,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
         if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } found)
         {
-            // The open node's row shows in the tree: its group opens, or, when it is large, lists only that row (ADR 0068).
-            target.Canvas.Groups.First(group => group.Kind == NodeGroup.Of(found)).Reveal();
+            // The open node's row shows in the tree: its group opens and lists all its rows (ADR 0070).
+            target.Canvas.Groups.First(group => group.Kind == NodeGroup.Of(found)).Open();
             if (target.Canvas.SelectedNode != found)
             {
                 target.Canvas.Inspect(found);

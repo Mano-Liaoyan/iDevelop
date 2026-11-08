@@ -172,8 +172,8 @@
     <Setter Property="LineHeight" Value="31" />
     <Setter Property="MaxLines" Value="3" />
   </Style>
-  <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
-       text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
+  <!-- The smallest cards with text keep the client's badge under the title, because a node is an agent wherever it shows. The view
+       sets the text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
     <Setter Property="Margin" Value="26,2,8,0" />
     <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
@@ -304,7 +304,7 @@
   <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
     <Setter Property="FontSize" Value="24" />
   </Style>
-  <!-- The smallest cards keep their model's words, so the client's letters stay small there. -->
+  <!-- The client's letters on an overview card, without the model's words beside them. -->
   <Style Selector=":is(Control).tier-title Border.farClient">
     <Setter Property="MinWidth" Value="34" />
     <Setter Property="Height" Value="36" />
@@ -327,9 +327,10 @@
     <Setter Property="LineHeight" Value="30" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
+  <!-- An overview card gives its text to the title. Its last line keeps the client's badge and the state's badge, and the model
+       shows from the Label tier up, in the card's tooltip, and in the inspector (ADR 0070). -->
   <Style Selector=":is(Control).tier-title TextBlock.farAgent">
-    <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
-    <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- The badge ends the last line, inside the card. Only the Block tier's card, which has no text, wears it on its corner. -->
   <Style Selector="Panel.stateBadge">
