@@ -9,6 +9,7 @@
       <SolidColorBrush x:Key="AppPanelBrush" Color="#FCFCFA" />
       <SolidColorBrush x:Key="SurfaceMutedBrush" Color="#EDEFF2" />
       <SolidColorBrush x:Key="SurfaceMuted60Brush" Color="#99EDEFF2" />
+      <SolidColorBrush x:Key="SurfaceShownBrush" Color="#E5E5E5" />
       <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="SurfaceOverlayBrush" Color="#F8FAFD" />
       <SolidColorBrush x:Key="SurfaceOverlay95Brush" Color="#F2F8FAFD" />
@@ -123,6 +124,7 @@
       <SolidColorBrush x:Key="AppPanelBrush" Color="#1D1B19" />
       <SolidColorBrush x:Key="SurfaceMutedBrush" Color="#222629" />
       <SolidColorBrush x:Key="SurfaceMuted60Brush" Color="#99222629" />
+      <SolidColorBrush x:Key="SurfaceShownBrush" Color="#1AFFFFFF" />
       <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#22201D" />
       <SolidColorBrush x:Key="SurfaceOverlayBrush" Color="#26292D" />
       <SolidColorBrush x:Key="SurfaceOverlay95Brush" Color="#F226292D" />
