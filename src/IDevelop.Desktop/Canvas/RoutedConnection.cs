@@ -60,7 +60,13 @@ public sealed class RoutedConnection : StepConnection
         StreamGeometryContext context, Point source, Point target)
     {
         var pieces = Pieces(source, target);
-        context.BeginFigure(pieces[0].Start, false);
+        // A wire at its own point joins the card's edge with a short line to its socket, which stands in the column of the port's socket.
+        context.BeginFigure(SourceOnEdge ? source - new Vector(SourceOffset.Width, 0) : pieces[0].Start, false);
+        if (SourceOnEdge)
+        {
+            context.LineTo(pieces[0].Start);
+        }
+
         foreach (var piece in pieces)
         {
             context.CubicBezierTo(piece.First, piece.Second, piece.End);
@@ -69,7 +75,6 @@ public sealed class RoutedConnection : StepConnection
         context.EndFigure(false);
         if (SourceOnEdge)
         {
-            // A wire that leaves at its own point meets its card at its own small socket, as the wire on the port does.
             DrawSocket(context, pieces[0].Start);
         }
 
@@ -119,7 +124,7 @@ public sealed class RoutedConnection : StepConnection
         }
 
         WirePiece[] pieces = [.. curve];
-        pieces[0] = pieces[0] with { Start = SourceOnEdge ? source - new Vector(SourceOffset.Width, 0) : source };
+        pieces[0] = pieces[0] with { Start = SourceOnEdge ? source - new Vector(SourceOffset.Width / 2, 0) : source };
         pieces[^1] = pieces[^1] with { End = TargetOnEdge ? target + new Vector(TargetOffset.Width, 0) : target };
         return pieces;
     }

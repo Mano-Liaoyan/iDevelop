@@ -17,7 +17,7 @@ internal sealed class WireRouter
     private const double KeptClearance = 60;
 
     // How much longer a route may grow to leave a full channel.
-    private const double MostDetour = 400;
+    private const double MostDetour = 900;
 
     private readonly Dictionary<object, Kept> _kept = [];
     private readonly Dictionary<object, List<Rect>> _closed = [];

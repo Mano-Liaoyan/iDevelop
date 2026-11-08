@@ -63,6 +63,12 @@ internal static class WireRouting
         }
 
         var wideRows = new Thickness(WideColumns, Math.Max(Math.Max(Clearance, (RowGap - reach) / 2 - 1), PassRoom(reach)));
+        // A wire that leaves a full channel keeps out of the other narrow gaps between rows, so it takes open space and not the next tight gap.
+        if (shut.Length > 0 && Detour(start, end, cards, new Thickness(Clearance, wideRows.Top), shut) is { } open)
+        {
+            return open;
+        }
+
         var (close, wide) = (Detour(start, end, cards, new Thickness(Clearance), shut), Detour(start, end, cards, wideRows, shut));
         if (wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour))
         {
