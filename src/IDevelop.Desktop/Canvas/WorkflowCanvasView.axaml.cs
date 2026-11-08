@@ -140,7 +140,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         Resources["FarTitleLines"] = text.Lines;
         Resources["FarCardHeight"] = 64 + text.Reach;
         Resources["FarCardMargin"] = new Thickness(0, 0, 0, -text.Reach);
-        Resources["FarLineMargin"] = new Thickness(31, lineTop, 62, 0);
+        Resources["FarLineMargin"] = new Thickness(34, lineTop, 62, 0);
         Resources["FarLineHeight"] = ZoomTiers.ChipRow;
         Resources["FarBadgeMargin"] = new Thickness(0, lineTop, 16, 0);
     }

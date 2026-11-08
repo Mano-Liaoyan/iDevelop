@@ -177,14 +177,14 @@
   <!-- The smallest cards with text keep the client's badge under the title, because a node is an agent wherever it shows. The view
        sets the text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="21,2,8,0" />
+    <Setter Property="Margin" Value="24,2,12,0" />
     <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
     <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
     <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
   <Style Selector=":is(Control).tier-block TextBlock.farTitle">
-    <Setter Property="Margin" Value="21,2,8,0" />
+    <Setter Property="Margin" Value="24,2,12,0" />
     <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
     <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
     <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />
