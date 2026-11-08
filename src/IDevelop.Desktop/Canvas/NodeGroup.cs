@@ -25,9 +25,6 @@ public sealed class NodeGroup(NodeGroupKind kind, Action changed) : ObservableOb
         _ => "Done",
     };
 
-    /// <summary>The header takes the state color that a stale card has on the canvas.</summary>
-    public bool IsStale => Kind == NodeGroupKind.Stale;
-
     /// <summary>How many nodes the group holds.</summary>
     public int Count
     {

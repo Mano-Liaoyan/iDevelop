@@ -218,7 +218,7 @@
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
               </Border>
               <TextBlock Grid.Row="0" Grid.Column="2" Classes="headerName" Text="Workflow" />
-              <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding TaskCount}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding StateLine}" AutomationProperties.AutomationId="WorkflowStateLine" />
             </inspector:InspectorHeader>
           </DataTemplate>
         </ContentControl.DataTemplates>

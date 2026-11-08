@@ -442,10 +442,6 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
-  <!-- A stale group's name has the canvas's stale color. -->
-  <Style Selector="TextBlock.groupName.stale">
-    <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
-  </Style>
   <!-- A node's name shows in full and wraps, selected or not (issue 108). -->
   <Style Selector="TextBlock.nodeName">
     <Setter Property="MaxLines" Value="0" />

@@ -13,18 +13,18 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>"5 of 9 · 1 running · 3 waiting", "9 nodes" before anything runs, or "No nodes yet", then "Unsaved" while it applies.</summary>
     public string Summary => string.Join(" · ", new[] { Counts.Summary(), HasUnsavedChanges ? "Unsaved" : null }.OfType<string>());
 
-    /// <summary>How far the work went, at the row's end. The chip before it holds the most urgent state.</summary>
+    /// <summary>How far the work went, at the end of the name's line. The line under the name holds the states.</summary>
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
 
     /// <summary>
-    /// What a folded row says on the name's line: the run bar's most urgent group as a badge and its count, the same number the bar shows,
-    /// so every row keeps one height. Its tooltip and name list every group in words, as the run bar says them (ADR 0070).
+    /// What a workflow row says under its name: the most urgent group's badge and every group of the run bar in the bar's own words and
+    /// numbers, such as "1 failed · 2 waiting · 1 running". The line wraps when the row is narrow, so no count hides.
     /// </summary>
     public IReadOnlyList<StateChip> RowChips => BarChips is [var first, ..]
-        ? [first with { Label = string.Join(", ", BarChips.Select(chip => chip.Label)), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
+        ? [first with { Label = string.Join(" · ", BarChips.Select(chip => chip.Label)), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
         : [];
 
-    /// <summary>The row says its most urgent group while any node needs a look. The Nodes section lists the states one by one (ADR 0071).</summary>
+    /// <summary>The row has its status line while any group shows in the run bar. The Nodes section lists the states one by one (ADR 0071).</summary>
     public bool ShowsRowChips => BarChips.Count > 0;
 
     /// <summary>The workflow row's tooltip: the whole name, which the row may cut, and the whole sum.</summary>

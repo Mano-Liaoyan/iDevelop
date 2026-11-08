@@ -15,19 +15,24 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
     internal WorkflowOverviewViewModel(WorkflowCanvasViewModel canvas)
     {
         _canvas = canvas;
-        canvas.Nodes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(TaskCount));
+        canvas.Nodes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(StateLine));
         canvas.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(WorkflowCanvasViewModel.Name))
             {
                 OnPropertyChanged(nameof(Name));
             }
+            else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Counts))
+            {
+                OnPropertyChanged(nameof(StateLine));
+            }
         };
     }
 
     public string Name => _canvas.Name;
 
-    public string TaskCount => _canvas.Nodes.Count == 1 ? "1 node" : $"{_canvas.Nodes.Count} nodes";
+    /// <summary>"2 of 9 · 1 running · 2 waiting" once a node ran, "9 nodes" before, as the workflow's tooltip says it.</summary>
+    public string StateLine => _canvas.Counts.Summary();
 
     /// <summary>The libraries, which the workflow inspector lists.</summary>
     public BlueprintsViewModel Blueprints => _canvas.Blueprints;

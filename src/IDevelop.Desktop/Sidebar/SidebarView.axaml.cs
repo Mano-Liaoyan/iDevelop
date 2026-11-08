@@ -465,18 +465,48 @@ public partial class SidebarView : UserControl
             .Select(row => (Top: row.TranslatePoint(default, NodeRows)?.Y ?? 0, row.Bounds.Height))
             .Select(row => (row.Top, Bottom: row.Top + row.Height)).OrderBy(row => row.Top)];
 
+    private double PinnedGroupHeight => NodesHead.IsVisible ? PinnedRowHeight : 0;
+
+    // The group whose rows meet the top edge stays pinned there. A header that has reached the pin's place takes it over.
+    private void PinGroup(ScrollViewer scroller)
+    {
+        var group = scroller.Offset.Y < 1 ? null
+            : NodeRows.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible && row.DataContext is NodeGroup)
+                .LastOrDefault(row => (row.TranslatePoint(default, NodeRows)?.Y ?? 0) < PinnedRowHeight - 0.5);
+        StickyGroup.DataContext = group?.DataContext;
+        NodesHead.IsVisible = group is not null;
+    }
+
+    // A click on the pinned group folds it, as a click on its header does.
+    private void OnStickyGroup(object? sender, RoutedEventArgs e) => (StickyGroup.DataContext as NodeGroup)?.Toggle();
+
+    // The list brought the selected row to its top edge. The pinned group must not hide that row.
+    private void KeepSelectedRowUnderPin(ScrollViewer scroller)
+    {
+        if (PinnedGroupHeight > 0 && NodeRows.SelectedItem is { } selected && NodeRows.ContainerFromItem(selected) is { } row
+            && row.TranslatePoint(default, NodeRows)?.Y is { } top && top > -0.5 && top < PinnedGroupHeight - 0.5)
+        {
+            scroller.Offset = scroller.Offset.WithY(scroller.Offset.Y + top - PinnedGroupHeight);
+        }
+    }
+
     private void OnNodesScrollChanged(ScrollChangedEventArgs e)
     {
         if (NodesScroller is { } scroller)
         {
+            PinGroup(scroller);
             var room = NodeRows.Padding.Bottom - TreeFootInset;
-            var wanted = EndRoom(scroller, room, ShownNodeRows().Select(row => row.Top + scroller.Offset.Y), 0);
+            var wanted = EndRoom(scroller, room, ShownNodeRows().Select(row => row.Top + scroller.Offset.Y), PinnedRowHeight);
             if (Math.Abs(wanted - room) > 0.5)
             {
                 NodeRows.Padding = new Thickness(0, 0, NodeRows.Padding.Right, TreeFootInset + wanted);
             }
 
-            RestOnWholeRow(scroller, ShownNodeRows(), 0, e.OffsetDelta.Y);
+            RestOnWholeRow(scroller, ShownNodeRows(), PinnedGroupHeight, e.OffsetDelta.Y);
+            if (e.OffsetDelta.Y < 0)
+            {
+                KeepSelectedRowUnderPin(scroller);
+            }
         }
 
         CoverCutNodeRows();
@@ -504,11 +534,13 @@ public partial class SidebarView : UserControl
             .Select(row => (Top: row.TranslatePoint(default, NodeRows)?.Y ?? 0, row.Bounds.Height)).ToList();
         var foot = rows.Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5)
             .Select(row => height - row.Top).DefaultIfEmpty(0).Max();
-        var top = rows.Where(row => row.Top < -0.5 && row.Top + row.Height > 0.5)
-            .Select(row => row.Top + row.Height).DefaultIfEmpty(0).Max();
-        if (NodesHeadCover.Height != top || NodesHeadCover.IsVisible != top > 0)
+        var head = PinnedGroupHeight;
+        var top = rows.Where(row => row.Top < head - 0.5 && row.Top + row.Height > head + 0.5)
+            .Select(row => row.Top + row.Height - head).DefaultIfEmpty(0).Max();
+        if (NodesHeadCover.Height != top || NodesHeadCover.IsVisible != top > 0 || NodesHeadCover.Margin.Top != head)
         {
             NodesHeadCover.Height = top;
+            NodesHeadCover.Margin = new Thickness(0, head, 8, 0);
             NodesHeadCover.IsVisible = top > 0;
         }
 

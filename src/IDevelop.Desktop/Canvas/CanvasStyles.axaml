@@ -730,14 +730,12 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The canvas has the keys: one thin accent line inside its edge, so a selected card's ring stays the strongest mark. -->
-  <!-- The ring of every focused control, inside the canvas's edges and quieter than the selected card's ring. -->
+  <!-- The canvas has the keys: the ring of every focused control, inside the canvas's edges. -->
   <Style Selector="Border.canvasFocus">
     <Setter Property="Margin" Value="3" />
     <Setter Property="BorderThickness" Value="2" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="Opacity" Value="0.4" />
   </Style>
   <Style Selector="Button.zoomValue TextBlock">
     <Setter Property="FontSize" Value="12" />
@@ -788,6 +786,19 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- The zoom's steps and Fit leave the bar for the overflow menu before the run bar takes its own row, so the band keeps one row (ADR 0070). -->
+  <!-- The bar comes closer together and says its progress as a fraction before the zoom controls leave. Every count keeps its word. -->
+  <Style Selector=":is(Control).tightChips:not(.ownRow) WrapPanel.barGroup">
+    <Setter Property="ItemSpacing" Value="6" />
+  </Style>
+  <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.progressLong">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.progressShort">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="TextBlock.progressShort">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
   <Style Selector=":is(Control).tightZoom:not(.ownRow) Button.zoomStep, :is(Control).tightZoom:not(.ownRow) Button.barSpare">
     <Setter Property="IsVisible" Value="False" />
   </Style>

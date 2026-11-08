@@ -336,12 +336,15 @@
               </Button>
             </StackPanel>
             <!-- How far the work went and every group in its words. A bar on its own row wraps them. Run Workflow's tooltip says what it runs. -->
-            <WrapPanel VerticalAlignment="Center" ItemSpacing="10" LineSpacing="4">
-              <TextBlock Classes="barText" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
+            <WrapPanel Classes="barGroup" VerticalAlignment="Center" ItemSpacing="10" LineSpacing="4">
+              <Panel>
+                <TextBlock Classes="barText progressLong" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
+                <TextBlock Classes="barText progressShort" Text="{Binding RowProgress}" />
+              </Panel>
               <ItemsControl Classes="barChips" ItemsSource="{Binding BarChips}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunChips">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
-                    <WrapPanel ItemSpacing="10" LineSpacing="4" />
+                    <WrapPanel Classes="barGroup" ItemSpacing="10" LineSpacing="4" />
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
               </ItemsControl>

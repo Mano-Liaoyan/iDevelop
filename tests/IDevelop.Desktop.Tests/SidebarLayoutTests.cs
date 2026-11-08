@@ -204,7 +204,7 @@ public sealed class SidebarLayoutTests : IDisposable
     [AvaloniaTheory]
     [InlineData(240)]
     [InlineData(400)]
-    public void Rows_keep_one_height_while_their_names_fit_and_state_shows_as_counts_after_the_name(double width)
+    public void Rows_keep_one_height_while_their_names_fit_and_the_status_line_says_every_group_under_the_name(double width)
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var shell = OpenBoth(_fakes.DiscoverAsync().Result);
@@ -218,19 +218,17 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.AddNode();
         shell.Render();
 
-        // A short name leaves room on its line, so the state's counts stand after it and the row keeps its height (ADR 0068).
-        Assert.Equal(26.0, row.Bounds.Height);
+        // The progress keeps the end of the name's line, and the status line under the name says every group in the run bar's words.
         var nameTop = Of<Control>(row.GetVisualParent()!, "WorkflowName").TranslatePoint(default, row)!.Value.Y;
-        Assert.True(Math.Abs(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").TranslatePoint(default, row)!.Value.Y - nameTop) < 2, "The counts stand on the name's line.");
-        Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowAlert").IsEffectivelyVisible);
+        var alert = Of<Control>(row.GetVisualParent()!, "WorkflowAlert");
+        Assert.True(alert.TranslatePoint(default, row)!.Value.Y > nameTop + 10, "The status line stands under the name.");
+        Assert.True(alert.IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
-        // The progress keeps the row's end in every state, and the state is a badge and a count after the name, with its words
-        // in the chip's tooltip and name.
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
-        var alert = Of<Control>(row.GetVisualParent()!, "WorkflowAlert");
-        Assert.Equal(canvas.RowChips.Select(chip => chip.Count.ToString()), alert.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
-        Assert.Equal(canvas.RowChips.Select(chip => chip.Tip), alert.GetVisualDescendants().OfType<StackPanel>().Where(chip => chip.DataContext is Canvas.StateChip).Select(chip => (string)ToolTip.GetTip(chip)!));
+        Assert.Equal(string.Join(" \u00b7 ", canvas.BarChips.Select(chip => chip.Label)), Assert.Single(canvas.RowChips).Label);
+        Assert.Equal(canvas.RowChips.Select(chip => chip.Label), alert.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
+        Assert.Equal(canvas.RowChips.Select(chip => chip.Tip), alert.GetVisualDescendants().OfType<DockPanel>().Where(chip => chip.DataContext is Canvas.StateChip).Select(chip => (string)ToolTip.GetTip(chip)!));
         Assert.Single(canvas.RowChips);
     }
 
