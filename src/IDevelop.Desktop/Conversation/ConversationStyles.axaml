@@ -673,7 +673,11 @@
   <Style Selector="SelectableTextBlock.attentionText">
     <Setter Property="SelectionBrush" Value="{DynamicResource StateSelected40Brush}" />
   </Style>
-  <Style Selector="ToggleButton.choice">
+  <Style Selector="ScrollViewer.quickReplies">
+    <Setter Property="MaxHeight" Value="100" />
+    <Setter Property="Margin" Value="0,0,0,6" />
+  </Style>
+  <Style Selector="Button.choice, ToggleButton.choice">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -687,12 +691,12 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="ToggleButton.choice /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice:unchecked /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="Button.choice /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice:unchecked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="ToggleButton.choice:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice:pressed /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="Button.choice:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.choice:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.choice:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />

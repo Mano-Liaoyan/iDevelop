@@ -301,6 +301,28 @@
         </Grid>
       </Border>
 
+      <!-- The options a question lists in its text. One fills the composer, and the person presses Send. Past three rows they scroll. -->
+      <ScrollViewer Classes="quickReplies" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasQuickReplies}">
+        <ItemsControl ItemsSource="{Binding QuickReplies}" AutomationProperties.AutomationId="ConversationQuickReplies">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="2" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="conversation:QuickReplyViewModel">
+              <Button Classes="choice" Click="OnQuickReply" ToolTip.Tip="{Binding Text}"
+                      AutomationProperties.AutomationId="ConversationQuickReply" AutomationProperties.Name="{Binding Text}">
+                <Grid ColumnDefinitions="16,*" ColumnSpacing="4">
+                  <TextBlock Classes="choiceDigit" Text="{Binding Digit}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Text}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </Grid>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
       <Border Classes="composer" IsVisible="{Binding Node.HasAgent}">
         <StackPanel>
           <TextBox x:Name="Composer" Classes="composerBox" Text="{Binding Draft}"

@@ -233,6 +233,21 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The card has words to read under its header.</summary>
     public bool ShowsCardBody => CardBody is not null || CardOffered is not null || CardHint is not null || Node.Questions.Count > 0 && Node.IsAsking;
 
+    /// <summary>The options the waiting question lists in its text, which fill the composer. A question with no list has none.</summary>
+    public IReadOnlyList<QuickReplyViewModel> QuickReplies
+    {
+        get;
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasQuickReplies));
+            }
+        }
+    } = [];
+
+    public bool HasQuickReplies => QuickReplies.Count > 0;
+
     /// <summary>The person opened the note box of Send back.</summary>
     public bool IsSendBackOpen
     {
@@ -340,10 +355,21 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The digit key picks its choice. It works only while the composer is empty, where a digit is no message.</summary>
+    /// <summary>The digit key picks its choice or its quick reply. It works only while the composer is empty, where a digit is no message.</summary>
     internal bool PickChoice(int digit)
     {
-        if (!Node.IsAsking || State.Draft.Length > 0)
+        if (State.Draft.Length > 0)
+        {
+            return false;
+        }
+
+        if (QuickReplies.FirstOrDefault(reply => reply.Number == digit) is { } quick)
+        {
+            FillReply(quick);
+            return true;
+        }
+
+        if (!Node.IsAsking)
         {
             return false;
         }
@@ -355,6 +381,20 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
         choice.IsChosen = !choice.IsChosen;
         return true;
+    }
+
+    /// <summary>Puts the option in the composer, in place of another option, and after the person's own words. The person presses Send.</summary>
+    internal void FillReply(QuickReplyViewModel reply) =>
+        Draft = string.IsNullOrWhiteSpace(Draft) || QuickReplies.Any(other => other.Text == Draft) ? reply.Text : $"{Draft.TrimEnd()}\n{reply.Text}";
+
+    // A wait for the agent's words reads the options from the words that ask, and the same words keep the same buttons.
+    private void ReadQuickReplies()
+    {
+        var options = Card == AttentionCard.Reply ? Conversation.QuickReplies.Read(CardBody ?? Node.LastReply) : [];
+        if (!options.SequenceEqual(QuickReplies.Select(reply => reply.Text)))
+        {
+            QuickReplies = [.. options.Select((text, index) => new QuickReplyViewModel(index + 1, text))];
+        }
     }
 
     private static int ShownCount(int count, int room) => count <= room ? count : room;
@@ -417,6 +457,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CardHint));
         OnPropertyChanged(nameof(ShowsCardBody));
         OnPropertyChanged(nameof(ShowsCard));
+        ReadQuickReplies();
         _loadEarlier.NotifyCanExecuteChanged();
     }
 
@@ -541,6 +582,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             IsSendBackOpen = false;
         }
 
+        ReadQuickReplies();
         Relate();
     }
 
@@ -584,6 +626,9 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             case nameof(TaskNodeViewModel.ShowsApprove):
                 OnPropertyChanged(nameof(ShowsCardApprove));
                 OnPropertyChanged(nameof(ShowsCard));
+                break;
+            case nameof(TaskNodeViewModel.LastReply):
+                ReadQuickReplies();
                 break;
             case nameof(TaskNodeViewModel.Latest):
                 OnPropertyChanged(nameof(WorkingLine));

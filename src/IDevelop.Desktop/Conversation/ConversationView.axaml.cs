@@ -360,8 +360,22 @@ public partial class ConversationView : UserControl
             && _model?.PickChoice(e.Key >= Key.NumPad1 ? e.Key - Key.NumPad0 : e.Key - Key.D0) == true)
         {
             e.Handled = true;
+            CaretToEnd();
         }
     }
+
+    // An option goes into the composer, which takes the keys, so the person can add to it or press Send.
+    private void OnQuickReply(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: QuickReplyViewModel reply })
+        {
+            _model?.FillReply(reply);
+            Composer.Focus();
+            CaretToEnd();
+        }
+    }
+
+    private void CaretToEnd() => Composer.CaretIndex = Composer.Text?.Length ?? 0;
 
     // Left and Right fold and open a group of steps, as they do a tree's row.
     private static void OnStepKey(object? sender, KeyEventArgs e)
