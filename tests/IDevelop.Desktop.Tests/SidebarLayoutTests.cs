@@ -340,6 +340,58 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.True(list.Bounds.Bottom <= sections.Bounds.Height + 0.5, "Nodes goes past the panel.");
     }
 
+    [AvaloniaTheory]
+    [InlineData(700)]
+    [InlineData(733)]
+    [InlineData(800)]
+    [InlineData(847)]
+    public void Projects_ends_on_a_whole_row_and_every_workflow_is_in_reach(double height)
+    {
+        var reports = _temp.Create(Reports);
+        foreach (var index in Enumerable.Range(1, 30))
+        {
+            Save(reports, $"Workflow {index}", "Step");
+        }
+
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Window.Height = height;
+        shell.Render();
+        T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+        var (tree, foot) = (Named<ScrollViewer>("Tree"), Named<Border>("TreeFootCover"));
+
+        Assert.True(tree.Extent.Height > tree.Viewport.Height, "Projects does not scroll.");
+        Assert.False(foot.IsVisible && foot.Height > 8, $"A blank band of {foot.Height} px ends Projects at the top of its range.");
+
+        tree.Offset = tree.Offset.WithY(tree.Extent.Height);
+        shell.Render();
+        var last = tree.GetVisualDescendants().OfType<Button>().Where(row => row.Classes.Contains("workflow") && row.IsEffectivelyVisible).Last();
+        var at = last.TranslatePoint(default, tree)!.Value.Y;
+        Assert.InRange(at + last.Bounds.Height, 0, tree.Viewport.Height + 0.5);
+    }
+
+    [AvaloniaFact]
+    public void Nodes_rests_on_a_whole_row_so_no_blank_band_shows_under_its_heading()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Window.Height = 700;
+        shell.Render();
+        var list = shell.Find<ListBox>("SidebarTasks");
+        var scroll = list.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var head = shell.Window.GetVisualDescendants().OfType<Border>().Single(control => control.Name == "NodesHeadCover");
+
+        foreach (var offset in new[] { 13.0, 50, 97, 211, 90, 40, scroll.Extent.Height })
+        {
+            scroll.Offset = scroll.Offset.WithY(offset);
+            shell.Render();
+            Assert.False(head.IsVisible, $"A cover hides a row under the heading with the list at {scroll.Offset.Y} of {scroll.Extent.Height}.");
+        }
+    }
+
     [AvaloniaFact]
     public void A_node_s_name_shows_in_full_also_while_it_is_selected()
     {

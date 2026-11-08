@@ -345,7 +345,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="local:UnopenedProject">
-                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="8,5,0,5" ColumnSpacing="8"
+                <Grid Classes="unopenedRow" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="8,5,0,5" ColumnSpacing="8"
                       Background="Transparent"
                       ToolTip.Tip="{Binding Reason}">
                   <TextBlock Grid.Row="0" Classes="rowName semibold" Text="{Binding Name}"

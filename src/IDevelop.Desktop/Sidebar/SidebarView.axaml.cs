@@ -54,9 +54,13 @@ public partial class SidebarView : UserControl
             ActivityScroller.MaxHeight = e.NewSize.Height / 2;
             FoldActivity();
         };
-        TreeRows.LayoutUpdated += (_, _) => FoldActivity();
+        TreeRows.LayoutUpdated += (_, _) =>
+        {
+            FoldActivity();
+            SplitSections();
+        };
         Sections.SizeChanged += (_, _) => SplitSections();
-        NodeRows.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => CoverCutNodeRows());
+        NodeRows.AddHandler(ScrollViewer.ScrollChangedEvent, (_, e) => OnNodesScrollChanged(e));
         NodeRows.LayoutUpdated += (_, _) => CoverCutNodeRows();
         DataContextChanged += (_, _) => WatchReveals();
     }
@@ -66,13 +70,18 @@ public partial class SidebarView : UserControl
     private void SplitSections()
     {
         var room = Sections.Bounds.Height - ProjectsHeading.Bounds.Height;
-        Tree.MaxHeight = Math.Max(0, _revealing?.Canvas switch
+        Tree.MaxHeight = WholeRows(Math.Max(0, _revealing?.Canvas switch
         {
             null => room,
             { IsEmpty: true } => room - EmptyNodesHeight,
             _ => Math.Min(room / 2, room - NodesLeastHeight),
-        });
+        }));
     }
+
+    // A section that scrolls ends on a whole row, so the row after it never shows cut or as a blank band. Nodes takes what is left over.
+    private double WholeRows(double limit) => TreeRows.DesiredSize.Height <= limit ? limit
+        : TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
+            .Select(row => TopOf(row) + row.Bounds.Height + TreeFootInset).Where(bottom => bottom <= limit).DefaultIfEmpty(limit).Max();
 
     private void FoldActivity()
     {
@@ -382,7 +391,7 @@ public partial class SidebarView : UserControl
     {
         PinRows();
         RoomAfterLastRow();
-        RestOnWholeRow(e.OffsetDelta.Y);
+        RestOnWholeRow(Tree, ShownRows(), PinnedHeight, e.OffsetDelta.Y);
         CoverCutRows();
     }
 
@@ -415,32 +424,59 @@ public partial class SidebarView : UserControl
     // The space under the last row without the room that RoomAfterLastRow adds.
     private const double TreeFootInset = 8;
 
-    // The end of the tree's range rests on a row's top too. A little room after the last row makes up what no whole row fills,
-    // so a row that the pinned rows would cut never hides as an empty band under them.
+    // The end of a list's range rests on a row's top too. A little room after the last row makes up what no whole row fills,
+    // so a row that an edge would cut never hides as an empty band there. The room that the list has now does not count.
+    private static double EndRoom(ScrollViewer scroller, double room, IEnumerable<double> tops, double head)
+    {
+        var end = scroller.Extent.Height - room - scroller.Viewport.Height;
+        var rest = end <= 0 ? end : tops.Select(top => top - head).Where(top => top >= end - 0.5).DefaultIfEmpty(end).Min();
+        return Math.Max(0, rest - end);
+    }
+
     private void RoomAfterLastRow()
     {
         var room = TreeRows.Margin.Bottom - TreeFootInset;
-        var (end, head) = (Tree.Extent.Height - room - Tree.Viewport.Height, PinnedRowHeight);
-        var rest = end <= 0 ? end : TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
-            .Select(row => TopOf(row) - head).Where(top => top >= end - 0.5).DefaultIfEmpty(end).Min();
-        var wanted = Math.Max(0, rest - end);
+        var wanted = EndRoom(Tree, room, TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow).Select(row => TopOf(row)), PinnedRowHeight);
         if (Math.Abs(wanted - room) > 0.5)
         {
             TreeRows.Margin = new Thickness(0, 0, TreeRows.Margin.Right, TreeFootInset + wanted);
         }
     }
 
-    // The tree rests on a row's top under the pinned rows. It goes on in the direction it moved, so a small step never goes back.
-    private void RestOnWholeRow(double moved)
+    // A list rests on a row's top under its head. It goes on in the direction it moved, so a small step never goes back.
+    private static void RestOnWholeRow(ScrollViewer scroller, IReadOnlyList<(double Top, double Bottom)> rows, double head, double moved)
     {
-        var (rows, head) = (ShownRows(), PinnedHeight);
         if (moved == 0 || !rows.Any(row => row.Top < head - 0.5 && row.Bottom > head + 0.5))
         {
             return;
         }
 
         var row = moved > 0 ? rows.FirstOrDefault(row => row.Top >= head - 0.5, (Top: head, Bottom: head)) : rows.Last(row => row.Top < head - 0.5);
-        Tree.Offset = Tree.Offset.WithY(Tree.Offset.Y + row.Top - head);
+        scroller.Offset = scroller.Offset.WithY(scroller.Offset.Y + row.Top - head);
+    }
+
+    private ScrollViewer? NodesScroller => NodeRows.Scroll as ScrollViewer;
+
+    private IReadOnlyList<(double Top, double Bottom)> ShownNodeRows() =>
+        [.. NodeRows.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible)
+            .Select(row => (Top: row.TranslatePoint(default, NodeRows)?.Y ?? 0, row.Bounds.Height))
+            .Select(row => (row.Top, Bottom: row.Top + row.Height)).OrderBy(row => row.Top)];
+
+    private void OnNodesScrollChanged(ScrollChangedEventArgs e)
+    {
+        if (NodesScroller is { } scroller)
+        {
+            var room = NodeRows.Padding.Bottom - TreeFootInset;
+            var wanted = EndRoom(scroller, room, ShownNodeRows().Select(row => row.Top + scroller.Offset.Y), 0);
+            if (Math.Abs(wanted - room) > 0.5)
+            {
+                NodeRows.Padding = new Thickness(0, 0, NodeRows.Padding.Right, TreeFootInset + wanted);
+            }
+
+            RestOnWholeRow(scroller, ShownNodeRows(), 0, e.OffsetDelta.Y);
+        }
+
+        CoverCutNodeRows();
     }
 
     // At the end of its range the tree cannot rest on a row, and a row that an edge would cut hides under a cover until it shows whole.
@@ -485,6 +521,7 @@ public partial class SidebarView : UserControl
         ListBoxItem item => item.FindAncestorOfType<ListBox>()?.Classes.Contains("tasks") == true,
         ToggleButton toggle => toggle.Classes.Contains("projectRow"),
         Button button => button.Classes.Contains("workflow"),
+        Grid grid => grid.Classes.Contains("unopenedRow"),
         _ => false,
     };
 
