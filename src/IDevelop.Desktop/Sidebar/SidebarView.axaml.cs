@@ -28,7 +28,7 @@ public partial class SidebarView : UserControl
     private const double NodesLeastHeight = 146;
 
     // The room Projects leaves Nodes for its three workflow rows: a group's heading and five rows, two of them on two lines,
-    // because a long node name wraps (issue #108).
+    // because a long node name wraps (issue 108).
     private const double NodesRoomyHeight = 202;
 
     // While a workflow is open, Projects keeps room for this many workflow rows, under the pinned project (ADR 0071).
