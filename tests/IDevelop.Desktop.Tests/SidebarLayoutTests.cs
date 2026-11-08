@@ -362,12 +362,17 @@ public sealed class SidebarLayoutTests : IDisposable
         var canvas = shell.Window.ViewModel.Canvas!;
         var group = canvas.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted);
         var list = shell.Window.GetVisualDescendants().OfType<ListBox>().Single(list => list.DataContext == canvas && list.Classes.Contains("tasks"));
+        bool PointsRight() => list.GetVisualDescendants().OfType<ListBoxItem>().Single(row => row.DataContext == group)
+            .GetVisualDescendants().OfType<PathIcon>().Single(icon => icon.Classes.Contains("groupChevron")).Classes.Contains("folded");
         Assert.True(group.IsFolded);
+        Assert.True(PointsRight(), "A folded group that lists no row points its chevron right.");
 
         canvas.SelectedNode = canvas.Outline[7];
         shell.Render();
         Assert.True(group.IsFolded);
         Assert.Equal<object>([group, canvas.Outline[7], group.More], canvas.TreeRows);
+        // The chevron agrees with what shows: the group lists a row, so it points down.
+        Assert.False(PointsRight(), "A folded group that lists the selected row points its chevron right.");
         Assert.Same(canvas.Outline[7], list.SelectedItem);
 
         // Another selection takes the one row's place.

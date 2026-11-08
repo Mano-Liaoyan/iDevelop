@@ -368,7 +368,7 @@
                                   <DataTemplate DataType="canvas:NodeGroup">
                                     <Grid ColumnDefinitions="14,Auto,*" ColumnSpacing="5" Background="Transparent" ToolTip.Tip="{Binding ToggleLabel}"
                                           AutomationProperties.Name="{Binding ToggleLabel}">
-                                      <PathIcon Classes="groupChevron" Classes.folded="{Binding IsFolded}" Width="12" Height="12" />
+                                      <PathIcon Classes="groupChevron" Classes.folded="{Binding ShowsFolded}" Width="12" Height="12" />
                                       <TextBlock Grid.Column="1" Classes="groupName" Text="{Binding Name}" />
                                       <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Count}" VerticalAlignment="Center"
                                                  AutomationProperties.AutomationId="NodeGroupCount" />

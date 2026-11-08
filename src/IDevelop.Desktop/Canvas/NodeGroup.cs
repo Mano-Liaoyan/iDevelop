@@ -52,6 +52,22 @@ public sealed class NodeGroup(NodeGroupKind kind, Action changed) : ObservableOb
     /// <summary>The group lists no node rows under its header.</summary>
     public bool IsFolded => _folded ?? IsLarge;
 
+    /// <summary>The group lists a row under its header: it is open, or it is folded and lists the selected node's row.</summary>
+    public bool ListsRows
+    {
+        get;
+        internal set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowsFolded));
+            }
+        }
+    }
+
+    /// <summary>The header's chevron points right only when no row shows under it, so the chevron agrees with the rows (ADR 0069).</summary>
+    public bool ShowsFolded => !ListsRows;
+
     /// <summary>What a click on the header does, such as "Show 21 done nodes".</summary>
     public string ToggleLabel => IsFolded ? $"Show {Name} ({Count})" : $"Fold {Name} ({Count})";
 

@@ -76,6 +76,7 @@ public sealed partial class WorkflowCanvasViewModel
         foreach (var group in groups.Where(group => group.Count > 0))
         {
             rows.Add(group);
+            var listed = rows.Count;
             if (!group.IsFolded)
             {
                 rows.AddRange(members[group.Kind]);
@@ -85,6 +86,8 @@ public sealed partial class WorkflowCanvasViewModel
                 rows.Add(shown);
                 rows.Add(group.More);
             }
+
+            group.ListsRows = rows.Count > listed;
         }
 
         return rows;
