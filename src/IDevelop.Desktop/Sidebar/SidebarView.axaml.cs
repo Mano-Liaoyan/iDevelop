@@ -196,11 +196,13 @@ public partial class SidebarView : UserControl
     // A group header is a row that the arrow keys reach, but Tab goes on to the nodes, and the header names its group.
     private void OnTreeContainerPrepared(object? sender, ContainerPreparedEventArgs e)
     {
-        var header = sender is ListBox list && list.ItemsView[e.Index] is NodeGroup;
+        var item = sender is ListBox list ? list.ItemsView[e.Index] : null;
+        var header = item is NodeGroup;
+        var more = item is GroupMore;
         e.Container.Classes.Set("groupRow", header);
-        KeyboardNavigation.SetIsTabStop(e.Container, !header);
-        AutomationProperties.SetAutomationId(e.Container, header ? "NodeGroup" : null);
-        if (header)
+        KeyboardNavigation.SetIsTabStop(e.Container, !header && !more);
+        AutomationProperties.SetAutomationId(e.Container, header ? "NodeGroup" : more ? "NodeGroupMore" : null);
+        if (header || more)
         {
             e.Container[!AutomationProperties.NameProperty] = new Avalonia.Data.Binding(nameof(NodeGroup.ToggleLabel));
         }
@@ -222,9 +224,18 @@ public partial class SidebarView : UserControl
         }
     }
 
+    // A group header and the "+N more" row of a folded group each fold or open the group.
+    private static NodeGroup? GroupOf(object? row) => row switch
+    {
+        NodeGroup group => group,
+        GroupMore more => more.Group,
+        _ => null,
+    };
+
     private static void OnGroupPressed(object? sender, PointerPressedEventArgs e)
     {
-        if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: NodeGroup group } item
+        if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { } item
+            && GroupOf(item.DataContext) is { } group
             && e.GetCurrentPoint(item).Properties.IsLeftButtonPressed)
         {
             group.Toggle();
@@ -247,7 +258,7 @@ public partial class SidebarView : UserControl
         }
 
         var row = rows[at];
-        if (e.Key is Key.Enter or Key.Space && row.DataContext is NodeGroup group)
+        if (e.Key is Key.Enter or Key.Space && GroupOf(row.DataContext) is { } group)
         {
             group.Toggle();
             e.Handled = true;
@@ -293,6 +304,9 @@ public partial class SidebarView : UserControl
             case NodeGroup { IsFolded: true } group:
                 group.Toggle();
                 return true;
+            case GroupMore more:
+                more.Group.Toggle();
+                return true;
             default:
                 return false;
         }
@@ -319,6 +333,7 @@ public partial class SidebarView : UserControl
     private static Control? ParentRow(IReadOnlyList<Control> rows, int at) => rows[at] switch
     {
         ListBoxItem { DataContext: TaskNodeViewModel node } => rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == node.Canvas),
+        ListBoxItem { DataContext: GroupMore more } => rows.Take(at).LastOrDefault(row => row.DataContext == more.Group) ?? rows[at],
         ListBoxItem { DataContext: NodeGroup } item => item.FindAncestorOfType<ListBox>()?.DataContext is WorkflowCanvasViewModel canvas
             ? rows.Take(at).LastOrDefault(row => row is Button && row.DataContext == canvas) : rows[at],
         Button { DataContext: WorkflowCanvasViewModel canvas } => rows.Take(at).LastOrDefault(row => row.DataContext == canvas.Project),

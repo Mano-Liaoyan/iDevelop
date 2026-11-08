@@ -11,6 +11,7 @@ public sealed partial class WorkflowCanvasViewModel
 {
     private void Reroute()
     {
+        ShowFarText();
         _spreadHeld = true;
         foreach (var connection in Connections)
         {
@@ -63,6 +64,36 @@ public sealed partial class WorkflowCanvasViewModel
         {
             node.TitleKeep = keep;
         }
+    }
+
+    /// <summary>Sets the zoomed out card's text for the zoom and the cards' rows. It returns whether a card's drawn height changed.</summary>
+    private bool ShowFarText()
+    {
+        var text = ZoomTiers.TitleText(ViewportZoom, Tier == ZoomTier.Block ? ZoomTier.Block : ZoomTier.Title, Tier == ZoomTier.Title ? RowPitch() : double.PositiveInfinity);
+        var grew = text.Reach != FarText.Reach;
+        FarText = text;
+        return grew;
+    }
+
+    /// <summary>The least distance from a collapsed card's top to the top of a collapsed card under it that it overlaps across.</summary>
+    private double RowPitch()
+    {
+        const double width = TaskCardWidth + 32;
+        var pitch = double.PositiveInfinity;
+        var cards = Nodes.Where(node => !node.IsExpanded).Select(node => node.DisplayLocation).ToArray();
+        for (var first = 0; first < cards.Length; first++)
+        {
+            for (var second = first + 1; second < cards.Length; second++)
+            {
+                var (dx, dy) = (Math.Abs(cards[first].X - cards[second].X), Math.Abs(cards[first].Y - cards[second].Y));
+                if (dx < width && dy > 0)
+                {
+                    pitch = Math.Min(pitch, dy);
+                }
+            }
+        }
+
+        return pitch;
     }
 
     // While every wire finds its path, each one need not spread them all.

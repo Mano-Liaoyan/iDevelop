@@ -6,16 +6,39 @@ namespace IDevelop.Desktop.Tests;
 public sealed class ZoomTitleTextTests
 {
     [Theory]
-    [InlineData(0.23, 40, 2)]
-    [InlineData(0.244, 38, 2)]
-    [InlineData(0.29, 32, 3)]
-    [InlineData(0.34, 30, 3)]
-    public void The_title_tier_keeps_its_text_readable_and_a_closer_zoom_keeps_more_lines(double zoom, double size, int lines)
+    [InlineData(0.23, 40)]
+    [InlineData(0.244, 38)]
+    [InlineData(0.29, 32)]
+    [InlineData(0.34, 30)]
+    public void The_title_tier_keeps_its_text_readable_and_takes_three_lines_where_the_rows_leave_room(double zoom, double size)
     {
         var text = ZoomTiers.TitleText(zoom);
 
-        Assert.Equal((size, lines), (text.Size, text.Lines));
+        Assert.Equal((size, 3), (text.Size, text.Lines));
         Assert.True(text.Size * zoom >= 9, $"The text draws at {text.Size * zoom} px.");
+    }
+
+    [Theory]
+    [InlineData(0.244, 3)]
+    [InlineData(0.276, 3)]
+    [InlineData(0.32, 3)]
+    [InlineData(0.23, 2)]
+    public void A_title_tier_card_grows_only_as_far_as_a_6_px_gap_to_the_card_under_it(double zoom, int lines)
+    {
+        const double pitch = 190;
+        var text = ZoomTiers.TitleText(zoom, ZoomTier.Title, pitch);
+
+        Assert.Equal(lines, text.Lines);
+        Assert.True((pitch - 64 - text.Reach) * zoom >= ZoomTiers.CardGap, $"The gap is {(pitch - 64 - text.Reach) * zoom} px.");
+        Assert.True(text.Reach >= ZoomTiers.CardReach(ZoomTier.Title), "A card never draws shorter than its tier's height.");
+    }
+
+    [Fact]
+    public void Close_rows_keep_the_title_tier_card_at_its_height_and_two_lines()
+    {
+        var text = ZoomTiers.TitleText(0.244, ZoomTier.Title, 120);
+
+        Assert.Equal((2, ZoomTiers.CardReach(ZoomTier.Title)), (text.Lines, text.Reach));
     }
 
     [Theory]

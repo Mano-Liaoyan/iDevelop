@@ -143,7 +143,7 @@ public sealed class ConnectionViewModel : ObservableObject
             OnPropertyChanged(nameof(EntersOwnPoint));
         }
 
-        var route = WireRouting.Route(SourcePoint, TargetPoint, cards, ZoomTiers.CardReach(_canvas.Tier));
+        var route = WireRouting.Route(SourcePoint, TargetPoint, cards, _canvas.CardReach);
         if (!route.SequenceEqual(_ownRoute))
         {
             _ownRoute = route;

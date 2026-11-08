@@ -330,7 +330,7 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Opening_a_nodes_conversation_opens_its_large_tree_group_even_after_the_person_folded_it()
+    public void Opening_a_nodes_conversation_keeps_its_large_tree_group_folded_and_lists_its_row()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
@@ -339,20 +339,17 @@ public sealed class SidebarLayoutTests : IDisposable
         shell.Render();
         var canvas = shell.Window.ViewModel.Canvas!;
         var group = canvas.Groups.Single(group => group.Kind == Canvas.NodeGroupKind.NotStarted);
-        canvas.SelectedNode = canvas.Outline[5];
-        shell.Render();
-        group.Toggle();
-        shell.Render();
-        Assert.True(group.IsFolded);
 
         canvas.Outline[5].OpenConversationCommand.Execute(null);
         shell.Render();
 
-        Assert.False(group.IsFolded);
+        Assert.True(group.IsFolded);
+        Assert.Equal<object>([group, canvas.Outline[5], group.More], canvas.TreeRows);
+        Assert.Equal("+11 more", group.More.Label);
     }
 
     [AvaloniaFact]
-    public void Selecting_a_node_of_a_large_folded_group_opens_the_group_and_shows_its_row_selected()
+    public void Selecting_a_node_of_a_large_folded_group_lists_only_its_row_selected_and_more_opens_the_group()
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 12).Select(index => $"Node {index}")]);
@@ -366,19 +363,23 @@ public sealed class SidebarLayoutTests : IDisposable
 
         canvas.SelectedNode = canvas.Outline[7];
         shell.Render();
-        Assert.False(group.IsFolded);
+        Assert.True(group.IsFolded);
+        Assert.Equal<object>([group, canvas.Outline[7], group.More], canvas.TreeRows);
         Assert.Same(canvas.Outline[7], list.SelectedItem);
 
-        // The person folds the group again, and the canvas keeps its selection.
-        group.Toggle();
-        shell.Render();
-        Assert.True(group.IsFolded);
-        Assert.Same(canvas.Outline[7], canvas.SelectedNode);
-
-        // A new selection opens it again.
+        // Another selection takes the one row's place.
         canvas.SelectedNode = canvas.Outline[3];
         shell.Render();
+        Assert.Equal<object>([group, canvas.Outline[3], group.More], canvas.TreeRows);
+        Assert.Same(canvas.Outline[3], list.SelectedItem);
+
+        // The "+N more" row opens the group, and the selection stays.
+        var more = list.GetVisualDescendants().OfType<ListBoxItem>().Single(row => row.DataContext == group.More);
+        Assert.Equal("NodeGroupMore", Avalonia.Automation.AutomationProperties.GetAutomationId(more));
+        group.More.Group.Toggle();
+        shell.Render();
         Assert.False(group.IsFolded);
+        Assert.Equal(13, canvas.TreeRows.Count);
         Assert.Same(canvas.Outline[3], list.SelectedItem);
         list.SelectedItem = canvas.Outline[2];
         shell.Render();

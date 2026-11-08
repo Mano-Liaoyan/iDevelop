@@ -438,6 +438,11 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
+  <!-- The "+N more" row of a folded group reads as a link to the group's other nodes (ADR 0068). -->
+  <Style Selector="TextBlock.groupMore">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
   <!-- A node's name shows in full and wraps, selected or not (issue 108). Its smaller type keeps the tree easy to scan. -->
   <Style Selector="TextBlock.nodeName">
     <Setter Property="MaxLines" Value="0" />

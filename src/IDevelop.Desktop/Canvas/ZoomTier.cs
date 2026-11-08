@@ -3,6 +3,9 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>How much a card shows at the canvas's zoom. Every tier shows the card's title, never under 9 px on screen.</summary>
 public enum ZoomTier { Full, Detail, Compact, Label, Title, Block }
 
+/// <summary>A Title or Block tier card's text size and line height in canvas units, its title lines, and how far the card draws under its 64 px box.</summary>
+public readonly record struct FarText(double Size, double Line, int Lines, double Reach);
+
 public static class ZoomTiers
 {
     private const double FullFrom = 0.84;
@@ -23,8 +26,14 @@ public static class ZoomTiers
     /// <summary>The least size in screen pixels of a Title or Block tier card's text.</summary>
     public const double ReadablePixels = 9;
 
-    /// <summary>The height in canvas units over the agent's line of a Title tier card.</summary>
-    private const double TitleRoom = 106;
+    /// <summary>The most title lines of a Title tier card.</summary>
+    private const int TitleLines = 3;
+
+    /// <summary>The space in canvas units over a Title tier card's title.</summary>
+    public const double TitleTop = 4;
+
+    /// <summary>The least gap in screen pixels between a Title tier card that grows and the card under it.</summary>
+    public const double CardGap = 6;
 
     /// <summary>The height in canvas units for the title of a Block tier card, which has no agent's line and no badge.</summary>
     private const double BlockRoom = 142;
@@ -66,17 +75,35 @@ public static class ZoomTiers
 
     /// <summary>
     /// The text size in canvas units that keeps a Title or Block tier card's text just readable on screen at <paramref name="zoom"/>,
-    /// in even steps, with its line height and the title lines that the card's room holds, so a closer zoom keeps more words.
+    /// in even steps, with its line height, the title lines, and how far the card draws under its 64 px box.
+    /// A Title tier card takes up to three title lines over its agent's line and grows to hold them, but only as far as
+    /// <paramref name="pitch"/>, the least distance in canvas units from a card's top to the top of the card under it, leaves a 6 px gap (ADR 0068).
     /// A Block tier card gives up its agent's line and its badge, so its title keeps one or two lines at 9 px at every zoom.
     /// </summary>
-    public static (double Size, double Line, int Lines) TitleText(double zoom, ZoomTier tier = ZoomTier.Title)
+    public static FarText TitleText(double zoom, ZoomTier tier = ZoomTier.Title, double pitch = double.PositiveInfinity)
     {
         var least = 2 * Math.Ceiling(ReadablePixels / zoom / 2);
-        var size = tier == ZoomTier.Block ? Math.Max(least, 30) : Math.Clamp(least, 30, 44);
-        var line = Math.Ceiling(size * (tier == ZoomTier.Block ? 1.04 : 1.08));
-        return tier == ZoomTier.Block
-            ? (size, line, Math.Clamp((int)(BlockRoom / line), 1, BlockLines))
-            : (size, line, (int)(TitleRoom / line));
+        if (tier == ZoomTier.Block)
+        {
+            var blockSize = Math.Max(least, 30);
+            var blockLine = Math.Ceiling(blockSize * 1.04);
+            return new(blockSize, blockLine, Math.Clamp((int)(BlockRoom / blockLine), 1, BlockLines), CardReach(tier));
+        }
+
+        var size = Math.Clamp(least, 30, 44);
+        var line = Math.Ceiling(size * 1.04);
+        var drawn = 64 + CardReach(ZoomTier.Title);
+        var room = Math.Max(drawn, pitch - CardGap / zoom);
+        var lines = TitleLines;
+        while (lines > 1 && Height(lines) > room)
+        {
+            lines--;
+        }
+
+        return new(size, line, lines, Math.Max(drawn, Height(lines)) - 64);
+
+        // The title's lines and the agent's line, one line high, under the top's space.
+        double Height(int count) => TitleTop + (count + 1) * line;
     }
 
     /// <summary>The style class that the canvas takes in the tier, or null for the full card.</summary>

@@ -1,6 +1,6 @@
 # Every card keeps its title, and the tree shows the selected node's row
 
-A card shows its title at every zoom tier. The Block tier no longer turns a card into a state block without a name. The left tree opens the group of the selected or open node at any size. The inspector title takes up to four lines, and a short inspector keeps one short line that says what Continue and Retry do. This amends ADR 0045, ADR 0047, ADR 0065, and ADR 0066.
+A card shows its title at every zoom tier. The Block tier no longer turns a card into a state block without a name. The left tree opens the group of the selected or open node at any size. The inspector title takes up to four lines, and a short inspector keeps one short line that says what Continue and Retry do. This amends ADR 0045, ADR 0047, ADR 0065, and ADR 0066. ADR 0068 amends its tree reveal for a large group and its Title tier lines.
 
 Ten review rounds found that cards at the Block tier, such as the docked conversation's canvas at 38%, were unlabeled state blocks, and that titles at 61% were cut. Round 20 also found that the open node had no row in the tree when its group was large, that group headers and node rows stood at one indent, that the inspector title cut its distinguishing end, and that the interrupted header at the minimum window did not say what Continue and Retry do.
 

@@ -150,6 +150,10 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(ZoomLabel));
                 Tier = ZoomTiers.Next(Tier, value);
+                if (ShowFarText())
+                {
+                    Reroute();
+                }
             }
         }
     } = 1;
@@ -162,6 +166,16 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     /// <summary>The zoom as a percent, on the control that resets it.</summary>
     public string ZoomLabel => $"{Math.Round(ViewportZoom / ZoomTiers.ActualSize * 100)}%";
+
+    /// <summary>The zoomed out card's text at this zoom, and how far a card draws under its box.</summary>
+    public FarText FarText
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    } = ZoomTiers.TitleText(1);
+
+    /// <summary>How far a collapsed card draws under its 64 px box at this zoom.</summary>
+    internal double CardReach => Tier == ZoomTier.Title ? FarText.Reach : ZoomTiers.CardReach(Tier);
 
     /// <summary>How much a card shows at this zoom.</summary>
     public ZoomTier Tier

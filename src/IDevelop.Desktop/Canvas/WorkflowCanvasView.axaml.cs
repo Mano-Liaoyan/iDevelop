@@ -118,13 +118,22 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // The steps are even, so a zoom gesture measures the cards' text only when its size changes.
     private void ShowTitleText()
     {
-        var (size, line, lines) = ZoomTiers.TitleText(_viewModel?.ViewportZoom ?? 1, _viewModel?.Tier ?? ZoomTier.Title);
-        if (!Resources.TryGetValue("FarTitleSize", out var shown) || !Equals(shown, size) || !Resources.TryGetValue("FarTitleLines", out var shownLines) || !Equals(shownLines, lines))
+        if (_viewModel?.FarText is not { } text || Resources.TryGetValue("FarTitleText", out var shown) && Equals(shown, text))
         {
-            Resources["FarTitleSize"] = size;
-            Resources["FarTitleLine"] = line;
-            Resources["FarTitleLines"] = lines;
+            return;
         }
+
+        // A Title tier card's agent's line and badge stand under its title's lines, and the card grows to hold them (ADR 0068).
+        var lineTop = ZoomTiers.TitleTop + text.Lines * text.Line;
+        Resources["FarTitleText"] = text;
+        Resources["FarTitleSize"] = text.Size;
+        Resources["FarTitleLine"] = text.Line;
+        Resources["FarTitleLines"] = text.Lines;
+        Resources["FarCardHeight"] = 64 + text.Reach;
+        Resources["FarCardMargin"] = new Thickness(0, 0, 0, -text.Reach);
+        Resources["FarLineMargin"] = new Thickness(26, lineTop, 62, 0);
+        Resources["FarLineHeight"] = text.Line;
+        Resources["FarBadgeMargin"] = new Thickness(0, lineTop + (text.Line - 36) / 2, 16, 0);
     }
 
     // A tier takes one class on the view, so only a threshold changes the cards' layout. Under a zoom of 0.5 the dots would turn
@@ -231,7 +240,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // never cuts a wire that arcs past the cards.
     private Rect Extent()
     {
-        var reach = _viewModel is { } canvas ? ZoomTiers.CardReach(canvas.Tier) : 0;
+        var reach = _viewModel?.CardReach ?? 0;
         var cards = Cards().Aggregate((union, card) => union.Union(card)).Inflate(new Thickness(0, 0, 0, reach));
         var wires = _viewModel?.Connections.SelectMany(wire => wire.Curve).SelectMany(piece => new[] { piece.Start, piece.At(0.5), piece.End }) ?? [];
         return wires.Aggregate(cards, (union, point) => new Rect(
@@ -303,7 +312,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             return;
         }
 
-        var reach = ZoomTiers.CardReach(canvas.Tier);
+        var reach = canvas.CardReach;
         var branch = canvas.Connections.Where(wire => wire.From == node).Select(wire => wire.To)
             .Concat(canvas.Connections.Where(wire => wire.To == node).Select(wire => wire.From))
             .Append(node).Distinct()
@@ -410,7 +419,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     {
         var zoom = Editor.ViewportZoom;
         var at = (node.DisplayLocation - Editor.ViewportLocation) * zoom;
-        var height = node.IsExpanded ? node.CardSize.Height : WorkflowCanvasViewModel.TaskCardHeight + ZoomTiers.CardReach(_viewModel!.Tier);
+        var height = node.IsExpanded ? node.CardSize.Height : WorkflowCanvasViewModel.TaskCardHeight + _viewModel!.CardReach;
         var width = node.IsExpanded ? node.CardSize.Width : WorkflowCanvasViewModel.TaskCardWidth;
         return new Rect(at.X + 10 * zoom, at.Y, (width - 20) * zoom, height * zoom);
     }
@@ -464,7 +473,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             ShowTier();
             ShowTitleText();
         }
-        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.ViewportZoom))
+        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.FarText))
         {
             ShowTitleText();
         }
