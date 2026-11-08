@@ -403,11 +403,11 @@
     <Setter Property="BorderThickness" Value="9" />
   </Style>
   <!-- The pointer over a card draws a thin neutral line of one screen pixel outside its edge, with the selection's gap, at each
-       zoom. It is half the selection line's weight and never accent, so hover never competes with a selection (ADR 0064). -->
+       zoom. It is half the selection line's weight and never accent, so hover never competes with a selection (ADR 0064). It
+       draws in the full muted text color, which stands apart from the card's own border (ADR 0069). -->
   <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="Opacity" Value="0.6" />
   </Style>
   <Style Selector=":is(Control).tier-detail nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-compact nodify|ItemContainer:pointerover:not(:selected) Border.ring">
     <Setter Property="BorderThickness" Value="1.6" />
