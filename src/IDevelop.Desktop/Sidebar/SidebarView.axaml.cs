@@ -81,7 +81,7 @@ public partial class SidebarView : UserControl
     // A section that scrolls ends on a whole row, so the row after it never shows cut or as a blank band. Nodes takes what is left over.
     private double WholeRows(double limit) => TreeRows.DesiredSize.Height <= limit ? limit
         : TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
-            .Select(row => TopOf(row) + row.Bounds.Height + TreeFootInset).Where(bottom => bottom <= limit).DefaultIfEmpty(limit).Max();
+            .Select(row => TopOf(row) + row.Bounds.Height + RowGap).Where(bottom => bottom <= limit).DefaultIfEmpty(limit).Max();
 
     private void FoldActivity()
     {
@@ -420,6 +420,9 @@ public partial class SidebarView : UserControl
     private List<(double Top, double Bottom)> ShownRows() =>
         [.. TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
             .Select(row => (Top: TopOf(row) - Tree.Offset.Y, Bottom: TopOf(row) - Tree.Offset.Y + row.Bounds.Height)).OrderBy(row => row.Top)];
+
+    // The gap under a row, which a section that ends on a whole row keeps before its edge.
+    private const double RowGap = 2;
 
     // The space under the last row without the room that RoomAfterLastRow adds.
     private const double TreeFootInset = 8;

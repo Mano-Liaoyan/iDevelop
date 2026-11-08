@@ -168,7 +168,7 @@
   </Style>
   <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
   <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="17,6,8,0" />
+    <Setter Property="Margin" Value="14,6,8,0" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="LineHeight" Value="31" />
@@ -250,7 +250,7 @@
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="32" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="27,0,56,4" />
+    <Setter Property="Margin" Value="24,0,52,4" />
   </Style>
   <Style Selector="DockPanel.farLine > :is(Control)">
     <Setter Property="VerticalAlignment" Value="Center" />
@@ -298,10 +298,10 @@
   <!-- At the Label tier, where a fit rests, the letters and the model's name share the line with the badge, so both keep a size
        at which a name such as "GPT-6.1 Terra" or "Sonnet 5.5" fits whole, and the model's words a step under the title's (ADR 0066, ADR 0070). -->
   <Style Selector=":is(Control).tier-label Border.farClient">
-    <Setter Property="MinWidth" Value="28" />
+    <Setter Property="MinWidth" Value="26" />
     <Setter Property="Height" Value="30" />
     <Setter Property="Padding" Value="2,0" />
-    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="Margin" Value="0,0,2,0" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
     <Setter Property="FontSize" Value="24" />
@@ -347,10 +347,10 @@
     <Setter Property="Margin" Value="0,63,18,0" />
   </Style>
   <Style Selector=":is(Control).tier-label Panel.stateBadge">
-    <Setter Property="Width" Value="32" />
-    <Setter Property="Height" Value="32" />
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="0,0,18,11" />
+    <Setter Property="Margin" Value="0,0,17,12" />
   </Style>
   <Style Selector=":is(Control).tier-title Panel.stateBadge">
     <Setter Property="Width" Value="36" />
