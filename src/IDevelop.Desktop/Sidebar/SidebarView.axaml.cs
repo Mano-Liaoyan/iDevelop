@@ -352,6 +352,7 @@ public partial class SidebarView : UserControl
     private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         PinRows();
+        RoomAfterLastRow();
         RestOnWholeRow(e.OffsetDelta.Y);
         CoverCutRows();
     }
@@ -381,6 +382,24 @@ public partial class SidebarView : UserControl
     private List<(double Top, double Bottom)> ShownRows() =>
         [.. TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
             .Select(row => (Top: TopOf(row) - Tree.Offset.Y, Bottom: TopOf(row) - Tree.Offset.Y + row.Bounds.Height)).OrderBy(row => row.Top)];
+
+    // The space under the last row without the room that RoomAfterLastRow adds.
+    private const double TreeFootInset = 8;
+
+    // The end of the tree's range rests on a row's top too. A little room after the last row makes up what no whole row fills,
+    // so a row that the pinned rows would cut never hides as an empty band under them.
+    private void RoomAfterLastRow()
+    {
+        var room = TreeRows.Margin.Bottom - TreeFootInset;
+        var (end, head) = (Tree.Extent.Height - room - Tree.Viewport.Height, PinnedRowHeight + 1);
+        var rest = end <= 0 ? end : TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
+            .Select(row => TopOf(row) - head).Where(top => top >= end - 0.5).DefaultIfEmpty(end).Min();
+        var wanted = Math.Max(0, rest - end);
+        if (Math.Abs(wanted - room) > 0.5)
+        {
+            TreeRows.Margin = new Thickness(0, 0, TreeRows.Margin.Right, TreeFootInset + wanted);
+        }
+    }
 
     // The tree rests on a row's top under the pinned rows. It goes on in the direction it moved, so a small step never goes back.
     private void RestOnWholeRow(double moved)

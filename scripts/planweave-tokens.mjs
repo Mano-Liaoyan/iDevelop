@@ -116,7 +116,7 @@ const brushes = [
   ['StateSelected', 'apple-blue'],
   ['StateSelected25', 'apple-blue', 25],
   ['StateSelected40', 'apple-blue', 40],
-  ['StateSelectedSurface', 'apple-blue', 10],
+  ['StateSelectedSurface', 'apple-blue', 16],
   ['StateRunning', 'apple-blue'],
   ['StateRunning45', 'apple-blue', 45],
   ['StateRunningSurface', 'apple-blue', 10],

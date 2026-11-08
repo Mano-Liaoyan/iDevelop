@@ -506,6 +506,11 @@ public sealed class SidebarLayoutTests : IDisposable
                 Assert.True(!(at < edge - 0.5 && bottom > edge + 0.5) || (cover.IsVisible && edge + cover.Height >= bottom - 0.5), $"The row at {at} is cut at {edge} with the tree at {tree.Offset.Y}.");
             }
         }
+
+        // The end of the range also rests on a row, so no cut row hides as an empty band under the pinned rows.
+        tree.Offset = tree.Offset.WithY(tree.Extent.Height - tree.Viewport.Height);
+        shell.Render();
+        Assert.False(cover.IsVisible, $"A row hides under the pinned rows with the tree at {tree.Offset.Y} of {tree.Extent.Height}.");
     }
 
     [AvaloniaFact]

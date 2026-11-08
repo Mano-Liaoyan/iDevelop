@@ -23,7 +23,7 @@
       <SolidColorBrush x:Key="StateSelectedBrush" Color="#0088FF" />
       <SolidColorBrush x:Key="StateSelected25Brush" Color="#400088FF" />
       <SolidColorBrush x:Key="StateSelected40Brush" Color="#660088FF" />
-      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#1A0088FF" />
+      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#290088FF" />
       <SolidColorBrush x:Key="StateRunningBrush" Color="#0088FF" />
       <SolidColorBrush x:Key="StateRunning45Brush" Color="#730088FF" />
       <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#1A0088FF" />
@@ -137,7 +137,7 @@
       <SolidColorBrush x:Key="StateSelectedBrush" Color="#0091FF" />
       <SolidColorBrush x:Key="StateSelected25Brush" Color="#400091FF" />
       <SolidColorBrush x:Key="StateSelected40Brush" Color="#660091FF" />
-      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#1A0091FF" />
+      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#290091FF" />
       <SolidColorBrush x:Key="StateRunningBrush" Color="#0091FF" />
       <SolidColorBrush x:Key="StateRunning45Brush" Color="#730091FF" />
       <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#1A0091FF" />
