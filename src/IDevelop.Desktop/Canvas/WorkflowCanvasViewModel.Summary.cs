@@ -21,7 +21,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// numbers, such as "1 failed · 2 waiting · 1 running". The line wraps when the row is narrow, so no count hides.
     /// </summary>
     public IReadOnlyList<StateChip> RowChips => BarChips is [var first, ..]
-        ? [first with { Label = string.Join(" · ", BarChips.Select(chip => chip.Label)), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
+        ? [first with { Label = StateCounts.KeepCountsWhole(string.Join(" · ", BarChips.Select(chip => chip.Label))), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
         : [];
 
     /// <summary>The row has its status line while any group shows in the run bar. The Nodes section lists the states one by one (ADR 0071).</summary>

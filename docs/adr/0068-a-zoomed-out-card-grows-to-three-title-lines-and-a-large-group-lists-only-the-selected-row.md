@@ -18,7 +18,7 @@ Round 21 found that titles at 61% were cut to similar starts, that the eight-nod
 - **One state word.** The inspector, the card, and the tree say "Not started" for an idle node and "Done" for a completed node, the names of the tree's groups. Other states keep their words.
 - **Conversation header.** The conversation's header shows the title on one line with an ellipsis. Its tooltip and the inspector hold the whole title.
 - **Workflow row.** The 2 px accent line of the workflow whose node is selected stands at the row's left edge, before the chevron, and not next to the name. A folded workflow's state counts stand after its name on the name's line when the whole name fits beside them, and under the name otherwise.
-- **Breadcrumb.** The project's name, at most 120 px, keeps its width, and the workflow's name gives up width first.
+- **Breadcrumb.** The project's name, at most 120 px, gives up its width first and leaves when it can no longer read. The workflow's name is cut only when it alone is wider than the room.
 - **Blueprint editing.** While the inspector edits a blueprint, Add and Generate are off, because they change the workflow under the editor.
 
 ## Considered options

@@ -1,6 +1,7 @@
 using IDevelop.Desktop.Blueprints;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Desktop.Theme;
 
 namespace IDevelop.Desktop.Inspector;
 
@@ -32,7 +33,7 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
     public string Name => _canvas.Name;
 
     /// <summary>"2 of 9 · 1 running · 2 waiting" once a node ran, "9 nodes" before, as the workflow's tooltip says it.</summary>
-    public string StateLine => _canvas.Counts.Summary();
+    public string StateLine => StateCounts.KeepCountsWhole(_canvas.Counts.Summary());
 
     /// <summary>The libraries, which the workflow inspector lists.</summary>
     public BlueprintsViewModel Blueprints => _canvas.Blueprints;

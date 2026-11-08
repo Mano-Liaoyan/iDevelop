@@ -226,7 +226,7 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowUnsaved").IsEffectivelyVisible);
         Assert.True(Of<Control>(row.GetVisualParent()!, "WorkflowSummary").IsEffectivelyVisible);
         var canvas = (Canvas.WorkflowCanvasViewModel)row.DataContext!;
-        Assert.Equal(string.Join(" \u00b7 ", canvas.BarChips.Select(chip => chip.Label)), Assert.Single(canvas.RowChips).Label);
+        Assert.Equal(StateCounts.KeepCountsWhole(string.Join(" \u00b7 ", canvas.BarChips.Select(chip => chip.Label))), Assert.Single(canvas.RowChips).Label);
         Assert.Equal(canvas.RowChips.Select(chip => chip.Label), alert.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text!));
         Assert.Equal(canvas.RowChips.Select(chip => chip.Tip), alert.GetVisualDescendants().OfType<DockPanel>().Where(chip => chip.DataContext is Canvas.StateChip).Select(chip => (string)ToolTip.GetTip(chip)!));
         Assert.Single(canvas.RowChips);
@@ -524,6 +524,30 @@ public sealed class SidebarLayoutTests : IDisposable
 
         Assert.True(pinned.IsVisible);
         Assert.Equal(Reports, ((ProjectViewModel)pinned.DataContext!).Name);
+    }
+
+    [AvaloniaFact]
+    public void The_group_of_the_rows_under_the_top_edge_stays_pinned_and_the_rows_rest_under_it()
+    {
+        var reports = _temp.Create(Reports);
+        // Each title wraps to several lines, so eight rows scroll.
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 8).Select(task => $"Task {task} {string.Concat(Enumerable.Repeat("with a long name ", 8))}")]);
+        var shell = Shell.Open(reports);
+        shell.Window.Width = 900;
+        shell.Window.Height = 600;
+        shell.Render();
+        T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+        var (list, head, sticky) = (Named<ListBox>("NodeRows"), Named<Border>("NodesHead"), Named<Button>("StickyGroup"));
+        Assert.False(head.IsVisible);
+
+        var scroller = (ScrollViewer)list.Scroll!;
+        scroller.Offset = scroller.Offset.WithY(60);
+        shell.Render();
+
+        Assert.True(head.IsVisible);
+        Assert.Equal("Not started", ((Canvas.NodeGroup)sticky.DataContext!).Name);
+        var tops = list.GetVisualDescendants().OfType<ListBoxItem>().Select(row => row.TranslatePoint(default, list)!.Value.Y);
+        Assert.Contains(tops, top => Math.Abs(top - 26) < 1);
     }
 
     [AvaloniaFact]

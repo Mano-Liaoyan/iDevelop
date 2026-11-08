@@ -15,6 +15,10 @@ public readonly record struct StateCounts(int Completed, int Running, int Waitin
     /// </summary>
     public string Progress => !HasRun ? Summary() : $"{Completed} of {Total}";
 
+    /// <summary>A line of several parts with a no-break space in each part of " · ", so a wrap never parts a count from its word.</summary>
+    public static string KeepCountsWhole(string line) =>
+        line.Contains(" · ") ? string.Join(" · ", line.Split(" · ").Select(part => part.Replace(' ', '\u00a0'))) : line;
+
     public string Summary()
     {
         if (Total == 0)

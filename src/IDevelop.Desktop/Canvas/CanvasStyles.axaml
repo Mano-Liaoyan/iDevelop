@@ -786,6 +786,9 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- The zoom's steps and Fit leave the bar for the overflow menu before the run bar takes its own row, so the band keeps one row (ADR 0070). -->
+  <Style Selector="TextBlock.progressShort">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
   <!-- The bar comes closer together and says its progress as a fraction before the zoom controls leave. Every count keeps its word. -->
   <Style Selector=":is(Control).tightChips:not(.ownRow) WrapPanel.barGroup">
     <Setter Property="ItemSpacing" Value="6" />
@@ -795,9 +798,6 @@
   </Style>
   <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.progressShort">
     <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector="TextBlock.progressShort">
-    <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).tightZoom:not(.ownRow) Button.zoomStep, :is(Control).tightZoom:not(.ownRow) Button.barSpare">
     <Setter Property="IsVisible" Value="False" />

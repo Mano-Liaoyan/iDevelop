@@ -133,7 +133,7 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.Equal("1 question, 1 reply", canvas.BarChips[1].Tip);
         // The row's status line holds the most urgent group's badge and every group in the bar's words and numbers.
         var row = Assert.Single(canvas.RowChips);
-        Assert.Equal((NodeState.Failed, 1, "1 failed \u00b7 2 waiting \u00b7 2 interrupted"), (row.State, row.Count, row.Label));
+        Assert.Equal((NodeState.Failed, 1, "1\u00a0failed \u00b7 2\u00a0waiting \u00b7 2\u00a0interrupted"), (row.State, row.Count, row.Label));
         Assert.Equal("1 failed\n1 question, 1 reply\n2 interrupted", row.Tip);
 
         void Sweep()
@@ -613,6 +613,20 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.Equal(compact, !shell.Find<TextBlock>("BreadcrumbProject").IsEffectivelyVisible);
         var texts = ids.SelectMany(id => shell.Find<Control>(id).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible);
         Assert.Empty(texts.Where(Trimmed).Select(text => $"At {at}, \"{text.Text}\" is cut short."));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(300, 100, 150)]
+    [InlineData(240, 90, 150)]
+    [InlineData(200, 0, 150)]
+    [InlineData(120, 0, 120)]
+    public void The_project_s_name_gives_up_its_width_before_the_workflow_s_name(double room, double projectWidth, double workflowWidth)
+    {
+        var (project, workflow) = (new Border { Child = new Border { Width = 100, Height = 10 } }, new Border { Child = new Border { Width = 150, Height = 10 } });
+        var names = new CrumbNames { Children = { project, workflow } };
+        names.Measure(new Size(room, 30));
+        names.Arrange(new Rect(names.DesiredSize));
+        Assert.Equal((projectWidth, workflowWidth), (project.Bounds.Width, workflow.Bounds.Width));
     }
 
     /// <summary>
