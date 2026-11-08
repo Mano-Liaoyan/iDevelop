@@ -14,6 +14,8 @@ Round 27 found that a stale node stood under "Not started" while the canvas and 
 - **Activity row.** An Activity row has a hover fill and no selection fill. The Nodes section shows the selected node.
 - **Activity fold.** Activity folds when the tree's rows take more than 45% of the panel. The measure leaves out the tree's end room, because that room changes with the fold.
 - **Nodes edges.** A row that the top edge of the Nodes list would cut hides under the panel's color, as a row at the bottom edge does.
+- **Whole rows.** Projects ends on a whole row when it scrolls, and the room left over goes to Nodes. The Nodes list rests on a row's top, as the Projects tree does, so neither section shows a blank band at its edge.
+- **Inspector chevrons.** An inspector section's chevron leads its title, as every other fold chevron does.
 - **Failed node.** While the conversation shows a failed node's card, the card holds the primary Retry. The inspector header keeps Retry as a quiet action.
 
 ## Considered options

@@ -285,15 +285,19 @@ public sealed class MarkdownView : StackPanel
             }
         };
 
-        var header = new Grid { Classes = { "mdCodeHeader" }, ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        header.Children.Add(new TextBlock { Classes = { "mdCodeLanguage" }, Text = language?.Trim() ?? "" });
-        Grid.SetColumn(copy, 1);
-        header.Children.Add(copy);
+        // The language and Copy stand beside the first code line, in a column of their own, so the block has no empty band and nothing covers the code.
+        var tools = new StackPanel { Classes = { "mdCodeTools" }, Orientation = Orientation.Horizontal, Spacing = 4 };
+        if (!string.IsNullOrWhiteSpace(language))
+        {
+            tools.Children.Add(new TextBlock { Classes = { "mdCodeLanguage" }, Text = language.Trim() });
+        }
+
+        tools.Children.Add(copy);
         var body = new CodeText(source, language) { Classes = { "mdMono", "mdCodeText" } };
-        var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto") };
-        Grid.SetRow(body, 1);
-        layout.Children.Add(header);
+        var layout = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(tools, 1);
         layout.Children.Add(body);
+        layout.Children.Add(tools);
         return new Border { Classes = { "mdCode" }, Child = layout };
     }
 

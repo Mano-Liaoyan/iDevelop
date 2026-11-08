@@ -20,7 +20,7 @@
       <x:Int32 x:Key="FarTitleLines">2</x:Int32>
       <x:Double x:Key="FarCardHeight">158</x:Double>
       <Thickness x:Key="FarCardMargin">0,0,0,-94</Thickness>
-      <Thickness x:Key="FarLineMargin">26,112,62,0</Thickness>
+      <Thickness x:Key="FarLineMargin">31,112,62,0</Thickness>
       <x:Double x:Key="FarLineHeight">44</x:Double>
       <Thickness x:Key="FarBadgeMargin">0,116,16,0</Thickness>
     </ResourceDictionary>

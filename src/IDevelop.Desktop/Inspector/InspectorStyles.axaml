@@ -275,17 +275,17 @@
     <Setter Property="Height" Value="16" />
   </Style>
 
-  <!-- A section's header is a thin row on a hairline, so groups read at a glance and leave room for the properties. Its chevron and title start on the rows' glyph and
-       label columns, and its count ends at the action edge. Folded, its chevron points to the leading edge. -->
+  <!-- A section's header is a thin row on a hairline, so groups read at a glance and leave room for the properties. Its chevron leads the row (ADR 0072) on the rows' glyph
+       column, and its count ends at the action edge. Folded, its chevron points to the leading edge. -->
   <Style Selector="inspector|InspectorSection">
     <Setter Property="Template">
       <ControlTemplate>
         <StackPanel Margin="0,0,0,4">
           <Border Name="PART_Rule" Classes="sectionRule" />
           <Button Name="PART_Header" Classes="sectionHeader" AutomationProperties.Name="{TemplateBinding Title}">
-            <Grid ColumnDefinitions="Auto,4,14,*,Auto">
-              <PathIcon Grid.Column="2" Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
-              <TextBlock Classes="sectionTitle" Text="{TemplateBinding Title}"
+            <Grid ColumnDefinitions="14,4,Auto,*,Auto">
+              <PathIcon Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
+              <TextBlock Grid.Column="2" Classes="sectionTitle" Text="{TemplateBinding Title}"
                          AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
               <!-- A folded section says what it holds in one muted line after its chevron. -->
               <TextBlock Grid.Column="3" Name="PART_Summary" Classes="sectionSummary" Text="{TemplateBinding Summary}" IsVisible="False" Margin="6,0,8,0"

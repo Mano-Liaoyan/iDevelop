@@ -87,9 +87,10 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
-  <Style Selector="Grid.mdCodeHeader">
+  <Style Selector="StackPanel.mdCodeTools">
     <Setter Property="Height" Value="24" />
-    <Setter Property="Margin" Value="12,4,8,0" />
+    <Setter Property="Margin" Value="0,6,8,0" />
+    <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
   <Style Selector="TextBlock.mdCodeLanguage">
     <Setter Property="FontSize" Value="12" />
@@ -98,7 +99,7 @@
   </Style>
   <!-- CodeText continues a long line on an indented line, so the block never cuts a character and each source line still shows where it starts. -->
   <Style Selector="SelectableTextBlock.mdCodeText">
-    <Setter Property="Margin" Value="12,0,12,12" />
+    <Setter Property="Margin" Value="12,10,8,10" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <!-- Quiet colors for what a reader looks for first. The body keeps the block's text color. -->
