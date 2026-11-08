@@ -242,11 +242,15 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(HasQuickReplies));
+                OnPropertyChanged(nameof(QuickRepliesScroll));
             }
         }
     } = [];
 
     public bool HasQuickReplies => QuickReplies.Count > 0;
+
+    /// <summary>More options than the three rows in view, so their scroll bar takes a gutter beside them.</summary>
+    public bool QuickRepliesScroll => QuickReplies.Count > 3;
 
     /// <summary>The person opened the note box of Send back.</summary>
     public bool IsSendBackOpen

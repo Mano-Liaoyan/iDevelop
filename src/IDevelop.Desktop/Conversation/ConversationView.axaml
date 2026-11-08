@@ -303,7 +303,7 @@
 
       <!-- The options a question lists in its text. One fills the composer, and the person presses Send. Past three rows they scroll. -->
       <ScrollViewer Classes="quickReplies" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasQuickReplies}">
-        <ItemsControl ItemsSource="{Binding QuickReplies}" AutomationProperties.AutomationId="ConversationQuickReplies">
+        <ItemsControl Classes.scrolls="{Binding QuickRepliesScroll}" ItemsSource="{Binding QuickReplies}" AutomationProperties.AutomationId="ConversationQuickReplies">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Spacing="2" />

@@ -677,6 +677,9 @@
     <Setter Property="MaxHeight" Value="100" />
     <Setter Property="Margin" Value="0,0,0,6" />
   </Style>
+  <Style Selector="ScrollViewer.quickReplies ItemsControl.scrolls">
+    <Setter Property="Margin" Value="0,0,12,0" />
+  </Style>
   <Style Selector="Button.choice, ToggleButton.choice">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
