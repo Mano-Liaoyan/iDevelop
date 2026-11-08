@@ -250,7 +250,7 @@
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="32" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="24,0,62,4" />
+    <Setter Property="Margin" Value="24,0,57,4" />
   </Style>
   <Style Selector="DockPanel.farLine > :is(Control)">
     <Setter Property="VerticalAlignment" Value="Center" />

@@ -347,7 +347,7 @@ public sealed class SidebarLayoutTests : IDisposable
         var reports = _temp.Create(Reports);
         foreach (var index in Enumerable.Range(1, 6))
         {
-            Save(reports, $"Workflow number {index} with a long name that wraps in the panel", "Step");
+            Save(reports, $"Workflow number {index} with a long name that wraps in the panel and takes three lines here", "Step");
         }
 
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);

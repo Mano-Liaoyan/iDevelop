@@ -81,10 +81,15 @@ public partial class SidebarView : UserControl
         Tree.MaxHeight = WholeRows(Math.Max(0, _revealing?.Canvas is null
             ? room
             : Math.Min(room - NodesHeadingHeight - NodesLeastHeight,
-                Math.Max(Rows.Bounds.Height * ProjectsShare - ProjectsHeading.Bounds.Height, Math.Min(LeastWorkflowRowsHeight(), room - NodesHeadingHeight - NodesRoomyHeight)))));
+                Math.Max(Rows.Bounds.Height * ProjectsShare - ProjectsHeading.Bounds.Height, Math.Min(RowEndAtOrAfter(LeastWorkflowRowsHeight()), room - NodesHeadingHeight - NodesRoomyHeight)))));
     }
 
-    // The height of the tallest run of three workflow rows under the pinned project, so the rows that the person sees number three wherever the list rests.
+    // The first row bottom at or below a height, so three rows end on a whole row.
+    private double RowEndAtOrAfter(double height) =>
+        TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow).Select(row => TopOf(row) + row.Bounds.Height)
+            .Where(bottom => bottom >= height).DefaultIfEmpty(height).Min();
+
+    // The height of the tallest run of three workflow rows under the pinned project, so three rows show wherever the list rests.
     private double LeastWorkflowRowsHeight()
     {
         var rows = WorkflowRows().OrderBy(TopOf).ToList();
