@@ -12,6 +12,8 @@ Round 27 found that a stale node stood under "Not started" while the canvas and 
 - **Chevrons.** Activity, project, and group chevrons are the one 12 px glyph, and each leads its row at the panel's content edge.
 - **Pinned project.** The pinned project row has no line under it. Rows rest on a whole row under it, so it needs no line.
 - **Activity row.** An Activity row has a hover fill and no selection fill. The Nodes section shows the selected node.
+- **Activity fold.** Activity folds when the tree's rows take more than 45% of the panel. The measure leaves out the tree's end room, because that room changes with the fold.
+- **Nodes edges.** A row that the top edge of the Nodes list would cut hides under the panel's color, as a row at the bottom edge does.
 - **Failed node.** While the conversation shows a failed node's card, the card holds the primary Retry. The inspector header keeps Retry as a quiet action.
 
 ## Considered options

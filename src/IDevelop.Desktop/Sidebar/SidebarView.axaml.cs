@@ -457,14 +457,22 @@ public partial class SidebarView : UserControl
         TreeHeadCover.IsVisible = top > 0;
     }
 
-    // The Nodes section's row that its bottom edge would cut hides under a cover, as the Projects section's does.
+    // The Nodes section's row that its top or bottom edge would cut hides under a cover, as the Projects section's does.
     private void CoverCutNodeRows()
     {
         var height = NodeRows.Bounds.Height;
-        var foot = NodeRows.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible)
-            .Select(row => (Top: row.TranslatePoint(default, NodeRows)?.Y ?? 0, row.Bounds.Height))
-            .Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5)
+        var rows = NodeRows.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible)
+            .Select(row => (Top: row.TranslatePoint(default, NodeRows)?.Y ?? 0, row.Bounds.Height)).ToList();
+        var foot = rows.Where(row => row.Top < height - 0.5 && row.Top + row.Height > height + 0.5)
             .Select(row => height - row.Top).DefaultIfEmpty(0).Max();
+        var top = rows.Where(row => row.Top < -0.5 && row.Top + row.Height > 0.5)
+            .Select(row => row.Top + row.Height).DefaultIfEmpty(0).Max();
+        if (NodesHeadCover.Height != top || NodesHeadCover.IsVisible != top > 0)
+        {
+            NodesHeadCover.Height = top;
+            NodesHeadCover.IsVisible = top > 0;
+        }
+
         if (NodesFootCover.Height != foot || NodesFootCover.IsVisible != foot > 0)
         {
             NodesFootCover.Height = foot;

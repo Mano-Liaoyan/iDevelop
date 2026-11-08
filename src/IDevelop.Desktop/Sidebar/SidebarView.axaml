@@ -444,8 +444,9 @@
       <TextBlock Classes="caption" Margin="16,2,16,0" VerticalAlignment="Top" TextWrapping="Wrap" Text="No nodes yet. Press N to add one."
                  x:DataType="canvas:WorkflowCanvasViewModel" IsVisible="{Binding IsEmpty}"
                  AutomationProperties.AutomationId="NodesEmpty" />
-      <!-- A row that the bottom edge would cut hides under the panel's color until it comes in whole. It takes no pointer. -->
+      <!-- A row that the top or bottom edge would cut hides under the panel's color until it comes in whole. It takes no pointer. -->
       <Border x:Name="NodesFootCover" Classes="treeCover" VerticalAlignment="Bottom" Margin="0,0,8,0" IsVisible="False" />
+      <Border x:Name="NodesHeadCover" Classes="treeCover" VerticalAlignment="Top" Margin="0,0,8,0" IsVisible="False" />
       </Panel>
     </Grid>
 
