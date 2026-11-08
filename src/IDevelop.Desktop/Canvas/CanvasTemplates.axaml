@@ -156,7 +156,8 @@
             <TextBlock Text="{Binding ClientMark}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        AutomationProperties.AutomationId="CardClientMark" />
           </Border>
-          <TextBlock x:Name="FarAgent" Classes="farAgent" Text="{Binding CardLine}" theme:StyleClass.State="{Binding State}"
+          <!-- A model name that does not fit keeps its last word, which tells "GPT-6.1 Sol" from "GPT-6.1 Terra" (ADR 0069). -->
+          <theme:EllipsisText Classes="farAgent" Whole="{Binding CardLine}" EndWords="1" MaxLines="1" theme:StyleClass.State="{Binding State}"
                               AutomationProperties.AutomationId="CardLine" AutomationProperties.AccessibilityView="Raw" />
         </DockPanel>
         <!-- While the node needs the person, the zoomed out badge acts as the full card's does, because Fit rests at this form. -->

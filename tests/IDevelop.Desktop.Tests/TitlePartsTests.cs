@@ -185,4 +185,21 @@ public sealed class TitlePartsTests
         Assert.Single(text.Text!, letter => letter == '…');
         Assert.EndsWith("…", text.Text);
     }
+
+    [AvaloniaFact]
+    public void A_cut_model_name_keeps_its_last_word_so_two_models_of_one_family_read_apart()
+    {
+        string Shown(string model)
+        {
+            var text = new EllipsisText { Whole = model, EndWords = 1, FontSize = 25, MaxLines = 1, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+            text.Measure(new Avalonia.Size(140, double.PositiveInfinity));
+            return text.Text!;
+        }
+
+        var (sol, terra) = (Shown("GPT-6.1 Solstice"), Shown("GPT-6.1 Terrapin"));
+
+        Assert.EndsWith("… Solstice", sol);
+        Assert.EndsWith("… Terrapin", terra);
+        Assert.StartsWith("G", sol);
+    }
 }

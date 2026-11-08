@@ -25,7 +25,7 @@ public sealed class EllipsisText : TextBlock
     public static readonly DirectProperty<EllipsisText, bool> IsCutProperty =
         AvaloniaProperty.RegisterDirect<EllipsisText, bool>(nameof(IsCut), text => text.IsCut);
 
-    static EllipsisText() => AffectsMeasure<EllipsisText>(WholeProperty, KeyProperty);
+    static EllipsisText() => AffectsMeasure<EllipsisText>(WholeProperty, KeyProperty, EndWordsProperty);
 
     /// <summary>The whole text. <see cref="TextBlock.Text"/> holds what shows.</summary>
     public string? Whole
@@ -40,6 +40,18 @@ public sealed class EllipsisText : TextBlock
         get => GetValue(KeyProperty);
         set => SetValue(KeyProperty, value);
     }
+
+    /// <summary>
+    /// How many last words a cut keeps after the ellipsis, as a model name's last word, which tells "GPT-6.1 Sol" from "GPT-6.1
+    /// Terra": a cut reads "GPT-6.1… Terra" (ADR 0069). 0 cuts at the end. <see cref="Key"/> comes first where it is set.
+    /// </summary>
+    public int EndWords
+    {
+        get => GetValue(EndWordsProperty);
+        set => SetValue(EndWordsProperty, value);
+    }
+
+    public static readonly StyledProperty<int> EndWordsProperty = AvaloniaProperty.Register<EllipsisText, int>(nameof(EndWords));
 
     /// <summary>The text that shows is shorter than <see cref="Whole"/>, so a More control can show only then.</summary>
     public bool IsCut
@@ -93,7 +105,7 @@ public sealed class EllipsisText : TextBlock
         var end = Longest(whole.Length, length => Cut(whole, length), width);
         if (Key is not { } key)
         {
-            return Cut(whole, end);
+            return EndWords > 0 ? KeepEnd(whole, width) ?? Cut(whole, end) : Cut(whole, end);
         }
 
         var starts = TitleKey.WordStarts(whole);
@@ -142,6 +154,22 @@ public sealed class EllipsisText : TextBlock
         }
 
         return Cut(whole, end);
+    }
+
+    // The longest start of the text before its last EndWords words that fits with them after an ellipsis, or null.
+    private string? KeepEnd(string whole, double width)
+    {
+        var starts = TitleKey.WordStarts(whole);
+        if (starts.Length <= EndWords)
+        {
+            return null;
+        }
+
+        var from = starts[^EndWords];
+        var tail = whole[from..];
+        var head = whole[..from].TrimEnd();
+        var fits = Longest(head.Length, length => Cut(head, length) + " " + tail, width);
+        return fits > 0 ? Cut(head, fits) + " " + tail : null;
     }
 
     // The most characters, under the limit, whose text fits. No text fits at 0.
