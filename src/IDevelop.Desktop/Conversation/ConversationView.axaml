@@ -447,7 +447,7 @@
               <DataTemplate DataType="conversation:MessageItemViewModel">
                 <Panel Classes="row" Classes.tight="{Binding IsBeforeSteps}">
                   <StackPanel Spacing="4">
-                    <TextBlock Classes="author" Classes.asking="{Binding IsAsking}" Text="{Binding AuthorLine}" IsVisible="{Binding ShowsAuthor}"
+                    <TextBlock Classes="author" Classes.asking="{Binding IsAsking}" Classes.person="{Binding IsPerson}" Text="{Binding AuthorLine}" IsVisible="{Binding ShowsAuthor}"
                                AutomationProperties.AutomationId="MessageAuthor" />
                     <Grid ColumnDefinitions="*,4*">
                       <Border Grid.Column="{Binding IsPerson, Converter={x:Static conversation:ConversationView.MessageColumn}}"

@@ -49,10 +49,10 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     /// <summary>A subagent of the node's agent wrote it, so it shows as the subagent's own.</summary>
     public bool IsSubagent => _agent?.Subagent is not null;
 
-    /// <summary>The first agent line after a person's message or a marker names its author, and a subagent's line always does.</summary>
+    /// <summary>A person's message always names its sender. The first agent line after a person's message or a marker names its author, and a subagent's line always does.</summary>
     public bool ShowsAuthor
     {
-        get => _showsAuthor || IsAsking;
+        get => _showsAuthor || IsAsking || IsPerson;
         internal set => SetProperty(ref _showsAuthor, value);
     }
 

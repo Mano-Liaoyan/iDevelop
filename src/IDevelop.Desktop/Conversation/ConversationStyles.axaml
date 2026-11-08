@@ -272,9 +272,13 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
   </Style>
   <!-- Prose keeps a reading measure of about 75 characters. Code and tables take the column's whole width. -->
-  <Style Selector="Border.message > conversation|MarkdownView > SelectableTextBlock.md">
+  <Style Selector="Border.message conversation|MarkdownView SelectableTextBlock.md">
     <Setter Property="MaxWidth" Value="520" />
     <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Border.message Border.mdCell > SelectableTextBlock.md">
+    <Setter Property="MaxWidth" Value="Infinity" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
   </Style>
   <Style Selector="Panel.row.taskTurn">
     <Setter Property="Margin" Value="24,16,14,0" />
@@ -349,6 +353,10 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <!-- The person's name stands over the person's message, at the right edge. -->
+  <Style Selector="TextBlock.author.person">
+    <Setter Property="HorizontalAlignment" Value="Right" />
   </Style>
   <Style Selector="TextBlock.author.asking">
     <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />

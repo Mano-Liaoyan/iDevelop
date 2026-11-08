@@ -56,6 +56,22 @@ public sealed class ConversationViewTests : IDisposable
     private static ConversationLine Said(int i) => i % 2 == 0 ? new ConversationLine.Person($"Message {i}") : new ConversationLine.Agent($"Message {i}");
 
     [AvaloniaFact]
+    public void Prose_keeps_one_reading_measure_in_lists_and_quotes_and_a_table_keeps_its_width()
+    {
+        _conversation.Add(new ConversationLine.Agent("Plain.\n\n- A list item.\n\n> A quote.\n\n| A |\n| --- |\n| Cell |"));
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+
+        var texts = view.GetVisualDescendants().OfType<SelectableTextBlock>().Where(text => text.Classes.Contains("md")).ToList();
+        var cells = texts.Where(text => text.GetVisualParent() is Border { Classes: var classes } && classes.Contains("mdCell")).ToList();
+        Assert.Equal(2, cells.Count);
+        Assert.All(cells, cell => Assert.True(double.IsPositiveInfinity(cell.MaxWidth)));
+        var prose = texts.Except(cells).ToList();
+        Assert.Equal(3, prose.Count);
+        Assert.All(prose, text => Assert.Equal(520, text.MaxWidth));
+    }
+
+    [AvaloniaFact]
     public void A_500_line_history_opens_at_the_latest_line_and_pages_back_through_each_line_once_in_a_virtualizing_list()
     {
         _conversation.Add([.. Enumerable.Range(0, 500).Select(Said)]);
@@ -149,7 +165,7 @@ public sealed class ConversationViewTests : IDisposable
         var model = Open();
 
         Assert.Equal(
-            [("Codex", true), ("Codex", false), ("Subagent: explore", true), ("Codex", true), ("You", false), ("Codex", true)],
+            [("Codex", true), ("Codex", false), ("Subagent: explore", true), ("Codex", true), ("You", true), ("Codex", true)],
             model.Items.OfType<MessageItemViewModel>().Select(message => (message.AuthorLabel, message.ShowsAuthor)));
     }
 
