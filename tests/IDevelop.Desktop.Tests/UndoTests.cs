@@ -132,6 +132,21 @@ public sealed class UndoTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Undo_and_Redo_take_the_faint_ink_while_they_have_no_step()
+    {
+        var shell = OpenChain();
+        Assert.Equal((Color(shell, "TextFaintBrush"), Color(shell, "TextFaintBrush")), (Ink(shell.Find<Button>("Undo")), Ink(shell.Find<Button>("Redo"))));
+
+        Delete(shell, "Build");
+
+        Assert.Equal(Color(shell, "TextMutedBrush"), Ink(shell.Find<Button>("Undo")));
+        Assert.Equal(Color(shell, "TextFaintBrush"), Ink(shell.Find<Button>("Redo")));
+
+        static Avalonia.Media.Color Ink(Button button) => ((Avalonia.Media.ISolidColorBrush)button.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(part => part.Name == "PART_ContentPresenter").Foreground!).Color;
+        static Avalonia.Media.Color Color(Shell shell, string key) => shell.Resource(key);
+    }
+
+    [AvaloniaFact]
     public void The_popovers_Undo_and_Redo_actions_take_a_step_each_and_show_only_while_there_is_one()
     {
         var shell = OpenChain();

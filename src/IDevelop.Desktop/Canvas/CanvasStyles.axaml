@@ -543,12 +543,12 @@
   <Style Selector=":is(Control).tier-label Ellipse.port.output, :is(Control).tier-label Ellipse.portDot.output, :is(Control).tier-title Ellipse.port.output, :is(Control).tier-title Ellipse.portDot.output">
     <Setter Property="RenderTransform" Value="translateX(8px)" />
   </Style>
-  <!-- A port's ring is faint until a connection uses it. -->
+  <!-- A port's ring stays quiet, but it reads on the canvas in both themes, until a connection uses it. -->
   <Style Selector="Ellipse.port">
-    <Setter Property="Stroke" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
   </Style>
   <Style Selector="Ellipse.port.connected">
-    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
   <!-- Nodify's own rule that draws connections below the cards never matches its internal host type. -->
@@ -731,9 +731,13 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- The canvas has the keys: one thin accent line inside its edge, so a selected card's ring stays the strongest mark. -->
+  <!-- The ring of every focused control, inside the canvas's edges and quieter than the selected card's ring. -->
   <Style Selector="Border.canvasFocus">
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Margin" Value="3" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="CornerRadius" Value="7" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Opacity" Value="0.4" />
   </Style>
   <Style Selector="Button.zoomValue TextBlock">
     <Setter Property="FontSize" Value="12" />

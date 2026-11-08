@@ -578,7 +578,7 @@
   <Style Selector="ToggleButton.picker:disabled">
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- A fixed value reads as fixed in every part, its text too, and the row's info glyph says why (ADR 0070). -->
+  <!-- A fixed value reads as fixed in every part, its text too, and its tooltip says why (ADR 0070). -->
   <Style Selector="ToggleButton.picker:disabled TextBlock.value">
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>

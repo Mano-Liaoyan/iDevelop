@@ -103,14 +103,14 @@
                 <!-- The graph's edits are their own group, apart from where the person is. -->
                 <Border theme:SpillRow.Pinned="True" Classes="crumbPart">
                   <StackPanel Orientation="Horizontal">
-                    <Button Classes="ghost" CornerRadius="7,0,0,7" VerticalAlignment="Stretch"
+                    <Button Classes="ghost glyph" CornerRadius="7,0,0,7" VerticalAlignment="Stretch"
                             Command="{Binding UndoCommand}"
                             ToolTip.Tip="Undo"
                             AutomationProperties.AutomationId="Undo"
                             AutomationProperties.Name="Undo">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconUndo}" />
                     </Button>
-                    <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"
+                    <Button Classes="ghost glyph" CornerRadius="0" VerticalAlignment="Stretch"
                             Command="{Binding RedoCommand}"
                             ToolTip.Tip="Redo"
                             AutomationProperties.AutomationId="Redo"
@@ -118,7 +118,7 @@
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRedo}" />
                     </Button>
                     <!-- The dot is the one mark of unsaved work here, so the names keep the width that words would take. -->
-                    <Button Classes="ghost" CornerRadius="0,7,7,0" VerticalAlignment="Stretch"
+                    <Button Classes="ghost glyph" CornerRadius="0,7,7,0" VerticalAlignment="Stretch"
                             Command="{Binding SaveCommand}"
                             ToolTip.Tip="Save (Ctrl+S)"
                             AutomationProperties.AutomationId="Save"

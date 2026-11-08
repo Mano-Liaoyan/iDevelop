@@ -17,12 +17,16 @@ public sealed partial class WorkflowCanvasViewModel
     public string RowProgress => Counts.Total == 0 ? "Empty" : $"{Counts.Completed}/{Counts.Total}";
 
     /// <summary>
-    /// What a folded row says on the name's line: the run bar's most urgent group as a badge and its count, so every row keeps one
-    /// height. Its tooltip and name list every group in words, as the run bar says them (ADR 0070).
+    /// What a folded row says on the name's line: the run bar's most urgent group as a badge, so every row keeps one height, with the
+    /// count of all the nodes that need the person, the Nodes section's Needs you group, or else that group's own count. Its tooltip
+    /// and name list every group in words, as the run bar says them (ADR 0070).
     /// </summary>
     public IReadOnlyList<StateChip> RowChips => BarChips is [var first, ..]
-        ? [first with { Label = string.Join(", ", BarChips.Select(chip => chip.Label)), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
+        ? [first with { Count = NeedsYouCount > 0 ? NeedsYouCount : first.Count, Label = string.Join(", ", BarChips.Select(chip => chip.Label)), Tip = string.Join("\n", BarChips.Select(chip => chip.Tip)) }]
         : [];
+
+    /// <summary>How many nodes the Nodes section's Needs you group holds: what waits for the person, what was interrupted, and what failed.</summary>
+    private int NeedsYouCount => Counts.Waiting + Counts.Interrupted + Counts.Failed;
 
     /// <summary>The row says its most urgent group while any node needs a look. The Nodes section lists the states one by one (ADR 0071).</summary>
     public bool ShowsRowChips => BarChips.Count > 0;

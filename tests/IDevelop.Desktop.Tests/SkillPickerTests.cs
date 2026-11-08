@@ -259,7 +259,7 @@ public sealed class SkillPickerTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.False(shell.Find<ToggleButton>("TaskSkills").IsEffectivelyVisible);
-        Assert.Equal("All skills", shell.Find<TextBlock>("TaskSkillsValue").Text);
+        Assert.Equal("Always all skills", shell.Find<TextBlock>("TaskSkillsValue").Text);
         Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue").FindAncestorOfType<ToggleButton>()!));
         Assert.False(shell.Find<Control>("SkillList").IsEffectivelyVisible);
     }

@@ -48,8 +48,11 @@ public sealed class SkillPickerViewModel : ObservableObject
 
     public bool ShowsList => IsOpen && CanChoose;
 
-    /// <summary>"All skills" without a choice, else the names of the skills the node chose, which the row cuts at its end.</summary>
-    public string Summary => Settings?.Skills switch
+    /// <summary>
+    /// "All skills" without a choice, else the names of the skills the node chose, which the row cuts at its end. A client that takes
+    /// no choice says so in the value, so that its dimmed field reads as fixed without a tooltip.
+    /// </summary>
+    public string Summary => Settings is not null && !CanChoose ? "Always all skills" : Settings?.Skills switch
     {
         null => "All skills",
         { Count: 0 } => "No skills",

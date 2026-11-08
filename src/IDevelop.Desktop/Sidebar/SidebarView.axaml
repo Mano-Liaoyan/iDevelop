@@ -300,7 +300,7 @@
                                 </Button.ContextMenu>
                                 <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
                                   <!-- A workflow's name shows in full at every panel width, so a long one wraps. The most urgent state's
-                                       badge and count stand at the end of the name's first line, before the progress, so every row
+                                       badge and the count of nodes that need the person stand at the end of the name's first line, before the progress, so every row
                                        keeps one rhythm; the chip's tooltip and name list every state in words (ADR 0070). -->
                                   <TextBlock Classes="rowName workflowName" Classes.shown="{Binding IsSelected}" Text="{Binding Name}" TextWrapping="Wrap"
                                              AutomationProperties.AutomationId="WorkflowName" />
