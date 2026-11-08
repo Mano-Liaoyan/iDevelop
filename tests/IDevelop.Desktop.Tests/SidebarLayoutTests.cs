@@ -333,9 +333,41 @@ public sealed class SidebarLayoutTests : IDisposable
         var (tree, sections, list) = (Named<ScrollViewer>("Tree"), Named<Grid>("Sections"), shell.Find<ListBox>("SidebarTasks"));
 
         Assert.True(tree.Extent.Height > tree.Viewport.Height, "Projects does not scroll.");
-        Assert.InRange(tree.Bounds.Height, sections.Bounds.Height / 2 - 40, sections.Bounds.Height / 2 + 6);
-        Assert.True(list.Bounds.Height > sections.Bounds.Height / 2 - 60, $"Nodes has {list.Bounds.Height} px.");
+        var panel = Named<Grid>("Rows").Bounds.Height;
+        Assert.InRange(tree.Bounds.Height + 28, panel * 0.35 - 40, panel * 0.35);
+        Assert.True(list.Bounds.Height > panel * 0.35, $"Nodes has {list.Bounds.Height} px.");
         Assert.True(list.Bounds.Bottom <= sections.Bounds.Height + 0.5, "Nodes goes past the panel.");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(600, false)]
+    [InlineData(600, true)]
+    [InlineData(800, false)]
+    [InlineData(800, true)]
+    public void Projects_keeps_its_share_and_the_open_row_and_Nodes_keeps_five_rows(double height, bool activityOpen)
+    {
+        var reports = _temp.Create(Reports);
+        foreach (var index in Enumerable.Range(1, 30))
+        {
+            Save(reports, $"Workflow {index}", "Step");
+        }
+
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        var view = shell.Window.ViewModel;
+        shell.OpenNodes(Reports, ReleaseNotes);
+        view.Activity.IsOpen = activityOpen;
+        shell.Window.Height = height;
+        shell.Render();
+        T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+        var (tree, list) = (Named<ScrollViewer>("Tree"), shell.Find<ListBox>("SidebarTasks"));
+
+        Assert.True(tree.Bounds.Height + 28 <= Named<Grid>("Rows").Bounds.Height * 0.35 + 0.5, $"Projects has {tree.Bounds.Height} px.");
+        var row = shell.WorkflowRow(Reports, ReleaseNotes).TranslatePoint(default, tree)!.Value.Y;
+        Assert.InRange(row, 0, tree.Viewport.Height - shell.WorkflowRow(Reports, ReleaseNotes).Bounds.Height);
+        var shown = list.GetVisualDescendants().OfType<ListBoxItem>().Count(item =>
+            item.TranslatePoint(default, list)!.Value.Y >= -0.5 && item.TranslatePoint(new Point(0, item.Bounds.Height), list)!.Value.Y <= list.Bounds.Height + 0.5);
+        Assert.True(shown >= 5, $"Nodes shows {shown} rows in {list.Bounds.Height} px.");
     }
 
     [AvaloniaTheory]

@@ -19,7 +19,6 @@ public sealed class ActivityViewModel : ObservableObject
     private readonly Action<TaskNodeViewModel> _open;
     private readonly Dictionary<TaskNodeViewModel, ActivityRow> _rows = [];
     private List<ActivityRow> _ordered = [];
-    private bool _isOpenWhileCompact;
 
     /// <param name="projects">The open projects, in their order.</param>
     /// <param name="open">Shows a node and what it needs from the person.</param>
@@ -81,56 +80,25 @@ public sealed class ActivityViewModel : ObservableObject
         }
     }
 
-    /// <summary>The person folded the list down to its heading. The window remembers it.</summary>
-    public bool IsFolded
+    /// <summary>The person opened the list under its heading. The list starts folded, and the session file keeps this choice.</summary>
+    public bool IsOpen
     {
         get;
         set
         {
             if (SetProperty(ref field, value))
             {
-                RaiseFold();
-            }
-        }
-    }
-
-    /// <summary>
-    /// The panel is short, so the list starts folded down to its heading, whatever the person chose for a taller panel. The
-    /// heading's toggle still opens it, and that choice lasts until the panel grows.
-    /// </summary>
-    internal bool IsCompact
-    {
-        get;
-        set
-        {
-            if (field != value)
-            {
-                field = value;
-                _isOpenWhileCompact = false;
-                RaiseFold();
-            }
-        }
-    }
-
-    public bool IsOpen
-    {
-        get => IsCompact ? _isOpenWhileCompact : !IsFolded;
-        set
-        {
-            if (IsCompact)
-            {
-                _isOpenWhileCompact = value;
-                RaiseFold();
-            }
-            else
-            {
-                IsFolded = !value;
+                OnPropertyChanged(nameof(FoldLabel));
+                OnPropertyChanged(nameof(FoldTip));
             }
         }
     }
 
     /// <summary>What the heading's toggle does now, for a screen reader and the tooltip.</summary>
     public string FoldLabel => IsOpen ? "Hide Activity" : "Show Activity";
+
+    /// <summary>The toggle's tooltip, which also names the list's scope while several projects are open.</summary>
+    public string FoldTip => CoversSeveralProjects ? $"{FoldLabel}. It lists all open projects." : FoldLabel;
 
     public bool HasMore => !IsShowingAll && _ordered.Count > Limit;
 
@@ -140,7 +108,13 @@ public sealed class ActivityViewModel : ObservableObject
     public bool CoversSeveralProjects
     {
         get;
-        private set => SetProperty(ref field, value);
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(FoldTip));
+            }
+        }
     }
 
     public ICommand ShowAllCommand { get; }
@@ -192,12 +166,6 @@ public sealed class ActivityViewModel : ObservableObject
         OnPropertyChanged(nameof(HasRunning));
         OnPropertyChanged(nameof(HasMore));
         OnPropertyChanged(nameof(ShowAllLabel));
-    }
-
-    private void RaiseFold()
-    {
-        OnPropertyChanged(nameof(IsOpen));
-        OnPropertyChanged(nameof(FoldLabel));
     }
 
     private static int? GroupOf(TaskNodeViewModel node) => node.State switch

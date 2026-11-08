@@ -639,8 +639,7 @@
     <Setter Property="BorderThickness" Value="0,1,0,0" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <!-- A section heading that folds its list. -->
-  <!-- One line is 28 px high. A row whose counts wrap grows, so no count is cut. -->
+  <!-- A section heading that folds its list: its label starts where the other section labels start, and its chevron ends the row where their actions end. -->
   <Style Selector="ToggleButton.sectionFold">
     <Setter Property="MinHeight" Value="28" />
     <Setter Property="Height" Value="NaN" />
@@ -707,10 +706,8 @@
     <Setter Property="FontWeight" Value="Normal" />
   </Style>
   <Style Selector="Button.nav.workflow.selected /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <!-- The shown workflow is the parent of the selected node, so its row takes a weaker fill of the same accent than the node's row. -->
-    <Setter Property="Background">
-      <SolidColorBrush Color="{DynamicResource NodifyEditor.SelectionRectangleColor}" Opacity="0.09" />
-    </Setter>
+    <!-- The shown workflow is the parent of the selected node, so its row takes the quiet neutral fill, and only the node's row takes the accent fill. -->
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
 
   <!-- UI Automation reads which workflow the window shows from its row's status. -->

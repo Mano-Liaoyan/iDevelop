@@ -32,8 +32,8 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
     /// <summary>The folders the person closed, newest first, which the empty left area offers again.</summary>
     public ImmutableArray<string> Recent { get; init; } = [];
 
-    /// <summary>The left area folds its Activity list down to the heading.</summary>
-    public bool ActivityFolded { get; init; }
+    /// <summary>The person opened the left area's Activity list. It starts folded to one row.</summary>
+    public bool ActivityOpen { get; init; }
 
     public static readonly WorkspaceSession Empty = new([], null);
 
@@ -63,7 +63,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
             Cards = [.. Items(session["cards"]).Select(CardsOf).OfType<WorkflowCards>()],
             Folded = [.. Items(session["folded"]).Select(Text).OfType<string>()],
             Recent = [.. Items(session["recent"]).Select(Text).OfType<string>()],
-            ActivityFolded = session["activityFolded"] is JsonValue folded && folded.TryGetValue<bool>(out var isFolded) && isFolded,
+            ActivityOpen = session["activityOpen"] is JsonValue open && open.TryGetValue<bool>(out var isOpen) && isOpen,
         };
     }
 
@@ -81,7 +81,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
             })]),
             ["folded"] = new JsonArray([.. Folded.Select(folder => JsonValue.Create(folder))]),
             ["recent"] = new JsonArray([.. Recent.Select(folder => JsonValue.Create(folder))]),
-            ["activityFolded"] = ActivityFolded,
+            ["activityOpen"] = ActivityOpen,
         };
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
         AtomicFile.Replace(file, JsonSerializer.SerializeToUtf8Bytes(session));

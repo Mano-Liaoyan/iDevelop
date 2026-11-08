@@ -589,7 +589,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 }
             }
 
-            Activity.IsFolded = session.ActivityFolded;
+            Activity.IsOpen = session.ActivityOpen;
             var canvases = Projects.SelectMany(project => project.Workflows).ToList();
             foreach (var canvas in canvases)
             {
@@ -828,7 +828,7 @@ public sealed class MainWindowViewModel : ObservableObject
             Cards = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.AnyCardExpanded)
                 .Select(canvas => new WorkflowCards(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ExpandedCards))],
             Folded = [.. Projects.Where(project => !project.IsExpanded).Select(project => project.Folder)],
-            ActivityFolded = Activity.IsFolded,
+            ActivityOpen = Activity.IsOpen,
             Recent = [.. Recent.Select(project => project.Folder).Where(folder => !Projects.Any(open => ProjectFolders.Comparer.Equals(open.Folder, folder)))],
         };
         try

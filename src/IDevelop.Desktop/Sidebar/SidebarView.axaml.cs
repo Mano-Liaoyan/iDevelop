@@ -21,22 +21,20 @@ public partial class SidebarView : UserControl
     // The room a revealed row keeps from the tree's bottom edge.
     private const double TreeBottomRoom = 32;
 
-    // Below this panel height Activity starts folded, so the tree keeps the room.
-    private const double ActivityFoldHeight = 700;
+    // While a workflow is open, Projects takes at most this share of the panel's height, its heading included (ADR 0071).
+    private const double ProjectsShare = 0.35;
 
-    // A tree that takes more of the panel than this folds Activity to its heading, so Projects and Nodes keep their rows.
-    private const double ActivityFoldShare = 0.45;
+    // The Nodes list keeps at least five one-line rows: 26 px each, 2 px between them, and its 8 px end room.
+    private const double NodesLeastHeight = 146;
 
-    // The least height of the Nodes section, so a long list of projects never hides the shown workflow's nodes.
-    private const double NodesLeastHeight = 120;
+    // The rule and the heading over the Nodes list.
+    private const double NodesHeadingHeight = 40;
 
-    // A workflow with no node keeps the Nodes heading and its one line, and Projects takes the rest (ADR 0072).
-    private const double EmptyNodesHeight = 72;
+    // An open Activity list leaves Projects its heading and one row, as well as the Nodes section's least height.
+    private const double SectionsLeastHeight = 28 + 30 + NodesHeadingHeight + NodesLeastHeight;
 
     private IInputElement? _beforeFind;
     private MainWindowViewModel? _revealing;
-
-    private WorkflowCanvasViewModel? _splitting;
 
     public SidebarView()
     {
@@ -47,19 +45,12 @@ public partial class SidebarView : UserControl
         AddHandler(KeyDownEvent, OnRowKeyDown, RoutingStrategies.Tunnel);
         // A group header folds or opens its group, and the list never selects it.
         AddHandler(PointerPressedEvent, OnGroupPressed, RoutingStrategies.Tunnel);
-        // Activity never takes more than half of the panel. A short panel, or a tree longer than ActivityFoldShare of it, folds Activity to its
-        // heading, so the tree keeps the room while the person moves through a long workflow. Both measures are free of the fold: the rows' own heights leave out the tree's end room, which changes with the fold.
-        Rows.SizeChanged += (_, e) =>
-        {
-            ActivityScroller.MaxHeight = e.NewSize.Height / 2;
-            FoldActivity();
-        };
-        TreeRows.LayoutUpdated += (_, _) =>
-        {
-            FoldActivity();
-            SplitSections();
-        };
+        Rows.SizeChanged += (_, _) => SplitSections();
+        TreeRows.LayoutUpdated += (_, _) => SplitSections();
         Sections.SizeChanged += (_, _) => SplitSections();
+        // The limit or a row's height can move the open workflow's row out of the section's view, and it comes back (ADR 0071).
+        Tree.SizeChanged += (_, _) => ShowOpenWorkflow();
+        TreeRows.SizeChanged += (_, _) => ShowOpenWorkflow();
         NodeRows.AddHandler(ScrollViewer.ScrollChangedEvent, (_, e) => OnNodesScrollChanged(e));
         // A rest moves the rows after the scroll's event, so the pin and the covers read the rows where they end up.
         NodeRows.LayoutUpdated += (_, _) =>
@@ -74,36 +65,30 @@ public partial class SidebarView : UserControl
         DataContextChanged += (_, _) => WatchReveals();
     }
 
-    // Projects takes its rows' height up to half of the sections' room, then scrolls, and Nodes takes the rest. With no workflow
-    // shown, Projects takes all the room (ADR 0071).
+    // Activity takes at most half of the panel and leaves the sections their least height. While a workflow is open, Projects takes
+    // its rows' height up to its share of the panel, then scrolls, and Nodes takes the rest. With no workflow open, Projects takes all the room (ADR 0071).
     private void SplitSections()
     {
+        ActivityScroller.MaxHeight = Math.Max(0, Math.Min(Rows.Bounds.Height / 2, ActivityScroller.Bounds.Height + Sections.Bounds.Height - SectionsLeastHeight));
         var room = Sections.Bounds.Height - ProjectsHeading.Bounds.Height;
-        Tree.MaxHeight = WholeRows(Math.Max(0, _revealing?.Canvas switch
-        {
-            null => room,
-            { IsEmpty: true } => room - EmptyNodesHeight,
-            _ => Math.Min(room / 2, room - NodesLeastHeight),
-        }));
+        Tree.MaxHeight = WholeRows(Math.Max(0, _revealing?.Canvas is null
+            ? room
+            : Math.Min(Rows.Bounds.Height * ProjectsShare - ProjectsHeading.Bounds.Height, room - NodesHeadingHeight - NodesLeastHeight)));
     }
 
-    // A row that misses the limit by this little still shows whole, so the last few pixels of the section's room are not wasted.
-    private const double WholeRowSlack = 6;
+    // Keeps the open workflow's row in the Projects section's view after the layout has settled.
+    private void ShowOpenWorkflow() => Dispatcher.UIThread.Post(() =>
+    {
+        if (_revealing?.Canvas is { } canvas && WorkflowRows().FirstOrDefault(row => row.DataContext == canvas) is { } row)
+        {
+            ScrollInto(TopOf(row), TopOf(row) + row.Bounds.Height, PinnedRowHeight + 1);
+        }
+    }, DispatcherPriority.Background);
 
     // A section that scrolls ends on a whole row, so the row after it never shows cut or as a blank band. Nodes takes what is left over.
     private double WholeRows(double limit) => TreeRows.DesiredSize.Height <= limit ? limit
         : TreeRows.GetVisualDescendants().OfType<Control>().Where(IsTreeRow)
-            .Select(row => TopOf(row) + row.Bounds.Height).Where(bottom => bottom <= limit + WholeRowSlack).DefaultIfEmpty(limit).Max();
-
-    private void FoldActivity()
-    {
-        if (DataContext is MainWindowViewModel view && Rows.Bounds.Height > 0)
-        {
-            // What needs the person keeps the list open whatever the tree's length, because it starts the Reply path (ADR 0074).
-            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight
-                || (!view.Activity.HasWaiting && !view.Activity.HasFailed && TreeRows.Children.Sum(child => child.DesiredSize.Height) > Rows.Bounds.Height * ActivityFoldShare);
-        }
-    }
+            .Select(row => TopOf(row) + row.Bounds.Height).Where(bottom => bottom <= limit).DefaultIfEmpty(limit).Max();
 
     // The tree follows the window: what the person opens anywhere, it opens to and shows.
     private void WatchReveals()
@@ -126,18 +111,8 @@ public partial class SidebarView : UserControl
 
     private void WatchCanvas()
     {
-        _splitting?.PropertyChanged -= OnCanvasChanged;
-        _splitting = _revealing?.Canvas;
-        _splitting?.PropertyChanged += OnCanvasChanged;
         SplitSections();
-    }
-
-    private void OnCanvasChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(WorkflowCanvasViewModel.IsEmpty))
-        {
-            SplitSections();
-        }
+        ShowOpenWorkflow();
     }
 
     private void OnTreeReveal(WorkflowCanvasViewModel canvas, TaskNodeViewModel? node) =>
@@ -463,8 +438,10 @@ public partial class SidebarView : UserControl
     private static void RestOnWholeRow(ScrollViewer scroller, IReadOnlyList<(double Top, double Bottom)> rows, IReadOnlyList<(double Top, double Bottom)> rests, double head, double moved)
     {
         var cut = rows.Any(row => row.Top < head - 0.5 && row.Bottom > head + 0.5);
+        // A header that is no rest and that the pinned row half covers would leave a blank band under the pin, so the list goes on past it.
+        var cutNoRest = rows.Any(row => row.Top < head - 0.5 && row.Bottom > head + 0.5 && !rests.Contains(row));
         var noRest = !cut && head > 0 && rows.FirstOrDefault(row => row.Bottom > head + 0.5) is { Bottom: > 0 } first && !rests.Contains(first);
-        if (!noRest && (moved == 0 || !cut))
+        if (!noRest && !cutNoRest && (moved == 0 || !cut))
         {
             return;
         }

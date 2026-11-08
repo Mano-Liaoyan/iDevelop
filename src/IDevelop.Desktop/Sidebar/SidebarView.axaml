@@ -53,51 +53,50 @@
       </TextBox>
     </Border>
 
-    <!-- What needs the person and what runs now, without a click. The heading's chevron folds the list, and its counts stay in view
-         and add up to the list. A short panel starts folded, so the heading is the one summary row until the person opens it. -->
+    <!-- What needs the person and what runs now. The list starts folded to this one row, whose counts add up to the list. A badge and
+         a number stand for each count here, as on a folded project row, and each count's tooltip says its state in words (ADR 0071). -->
     <Grid Grid.Row="2" RowDefinitions="Auto,Auto" Margin="8,4,0,0" IsVisible="{Binding Activity.HasRows}">
       <ToggleButton Classes="sectionFold" Margin="0,0,8,0" IsChecked="{Binding Activity.IsOpen}"
-                    ToolTip.Tip="{Binding Activity.FoldLabel}"
+                    ToolTip.Tip="{Binding Activity.FoldTip}"
                     AutomationProperties.AutomationId="ActivityFold"
                     AutomationProperties.Name="{Binding Activity.FoldLabel}">
-        <Grid ColumnDefinitions="12,*" RowDefinitions="Auto,Auto" ColumnSpacing="6">
-          <PathIcon Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="1" Classes="section" Text="Activity" VerticalAlignment="Center" />
-          <!-- Every count says its state in words, as the run bar and the workflow rows do (ADR 0063). The counts take their own
-               line under the heading and wrap from its left edge, so the heading stays in one place. -->
-          <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" ItemSpacing="10" LineSpacing="2">
+        <Grid ColumnDefinitions="Auto,*,12" ColumnSpacing="6">
+          <TextBlock Classes="section" Text="Activity" VerticalAlignment="Center" />
+          <StackPanel Grid.Column="1" Classes="counts tight" VerticalAlignment="Center">
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasWaiting}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting for you'}"
-                        AutomationProperties.AutomationId="ActivityWaiting">
+                        AutomationProperties.AutomationId="ActivityWaiting"
+                        AutomationProperties.Name="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting'}">
               <theme:StateBadge State="InputRequired" Why="Question" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting'}" />
+              <TextBlock Classes="caption" Text="{Binding Activity.WaitingCount}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasFailed}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}"
-                        AutomationProperties.AutomationId="ActivityFailed">
+                        AutomationProperties.AutomationId="ActivityFailed"
+                        AutomationProperties.Name="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}">
               <theme:StateBadge State="Failed" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}" />
+              <TextBlock Classes="caption" Text="{Binding Activity.FailedCount}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasInterrupted}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}"
-                        AutomationProperties.AutomationId="ActivityInterrupted">
+                        AutomationProperties.AutomationId="ActivityInterrupted"
+                        AutomationProperties.Name="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}">
               <theme:StateBadge State="InputRequired" Why="Interrupted" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}" />
+              <TextBlock Classes="caption" Text="{Binding Activity.InterruptedCount}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasRunning}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.RunningCount, StringFormat='{}{0} running'}"
-                        AutomationProperties.AutomationId="ActivityRunning">
+                        AutomationProperties.AutomationId="ActivityRunning"
+                        AutomationProperties.Name="{Binding Activity.RunningCount, StringFormat='{}{0} running'}">
               <theme:StateBadge State="Running" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.RunningCount, StringFormat='{}{0} running'}" />
+              <TextBlock Classes="caption" Text="{Binding Activity.RunningCount}" />
             </StackPanel>
-          </WrapPanel>
+          </StackPanel>
+          <PathIcon Grid.Column="2" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" />
         </Grid>
       </ToggleButton>
       <ScrollViewer x:Name="ActivityScroller" Grid.Row="1" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding Activity.IsOpen}">
         <StackPanel Spacing="2" Margin="0,0,8,0">
-          <!-- While several projects are open, the list covers all of them, whichever project the window shows. -->
-          <TextBlock Classes="caption" Margin="8,0,0,2" Text="All open projects" IsVisible="{Binding Activity.CoversSeveralProjects}"
-                     AutomationProperties.AutomationId="ActivityScope" />
           <ItemsControl ItemsSource="{Binding Activity.Rows}"
                         AutomationProperties.AutomationId="Activity"
                         AutomationProperties.Name="Activity">
@@ -158,8 +157,8 @@
     </StackPanel>
 
     <!-- Two sections share the panel, as VS Code's Explorer and Outline do (ADR 0071). Projects lists the projects and their
-         workflows, and it takes its rows' height up to half of the room, then scrolls. Nodes lists the shown workflow's nodes by
-         state, and it scrolls in the rest. A rule divides them, and they keep one panel's color. -->
+         workflows. While a workflow is open it takes at most 35% of the panel's height, then scrolls. Nodes lists the shown
+         workflow's nodes by state, and it scrolls in the rest. A rule divides them, and they keep one panel's color. -->
     <Grid x:Name="Sections" Grid.Row="3" RowDefinitions="Auto,Auto,Auto,*" IsVisible="{Binding HasProjects}">
       <Grid x:Name="ProjectsHeading" ColumnDefinitions="*,Auto" Height="28" Margin="16,0,16,0">
         <TextBlock Classes="section" Text="Projects" VerticalAlignment="Center" />

@@ -1,5 +1,6 @@
 using IDevelop.Desktop.Inspector;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Headless;
@@ -190,6 +191,8 @@ public sealed class ActivityTests : IDisposable
         shell.Render();
         shell.WaitUntil(() => view.Activity.Rows.All(row => row.ProjectLine is not null), "the rows name their project");
 
+        view.Activity.IsOpen = true;
+        shell.Render();
         var project = view.Projects.Single(item => item.Folder != other).Name;
         Assert.All(view.Activity.Rows, row => Assert.Equal($"{project} · Workflow", row.ProjectLine));
         Assert.Contains(Shell.ById<TextBlock>(shell.Window, "ActivityProject"), text => text.IsEffectivelyVisible && text.Text == $"{project} · Workflow");
@@ -207,6 +210,9 @@ public sealed class ActivityTests : IDisposable
         // With one project open, a row needs no project line.
         Assert.All(view.Activity.Rows, row => Assert.Null(row.ProjectLine));
         Assert.DoesNotContain(Shell.ById<TextBlock>(shell.Window, "ActivityProject"), text => text.IsEffectivelyVisible);
+        Assert.True(shell.Find<ToggleButton>("ActivityFold").IsEffectivelyVisible);
+        view.Activity.IsOpen = true;
+        shell.Render();
         Assert.True(shell.Find<ItemsControl>("Activity").IsEffectivelyVisible);
         Assert.Equal("1 of 3 · 1 running · 1 waiting", view.Canvas!.Summary);
         Assert.Equal(1, view.Projects[0].WaitingCount);
@@ -219,24 +225,26 @@ public sealed class ActivityTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_short_panel_folds_Activity_to_its_heading_and_the_heading_opens_it()
+    public void Activity_starts_folded_to_one_row_and_stays_open_at_every_height_after_a_click()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Run(shell);
         var activity = shell.Window.ViewModel.Activity;
+        var fold = shell.Find<ToggleButton>("ActivityFold");
 
-        shell.Window.Height = 600;
         shell.Render();
-        Assert.Equal((false, "Show Activity", false), (activity.IsOpen, activity.FoldLabel, activity.IsFolded));
+        Assert.Equal((false, "Show Activity"), (activity.IsOpen, activity.FoldLabel));
+        Assert.DoesNotContain(Shell.ById<Button>(shell.Window, "ActivityRow"), row => row.IsEffectivelyVisible);
+        Assert.InRange(fold.Bounds.Height, 26, 30);
 
         activity.IsOpen = true;
-        Assert.Equal((true, false), (activity.IsOpen, activity.IsFolded));
-
-        activity.IsOpen = false;
+        shell.Window.Height = 600;
+        shell.Render();
+        Assert.True(activity.IsOpen);
         shell.Window.Height = 900;
         shell.Render();
-        Assert.True(activity.IsOpen, "A tall panel does not take back the person's own choice.");
+        Assert.True(activity.IsOpen, "A change of height does not take back the person's choice.");
     }
 
     [AvaloniaFact]
@@ -319,14 +327,14 @@ public sealed class ActivityTests : IDisposable
     }
 
     [Fact]
-    public void The_session_keeps_a_folded_Activity_list()
+    public void The_session_keeps_an_open_Activity_list()
     {
         var file = Path.GetTempFileName();
         try
         {
-            (WorkspaceSession.Empty with { ActivityFolded = true }).Write(file);
+            (WorkspaceSession.Empty with { ActivityOpen = true }).Write(file);
 
-            Assert.True(WorkspaceSession.Read(file).ActivityFolded);
+            Assert.True(WorkspaceSession.Read(file).ActivityOpen);
         }
         finally
         {
