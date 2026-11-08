@@ -175,7 +175,7 @@
   <!-- The smallest cards with text keep the agent's line, because a node is an agent wherever its words read. The view sets the
        text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
   <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="26,4,8,0" />
+    <Setter Property="Margin" Value="26,2,8,0" />
     <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
     <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
     <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />

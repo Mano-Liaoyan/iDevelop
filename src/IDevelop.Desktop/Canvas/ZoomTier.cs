@@ -30,7 +30,10 @@ public static class ZoomTiers
     private const int TitleLines = 3;
 
     /// <summary>The space in canvas units over a Title tier card's title.</summary>
-    public const double TitleTop = 4;
+    public const double TitleTop = 2;
+
+    /// <summary>The space in canvas units under a Title tier card's agent's line, which holds the line's descenders.</summary>
+    private const double TitleBottom = 5;
 
     /// <summary>The least gap in screen pixels between a Title tier card that grows and the card under it.</summary>
     public const double CardGap = 6;
@@ -75,7 +78,7 @@ public static class ZoomTiers
 
     /// <summary>
     /// The text size in canvas units that keeps a Title or Block tier card's text just readable on screen at <paramref name="zoom"/>,
-    /// in even steps, with its line height, the title lines, and how far the card draws under its 64 px box.
+    /// with its line height, the title lines, and how far the card draws under its 64 px box.
     /// A Title tier card takes up to three title lines over its agent's line and grows to hold them, but only as far as
     /// <paramref name="pitch"/>, the least distance in canvas units from a card's top to the top of the card under it, leaves a 6 px gap (ADR 0068).
     /// A Block tier card gives up its agent's line and its badge, so its title keeps one or two lines at 9 px at every zoom.
@@ -90,7 +93,8 @@ public static class ZoomTiers
             return new(blockSize, blockLine, Math.Clamp((int)(BlockRoom / blockLine), 1, BlockLines), CardReach(tier));
         }
 
-        var size = Math.Clamp(least, 30, 44);
+        // The Title tier's size steps by one, so the text keeps as close to 9 px as the room for three lines needs.
+        var size = Math.Clamp(Math.Ceiling(ReadablePixels / zoom), 30, 44);
         var line = Math.Ceiling(size * 1.04);
         var drawn = 64 + CardReach(ZoomTier.Title);
         var room = Math.Max(drawn, pitch - CardGap / zoom);
@@ -103,7 +107,7 @@ public static class ZoomTiers
         return new(size, line, lines, Math.Max(drawn, Height(lines)) - 64);
 
         // The title's lines and the agent's line, one line high, under the top's space.
-        double Height(int count) => TitleTop + (count + 1) * line;
+        double Height(int count) => TitleTop + (count + 1) * line + TitleBottom;
     }
 
     /// <summary>The style class that the canvas takes in the tier, or null for the full card.</summary>

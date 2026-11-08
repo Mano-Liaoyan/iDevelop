@@ -7,7 +7,7 @@ public sealed class ZoomTitleTextTests
 {
     [Theory]
     [InlineData(0.23, 40)]
-    [InlineData(0.244, 38)]
+    [InlineData(0.244, 37)]
     [InlineData(0.29, 32)]
     [InlineData(0.34, 30)]
     public void The_title_tier_keeps_its_text_readable_and_takes_three_lines_where_the_rows_leave_room(double zoom, double size)
