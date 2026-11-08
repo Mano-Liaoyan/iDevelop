@@ -48,7 +48,7 @@ public partial class SidebarView : UserControl
         // A group header folds or opens its group, and the list never selects it.
         AddHandler(PointerPressedEvent, OnGroupPressed, RoutingStrategies.Tunnel);
         // Activity never takes more than half of the panel. A short panel, or a tree longer than ActivityFoldShare of it, folds Activity to its
-        // heading, so the tree keeps the room while the person moves through a long workflow. Both measures are free of the fold, so the tree's end room, which changes with the fold, does not count.
+        // heading, so the tree keeps the room while the person moves through a long workflow. Both measures are free of the fold: the rows' own heights leave out the tree's end room, which changes with the fold.
         Rows.SizeChanged += (_, e) =>
         {
             ActivityScroller.MaxHeight = e.NewSize.Height / 2;
@@ -78,7 +78,7 @@ public partial class SidebarView : UserControl
     {
         if (DataContext is MainWindowViewModel view && Rows.Bounds.Height > 0)
         {
-            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight || TreeRows.DesiredSize.Height - TreeRows.Margin.Bottom > Rows.Bounds.Height * ActivityFoldShare;
+            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight || TreeRows.Children.Sum(child => child.DesiredSize.Height) > Rows.Bounds.Height * ActivityFoldShare;
         }
     }
 
