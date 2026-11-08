@@ -1,6 +1,6 @@
 # Every card keeps its title, and the tree shows the selected node's row
 
-A card shows its title at every zoom tier. The Block tier no longer turns a card into a state block without a name. The left tree opens the group of the selected or open node at any size. The inspector title takes up to four lines, and a short inspector keeps one short line that says what Continue and Retry do. This amends ADR 0045, ADR 0047, ADR 0065, and ADR 0066. ADR 0068 amends its tree reveal for a large group and its Title tier lines.
+A card shows its title at every zoom tier. The Block tier no longer turns a card into a state block without a name. The left tree opens the group of the selected or open node at any size. The inspector title takes up to four lines. This amends ADR 0045, ADR 0047, ADR 0065, and ADR 0066. ADR 0068 amends its tree reveal for a large group and its Title tier lines.
 
 ADR 0071 moves the tree's node rows to the Nodes section, which scrolls the selected node's row into view. ADR 0071 also shows the inspector title in full.
 
@@ -13,7 +13,7 @@ Ten review rounds found that cards at the Block tier, such as the docked convers
 - **Tree reveal.** Selecting a node, on the canvas or by opening its conversation, opens its tree group at any size, and the tree shows its row as selected. The group opens once for each selection, so a group that the person folds stays folded until the selection changes or the node moves to another group. This withdraws ADR 0066's rule that a group of more than 8 nodes stays folded for a canvas selection. A group still starts folded above 8 nodes (ADR 0065).
 - **Tree levels.** A group header stands one level before its node rows: a node's tile starts under the group's name.
 - **Inspector title.** The header shows the title in up to four lines, then an ellipsis. A short inspector shows two. The tooltip holds the whole title. This amends ADR 0066's two lines.
-- **Short inspector.** Under 700 px of inspector height, an interrupted node's header keeps one muted line, "Continue resumes. Retry starts again.". Its tooltip holds the whole sentence. This amends ADR 0065's rule that the state's sentence moves to the tooltip.
+- **Short inspector.** ADR 0074 removes the short line. The interrupted node's tooltip holds the sentence, and Retry is in the More menu.
 - **Run bar.** Before a chip gives up its words, Next says only "Next". Its tooltip and accessible name keep what it selects. This amends ADR 0065's order of steps.
 
 ## Considered options
