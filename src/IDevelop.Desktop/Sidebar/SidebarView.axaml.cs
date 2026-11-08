@@ -24,6 +24,9 @@ public partial class SidebarView : UserControl
     // Below this panel height Activity starts folded, so the tree keeps the room.
     private const double ActivityFoldHeight = 700;
 
+    // A tree that takes more of the panel than this folds Activity to its heading, so Projects and Nodes keep their rows.
+    private const double ActivityFoldShare = 0.45;
+
     // The least height of the Nodes section, so a long list of projects never hides the shown workflow's nodes.
     private const double NodesLeastHeight = 120;
 
@@ -44,7 +47,7 @@ public partial class SidebarView : UserControl
         AddHandler(KeyDownEvent, OnRowKeyDown, RoutingStrategies.Tunnel);
         // A group header folds or opens its group, and the list never selects it.
         AddHandler(PointerPressedEvent, OnGroupPressed, RoutingStrategies.Tunnel);
-        // Activity never takes more than half of the panel. A short panel, or a tree longer than half of it, folds Activity to its
+        // Activity never takes more than half of the panel. A short panel, or a tree longer than ActivityFoldShare of it, folds Activity to its
         // heading, so the tree keeps the room while the person moves through a long workflow. Both measures are free of the fold, so the tree's end room, which changes with the fold, does not count.
         Rows.SizeChanged += (_, e) =>
         {
@@ -75,7 +78,7 @@ public partial class SidebarView : UserControl
     {
         if (DataContext is MainWindowViewModel view && Rows.Bounds.Height > 0)
         {
-            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight || TreeRows.DesiredSize.Height - TreeRows.Margin.Bottom > Rows.Bounds.Height / 2;
+            view.Activity.IsCompact = Rows.Bounds.Height < ActivityFoldHeight || TreeRows.DesiredSize.Height - TreeRows.Margin.Bottom > Rows.Bounds.Height * ActivityFoldShare;
         }
     }
 
