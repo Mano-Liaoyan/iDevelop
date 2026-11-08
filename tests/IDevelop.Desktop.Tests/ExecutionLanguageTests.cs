@@ -98,7 +98,7 @@ public sealed class ExecutionLanguageTests
     [Fact]
     public void A_full_channel_reports_the_longest_wire_that_may_leave_it()
     {
-        // Three lanes need 12 of room at the least spacing, and this channel of 16 between margins of 6 has 4.
+        // Three lanes need 8 of room at the least spacing, and this channel of 16 between margins of 6 has 4.
         Rect[] cards = [new Rect(0, 0, 100, 400), new Rect(116, 0, 100, 400)];
         var spread = WireLanes.Spread(
         [

@@ -40,7 +40,8 @@ public sealed class WireRouterTests(ITestOutputHelper output)
     public void Lanes_that_run_side_by_side_keep_the_least_spacing(string name, ZoomTier tier)
     {
         var plan = PlanOf(name, tier);
-        var least = WireLanes.MinimumLane * ZoomTiers.WireScale(tier) - 0.01;
+        var leastUpOrDown = WireLanes.MinimumColumnLane * ZoomTiers.WireScale(tier) - 0.01;
+        var leastAcross = WireLanes.MinimumRowLane * ZoomTiers.WireScale(tier) - 0.01;
         var runs = plan.Drawn.SelectMany((wire, index) => wire.Route.Zip(wire.Route.Skip(1)).Select(run => (Wire: index, A: run.First, B: run.Second))).ToList();
         foreach (var a in runs)
         {
@@ -48,12 +49,12 @@ public sealed class WireRouterTests(ITestOutputHelper output)
             {
                 if (Math.Abs(a.A.X - a.B.X) < 0.01 && Math.Abs(b.A.X - b.B.X) < 0.01 && Overlap(a.A.Y, a.B.Y, b.A.Y, b.B.Y) > 1)
                 {
-                    Assert.True(Math.Abs(a.A.X - b.A.X) >= least, $"{name}: wires {a.Wire} and {b.Wire} run {Math.Abs(a.A.X - b.A.X)} apart up or down at x {a.A.X}.");
+                    Assert.True(Math.Abs(a.A.X - b.A.X) >= leastUpOrDown, $"{name}: wires {a.Wire} and {b.Wire} run {Math.Abs(a.A.X - b.A.X)} apart up or down at x {a.A.X}.");
                 }
 
                 if (Math.Abs(a.A.Y - a.B.Y) < 0.01 && Math.Abs(b.A.Y - b.B.Y) < 0.01 && Overlap(a.A.X, a.B.X, b.A.X, b.B.X) > 1)
                 {
-                    Assert.True(Math.Abs(a.A.Y - b.A.Y) >= least, $"{name}: wires {a.Wire} and {b.Wire} run {Math.Abs(a.A.Y - b.A.Y)} apart across at y {a.A.Y}.");
+                    Assert.True(Math.Abs(a.A.Y - b.A.Y) >= leastAcross, $"{name}: wires {a.Wire} and {b.Wire} run {Math.Abs(a.A.Y - b.A.Y)} apart across at y {a.A.Y}.");
                 }
             }
         }
@@ -64,7 +65,7 @@ public sealed class WireRouterTests(ITestOutputHelper output)
     public void Wires_that_share_a_port_take_separate_points_on_the_card_edge(string name, ZoomTier tier)
     {
         var plan = PlanOf(name, tier);
-        var least = WireLanes.MinimumLane * ZoomTiers.WireScale(tier) - 0.01;
+        var least = WireLanes.MinimumRowLane * ZoomTiers.WireScale(tier) - 0.01;
         foreach (var (group, side) in new[] { (plan.Wires.Select((wire, index) => (Card: wire.FromCard, Slot: plan.Drawn[index].Exit)), "output"), (plan.Wires.Select((wire, index) => (Card: wire.ToCard, Slot: plan.Drawn[index].Entry)), "input") })
         {
             foreach (var port in group.GroupBy(end => end.Card).Where(port => port.Count() > 1))

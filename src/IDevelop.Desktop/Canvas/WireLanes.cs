@@ -14,8 +14,11 @@ internal static class WireLanes
     /// <summary>The spacing between two lanes where the channel has room, at the Full tier, in canvas units.</summary>
     internal const double PreferredLane = 16;
 
-    /// <summary>The least spacing between two lanes at the Full tier, in canvas units.</summary>
-    internal const double MinimumLane = 6;
+    /// <summary>The least spacing between two lanes up or down at the Full tier, in canvas units. A fan out of one port needs the narrow gap between columns, and a wire that left it would loop around whole rows.</summary>
+    internal const double MinimumColumnLane = 4;
+
+    /// <summary>The least spacing between two lanes across at the Full tier, in canvas units. A long wire has open space to go to instead of a tight gap between rows.</summary>
+    internal const double MinimumRowLane = 6;
 
     // How far a run up or down keeps from the sides of its cards, at the Full tier width of a port's socket.
     private const double ColumnMargin = 6;
@@ -105,7 +108,7 @@ internal static class WireLanes
         var lanes = levels.Max() + 1;
         var (low, high) = (channel.Max(run => free[run].Low), channel.Min(run => free[run].High));
         var margin = vertical ? ColumnMargin : RowMargin;
-        var (minimum, spacing) = (MinimumLane * scale, PreferredLane * scale);
+        var (minimum, spacing) = ((vertical ? MinimumColumnLane : MinimumRowLane) * scale, PreferredLane * scale);
         double middle;
         if (double.IsFinite(low) && double.IsFinite(high))
         {
