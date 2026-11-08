@@ -300,6 +300,30 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Docking_a_view_too_far_out_to_read_frames_the_node_s_branch_where_its_titles_read()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Run(shell);
+        Resize(shell, 1600, 1000, 320);
+        Shell.Invoke(shell.InCard<Button>("Write docs", "CardAttention"));
+        shell.Render();
+        shell.Editor.ViewportZoom = 0.14;
+        shell.Render();
+
+        shell.Click(shell.Find<Button>("ConversationLayout"));
+        shell.Render();
+
+        // The view frames the branch closer, up to the bar's 100%, so the titles read beside the conversation (ADR 0069).
+        Assert.True(shell.Editor.ViewportZoom >= ZoomTiers.ReadableZoom, $"The docked view stays at {shell.Editor.ViewportZoom}.");
+        Assert.True(shell.Editor.ViewportZoom <= ZoomTiers.ActualSize + 0.001);
+        var node = shell.NodeModel("Write docs");
+        var branch = shell.Window.ViewModel.Canvas!.Connections.Where(wire => wire.To == node).Select(wire => wire.From.Title).Append("Write docs");
+        var editor = new Rect(shell.Editor.Bounds.Size);
+        Assert.All(branch, title => Assert.True(editor.Contains(shell.CardRect(title)), $"{title} at {shell.CardRect(title)} leaves {editor}."));
+    }
+
+    [AvaloniaFact]
     public void Fit_to_view_uses_the_room_a_long_status_leaves_on_the_docked_canvas()
     {
         using var f = FanOut.Fixture();

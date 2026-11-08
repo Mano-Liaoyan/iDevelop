@@ -295,9 +295,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
     /// <summary>
     /// Keeps <paramref name="node"/> and its direct predecessors and successors whole in view after the canvas got shorter, as
-    /// when the conversation docks under it. A view that already shows them stays. Otherwise the view frames them, never closer
-    /// than it was, so the person keeps the node's branch while they talk to its agent. Without a node, a view that cut a card
-    /// that showed whole fits again.
+    /// when the conversation docks under it. A view that already shows them at a zoom where a title reads stays. Otherwise the
+    /// view frames them: closer than it was, up to the bar's 100%, where the view was too far out to read a title, and never
+    /// closer than it was otherwise, so the person reads the node's branch while they talk to its agent (ADR 0069). Without a
+    /// node, a view that cut a card that showed whole fits again.
     /// </summary>
     internal void KeepBranchInView(TaskNodeViewModel? node, IReadOnlyCollection<Rect> shown)
     {
@@ -318,9 +319,11 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             .Append(node).Distinct()
             .Select(each => new Rect(each.DisplayRect.Position, each.DisplayRect.Size + new Size(0, reach)))
             .Aggregate((union, rect) => union.Union(rect));
-        if (!Room().Contains(new Rect((branch.Position - Editor.ViewportLocation) * Editor.ViewportZoom, branch.Size * Editor.ViewportZoom)))
+        var fits = CanvasChrome.FitZoom(branch, Room(FitMargin));
+        var far = Editor.ViewportZoom < ZoomTiers.ReadableZoom && fits > Editor.ViewportZoom;
+        if (far || !Room().Contains(new Rect((branch.Position - Editor.ViewportLocation) * Editor.ViewportZoom, branch.Size * Editor.ViewportZoom)))
         {
-            Fit(branch, node.DisplayRect.Center, Math.Min(Editor.ViewportZoom, CanvasChrome.FitZoom(branch, Room(FitMargin))));
+            Fit(branch, node.DisplayRect.Center, far ? Math.Min(fits, ZoomTiers.ActualSize) : Math.Min(Editor.ViewportZoom, fits));
         }
     }
 
