@@ -2,6 +2,8 @@
 
 A Title tier card takes up to three title lines at the 9 px floor and grows in height to hold them. A large tree group stays folded when a node in it is selected or opened, and lists only that node's row and a "+N more" row. A node's status uses the tree's state words, and a few rows and headers keep to one line. This amends ADR 0060, ADR 0066, and ADR 0067.
 
+ADR 0070 withdraws the "+N more" row and the Title tier card's model text.
+
 Round 21 found that titles at 61% were cut to similar starts, that the eight-node workflow beside the widest inspector cut its titles at 69%, and that a selection in a large Done group filled the left tree and pushed the other workflows and projects out of view.
 
 ## How it works
