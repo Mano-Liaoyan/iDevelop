@@ -135,7 +135,7 @@ public sealed class CanvasChromeTests : IDisposable
 
         void Sweep()
         {
-            var windows = new[] { 900.0, 1000, 1100, 1180, 1280, 1400, 1600 };
+            var windows = new[] { 900.0, 1000, 1100, 1180, 1280, 1400, 1600, 2560 };
             foreach (var width in windows.Concat(windows.Reverse()))
             {
                 foreach (var inspector in new double[] { 280, 320, 400, 520 })
@@ -583,6 +583,9 @@ public sealed class CanvasChromeTests : IDisposable
         var chips = bar.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "RunChip").ToArray();
         var limit = shell.ShowsAny("NextWaiting") ? shell.Bounds(shell.Find<Control>("NextWaiting")).Left : shell.Bounds(bar).Right;
         Assert.All(chips, chip => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(chip)) && shell.Bounds(chip).Right <= limit, $"At {at}, the chip \"{AutomationProperties.GetName(chip)}\" at {shell.Bounds(chip)} is cut by the bar at {shell.Bounds(bar)}."));
+        // Every count keeps its word at every width: a bar without room takes a second line, never a bare number.
+        Assert.All(chips, chip => Assert.Equal([AutomationProperties.GetName(chip)],
+            chip.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text)));
         if (shell.ShowsAny("StopWorkflow"))
         {
             Assert.Equal(canvas.Width >= CanvasChrome.CompactWidth, shell.Find<Button>("StopWorkflow").GetVisualDescendants().OfType<TextBlock>().Single().IsEffectivelyVisible);

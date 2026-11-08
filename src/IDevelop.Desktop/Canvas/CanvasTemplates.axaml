@@ -201,7 +201,7 @@
     </Panel>
   </DataTemplate>
 
-  <!-- A group of the run bar: its state's badge and its words, or only its number where the bar is tight. -->
+  <!-- A group of the run bar: its state's badge, its number, and its word. -->
   <DataTemplate x:Key="BarChipTemplate" DataType="canvas:StateChip">
     <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip.Tip="{Binding Tip}"
                 AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
@@ -211,7 +211,6 @@
                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
       </Panel>
       <TextBlock Classes="barText barWords" Text="{Binding Label}" />
-      <TextBlock Classes="barText barCount" Text="{Binding Count}" />
     </StackPanel>
   </DataTemplate>
 

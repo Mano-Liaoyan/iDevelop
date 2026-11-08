@@ -762,17 +762,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <!-- A chip says its group in words. Where the words do not fit beside the zoom controls, a chip shows its badge and count,
-       and its tooltip keeps the words, so the bar keeps one row (ADR 0065). -->
-  <Style Selector="TextBlock.barCount">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.barCount">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.barWords">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
+  <!-- A chip says its group in words at every width. A bar that cannot hold them on one line wraps them to a second (ADR 0069). -->
   <Style Selector="ItemsControl.barChips ContentPresenter > StackPanel">
     <Setter Property="Spacing" Value="4" />
     <Setter Property="MinHeight" Value="28" />
@@ -780,10 +770,10 @@
   <Style Selector="TextBlock.nextShort">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).tightNext:not(.tightChips):not(.ownRow) TextBlock.nextShort">
+  <Style Selector=":is(Control).tightNext:not(.ownRow) TextBlock.nextShort">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tightNext:not(.tightChips):not(.ownRow) TextBlock.nextLabel">
+  <Style Selector=":is(Control).tightNext:not(.ownRow) TextBlock.nextLabel">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector=":is(Control).tightFollow:not(.ownRow) Panel.barFollow, :is(Control).tightOwnRow Panel.barFollow">
