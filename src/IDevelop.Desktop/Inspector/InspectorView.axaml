@@ -161,13 +161,13 @@
                 Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
                 Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
                   <StackPanel>
-                    <theme:EllipsisText x:Name="DetailText" Classes="detail clamped" Whole="{Binding StateDetail}" ToolTip.Tip="{Binding StateDetail}"
+                    <theme:EllipsisText x:Name="DetailText" Classes="detail clamped" Whole="{Binding InspectorDetail}" ToolTip.Tip="{Binding InspectorDetail}"
                                            AutomationProperties.AutomationId="RunTaskDetail" />
                     <Button Classes="textLink" Content="Show all" IsVisible="{Binding #DetailText.IsCut}"
                             AutomationProperties.AutomationId="RunTaskDetailMore" AutomationProperties.Name="Show the whole text">
                       <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedLeft">
-                          <SelectableTextBlock Classes="wholeText" Text="{Binding StateDetail}" />
+                          <SelectableTextBlock Classes="wholeText" Text="{Binding InspectorDetail}" />
                         </Flyout>
                       </Button.Flyout>
                     </Button>
@@ -224,9 +224,9 @@
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" Width="12" Height="12" />
       </Border>
       <ScrollViewer x:Name="SectionScroller" Grid.Row="2" ScrollChanged="OnSectionsScrolled">
-        <StackPanel x:Name="SectionList" Margin="8,8,8,16">
+        <StackPanel x:Name="SectionList" Margin="8,4,8,16">
           <!-- Over the sections, and outside the swapped content, so the hint stays in the tree, hidden, while something is selected. -->
-          <TextBlock Classes="note" Text="{Binding InspectorHint}" Margin="4,0,4,8"
+          <TextBlock Classes="note" Text="{Binding InspectorHint}" Margin="4,4,4,8"
                      IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
                      AutomationProperties.AutomationId="InspectorHint" />
           <ContentControl>

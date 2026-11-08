@@ -30,6 +30,9 @@ public sealed partial class TaskNodeViewModel
     } = [];
 
     /// <summary>The header's row leaves Retry out, so its More menu offers it.</summary>
+    /// <summary>The state's sentence for the inspector's header, which names where Retry is when the header's row has no room for it.</summary>
+    public string? InspectorDetail => WaitReason == WaitReason.Interrupted && RetryIsInMenu ? NodeStates.InterruptedDetailInMenu : StateDetail;
+
     public bool RetryIsInMenu => ShowsRetry && Actions.All(action => action.Command != RetryCommand);
 
     /// <summary>The header's row leaves the conversation out, so its More menu offers it.</summary>

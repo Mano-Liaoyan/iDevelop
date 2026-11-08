@@ -86,6 +86,11 @@ public static class NodeStates
         _ => null,
     };
 
+    /// <summary>
+    /// The interrupted state's sentence where Retry is in the More menu, as in the inspector when Continue and Conversation take the header's row.
+    /// </summary>
+    public const string InterruptedDetailInMenu = "Closed mid-turn. Continue resumes the session. Retry, in the More menu, starts a new attempt.";
+
     /// <summary>The state's tone. An interrupted node needs nothing yet, so it takes the neutral tone, as its badge's gray disc does.</summary>
     public static StatusTone Tone(NodeState state, WaitReason why) =>
         state == NodeState.InputRequired && why == WaitReason.Interrupted ? StatusTone.Neutral : Tone(state);

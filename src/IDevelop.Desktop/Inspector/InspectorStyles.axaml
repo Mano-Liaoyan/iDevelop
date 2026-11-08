@@ -203,8 +203,9 @@
     <Setter Property="MaxHeight" Value="70" />
     <Setter Property="FontSize" Value="13" />
   </Style>
+  <!-- The box has 8 px over it, to the header's rule, and 8 px under it, to the first section's rule, with the sections' own 4 px inset below. -->
   <Style Selector="Border.filterBar">
-    <Setter Property="Padding" Value="12,4" />
+    <Setter Property="Padding" Value="12,8,12,0" />
   </Style>
   <!-- The filter is a field of the panel: the same quiet fill, hover tint, and focus edge as the rows' fields. -->
   <Style Selector="Border.filterBar TextBox">
@@ -275,7 +276,7 @@
               <TextBlock Grid.Column="2" Classes="sectionTitle" Text="{TemplateBinding Title}"
                          AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
               <!-- A folded section says what it holds in one muted line after its chevron. -->
-              <TextBlock Grid.Column="3" Name="PART_Summary" Classes="sectionSummary" Text="{TemplateBinding Summary}" IsVisible="False" Margin="6,0,8,0"
+              <TextBlock Grid.Column="3" Name="PART_Summary" Classes="sectionSummary" Text="{TemplateBinding Summary}" IsVisible="False" Margin="12,0,8,0"
                          AutomationProperties.AutomationId="SectionSummary" />
               <!-- The count's drawing ends where the glyphs' drawing ends, whatever its last character keeps clear. -->
               <inspector:InkAlignedText Grid.Column="4" Classes="sectionBadge" Text="{TemplateBinding Badge}"
@@ -572,8 +573,9 @@
   <Style Selector="ToggleButton.picker:disabled /template/ Border#Box">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
+  <!-- A fixed value opens no list, so it has no chevron, and the field does not read as a picker that is off. -->
   <Style Selector="ToggleButton.picker:disabled /template/ Path#Chevron">
-    <Setter Property="Fill" Value="{DynamicResource ComboBoxDropDownGlyphForegroundDisabled}" />
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- The open list: one tick box per skill, each name wrapping in full, inside a box of the picker's edges. -->
   <Style Selector="Border.skillList">
