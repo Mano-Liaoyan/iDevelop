@@ -303,6 +303,31 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Docking_that_cuts_a_card_fits_the_whole_graph_where_its_titles_read()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Run(shell);
+        Resize(shell, 1280, 800, 320);
+        Shell.Invoke(shell.InCard<Button>("Write docs", "CardAttention"));
+        shell.Render();
+        var view = shell.Window.GetVisualDescendants().OfType<WorkflowCanvasView>().First();
+        view.FitToView();
+        shell.Render();
+        // A view on the graph's left part, whose cards show whole before the dock takes the canvas's height.
+        shell.Editor.ViewportLocation -= new Vector(60, 0);
+        shell.Render();
+        Assert.NotEmpty(view.CardsInView());
+
+        shell.Click(shell.Find<Button>("ConversationLayout"));
+        shell.Render();
+
+        Assert.True(shell.Editor.ViewportZoom >= ZoomTiers.ReadableZoom, $"The docked view stays at {shell.Editor.ViewportZoom}.");
+        var editor = shell.Bounds(shell.Editor);
+        Assert.All(Cards(shell), card => Assert.True(editor.Contains(card), $"The card at {card} leaves {editor}."));
+    }
+
+    [AvaloniaFact]
     public void Docking_a_view_too_far_out_to_read_frames_the_node_s_branch_where_its_titles_read()
     {
         using var f = FanOut.Fixture();

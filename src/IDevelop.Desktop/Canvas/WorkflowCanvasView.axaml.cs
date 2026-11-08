@@ -306,8 +306,9 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// Keeps <paramref name="node"/> and its direct predecessors and successors whole in view after the canvas got shorter, as
     /// when the conversation docks under it. A view that already shows them at a zoom where a title reads stays. Otherwise the
     /// view frames them: closer than it was, up to the bar's 100%, where the view was too far out to read a title, and never
-    /// closer than it was otherwise, so the person reads the node's branch while they talk to its agent (ADR 0069). Without a
-    /// node, a view that cut a card that showed whole fits again.
+    /// closer than it was otherwise, so the person reads the node's branch while they talk to its agent (ADR 0069). A running
+    /// node's branch holds every node downstream of it while they fit at a zoom where a title reads. A view that cut a card that
+    /// showed whole fits the whole graph again, when the graph fits at that zoom. Without a node, it fits again.
     /// </summary>
     internal void KeepBranchInView(TaskNodeViewModel? node, IReadOnlyCollection<Rect> shown)
     {
@@ -322,18 +323,47 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             return;
         }
 
+        var view = new Rect(Editor.ViewportLocation, Editor.ViewportSize);
+        if (!shown.All(view.Contains) && CanvasChrome.FitZoom(Extent(), Room(FitMargin)) >= ZoomTiers.ReadableZoom)
+        {
+            FitToView();
+            return;
+        }
+
         var reach = canvas.CardReach;
-        var branch = canvas.Connections.Where(wire => wire.From == node).Select(wire => wire.To)
-            .Concat(canvas.Connections.Where(wire => wire.To == node).Select(wire => wire.From))
-            .Append(node).Distinct()
+        Rect Around(IEnumerable<TaskNodeViewModel> nodes) => nodes
             .Select(each => new Rect(each.DisplayRect.Position, each.DisplayRect.Size + new Size(0, reach)))
             .Aggregate((union, rect) => union.Union(rect));
+        var neighbours = canvas.Connections.Where(wire => wire.From == node).Select(wire => wire.To)
+            .Concat(canvas.Connections.Where(wire => wire.To == node).Select(wire => wire.From))
+            .Append(node).Distinct().ToArray();
+        var branch = Around(neighbours);
+        if (node.State == NodeState.Running && Around(neighbours.Concat(Downstream(canvas, node))) is var run
+            && CanvasChrome.FitZoom(run, Room(FitMargin)) >= ZoomTiers.ReadableZoom)
+        {
+            branch = run;
+        }
+
         var fits = CanvasChrome.FitZoom(branch, Room(FitMargin));
         var far = Editor.ViewportZoom < ZoomTiers.ReadableZoom && fits > Editor.ViewportZoom;
         if (far || !Room().Contains(new Rect((branch.Position - Editor.ViewportLocation) * Editor.ViewportZoom, branch.Size * Editor.ViewportZoom)))
         {
             Fit(branch, node.DisplayRect.Center, far ? Math.Min(fits, ZoomTiers.ActualSize) : Math.Min(Editor.ViewportZoom, fits));
         }
+    }
+
+    private static IEnumerable<TaskNodeViewModel> Downstream(WorkflowCanvasViewModel canvas, TaskNodeViewModel node)
+    {
+        var (seen, next) = (new HashSet<TaskNodeViewModel> { node }, new Queue<TaskNodeViewModel>([node]));
+        while (next.TryDequeue(out var from))
+        {
+            foreach (var to in canvas.Connections.Where(wire => wire.From == from).Select(wire => wire.To).Where(seen.Add))
+            {
+                next.Enqueue(to);
+            }
+        }
+
+        return seen;
     }
 
     /// <summary>The cards and an open proposal's ghost cards, in canvas units.</summary>
