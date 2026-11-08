@@ -30,7 +30,7 @@ internal static class WireRouting
     private const double RowGap = 126;
 
     // A wire that goes straight past a card keeps this far from its top and bottom edges, or it reads as the card's own wire.
-    private static readonly Thickness PassClearance = new(0, 22);
+    private static readonly Thickness PassClearance = new(0, 14);
 
     // What a detour keeps where cards stand closer than the clearance: the columns' port gutters and a wire's width.
     private static readonly Thickness[] Tight = [new(4, 6), new(0, 2)];
