@@ -61,7 +61,16 @@ public partial class SidebarView : UserControl
         };
         Sections.SizeChanged += (_, _) => SplitSections();
         NodeRows.AddHandler(ScrollViewer.ScrollChangedEvent, (_, e) => OnNodesScrollChanged(e));
-        NodeRows.LayoutUpdated += (_, _) => CoverCutNodeRows();
+        // A rest moves the rows after the scroll's event, so the pin and the covers read the rows where they end up.
+        NodeRows.LayoutUpdated += (_, _) =>
+        {
+            if (NodesScroller is { } scroller)
+            {
+                PinGroup(scroller);
+            }
+
+            CoverCutNodeRows();
+        };
         DataContextChanged += (_, _) => WatchReveals();
     }
 
@@ -394,7 +403,8 @@ public partial class SidebarView : UserControl
     {
         PinRows();
         RoomAfterLastRow();
-        RestOnWholeRow(Tree, ShownRows(), PinnedHeight, e.OffsetDelta.Y);
+        var rows = ShownRows();
+        RestOnWholeRow(Tree, rows, rows, PinnedHeight, e.OffsetDelta.Y);
         CoverCutRows();
     }
 
@@ -446,24 +456,37 @@ public partial class SidebarView : UserControl
         }
     }
 
-    // A list rests on a row's top under its head. It goes on in the direction it moved, so a small step never goes back.
-    private static void RestOnWholeRow(ScrollViewer scroller, IReadOnlyList<(double Top, double Bottom)> rows, double head, double moved)
+    // A list rests on one of its rests under its head. It goes on in the direction it moved, so a small step never goes back. A row
+    // under the head that is no rest moves on at once, also after a change of height, which moves nothing.
+    private static void RestOnWholeRow(ScrollViewer scroller, IReadOnlyList<(double Top, double Bottom)> rows, IReadOnlyList<(double Top, double Bottom)> rests, double head, double moved)
     {
-        if (moved == 0 || !rows.Any(row => row.Top < head - 0.5 && row.Bottom > head + 0.5))
+        var cut = rows.Any(row => row.Top < head - 0.5 && row.Bottom > head + 0.5);
+        var noRest = !cut && head > 0 && rows.FirstOrDefault(row => row.Bottom > head + 0.5) is { Bottom: > 0 } first && !rests.Contains(first);
+        if (!noRest && (moved == 0 || !cut))
         {
             return;
         }
 
-        var row = moved > 0 ? rows.FirstOrDefault(row => row.Top >= head - 0.5, (Top: head, Bottom: head)) : rows.Last(row => row.Top < head - 0.5);
-        scroller.Offset = scroller.Offset.WithY(scroller.Offset.Y + row.Top - head);
+        var rest = moved >= 0 ? rests.FirstOrDefault(row => row.Top >= head - 0.5, (Top: head, Bottom: head)) : rests.LastOrDefault(row => row.Top < head - 0.5, (Top: head, Bottom: head));
+        scroller.Offset = scroller.Offset.WithY(scroller.Offset.Y + rest.Top - head);
     }
 
     private ScrollViewer? NodesScroller => NodeRows.Scroll as ScrollViewer;
 
-    private IReadOnlyList<(double Top, double Bottom)> ShownNodeRows() =>
+    private List<(double Top, double Bottom, bool Header)> NodeRowSpans() =>
         [.. NodeRows.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible)
-            .Select(row => (Top: row.TranslatePoint(default, NodeRows)?.Y ?? 0, row.Bounds.Height))
-            .Select(row => (row.Top, Bottom: row.Top + row.Height)).OrderBy(row => row.Top)];
+            .Select(row => (Top: row.TranslatePoint(default, NodeRows)?.Y ?? 0, row.Bounds.Height, Header: row.DataContext is NodeGroup))
+            .Select(row => (row.Top, Bottom: row.Top + row.Height, row.Header)).OrderBy(row => row.Top)];
+
+    private IReadOnlyList<(double Top, double Bottom)> ShownNodeRows() => [.. NodeRowSpans().Select(row => (row.Top, row.Bottom))];
+
+    // The rows that the list rests on under the pinned group. A header after a node row is no rest: every row of the group above it
+    // has gone, so that group's pin would stand over nothing. The list goes on to the header's first row, and the header takes the pin.
+    private IReadOnlyList<(double Top, double Bottom)> NodeRests()
+    {
+        var spans = NodeRowSpans();
+        return [.. spans.Where((row, at) => !row.Header || at == 0 || spans[at - 1].Header).Select(row => (row.Top, row.Bottom))];
+    }
 
     private double PinnedGroupHeight => NodesHead.IsVisible ? PinnedRowHeight : 0;
 
@@ -473,8 +496,11 @@ public partial class SidebarView : UserControl
         var group = scroller.Offset.Y < 1 ? null
             : NodeRows.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible && row.DataContext is NodeGroup)
                 .LastOrDefault(row => (row.TranslatePoint(default, NodeRows)?.Y ?? 0) < PinnedRowHeight - 0.5);
-        StickyGroup.DataContext = group?.DataContext;
-        NodesHead.IsVisible = group is not null;
+        if (StickyGroup.DataContext != group?.DataContext || NodesHead.IsVisible != group is not null)
+        {
+            StickyGroup.DataContext = group?.DataContext;
+            NodesHead.IsVisible = group is not null;
+        }
     }
 
     // A click on the pinned group folds it, as a click on its header does.
@@ -496,13 +522,13 @@ public partial class SidebarView : UserControl
         {
             PinGroup(scroller);
             var room = NodeRows.Padding.Bottom - TreeFootInset;
-            var wanted = EndRoom(scroller, room, ShownNodeRows().Select(row => row.Top + scroller.Offset.Y), PinnedRowHeight);
+            var wanted = EndRoom(scroller, room, NodeRests().Select(row => row.Top + scroller.Offset.Y), PinnedRowHeight);
             if (Math.Abs(wanted - room) > 0.5)
             {
                 NodeRows.Padding = new Thickness(0, 0, NodeRows.Padding.Right, TreeFootInset + wanted);
             }
 
-            RestOnWholeRow(scroller, ShownNodeRows(), PinnedGroupHeight, e.OffsetDelta.Y);
+            RestOnWholeRow(scroller, ShownNodeRows(), NodeRests(), PinnedGroupHeight, e.OffsetDelta.Y);
             if (e.OffsetDelta.Y < 0)
             {
                 KeepSelectedRowUnderPin(scroller);

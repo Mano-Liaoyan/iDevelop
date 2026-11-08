@@ -550,6 +550,58 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.Contains(tops, top => Math.Abs(top - 26) < 1);
     }
 
+    // The states of the review fixture's scenes, in the order that the nodes are saved.
+    [AvaloniaTheory]
+    [InlineData("normal", new[] { Canvas.NodeState.Completed, Canvas.NodeState.Completed, Canvas.NodeState.Idle, Canvas.NodeState.Idle, Canvas.NodeState.Idle, Canvas.NodeState.Idle, Canvas.NodeState.Idle, Canvas.NodeState.Idle })]
+    [InlineData("running", new[] { Canvas.NodeState.InputRequired, Canvas.NodeState.InputRequired, Canvas.NodeState.Failed, Canvas.NodeState.InputRequired, Canvas.NodeState.Running, Canvas.NodeState.Stale, Canvas.NodeState.Idle, Canvas.NodeState.Completed, Canvas.NodeState.Completed })]
+    [InlineData("needs attention", new[] { Canvas.NodeState.InputRequired, Canvas.NodeState.InputRequired, Canvas.NodeState.Failed, Canvas.NodeState.InputRequired, Canvas.NodeState.InputRequired, Canvas.NodeState.Stale, Canvas.NodeState.Idle, Canvas.NodeState.Completed, Canvas.NodeState.Completed })]
+    [InlineData("failed", new[] { Canvas.NodeState.Failed, Canvas.NodeState.Failed, Canvas.NodeState.Idle, Canvas.NodeState.Idle, Canvas.NodeState.Idle, Canvas.NodeState.Idle, Canvas.NodeState.Completed, Canvas.NodeState.Completed })]
+    public void An_open_group_lists_every_node_and_a_pinned_group_keeps_a_row_under_it(string scene, Canvas.NodeState[] states)
+    {
+        // Three times each scene's nodes, so the list scrolls in the small window.
+        states = [.. states, .. states, .. states];
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. states.Select((_, index) => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Window.Width = 900;
+        shell.Window.Height = 600;
+        var canvas = shell.Window.ViewModel.Canvas!;
+        foreach (var (node, state) in canvas.Outline.Zip(states))
+        {
+            typeof(Canvas.TaskNodeViewModel).GetProperty(nameof(Canvas.TaskNodeViewModel.State))!.SetValue(node, state);
+        }
+
+        typeof(Canvas.WorkflowCanvasViewModel).GetMethod("ArrangeTreeRows", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(canvas, [null]);
+        shell.Render();
+        T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+        var (list, head, sticky) = (Named<ListBox>("NodeRows"), Named<Border>("NodesHead"), Named<Button>("StickyGroup"));
+        var scroller = (ScrollViewer)list.Scroll!;
+        List<ListBoxItem> Rows() => [.. list.GetVisualDescendants().OfType<ListBoxItem>().Where(row => row.IsEffectivelyVisible).OrderBy(row => row.TranslatePoint(default, list)!.Value.Y)];
+
+        foreach (var group in canvas.Groups.Where(group => group.Count > 0))
+        {
+            var rows = Rows().SkipWhile(row => row.DataContext != group).Skip(1).TakeWhile(row => row.DataContext is not Canvas.NodeGroup);
+            Assert.Equal(group.Count, rows.Count());
+        }
+
+        // Each offset and each way down and up: an open pinned group never stands over the next group's header.
+        var end = scroller.Extent.Height - scroller.Viewport.Height;
+        Assert.True(end > 0, $"The {scene} list does not scroll.");
+        var offsets = Enumerable.Range(0, (int)(end / 7) + 2).Select(step => step * 7.0).ToList();
+        foreach (var offset in offsets.Concat(Enumerable.Reverse(offsets)))
+        {
+            scroller.Offset = scroller.Offset.WithY(offset);
+            shell.Render();
+            if (head.IsVisible && sticky.DataContext is Canvas.NodeGroup { ShowsFolded: false } pinned)
+            {
+                var first = Rows().First(row => row.TranslatePoint(default, list)!.Value.Y + row.Bounds.Height > head.Bounds.Height + 0.5);
+                Assert.True(first.DataContext is Canvas.TaskNodeViewModel node && Canvas.NodeGroup.Of(node) == pinned.Kind,
+                    $"{scene}: {pinned.Name} is pinned with no row under it at offset {scroller.Offset.Y}: the first row is {first.DataContext}.");
+            }
+        }
+    }
+
     [AvaloniaFact]
     public void The_tree_rests_on_a_whole_row_under_its_pinned_rows()
     {
