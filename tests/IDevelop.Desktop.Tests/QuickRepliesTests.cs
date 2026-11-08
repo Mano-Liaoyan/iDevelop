@@ -111,6 +111,7 @@ public sealed class QuickRepliesTests
             var end = scroller.Extent.Height - scroller.Viewport.Height;
             Assert.True(end > 0, $"At height {height} the transcript has nothing to scroll.");
             Assert.InRange(scroller.Offset.Y, end - 40, end + 0.5);
+            Assert.Equal(scroller.Offset.Y, WholeLine.Rest((Control)scroller.Content!, scroller.Offset.Y, down: false), 0.5);
         }
     }
 

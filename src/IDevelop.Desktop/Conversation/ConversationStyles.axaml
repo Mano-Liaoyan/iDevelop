@@ -261,8 +261,10 @@
     <Setter Property="Margin" Value="0,0,10,0" />
   </Style>
   <!-- A row that the attention card speaks for keeps one pixel, because the virtualizing list cannot settle on a row of no height. -->
+  <!-- A row the card holds shows nothing. With the room under the last row, its height covers a line, so that a rest on a whole
+       line at the end keeps this row in the view and the list measures it. -->
   <Style Selector="Panel.row.held, Grid.narrow Panel.row.held">
-    <Setter Property="Height" Value="1" />
+    <Setter Property="Height" Value="12" />
     <Setter Property="Margin" Value="0" />
   </Style>
   <Style Selector="Panel.row.held > StackPanel">
