@@ -27,6 +27,13 @@ public partial class SidebarView : UserControl
     // The Nodes list keeps at least five one-line rows: 26 px each, 2 px between them, and its 8 px end room.
     private const double NodesLeastHeight = 146;
 
+    // The room Projects leaves Nodes for its three workflow rows: a group's heading and five rows, two of them on two lines,
+    // because a long node name wraps (issue #108).
+    private const double NodesRoomyHeight = 202;
+
+    // While a workflow is open, Projects keeps room for this many workflow rows, under the pinned project (ADR 0071).
+    private const int LeastWorkflowRows = 3;
+
     // The rule and the heading over the Nodes list.
     private const double NodesHeadingHeight = 40;
 
@@ -66,14 +73,28 @@ public partial class SidebarView : UserControl
     }
 
     // Activity takes at most half of the panel and leaves the sections their least height. While a workflow is open, Projects takes
-    // its rows' height up to its share of the panel, then scrolls, and Nodes takes the rest. With no workflow open, Projects takes all the room (ADR 0071).
+    // its rows' height up to its share of the panel or the height of three workflow rows, whichever is more, then scrolls, and Nodes takes the rest. With no workflow open, Projects takes all the room (ADR 0071).
     private void SplitSections()
     {
         ActivityScroller.MaxHeight = Math.Max(0, Math.Min(Rows.Bounds.Height / 2, ActivityScroller.Bounds.Height + Sections.Bounds.Height - SectionsLeastHeight));
         var room = Sections.Bounds.Height - ProjectsHeading.Bounds.Height;
         Tree.MaxHeight = WholeRows(Math.Max(0, _revealing?.Canvas is null
             ? room
-            : Math.Min(Rows.Bounds.Height * ProjectsShare - ProjectsHeading.Bounds.Height, room - NodesHeadingHeight - NodesLeastHeight)));
+            : Math.Min(room - NodesHeadingHeight - NodesLeastHeight,
+                Math.Max(Rows.Bounds.Height * ProjectsShare - ProjectsHeading.Bounds.Height, Math.Min(LeastWorkflowRowsHeight(), room - NodesHeadingHeight - NodesRoomyHeight)))));
+    }
+
+    // The height of the tallest run of three workflow rows under the pinned project, so the rows that the person sees number three wherever the list rests.
+    private double LeastWorkflowRowsHeight()
+    {
+        var rows = WorkflowRows().OrderBy(TopOf).ToList();
+        if (rows.Count == 0)
+        {
+            return 0;
+        }
+
+        var run = Math.Min(LeastWorkflowRows, rows.Count);
+        return PinnedRowHeight + Enumerable.Range(0, rows.Count - run + 1).Max(first => TopOf(rows[first + run - 1]) + rows[first + run - 1].Bounds.Height - TopOf(rows[first]));
     }
 
     // Keeps the open workflow's row in the Projects section's view after the layout has settled.

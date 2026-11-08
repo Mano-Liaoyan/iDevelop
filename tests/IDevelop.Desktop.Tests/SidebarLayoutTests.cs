@@ -341,6 +341,31 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.True(list.Bounds.Bottom <= sections.Bounds.Height + 0.5, "Nodes goes past the panel.");
     }
 
+    [AvaloniaFact]
+    public void Projects_gives_way_past_its_share_for_three_workflow_rows_and_Nodes_keeps_five_rows_at_the_least_window()
+    {
+        var reports = _temp.Create(Reports);
+        foreach (var index in Enumerable.Range(1, 6))
+        {
+            Save(reports, $"Workflow number {index} with a long name that wraps in the panel", "Step");
+        }
+
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Window.Height = 600;
+        shell.Render();
+        T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
+        var (tree, list) = (Named<ScrollViewer>("Tree"), shell.Find<ListBox>("SidebarTasks"));
+
+        var rows = tree.GetVisualDescendants().OfType<Button>().Where(row => row.Classes.Contains("workflow") && row.IsEffectivelyVisible).ToList();
+        var whole = rows.Count(row => row.TranslatePoint(default, tree)!.Value.Y >= -0.5 && row.TranslatePoint(new Point(0, row.Bounds.Height), tree)!.Value.Y <= tree.Viewport.Height + 0.5);
+        Assert.True(whole >= 3, $"Projects shows {whole} workflows in {tree.Viewport.Height} px.");
+        var shown = list.GetVisualDescendants().OfType<ListBoxItem>().Count(item =>
+            item.TranslatePoint(default, list)!.Value.Y >= -0.5 && item.TranslatePoint(new Point(0, item.Bounds.Height), list)!.Value.Y <= list.Bounds.Height + 0.5);
+        Assert.True(shown >= 5, $"Nodes shows {shown} rows in {list.Bounds.Height} px.");
+    }
+
     [AvaloniaTheory]
     [InlineData(600, false)]
     [InlineData(600, true)]
