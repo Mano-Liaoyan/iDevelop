@@ -205,7 +205,7 @@ public sealed class ExecutionLanguageTests
     [AvaloniaFact]
     public void A_title_too_narrow_for_a_start_of_it_still_keeps_its_place()
     {
-        var text = new EllipsisText { Whole = "Backfill ledger partition 2024-Q3", KeepFrom = 26, MaxLines = 2, TextWrapping = TextWrapping.Wrap, FontSize = 13 };
+        var text = new EllipsisText { Whole = "Backfill ledger partition 2024-Q3", Key = new TitleKey(4, 1, 0, 0), MaxLines = 2, TextWrapping = TextWrapping.Wrap, FontSize = 13 };
         text.Measure(new Avalonia.Size(4, 100));
         Assert.True(text.IsCut);
     }

@@ -56,13 +56,13 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
-    /// <summary>Tells each card which part of its title sets it apart from the other cards' titles.</summary>
+    /// <summary>Tells each card which words of its title set it apart from every other card's title.</summary>
     private void MarkTitles()
     {
-        var keeps = TitleParts.KeepFrom([.. Nodes.Select(node => node.Title)]);
+        var keeps = TitleParts.Keys([.. Nodes.Select(node => node.Title)]);
         foreach (var (node, keep) in Nodes.Zip(keeps))
         {
-            node.TitleKeep = keep;
+            node.TitleKey = keep;
         }
     }
 

@@ -1,57 +1,36 @@
+using IDevelop.Desktop.Theme;
+
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>Finds the part of each title that tells it from the most similar other title.</summary>
+/// <summary>Finds the words of each title that tell it from every other title in the workflow.</summary>
 public static class TitleParts
 {
     /// <summary>
-    /// For each title, where the word starts that differs from the title that shares the longest start with it. That is 0 for a
-    /// title that shares fewer than <see cref="LongStart"/> words, and for a title that another one repeats or merely continues, which keeps no part to show.
+    /// For each title, the fewest first words, the fewest last words, and the shortest run of inner words that no other title
+    /// starts with, ends with, or holds. A title that another one repeats has none of them.
     /// </summary>
-    public static int[] KeepFrom(IReadOnlyList<string> titles)
+    public static TitleKey[] Keys(IReadOnlyList<string> titles) => [.. titles.Select((title, index) => Key(title, [.. titles.Where((_, other) => other != index)]))];
+
+    private static TitleKey Key(string title, string[] others)
     {
-        var order = Enumerable.Range(0, titles.Count).OrderBy(index => titles[index], StringComparer.OrdinalIgnoreCase).ToArray();
-        var keeps = new int[titles.Count];
-        for (var at = 0; at < order.Length; at++)
+        var starts = TitleKey.WordStarts(title);
+        var count = starts.Length;
+        var head = Enumerable.Range(1, count).FirstOrDefault(words =>
+            !others.Any(other => other.StartsWith(title[..TitleKey.WordEnd(title, starts[words - 1])], StringComparison.OrdinalIgnoreCase)));
+        var tail = Enumerable.Range(1, Math.Max(0, count - 1)).FirstOrDefault(words =>
+            !others.Any(other => other.EndsWith(title[starts[count - words]..], StringComparison.OrdinalIgnoreCase)));
+        for (var length = 1; length <= count - 2; length++)
         {
-            var title = titles[order[at]];
-            var shared = Math.Max(
-                at > 0 ? Shared(title, titles[order[at - 1]]) : 0,
-                at < order.Length - 1 ? Shared(title, titles[order[at + 1]]) : 0);
-            var keep = shared < title.Length ? WordStart(title, shared) : 0;
-            keeps[order[at]] = Words(title[..keep]) >= LongStart ? keep : 0;
+            for (var from = 1; from + length < count; from++)
+            {
+                var span = title[starts[from]..TitleKey.WordEnd(title, starts[from + length - 1])];
+                if (!others.Any(other => other.Contains(span, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return new(head, tail, from, from + length);
+                }
+            }
         }
 
-        return keeps;
-    }
-
-    /// <summary>A shared start of fewer words leaves the title's own start in view, as "Mirror the" does.</summary>
-    public const int LongStart = 3;
-
-    private static int Words(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-
-    private static int Shared(string first, string second)
-    {
-        var length = 0;
-        while (length < first.Length && length < second.Length && char.ToUpperInvariant(first[length]) == char.ToUpperInvariant(second[length]))
-        {
-            length++;
-        }
-
-        return length;
-    }
-
-    private static int WordStart(string title, int at)
-    {
-        if (char.IsWhiteSpace(title[at]))
-        {
-            return at + 1;
-        }
-
-        while (at > 0 && !char.IsWhiteSpace(title[at - 1]))
-        {
-            at--;
-        }
-
-        return at;
+        return new(head, tail, 0, 0);
     }
 }

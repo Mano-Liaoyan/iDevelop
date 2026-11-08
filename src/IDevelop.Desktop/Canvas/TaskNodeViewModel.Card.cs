@@ -29,21 +29,12 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    /// <summary>Where the part of the title that tells this node from a similar one starts, which a cut title keeps in view.</summary>
-    public int TitleKeep
+    /// <summary>The words of the title that tell this node from every other node in the workflow, which a cut title keeps in view.</summary>
+    public Theme.TitleKey TitleKey
     {
         get;
-        internal set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(FarTitleKeep));
-            }
-        }
+        internal set => SetProperty(ref field, value);
     }
-
-    /// <summary><see cref="TitleKeep"/> in the zoomed out card's title, whose hyphenated tokens such as 2024-Q3 never break.</summary>
-    public int FarTitleKeep => TitleKeep <= 0 || TitleKeep > Title.Length ? 0 : Theme.NameBreaks.Keep(Title[..TitleKeep])!.Length;
 
     /// <summary>
     /// The card's model text: the end of the model's name as the inspector's Model field shows it, without the family word that

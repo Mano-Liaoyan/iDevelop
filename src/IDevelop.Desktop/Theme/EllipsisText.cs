@@ -8,9 +8,10 @@ namespace IDevelop.Desktop.Theme;
 /// <summary>
 /// Wrapped text that keeps to <see cref="TextBlock.MaxLines"/> and ends in an ellipsis when it loses text. Avalonia's own
 /// trimming adds no ellipsis to text that its line limit cuts at a word's end, and it cuts a long last line short, so
-/// this control finds the longest start of <see cref="Whole"/> that fits, ellipsis included. When <see cref="KeepFrom"/> marks
-/// the part of the text that tells it from a similar one and that whole part fits after an ellipsis, the text starts with the
-/// ellipsis and ends whole, so the part that differs reads first. The text is cut in one place only. Under
+/// this control finds the longest start of <see cref="Whole"/> that fits, ellipsis included. When <see cref="Key"/> marks
+/// the words that tell the text from every other title, a cut text keeps them: a start that holds the first words that differ,
+/// else an ellipsis and an end that holds the last words that differ, else the inner words that differ between two ellipses
+/// (ADR 0069). Under
 /// <see cref="TextWrapping.WrapWithOverflow"/> no word breaks across lines. It styles as a <see cref="TextBlock"/>.
 /// </summary>
 public sealed class EllipsisText : TextBlock
@@ -19,12 +20,12 @@ public sealed class EllipsisText : TextBlock
 
     public static readonly StyledProperty<string?> WholeProperty = AvaloniaProperty.Register<EllipsisText, string?>(nameof(Whole));
 
-    public static readonly StyledProperty<int> KeepFromProperty = AvaloniaProperty.Register<EllipsisText, int>(nameof(KeepFrom));
+    public static readonly StyledProperty<TitleKey?> KeyProperty = AvaloniaProperty.Register<EllipsisText, TitleKey?>(nameof(Key));
 
     public static readonly DirectProperty<EllipsisText, bool> IsCutProperty =
         AvaloniaProperty.RegisterDirect<EllipsisText, bool>(nameof(IsCut), text => text.IsCut);
 
-    static EllipsisText() => AffectsMeasure<EllipsisText>(WholeProperty, KeepFromProperty);
+    static EllipsisText() => AffectsMeasure<EllipsisText>(WholeProperty, KeyProperty);
 
     /// <summary>The whole text. <see cref="TextBlock.Text"/> holds what shows.</summary>
     public string? Whole
@@ -33,11 +34,11 @@ public sealed class EllipsisText : TextBlock
         set => SetValue(WholeProperty, value);
     }
 
-    /// <summary>Where the part of <see cref="Whole"/> that must stay in view starts, or 0 when only the start matters.</summary>
-    public int KeepFrom
+    /// <summary>The words of <see cref="Whole"/> that tell it from the other titles, or null when only the start matters.</summary>
+    public TitleKey? Key
     {
-        get => GetValue(KeepFromProperty);
-        set => SetValue(KeepFromProperty, value);
+        get => GetValue(KeyProperty);
+        set => SetValue(KeyProperty, value);
     }
 
     /// <summary>The text that shows is shorter than <see cref="Whole"/>, so a More control can show only then.</summary>
@@ -89,41 +90,58 @@ public sealed class EllipsisText : TextBlock
             return whole;
         }
 
-        // The part that differs leads where the whole text does not fit: an ellipsis stands for the shared start, and as many of
-        // its last words as fit stay before the part, so similar titles read apart at a glance ("…partition 2024-Q3", ADR 0065).
         var end = Longest(whole.Length, length => Cut(whole, length), width);
-        if (KeepFrom <= 1 || KeepFrom >= whole.Length)
+        if (Key is not { } key)
         {
             return Cut(whole, end);
         }
 
-        foreach (var start in WordStarts(whole, KeepFrom))
+        var starts = TitleKey.WordStarts(whole);
+        var count = starts.Length;
+
+        // A start that holds the first words that differ reads apart, and it keeps the title's own start.
+        if (key.Head is > 0 and var head && head <= count && end >= TitleKey.WordEnd(whole, starts[head - 1]))
         {
-            var tail = Ellipsis + whole[start..];
-            if (Fits(tail, width))
+            return Cut(whole, end);
+        }
+
+        // Else the last words that differ lead after an ellipsis, with as many words before them as fit, so similar titles read
+        // apart at a glance ("…partition 2024-Q3", ADR 0065).
+        if (key.Tail is > 0 and var tail && tail < count)
+        {
+            var from = starts[count - tail];
+            foreach (var start in starts.Skip(1).Where(start => start <= from))
             {
-                return tail;
+                if (Fits(Ellipsis + whole[start..], width))
+                {
+                    return Ellipsis + whole[start..];
+                }
+            }
+
+            // On the smallest cards a kept token such as 2024-Q3 can be wider than a line. It then breaks at its hyphen, so the
+            // part that differs still leads (ADR 0067).
+            var loose = Ellipsis + NameBreaks.Loose(whole[from..]);
+            if (loose != Ellipsis + whole[from..] && Fits(loose, width))
+            {
+                return loose;
             }
         }
 
-        // On the smallest cards a kept token such as 2024-Q3 can be wider than a line. It then breaks at its hyphen, so the part
-        // that differs still leads (ADR 0067).
-        var loose = Ellipsis + NameBreaks.Loose(whole[KeepFrom..]);
-        return loose != Ellipsis + whole[KeepFrom..] && Fits(loose, width) ? loose : Cut(whole, end);
-    }
-
-    // The starts of the words after the first one, up to and with the start of the kept part, the earliest first.
-    private static IEnumerable<int> WordStarts(string whole, int keep)
-    {
-        for (var at = 1; at < keep; at++)
+        // Else the inner words that differ show between two ellipses, with as many words before them as fit.
+        if (key.MiddleFrom > 0 && key.MiddleTo > key.MiddleFrom && key.MiddleTo < count)
         {
-            if (whole[at - 1] == ' ' && whole[at] != ' ')
+            var stop = TitleKey.WordEnd(whole, starts[key.MiddleTo - 1]);
+            foreach (var start in starts.Skip(1).Take(key.MiddleFrom))
             {
-                yield return at;
+                var middle = Ellipsis + whole[start..stop] + Ellipsis;
+                if (Fits(middle, width))
+                {
+                    return middle;
+                }
             }
         }
 
-        yield return keep;
+        return Cut(whole, end);
     }
 
     // The most characters, under the limit, whose text fits. No text fits at 0.
