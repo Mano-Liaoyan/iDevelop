@@ -98,30 +98,30 @@ public sealed class ExecutionLanguageTests
     [Fact]
     public void A_full_channel_reports_the_longest_wire_that_may_leave_it()
     {
-        // Three lanes need 16 of room at the least spacing, and this channel of 28 between margins of 14 has none.
-        Rect[] cards = [new Rect(0, 0, 100, 400), new Rect(128, 0, 100, 400)];
+        // Three lanes need 12 of room at the least spacing, and this channel of 16 between margins of 6 has 4.
+        Rect[] cards = [new Rect(0, 0, 100, 400), new Rect(116, 0, 100, 400)];
         var spread = WireLanes.Spread(
         [
-            Wire(1, 0, (110, 10), (114, 10), (114, 300), (120, 300)),
-            Wire(2, 0, (110, 20), (114, 20), (114, 100), (120, 100)),
-            Wire(3, 0, (110, 30), (114, 30), (114, 200), (120, 200)),
+            Wire(1, 0, (105, 10), (108, 10), (108, 300), (112, 300)),
+            Wire(2, 0, (105, 20), (108, 20), (108, 100), (112, 100)),
+            Wire(3, 0, (105, 30), (108, 30), (108, 200), (112, 200)),
         ], cards);
 
         var overflow = Assert.Single(spread.Overflows);
         Assert.Equal(0, overflow.Wire);
-        Assert.Equal(new Rect(100, 10, 28, 290), overflow.Channel);
+        Assert.Equal(new Rect(100, 10, 16, 290), overflow.Channel);
     }
 
     [Fact]
     public void A_wire_that_feeds_a_running_node_stays_in_a_full_channel()
     {
-        Rect[] cards = [new Rect(0, 0, 100, 400), new Rect(128, 0, 100, 400)];
+        Rect[] cards = [new Rect(0, 0, 100, 400), new Rect(116, 0, 100, 400)];
         WireLanes.Wire Active(double order, params (double X, double Y)[] points) => Wire(order, 0, points) with { Stays = true };
         var spread = WireLanes.Spread(
         [
-            Active(1, (110, 10), (114, 10), (114, 300), (120, 300)),
-            Wire(2, 0, (110, 20), (114, 20), (114, 100), (120, 100)),
-            Wire(3, 0, (110, 30), (114, 30), (114, 200), (120, 200)),
+            Active(1, (105, 10), (108, 10), (108, 300), (112, 300)),
+            Wire(2, 0, (105, 20), (108, 20), (108, 100), (112, 100)),
+            Wire(3, 0, (105, 30), (108, 30), (108, 200), (112, 200)),
         ], cards);
 
         Assert.Equal(2, Assert.Single(spread.Overflows).Wire);

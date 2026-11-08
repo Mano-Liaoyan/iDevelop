@@ -16,6 +16,9 @@ internal sealed class WireRouter
     // The room around a kept route that a moved card must leave free, so the route can stay.
     private const double KeptClearance = 60;
 
+    // How much longer a route may grow to leave a full channel.
+    private const double MostDetour = 400;
+
     private readonly Dictionary<object, Kept> _kept = [];
     private readonly Dictionary<object, List<Rect>> _closed = [];
     private Rect[] _cards = [];
@@ -52,17 +55,33 @@ internal sealed class WireRouter
             routes = Routes(cards, wires, ends, reach);
         }
 
-        var spread = Spread(wires, routes, cards, scale);
+        var stay = new bool[wires.Count];
+        var spread = Spread(wires, routes, stay, cards, scale);
         for (var round = 0; round < MostRounds && spread.Overflows.Count > 0; round++)
         {
             foreach (var overflow in spread.Overflows)
             {
-                Closed(wires[overflow.Wire].Key).Add(overflow.Channel);
-                _kept.Remove(wires[overflow.Wire].Key);
+                var index = overflow.Wire;
+                var wire = wires[index];
+                var closed = Closed(wire.Key);
+                closed.Add(overflow.Channel);
+                var source = wire.Output + new Vector(0, ends[index].Exit);
+                var target = wire.Input + new Vector(0, ends[index].Entry);
+                var route = WireRouting.Route(source, target, Owned(cards, wire), reach, closed);
+                // A wire that the next free channel would take far around stays and shares the full channel's room with its neighbours.
+                if (Length(route) > Length(routes[index]) + MostDetour)
+                {
+                    closed.RemoveAt(closed.Count - 1);
+                    stay[index] = true;
+                }
+                else
+                {
+                    routes[index] = route;
+                    _kept[wire.Key] = new Kept(source, target, route, BoundsOf(source, target, route));
+                }
             }
 
-            routes = Routes(cards, wires, ends, reach);
-            spread = Spread(wires, routes, cards, scale);
+            spread = Spread(wires, routes, stay, cards, scale);
         }
 
         return [.. wires.Select((wire, index) =>
@@ -73,8 +92,10 @@ internal sealed class WireRouter
         })];
     }
 
-    private static WireLanes.Spreading Spread(IReadOnlyList<Wire> wires, ImmutableArray<Point>[] routes, IReadOnlyList<Rect> cards, double scale) =>
-        WireLanes.Spread([.. wires.Select((wire, index) => new WireLanes.Wire(routes[index], wire.FromRect.Top + wire.FromRect.Left / 100000, wire.ToRect.Top + wire.ToRect.Left / 100000, wire.Active))], cards, scale);
+    private static WireLanes.Spreading Spread(IReadOnlyList<Wire> wires, ImmutableArray<Point>[] routes, bool[] stay, IReadOnlyList<Rect> cards, double scale) =>
+        WireLanes.Spread([.. wires.Select((wire, index) => new WireLanes.Wire(routes[index], wire.FromRect.Top + wire.FromRect.Left / 100000, wire.ToRect.Top + wire.ToRect.Left / 100000, wire.Active || stay[index]))], cards, scale);
+
+    private static double Length(ImmutableArray<Point> route) => route.Zip(route.Skip(1)).Sum(run => Point.Distance(run.First, run.Second));
 
     private List<Rect> Closed(object key) => _closed.TryGetValue(key, out var channels) ? channels : _closed[key] = [];
 

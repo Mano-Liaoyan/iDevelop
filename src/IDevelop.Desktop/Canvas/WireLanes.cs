@@ -15,10 +15,13 @@ internal static class WireLanes
     internal const double PreferredLane = 16;
 
     /// <summary>The least spacing between two lanes at the Full tier, in canvas units.</summary>
-    internal const double MinimumLane = 8;
+    internal const double MinimumLane = 6;
 
-    // How far a run up or down keeps from the sides of its cards: the port's gutter and socket.
-    private const double ColumnMargin = 14;
+    // How far a run up or down keeps from the sides of its cards, at the Full tier width of a port's socket.
+    private const double ColumnMargin = 6;
+
+    // How far lanes in open space keep from the cards on their one side, at the Full tier, so a wire there does not read as a card's border.
+    private const double OpenMargin = 14;
 
     // How far a run across keeps from the top and bottom of its cards where a channel holds more than one lane.
     private const double RowMargin = 8;
@@ -54,6 +57,20 @@ internal static class WireLanes
         var routes = wires.Select(wire => wire.Route.ToArray()).ToArray();
         var overflows = new List<Overflow>();
         Separate(wires, routes, cards, vertical: true, scale, overflows);
+        foreach (var route in routes)
+        {
+            // A lane past a stub's end shortens the stub, so the wire never turns back on itself beside its port.
+            if (route.Length >= 3 && Math.Abs(route[0].Y - route[1].Y) <= Tolerance && route[1].X < route[0].X)
+            {
+                route[0] = route[0].WithX(route[1].X);
+            }
+
+            if (route.Length >= 3 && Math.Abs(route[^1].Y - route[^2].Y) <= Tolerance && route[^2].X > route[^1].X)
+            {
+                route[^1] = route[^1].WithX(route[^2].X);
+            }
+        }
+
         Separate(wires, routes, cards, vertical: false, scale, overflows);
         // A lane that moved a wire into a card leaves that wire on its own route.
         return new([.. wires.Select((wire, index) => Hits(routes[index], cards) ? wire.Route : [.. routes[index]])], overflows);
@@ -97,7 +114,10 @@ internal static class WireLanes
             {
                 if (room / (lanes - 1) < minimum - Tolerance)
                 {
-                    overflows.Add(LeaveChannel(channel, runs, low, high, wires, vertical));
+                    if (LeaveChannel(channel, runs, low, high, wires, vertical) is { } overflow)
+                    {
+                        overflows.Add(overflow);
+                    }
                 }
 
                 spacing = Math.Max(Math.Min(spacing, room / (lanes - 1)), 2);
@@ -111,8 +131,9 @@ internal static class WireLanes
             var lines = channel.Select(run => runs[run].Line).Order().ToList();
             var half = (lanes - 1) * spacing / 2;
             middle = lines[lines.Count / 2];
-            middle = Math.Max(middle, double.IsFinite(low) ? low + margin + half : middle);
-            middle = Math.Min(middle, double.IsFinite(high) ? high - margin - half : middle);
+            var open = OpenMargin * scale;
+            middle = Math.Max(middle, double.IsFinite(low) ? low + open + half : middle);
+            middle = Math.Min(middle, double.IsFinite(high) ? high - open - half : middle);
         }
 
         for (var i = 0; i < order.Count; i++)
@@ -133,12 +154,17 @@ internal static class WireLanes
     }
 
     // The wire that leaves a full channel is the longest one that may leave, because it has the most other ways to go.
-    private static Overflow LeaveChannel(List<int> channel, List<Run> runs, double low, double high, IReadOnlyList<Wire> wires, bool vertical)
+    private static Overflow? LeaveChannel(List<int> channel, List<Run> runs, double low, double high, IReadOnlyList<Wire> wires, bool vertical)
     {
-        var leaver = channel.OrderBy(run => wires[runs[run].Wire].Stays).ThenByDescending(run => runs[run].End - runs[run].Start).ThenBy(run => runs[run].Wire).First();
-        var (start, end) = (runs[leaver].Start, runs[leaver].End);
+        var leaver = channel.Where(run => !wires[runs[run].Wire].Stays).OrderByDescending(run => runs[run].End - runs[run].Start).ThenBy(run => runs[run].Wire).Cast<int?>().FirstOrDefault();
+        if (leaver is not { } run0)
+        {
+            return null;
+        }
+
+        var (start, end) = (runs[run0].Start, runs[run0].End);
         var rect = vertical ? new Rect(low, start, high - low, end - start) : new Rect(start, low, end - start, high - low);
-        return new Overflow(runs[leaver].Wire, rect);
+        return new Overflow(runs[run0].Wire, rect);
     }
 
     // The runs of a wire that may move: each run up or down, and each run across that is not on a port's row.

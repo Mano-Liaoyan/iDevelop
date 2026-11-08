@@ -88,6 +88,7 @@ public sealed class WireRouterTests(ITestOutputHelper output)
 
         var timer = Stopwatch.StartNew();
         const int Steps = 200;
+        Assert.True(first.Elapsed.TotalMilliseconds < 200, $"The first plan took {first.Elapsed.TotalMilliseconds} ms.");
         var moved = cards.ToArray();
         for (var step = 0; step < Steps; step++)
         {
@@ -132,12 +133,14 @@ internal static class WirePlans
     public static (Rect[] Cards, WireRouter.Wire[] Wires) Input((double X, double Y)[] nodes, (int From, int To)[] edges, ZoomTier tier)
     {
         var reach = ZoomTiers.CardReach(tier);
-        Rect[] cards = [.. nodes.Select(node => new Rect(node.X, node.Y, WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight + reach))];
+        // A Title or Block tier card's container is wider, for its larger text (CanvasStyles.axaml).
+        var width = tier is ZoomTier.Title or ZoomTier.Block ? 292 : WorkflowCanvasViewModel.TaskCardWidth;
+        Rect[] cards = [.. nodes.Select(node => new Rect(node.X, node.Y, width, WorkflowCanvasViewModel.TaskCardHeight + reach))];
         WireRouter.Wire[] wires = [.. edges.Select((edge, index) => new WireRouter.Wire(
             index,
             edge.From,
             edge.To,
-            new Point(nodes[edge.From].X + WorkflowCanvasViewModel.TaskCardWidth - WorkflowCanvasViewModel.InputPortCenter.X, nodes[edge.From].Y + WorkflowCanvasViewModel.InputPortCenter.Y),
+            new Point(nodes[edge.From].X + width - WorkflowCanvasViewModel.InputPortCenter.X, nodes[edge.From].Y + WorkflowCanvasViewModel.InputPortCenter.Y),
             new Point(nodes[edge.To].X, nodes[edge.To].Y) + (Vector)WorkflowCanvasViewModel.InputPortCenter,
             cards[edge.From],
             cards[edge.To],

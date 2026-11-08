@@ -29,7 +29,7 @@ internal static class WireCurve
     private const double Tolerance = 0.01;
 
     /// <summary>How far a curve reaches along the runs on each side of a turn, in the order it tries them.</summary>
-    private static readonly double[] Reaches = [double.PositiveInfinity, 120, 60, 30, 14];
+    private static readonly double[] Reaches = [double.PositiveInfinity, 120, 60, 30, 14, 6, 2];
 
     private const int Samples = 64;
 
