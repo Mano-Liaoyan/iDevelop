@@ -730,10 +730,10 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The canvas has the keys: the ring of every focused control, inside the canvas's edges. -->
+  <!-- The canvas has the keys: one thin line inside the canvas's edges, so it never outweighs the selected card. -->
   <Style Selector="Border.canvasFocus">
     <Setter Property="Margin" Value="3" />
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>

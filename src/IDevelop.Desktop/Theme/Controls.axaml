@@ -706,7 +706,10 @@
     <Setter Property="FontWeight" Value="Normal" />
   </Style>
   <Style Selector="Button.nav.workflow.selected /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
+    <!-- The shown workflow is the parent of the selected node, so its row takes a weaker fill of the same accent than the node's row. -->
+    <Setter Property="Background">
+      <SolidColorBrush Color="{DynamicResource NodifyEditor.SelectionRectangleColor}" Opacity="0.09" />
+    </Setter>
   </Style>
 
   <!-- UI Automation reads which workflow the window shows from its row's status. -->
