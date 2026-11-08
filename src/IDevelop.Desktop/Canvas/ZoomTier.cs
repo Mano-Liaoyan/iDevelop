@@ -3,8 +3,11 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>How much a card shows at the canvas's zoom. Every tier shows the card's title, never under 9 px on screen.</summary>
 public enum ZoomTier { Full, Detail, Compact, Label, Title, Block }
 
-/// <summary>A Title or Block tier card's text size and line height in canvas units, its title lines, and how far the card draws under its 64 px box.</summary>
-public readonly record struct FarText(double Size, double Line, int Lines, double Reach);
+/// <summary>
+/// A Title or Block tier card's text size and line height in canvas units, its title lines, how far the card draws under its
+/// 64 px box, and the top of its chip row under the card's top.
+/// </summary>
+public readonly record struct FarText(double Size, double Line, int Lines, double Reach, double ChipTop = 0);
 
 public static class ZoomTiers
 {
@@ -32,8 +35,17 @@ public static class ZoomTiers
     /// <summary>The space in canvas units over a Title tier card's title.</summary>
     public const double TitleTop = 2;
 
-    /// <summary>The space in canvas units under a Title tier card's agent's line, which holds the line's descenders.</summary>
+    /// <summary>The space in canvas units under a Title tier card's chip row.</summary>
     private const double TitleBottom = 5;
+
+    /// <summary>The height in canvas units of a Title tier card's chip row: the client's badge and the state's badge.</summary>
+    public const double ChipRow = 36;
+
+    /// <summary>
+    /// The space under a Title tier card's last title line, as a part of the text size. It holds the descenders of "g" and "Q",
+    /// which draw under the tight line, and keeps about 4 px on screen between them and the chip row (ADR 0071).
+    /// </summary>
+    private const double TitleAir = 0.45;
 
     /// <summary>The least gap in screen pixels between a Title tier card that grows and the card under it.</summary>
     public const double CardGap = 6;
@@ -93,9 +105,11 @@ public static class ZoomTiers
             return new(blockSize, blockLine, Math.Clamp((int)(BlockRoom / blockLine), 1, BlockLines), CardReach(tier));
         }
 
-        // The Title tier's size steps by one, so the text keeps as close to 9 px as the room for three lines needs.
+        // The Title tier's size steps by one, so the text keeps as close to 9 px as the room for three lines needs. The card
+        // takes the most lines whose height leaves the 6 px gap to the card under it, so a card never grows into its neighbour.
         var size = Math.Clamp(Math.Ceiling(ReadablePixels / zoom), 30, 44);
         var line = Math.Ceiling(size * 1.04);
+        var air = Math.Ceiling(size * TitleAir);
         var drawn = 64 + CardReach(ZoomTier.Title);
         var room = Math.Max(drawn, pitch - CardGap / zoom);
         var lines = TitleLines;
@@ -104,10 +118,34 @@ public static class ZoomTiers
             lines--;
         }
 
-        return new(size, line, lines, Math.Max(drawn, Height(lines)) - 64);
+        var height = Math.Max(drawn, Height(lines));
+        return new(size, line, lines, height - 64, height - TitleBottom - ChipRow);
 
-        // The title's lines and the agent's line, one line high, under the top's space.
-        double Height(int count) => TitleTop + (count + 1) * line + TitleBottom;
+        // The title's lines, the air under them, and the chip row, under the top's space.
+        double Height(int count) => TitleTop + count * line + air + ChipRow + TitleBottom;
+    }
+
+    /// <summary>
+    /// The least distance in canvas units from a card's top at <paramref name="cards"/> to the top of a card under it that it
+    /// overlaps across, ports included. A Title tier card grows only within it (ADR 0068).
+    /// </summary>
+    public static double RowPitch(IReadOnlyList<Avalonia.Point> cards)
+    {
+        const double width = WorkflowCanvasViewModel.TaskCardWidth + 32;
+        var pitch = double.PositiveInfinity;
+        for (var first = 0; first < cards.Count; first++)
+        {
+            for (var second = first + 1; second < cards.Count; second++)
+            {
+                var (dx, dy) = (Math.Abs(cards[first].X - cards[second].X), Math.Abs(cards[first].Y - cards[second].Y));
+                if (dx < width && dy > 0)
+                {
+                    pitch = Math.Min(pitch, dy);
+                }
+            }
+        }
+
+        return pitch;
     }
 
     /// <summary>The style class that the canvas takes in the tier, or null for the full card.</summary>

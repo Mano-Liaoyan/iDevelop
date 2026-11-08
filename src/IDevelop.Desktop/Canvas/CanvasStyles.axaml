@@ -149,8 +149,10 @@
   </Style>
   <!-- The title has the card's whole width, and the last line's height comes on top of the card's 64 px. Each tier sets both in
        canvas units, so the text stays at least 10 px on screen. -->
-  <!-- The title and the last line start on one line, 8 px past the kind stripe at every tier. -->
+  <!-- The title and the last line start on one line, 8 px past the kind stripe at every tier. The lines are tighter than the
+       font's own, so the title draws its descenders past its box into the room under it, and a "g" or a "Q" keeps its tail (ADR 0071). -->
   <Style Selector="TextBlock.farTitle">
+    <Setter Property="ClipToBounds" Value="False" />
     <Setter Property="Margin" Value="23,0,20,0" />
     <Setter Property="FontSize" Value="17" />
     <Setter Property="LineHeight" Value="21" />

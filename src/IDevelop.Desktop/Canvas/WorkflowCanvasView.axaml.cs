@@ -131,8 +131,9 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             return;
         }
 
-        // A Title tier card's agent's line and badge stand under its title's lines, and the card grows to hold them (ADR 0068).
-        var lineTop = ZoomTiers.TitleTop + text.Lines * text.Line;
+        // A Title tier card's chip row stands at the card's bottom, under its title's lines and their air, and the card grows to
+        // hold them (ADR 0068, ADR 0071).
+        var lineTop = text.ChipTop;
         Resources["FarTitleText"] = text;
         Resources["FarTitleSize"] = text.Size;
         Resources["FarTitleLine"] = text.Line;
@@ -140,8 +141,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         Resources["FarCardHeight"] = 64 + text.Reach;
         Resources["FarCardMargin"] = new Thickness(0, 0, 0, -text.Reach);
         Resources["FarLineMargin"] = new Thickness(26, lineTop, 62, 0);
-        Resources["FarLineHeight"] = text.Line;
-        Resources["FarBadgeMargin"] = new Thickness(0, lineTop + (text.Line - 36) / 2, 16, 0);
+        Resources["FarLineHeight"] = ZoomTiers.ChipRow;
+        Resources["FarBadgeMargin"] = new Thickness(0, lineTop, 16, 0);
     }
 
     // A tier takes one class on the view, so only a threshold changes the cards' layout. Under a zoom of 0.5 the dots would turn

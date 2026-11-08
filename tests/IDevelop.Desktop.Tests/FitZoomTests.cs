@@ -19,7 +19,7 @@ public sealed class ZoomTitleTextTests
     }
 
     [Theory]
-    [InlineData(0.244, 3)]
+    [InlineData(0.244, 2)]
     [InlineData(0.276, 3)]
     [InlineData(0.32, 3)]
     [InlineData(0.23, 2)]
