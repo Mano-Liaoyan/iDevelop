@@ -46,10 +46,10 @@ public sealed class SidebarTests : IDisposable
 
         shell.AddNode();
 
-        // The new task lands under Design, above Review, and the list reads the canvas from the top.
+        // The list reads the canvas from the top.
         Assert.Equal("0/4", shell.Find<TextBlock>("WorkflowSummary").Text);
         Assert.True(shell.Find<Control>("WorkflowUnsaved").IsEffectivelyVisible);
-        Assert.Equal(["Design", "Build", "New task", "Review"], shell.AgentRowTitles());
+        Assert.Equal(["Design", "Build", "Review", "New task"], shell.AgentRowTitles());
     }
 
     [AvaloniaFact]
@@ -102,8 +102,8 @@ public sealed class SidebarTests : IDisposable
         WaitForPan(shell);
 
         Assert.True(new Rect(shell.Editor.Bounds.Size).Contains(shell.CardRect("Build")), $"{shell.CardRect("Build")} is outside {shell.Editor.Bounds.Size}");
-        Assert.Equal(new Point(2115, 1223), shell.Editor.ViewportLocation);
-        Assert.Equal(new Point(2115, 1223), shell.Find<Minimap>("Minimap").ViewportLocation);
+        Assert.Equal(new Point(2105, 1238), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(2105, 1238), shell.Find<Minimap>("Minimap").ViewportLocation);
     }
 
     [AvaloniaFact]
@@ -119,7 +119,7 @@ public sealed class SidebarTests : IDisposable
         WaitForPan(shell);
 
         Assert.True(shell.Node("Build").IsSelected);
-        Assert.Equal(new Point(2115, 1223), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(2105, 1238), shell.Editor.ViewportLocation);
     }
 
     private Shell SelectBuildOnTheCanvasAndPanItAway()
@@ -140,7 +140,7 @@ public sealed class SidebarTests : IDisposable
 
         shell.Click(shell.SidebarRow("Build"));
 
-        Assert.Equal(new Point(120, -287), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(61, -272), shell.Editor.ViewportLocation);
     }
 
     [AvaloniaTheory]
@@ -153,7 +153,7 @@ public sealed class SidebarTests : IDisposable
 
         shell.Press(key);
 
-        Assert.Equal(new Point(120, -287), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(61, -272), shell.Editor.ViewportLocation);
     }
 
     [AvaloniaFact]

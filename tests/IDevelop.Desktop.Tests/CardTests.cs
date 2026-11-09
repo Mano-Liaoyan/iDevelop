@@ -210,7 +210,7 @@ public sealed class CardTests : IDisposable
 
         var ring = shell.CardLayer("Design", "stateStroke");
         // The status takes the client's line, and the model and level stay on the line under it.
-        Assert.Equal(["Design", "Antigravity", "3.8 Flash", "Running"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Input", "No result", "Antigravity", "3.8 Flash"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-running", ring.Classes);
         Assert.Equal(Color.Parse("#0088FF"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         Assert.Equal(NodeState.Running, shell.CardMark("Design").State);

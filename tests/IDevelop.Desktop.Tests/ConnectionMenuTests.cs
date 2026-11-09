@@ -127,8 +127,9 @@ public sealed class ConnectionMenuTests : IDisposable
             [(new ConnectionKey(Design, inserted.Id), ConnectionKind.Context), (new ConnectionKey(inserted.Id, Build), ConnectionKind.Context)],
             workflow.Connections.Select(connection => (connection.Key, connection.Value)).OrderBy(connection => connection.Key.From == Design ? 0 : 1));
         var at = shell.CanvasPointAt(click);
-        Assert.Equal(
-            new CanvasPoint(at.X - WorkflowCanvasViewModel.TaskCardWidth / 2, at.Y - WorkflowCanvasViewModel.TaskCardHeight / 2),
-            workflow.Positions[inserted.Id]);
+        var saved = workflow.Positions[inserted.Id];
+        var space = shell.Window.ViewModel.Canvas!.Space;
+        Assert.Equal(at.X - WorkflowCanvasViewModel.TaskCardWidth / 2, saved.X * space.Kx, 6);
+        Assert.Equal(at.Y - WorkflowCanvasViewModel.TaskCardHeight / 2, saved.Y * space.Ky, 6);
     }
 }

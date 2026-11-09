@@ -122,7 +122,7 @@ public sealed partial class WorkflowCanvasViewModel
         }
 
         var shift = FreeShift([.. copies.Keys.Select(id => Space.ToDisplay(Workflow.Positions[id]))]);
-        var places = SelectedNodes.Select(node => node.CopyAs(copies[node.Id], Space.ToSaved(Space.ToDisplay(Workflow.Positions[node.Id]) + shift))).ToList();
+        var places = SelectedNodes.Select(node => node.CopyAs(copies[node.Id], Space.Shifted(Workflow.Positions[node.Id], shift))).ToList();
         var connections = Workflow.Connections
             .Where(connection => copies.ContainsKey(connection.Key.From) && copies.ContainsKey(connection.Key.To))
             .Select(connection => (WorkflowEdit)new WorkflowEdit.Connect(new(copies[connection.Key.From], copies[connection.Key.To]), connection.Value));

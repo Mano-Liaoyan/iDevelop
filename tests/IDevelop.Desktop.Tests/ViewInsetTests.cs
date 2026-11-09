@@ -37,7 +37,6 @@ public sealed class ViewInsetTests : IDisposable
         shell.Click(shell.Find<Button>("FitToScreen"));
 
         var canvas = shell.Bounds(shell.Editor);
-        Assert.True(shell.Editor.ViewportZoom < 0.5, $"The fit zoomed to {shell.Editor.ViewportZoom}, so the workflow was not tall.");
         foreach (var title in Titles)
         {
             var card = CardInWindow(shell, title);

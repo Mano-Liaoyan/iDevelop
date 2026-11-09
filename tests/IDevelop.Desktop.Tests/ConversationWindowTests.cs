@@ -74,7 +74,7 @@ public sealed class ConversationWindowTests : IDisposable
         var shell = f.Open();
         shell.NodeModel("Design").RunCommand.Execute(null);
         shell.WaitForState("Design", NodeState.Failed);
-        shell.Editor.ViewportZoom = 1;
+        shell.Editor.ViewportZoom = 0.5;
         shell.Render();
         var attention = shell.InCard<Button>("Design", "CardFarAttention");
 
@@ -95,7 +95,7 @@ public sealed class ConversationWindowTests : IDisposable
 
         Assert.True(attention.IsEffectivelyVisible);
         Assert.StartsWith("Failed: ", Avalonia.Automation.AutomationProperties.GetName(attention));
-        Assert.Equal((240.0, 64.0), (shell.Node("Design").Bounds.Width - 20, shell.Node("Design").Bounds.Height));
+        Assert.Equal((220.0, 94.0), (shell.Node("Design").Bounds.Width - 20, shell.Node("Design").Bounds.Height));
         Shell.Invoke(attention);
         shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Items.Count > 1, "the conversation opens");
         shell.Render();

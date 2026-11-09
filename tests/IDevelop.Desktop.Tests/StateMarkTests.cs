@@ -153,13 +153,12 @@ public sealed class StateMarkTests
     [Fact]
     public void Every_font_size_comes_from_the_type_ramp()
     {
-        // The zoomed out card's sizes are canvas units that the Graph stage replaces.
+        // The Graph's card text takes its sizes from ZoomTiers.Metrics through dynamic resources, in canvas units.
         var literal = new Regex("FontSize(?:=|\" Value=)\"(?<value>[^\"]+)\"");
         var offenders = Directory.EnumerateFiles(Source(), "*.axaml", SearchOption.AllDirectories)
             .Where(file => !file.EndsWith("Tokens.axaml", StringComparison.Ordinal))
             .SelectMany(file => literal.Matches(File.ReadAllText(file)).Select(match => (file, value: match.Groups["value"].Value)))
-            .Where(found => !found.value.Contains("StaticResource Type", StringComparison.Ordinal) && !found.value.Contains("FarTitleSize", StringComparison.Ordinal))
-            .Where(found => !(found.file.EndsWith("CanvasStyles.axaml", StringComparison.Ordinal) && double.Parse(found.value) >= 17))
+            .Where(found => !found.value.Contains("StaticResource Type", StringComparison.Ordinal) && !found.value.StartsWith("{DynamicResource", StringComparison.Ordinal))
             .ToList();
 
         Assert.Empty(offenders);

@@ -224,12 +224,18 @@ internal sealed partial class Shell
 
     public static (Point, Point) Rounded((Point Source, Point Target) ends) => (Rounded(ends.Source), Rounded(ends.Target));
 
-    // Step connections from one output share their first runs. Only the run that enters the target is unique to one
-    // connection, and 19 px before the handle is the middle of its straight part, between its corner and its arrowhead.
+    /// <summary>A wire's ends on whole pixels, which is where a compacted card's sockets draw.</summary>
+    public static (Point, Point) Whole((Point Source, Point Target) ends) =>
+        (new Point(Math.Round(ends.Source.X), Math.Round(ends.Source.Y)), new Point(Math.Round(ends.Target.X), Math.Round(ends.Target.Y)));
+
+    /// <summary>A window point on the last piece of the wire into the node, the part of a wire no other wire shares.</summary>
     public Point ConnectionInto(string to)
     {
-        var target = Thumb(Input(to));
-        return new Point(target.X - 19, target.Y);
+        var wire = Window.ViewModel.Canvas!.Connections.First(connection => connection.To.Title == to);
+        var on = wire.Curve[^1].At(0.5);
+        var editor = Editor;
+        var local = new Point((on.X - editor.ViewportLocation.X) * editor.ViewportZoom, (on.Y - editor.ViewportLocation.Y) * editor.ViewportZoom);
+        return editor.TranslatePoint(local, Window) ?? throw new InvalidOperationException("The editor is not in the window.");
     }
 
     public void Click(Point point, RawInputModifiers modifiers = RawInputModifiers.None)

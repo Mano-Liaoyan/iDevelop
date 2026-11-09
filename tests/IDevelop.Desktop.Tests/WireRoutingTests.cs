@@ -10,9 +10,8 @@ using static IDevelop.Workflows.WorkflowEdit;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// Where a wire runs between its cards. Each card below is a container at a canvas location: 260 by 64, its output port
-/// centered at (250, 32) and its input port at (10, 32). A wire's route starts 26 px right of the output and ends 26 px
-/// left of the input.
+/// Where a wire runs between its cards. Each card below is a container at a canvas location, 260 by 64. A wire's route starts
+/// 12 px right of the output and ends 12 px left of the input.
 /// </summary>
 public sealed class WireRoutingTests : IDisposable
 {
@@ -29,7 +28,7 @@ public sealed class WireRoutingTests : IDisposable
     {
         var route = WireRouting.Route(new Point(370, 122), new Point(610, 282), [Card(120, 90), Card(600, 250)]);
 
-        Assert.Equal<Point>([new Point(396, 122), new Point(490, 122), new Point(490, 282), new Point(584, 282)], route);
+        Assert.Equal<Point>([new Point(382, 122), new Point(490, 122), new Point(490, 282), new Point(598, 282)], route);
     }
 
     [Fact]
@@ -38,7 +37,7 @@ public sealed class WireRoutingTests : IDisposable
         // The sample project: Design to Review, with Implement between them in Design's row.
         var route = WireRouting.Route(new Point(370, 122), new Point(730, 279.5), [Card(120, 90), Card(420, 90), Card(720, 247.5)]);
 
-        Assert.Equal<Point>([new Point(396, 122), new Point(396, 279.5), new Point(704, 279.5)], route);
+        Assert.Equal<Point>([new Point(382, 122), new Point(382, 279.5), new Point(718, 279.5)], route);
     }
 
     [Fact]
@@ -46,7 +45,7 @@ public sealed class WireRoutingTests : IDisposable
     {
         var route = WireRouting.Route(new Point(370, 122), new Point(730, 122), [Card(120, 90), Card(420, 90), Card(720, 90)]);
 
-        Assert.Equal<Point>([new Point(396, 122), new Point(396, 169), new Point(704, 169), new Point(704, 122)], route);
+        Assert.Equal<Point>([new Point(382, 122), new Point(382, 166), new Point(718, 166), new Point(718, 122)], route);
     }
 
     [Fact]
@@ -55,7 +54,7 @@ public sealed class WireRoutingTests : IDisposable
         // A column pitch of 340 and a row pitch of 190, as a saved layout has.
         var route = WireRouting.Route(new Point(370, 122), new Point(810, 122), [Card(120, 90), Card(460, 90), Card(800, 90)]);
 
-        Assert.Equal<Point>([new Point(396, 122), new Point(396, 216), new Point(784, 216), new Point(784, 122)], route);
+        Assert.Equal<Point>([new Point(382, 122), new Point(449, 122), new Point(449, 166), new Point(731, 166), new Point(731, 122), new Point(798, 122)], route);
     }
 
     [Fact]
@@ -64,7 +63,7 @@ public sealed class WireRoutingTests : IDisposable
         // The second card sits one footprint below Build, where FreeSpot stacks cards, which leaves a 30 px gap.
         var route = WireRouting.Route(new Point(370, 122), new Point(730, 232), [Card(120, 90), Card(420, 90), Card(420, 184), Card(720, 200)]);
 
-        Assert.Equal<Point>([new Point(396, 122), new Point(396, 169), new Point(704, 169), new Point(704, 232)], route);
+        Assert.Equal<Point>([new Point(382, 122), new Point(382, 172), new Point(718, 172), new Point(718, 232)], route);
     }
 
     [Fact]
@@ -72,7 +71,7 @@ public sealed class WireRoutingTests : IDisposable
     {
         var route = WireRouting.Route(new Point(670, 122), new Point(70, 152), [Card(420, 90), Card(60, 120)]);
 
-        Assert.Equal<Point>([new Point(696, 122), new Point(696, 199), new Point(44, 199), new Point(44, 152)], route);
+        Assert.Equal<Point>([new Point(682, 122), new Point(682, 185), new Point(58, 185), new Point(58, 152)], route);
     }
 
     [Fact]
@@ -80,7 +79,7 @@ public sealed class WireRoutingTests : IDisposable
     {
         var route = WireRouting.Route(new Point(670, 122), new Point(70, 352), [Card(420, 90), Card(60, 320)]);
 
-        Assert.Equal<Point>([new Point(696, 122), new Point(696, 237), new Point(44, 237), new Point(44, 352)], route);
+        Assert.Equal<Point>([new Point(682, 122), new Point(682, 237), new Point(58, 237), new Point(58, 352)], route);
     }
 
     [Fact]
@@ -88,7 +87,7 @@ public sealed class WireRoutingTests : IDisposable
     {
         var route = WireRouting.Route(new Point(370, 122), new Point(610, 282), [Card(120, 90), Card(600, 250), Card(560, 260)]);
 
-        Assert.Equal<Point>([new Point(396, 122), new Point(490, 122), new Point(490, 282), new Point(584, 282)], route);
+        Assert.Equal<Point>([new Point(382, 122), new Point(490, 122), new Point(490, 282), new Point(598, 282)], route);
     }
 
     [AvaloniaFact]
@@ -104,18 +103,24 @@ public sealed class WireRoutingTests : IDisposable
         var canvas = shell.Window.ViewModel.Canvas!;
         Point[] Plan() => [.. canvas.Connections.Single(wire => wire.Key == new ConnectionKey(Design, Review)).Route];
 
-        // The plan turns on the wire's own stub column, so it never runs through Build.
-        Assert.Equal(400, Plan()[1].X);
+        var (design, build) = (canvas.Nodes.Single(node => node.Title == "Design"), canvas.Nodes.Single(node => node.Title == "Build"));
+        // The plan turns in the channel between the two columns, so it never runs through Build.
+        void TurnsBeforeBuild() => Assert.InRange(Plan()[1].X, design.Location.X + WorkflowCanvasViewModel.TaskCardWidth, build.Location.X);
+
+        TurnsBeforeBuild();
+        var before = build.Location;
 
         shell.Drag(shell.Header(shell.Node("Build")), shell.Header(shell.Node("Build")) + new Vector(0, 330));
-        Assert.True(canvas.Nodes.Single(node => node.Title == "Build").Location.Y > 330, "Build moved below the wire");
+        Assert.True(build.Location.Y > 330, "Build moved below the wire");
 
-        Assert.Equal(new Point((396 + 704) / 2.0, 122), Plan()[1]);
+        var review = canvas.Nodes.Single(node => node.Title == "Review");
+        var (start, end) = (design.Output.Anchor.X + 12, review.Input.Anchor.X - 12);
+        Assert.Equal(new Point((start + end) / 2, design.Output.Anchor.Y), Plan()[1]);
 
         shell.Press(Key.Z, RawInputModifiers.Control);
-        Assert.Equal(new Point(420, 90), canvas.Nodes.Single(node => node.Title == "Build").Location);
+        Assert.Equal(before, build.Location);
 
-        Assert.Equal(400, Plan()[1].X);
+        TurnsBeforeBuild();
     }
 
     private static Rect Card(double x, double y) => new(x, y, 260, 64);

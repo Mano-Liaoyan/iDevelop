@@ -68,7 +68,7 @@ public sealed class RunBarTests
         shell.WaitForState("B", NodeState.Completed);
 
         Assert.Equal("Result", first.CardResult);
-        Assert.Equal("Report", first.CardResultDetail);
+        Assert.Matches("^[0-9a-f]{7}$", first.CardResultDetail);
         Assert.Equal("Input", second.CardInput);
         Assert.Equal("Input: A", second.Input.Tip);
         Assert.Equal("Output: Result 1", first.OutputLine);

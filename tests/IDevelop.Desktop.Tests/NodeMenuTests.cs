@@ -124,7 +124,7 @@ public sealed class NodeMenuTests : IDisposable
         var buildCopy = workflow.Tasks.Values.Single(task => task.Title == "Build copy");
         Assert.Equal(5, workflow.Tasks.Count);
         Assert.Equal(("Write the parser.", Codex), (designCopy.Field("instructions"), designCopy.Execution));
-        Assert.Equal((new CanvasPoint(105, 184), new CanvasPoint(505, 184)), (workflow.Positions[designCopy.Id], workflow.Positions[buildCopy.Id]));
+        Assert.Equal((new CanvasPoint(105, 210), new CanvasPoint(505, 210)), (workflow.Positions[designCopy.Id], workflow.Positions[buildCopy.Id]));
         Assert.Equal(ConnectionKind.Dependency, workflow.Connections[new ConnectionKey(designCopy.Id, buildCopy.Id)]);
         Assert.Equal(3, workflow.Connections.Count);
         Assert.Equal(["Build copy", "Design copy"], shell.Window.ViewModel.Canvas!.SelectedNodes.Select(node => node.Title).Order());
@@ -142,7 +142,7 @@ public sealed class NodeMenuTests : IDisposable
         shell.Click(shell.MenuItem("NodeMenuDuplicate"));
 
         var copy = Workflow(shell).Tasks.Values.Single(task => task.Title == "Design copy");
-        Assert.Equal(new CanvasPoint(105, 372), Workflow(shell).Positions[copy.Id]);
+        Assert.Equal(new CanvasPoint(105, 450), Workflow(shell).Positions[copy.Id]);
         Assert.All(
             ["Design", "Build", "Check"],
             title => Assert.False(shell.CardRect("Design copy").Intersects(shell.CardRect(title)), $"The copy covers {title}."));

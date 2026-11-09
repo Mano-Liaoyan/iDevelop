@@ -83,6 +83,9 @@ public readonly record struct GraphSpace(double Kx, double Ky)
     /// <summary>A position on the Map as the document saves it.</summary>
     public CanvasPoint ToSaved(Point display) => new(display.X / Kx, display.Y / Ky);
 
+    /// <summary>A saved position moved by a shift on the Map, without a round trip through the display's rounding.</summary>
+    public CanvasPoint Shifted(CanvasPoint saved, Vector display) => new(saved.X + display.X / Kx, saved.Y + display.Y / Ky);
+
     private static IEnumerable<(double Dx, double Dy)> Pairs(CanvasPoint[] points)
     {
         for (var first = 0; first < points.Length; first++)

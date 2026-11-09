@@ -109,14 +109,14 @@ public sealed class CanvasTests : IDisposable
     public void A_card_shows_its_title_and_one_subtitle_and_its_tooltip_previews_its_instructions()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        Assert.Equal(["Build", "No agent", "Not started"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Input", "No result", "No agent"], Shell.Texts(shell.Node("Build")));
         Assert.Equal(["Build", "Implement · No agent", "Instructions", "Nothing written yet.", "Instructions is empty.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Build")!);
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
-        Assert.Equal(["Build", "No agent", "Not started"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Input", "No result", "No agent"], Shell.Texts(shell.Node("Build")));
         Assert.Equal(["Build", "Implement · No agent", "Instructions", "Compile", "The node has no agent.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Build")!);
     }
 
@@ -203,14 +203,14 @@ public sealed class CanvasTests : IDisposable
         shell.ShowMinimap();
         Point Item(string title) => shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
             .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == title).Bounds.Position;
-        Assert.Equal((new Point(0, 0), new Point(300, 0)), (Item("Design"), Item("Build")));
+        Assert.Equal((new Point(0, 0), new Point(264, 0)), (Item("Design"), Item("Build")));
 
         // The minimap takes the editor's room, so the view may fit again, and a drag moves by its screen distance at that zoom.
         shell.Render();
         var from = shell.Header(shell.Node("Design"));
         shell.Drag(from, from + new Vector(150, 75) * shell.Editor.ViewportZoom);
 
-        Assert.Equal((new Point(0, 75), new Point(150, 0)), (Item("Design"), Item("Build")));
+        Assert.Equal((new Point(0, 75), new Point(116, 0)), (Item("Design"), Item("Build")));
     }
 
     [AvaloniaFact]
@@ -239,7 +239,7 @@ public sealed class CanvasTests : IDisposable
         shell.Click(build);
 
         var editor = shell.Editor;
-        Assert.Equal(new Point(2530, 1632), Shell.Rounded(editor.ViewportLocation + new Vector(editor.ViewportSize.Width, editor.ViewportSize.Height) / 2));
+        Assert.Equal(new Point(2520, 1647), Shell.Rounded(editor.ViewportLocation + new Vector(editor.ViewportSize.Width, editor.ViewportSize.Height) / 2));
     }
 
     [AvaloniaFact]
@@ -338,14 +338,16 @@ public sealed class CanvasTests : IDisposable
 
         Assert.Equal("seed - iDevelop", titleDuringDrag);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
-        Assert.Equal(new Point(255, 165), shell.Node("Design").Location);
+        Assert.Equal(new Point(240, 165), Shell.Rounded(shell.Node("Design").Location));
+        var saved = shell.Window.ViewModel.Canvas!.Workflow.Positions[Design];
         Assert.Equal(
             (Shell.Rounded(shell.Thumb(shell.Output("Design"))), Shell.Rounded(shell.Thumb(shell.Input("Build")))),
-            Shell.Rounded(shell.Ends(Assert.Single(shell.Connections()))));
+            Shell.Whole(shell.Ends(Assert.Single(shell.Connections()))));
         shell.Press(Key.S, RawInputModifiers.Meta);
         Assert.Equal("seed - iDevelop", shell.Window.Title);
         var reopened = Shell.Open(folder);
-        Assert.Equal(new Point(255, 165), reopened.Node("Design").Location);
-        Assert.Equal(new Point(405, 90), reopened.Node("Build").Location);
+        var reopenedCanvas = reopened.Window.ViewModel.Canvas!;
+        Assert.Equal(saved, reopenedCanvas.Workflow.Positions[Design]);
+        Assert.Equal(new CanvasPoint(405, 90), reopenedCanvas.Workflow.Positions[Build]);
     }
 }
