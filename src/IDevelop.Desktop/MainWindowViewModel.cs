@@ -104,40 +104,68 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     } = true;
 
-    /// <summary>The left panel shows: the person keeps it open, and a narrow window has not folded it for a selected node's inspector.</summary>
-    public bool IsSidebarShown => IsSidebarOpen && !IsInspectorSwapped;
+    /// <summary>The Index is wide. Otherwise the Rail stands in its place.</summary>
+    public bool IsSidebarShown => IsSidebarOpen && !(IsCompact && IsInspectorShown);
 
-    /// <summary>The window is too narrow to keep the inspector open beside the canvas, unless the person opens it.</summary>
-    internal bool IsNarrow
+    /// <summary>The Rail stands in the Index's place.</summary>
+    public bool ShowsRail => !IsSidebarShown;
+
+    /// <summary>The window's width tier. The window applies it on start and on every resize.</summary>
+    public WidthTier Tier
     {
         get;
-        set
+        internal set
         {
-            if (field != value)
+            if (SetProperty(ref field, value))
             {
-                field = value;
+                // Each tier starts from its own layout, so a choice made for another width does not carry over.
+                _inspectorChoice = null;
+                _swapClosedFor = null;
+                IsSidebarOpen = true;
+                IsIndexFlyoutOpen = false;
+                OnPropertyChanged(nameof(IsCompact));
                 RaiseInspector();
             }
         }
+    } = WidthTier.Default;
+
+    /// <summary>The window is in the Compact tier: at most one of the Index and the Agent panel is wide.</summary>
+    public bool IsCompact => Tier == WidthTier.Compact;
+
+    /// <summary>The window is so narrow that the Command Bar's progress bar takes its shorter width.</summary>
+    public bool IsMinimal
+    {
+        get;
+        internal set => SetProperty(ref field, value);
     }
 
-    /// <summary>The inspector is open: as the person last chose, or else while the window has room for it. With no project it has nothing to show.</summary>
-    public bool IsInspectorOpen => HasProjects && (_inspectorChoice ?? !IsNarrow);
+    /// <summary>The Rail's Index flyout is open over the Map. It closes on a choice, on Esc, or on a click outside it.</summary>
+    public bool IsIndexFlyoutOpen
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
+
+    /// <summary>The Agent panel is open: as the person last chose, or else in every tier but Compact, where it opens on demand. With no project it has nothing to show.</summary>
+    public bool IsInspectorOpen => HasProjects && (_inspectorChoice ?? !IsCompact);
 
     /// <summary>
-    /// The window is too narrow for both panels, so a selected node's inspector takes its column at its least width and the left
-    /// panel folds to its tab. Either tab gives the room back to the left panel. A choice the person made with the inspector's
-    /// tab, and an open conversation, keep the swap off (ADR 0059).
+    /// In the Compact tier a selected node opens the Agent panel on demand, and the Index becomes the Rail. The Index toggle or
+    /// Ctrl+Alt+B closes it for that node, and an open conversation keeps it closed.
     /// </summary>
-    public bool IsInspectorSwapped => HasProjects && IsNarrow && _inspectorChoice is null && Conversation is null
+    public bool IsInspectorSwapped => HasProjects && IsCompact && _inspectorChoice is null && Conversation is null
         && Canvas?.SelectedNode is { } node && node != _swapClosedFor;
 
-    /// <summary>The inspector shows in its column.</summary>
+    /// <summary>The Agent panel shows in its column.</summary>
     public bool IsInspectorShown => IsInspectorOpen || IsInspectorSwapped;
 
-    public string SidebarToggleLabel => IsSidebarShown ? "Hide the left panel" : "Show the left panel";
+    /// <summary>A drag can resize the Index: it is wide, and the tier gives it a range.</summary>
+    public bool CanResizeIndex => IsSidebarShown && !IsCompact;
 
-    public string InspectorToggleLabel => IsInspectorShown ? "Hide the inspector" : "Show the inspector";
+    /// <summary>A drag can resize the Agent panel: it shows, and the tier gives it a range.</summary>
+    public bool CanResizePanel => IsInspectorShown && !IsCompact;
+
+    public string SidebarToggleLabel => IsSidebarShown ? "Show the Rail" : "Show the Index";
 
     public ICommand ToggleSidebarCommand { get; }
 
@@ -159,6 +187,12 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>A workflow was shown or a node was chosen, so the left tree opens to its row and shows it.</summary>
     internal event Action<WorkflowCanvasViewModel, TaskNodeViewModel?>? TreeReveal;
 
+    /// <summary>A Run Strip pill asked for the next node in a state, as Ctrl+J and Ctrl+Shift+J do.</summary>
+    internal event Action<Canvas.NodeState>? NextRequested;
+
+    /// <summary>A Run Strip pill asked to frame the running nodes, as Shift+Period does.</summary>
+    internal event Action? FrameRunningRequested;
+
     /// <summary>The person asked for the conversation of a node that waits for their words, so the window puts the focus in its composer.</summary>
     internal event Action? ComposerRequested;
 
@@ -173,7 +207,6 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 shown?.PropertyChanged -= OnCanvasChanged;
                 value?.PropertyChanged += OnCanvasChanged;
-                OnPropertyChanged(nameof(ShowsCanvasBar));
                 RaiseInspector();
             }
         }
@@ -183,6 +216,11 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(WorkflowCanvasViewModel.SelectedNode))
         {
+            if (Canvas?.SelectedNode is not null)
+            {
+                CloseIndexFlyout();
+            }
+
             if (Canvas?.SelectedNode != _swapClosedFor)
             {
                 _swapClosedFor = null;
@@ -229,9 +267,6 @@ public sealed class MainWindowViewModel : ObservableObject
     public ConversationViewModel? DockedConversation => IsConversationDocked ? Conversation : null;
 
     public bool ShowsCanvas => MainConversation is null;
-
-    /// <summary>The canvas shows and has a workflow, so the top band has something to hold.</summary>
-    public bool ShowsCanvasBar => ShowsCanvas && Canvas is not null;
 
     public string ConversationLayoutLabel => IsConversationDocked ? "Expand to the main area" : "Dock under the canvas";
 
@@ -307,6 +342,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public void Select(WorkflowCanvasViewModel canvas)
     {
+        CloseIndexFlyout();
         if (canvas == Canvas)
         {
             return;
@@ -357,7 +393,7 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Opens the inspector for what the person asked to see in it.</summary>
     internal void ShowInspector() => ChooseInspector(true);
 
-    // Either tab ends a swap for its node, which gives the room back to the left panel, and leaves the person's choices as they were.
+    // Closing the Agent panel ends its on-demand opening for this node and leaves the person's other choices as they were.
     private void ToggleInspector()
     {
         if (IsInspectorSwapped)
@@ -371,20 +407,40 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Shows the left panel, which ends a swap that folded it.</summary>
+    /// <summary>Shows the Index: wide if the tier allows it, and otherwise as the Rail's flyout.</summary>
     internal void ShowSidebar()
     {
-        if (!IsSidebarShown)
+        if (IsSidebarShown)
         {
-            ToggleSidebar();
+            return;
+        }
+
+        if (IsCompact && IsInspectorShown)
+        {
+            IsIndexFlyoutOpen = true;
+        }
+        else
+        {
+            IsSidebarOpen = true;
         }
     }
 
+    // In the Compact tier the wide Index replaces the Agent panel, so the toggle closes the panel first.
     private void ToggleSidebar()
     {
-        if (IsSidebarOpen && IsInspectorSwapped)
+        IsIndexFlyoutOpen = false;
+        if (IsCompact && IsInspectorShown)
         {
-            _swapClosedFor = Canvas?.SelectedNode;
+            if (IsInspectorSwapped)
+            {
+                _swapClosedFor = Canvas?.SelectedNode;
+            }
+            else
+            {
+                _inspectorChoice = false;
+            }
+
+            IsSidebarOpen = true;
             RaiseInspector();
         }
         else
@@ -392,6 +448,19 @@ public sealed class MainWindowViewModel : ObservableObject
             IsSidebarOpen = !IsSidebarOpen;
         }
     }
+
+    /// <summary>Opens the Rail's Index flyout, or closes it when it is open.</summary>
+    internal void ToggleIndexFlyout() => IsIndexFlyoutOpen = !IsIndexFlyoutOpen;
+
+    /// <summary>The Rail's Inbox: the flyout, with the list of what needs the person open.</summary>
+    internal void OpenInbox()
+    {
+        Activity.IsOpen = true;
+        IsIndexFlyoutOpen = true;
+    }
+
+    /// <summary>A person's choice in the flyout closes it.</summary>
+    private void CloseIndexFlyout() => IsIndexFlyoutOpen = false;
 
     private void ChooseInspector(bool open)
     {
@@ -411,7 +480,9 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsInspectorSwapped));
         OnPropertyChanged(nameof(IsInspectorShown));
         OnPropertyChanged(nameof(IsSidebarShown));
-        OnPropertyChanged(nameof(InspectorToggleLabel));
+        OnPropertyChanged(nameof(ShowsRail));
+        OnPropertyChanged(nameof(CanResizeIndex));
+        OnPropertyChanged(nameof(CanResizePanel));
         OnPropertyChanged(nameof(SidebarToggleLabel));
     }
 
@@ -732,6 +803,8 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             OpenFolder = folder => OpenFolder(folder),
             OpenFile = file => OpenFile(file),
+            ShowNext = state => NextRequested?.Invoke(state),
+            FrameRunning = () => FrameRunningRequested?.Invoke(),
         };
         document.Changed += (_, _) =>
         {
@@ -810,7 +883,6 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(MainConversation));
         OnPropertyChanged(nameof(DockedConversation));
         OnPropertyChanged(nameof(ShowsCanvas));
-        OnPropertyChanged(nameof(ShowsCanvasBar));
         OnPropertyChanged(nameof(ConversationLayoutLabel));
     }
 

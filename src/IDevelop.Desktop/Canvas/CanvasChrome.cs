@@ -3,35 +3,24 @@ using Avalonia;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// The rules for the bars docked around the canvas: the breadcrumb, Run Workflow, Generate, the zoom controls, the run
-/// bar, and the minimap. Each decides from the canvas's own size, so all of them switch together.
+/// The rules for the Map: how a fit and a framed view place the cards, and what the footer and the minimap show at the Map's size.
 /// </summary>
 internal static class CanvasChrome
 {
-    /// <summary>The least room between two controls side by side in a bar.</summary>
-    public const double Spacing = 12;
-
-    /// <summary>
-    /// Below this canvas width the canvas is compact: the breadcrumb shows only the workflow's name, so Run Workflow and Stop Workflow keep their words.
-    /// </summary>
-    public const double CompactWidth = 680;
-
     /// <summary>
     /// The lowest zoom of a fit: the editor's own least zoom. Fit shows the whole graph, and a large graph takes the tier that
     /// its zoom gives, so no column is cut at the canvas's edge (ADR 0065).
     /// </summary>
     public const double LeastFitZoom = 0.1;
 
-    /// <summary>Below this canvas height, as with the conversation docked under it, the minimap hides.</summary>
-    public const double MinimapMinHeight = 480;
+    /// <summary>Below this Map width the minimap and its toggle hide.</summary>
+    public const double MinimapMinWidth = 640;
 
-    /// <summary>
-    /// Below this canvas width the view controls move to the overflow menu and the minimap hides.
-    /// </summary>
-    public const double NarrowBarWidth = 520;
+    /// <summary>How much of the editor's right edge a shown minimap takes: its width and its 8 px margin on each side.</summary>
+    public const double MinimapReach = 192;
 
-    /// <summary>Below this canvas width the run bar's progress shortens to "5/9", so its chips fit whole.</summary>
-    public const double ShortBarWidth = 760;
+    /// <summary>Below this Map width the footer's key hints hide.</summary>
+    public const double HintsMinWidth = 560;
 
     /// <summary>
     /// The zoom that fits <paramref name="extent"/> in <paramref name="room"/>, never under <see cref="LeastFitZoom"/> and never
@@ -94,13 +83,5 @@ internal static class CanvasChrome
             Best(location.Y, view.Height / zoom, room.Top / zoom, room.Bottom / zoom, keep.Top, keep.Bottom, [.. cards.Select(card => (card.Top, card.Bottom))]));
     }
 
-    public static bool IsShortBar(Size canvas) => canvas.Width < ShortBarWidth;
-
-    public static bool IsNarrowBar(Size canvas) => canvas.Width < NarrowBarWidth;
-
-    /// <summary>Whether Add and Generate give up their words, so the workflow's name in the breadcrumb keeps its width.</summary>
-
-    public static bool IsCompact(Size canvas) => canvas.Width < CompactWidth;
-
-    public static bool ShowsMinimap(Size canvas) => !IsNarrowBar(canvas) && canvas.Height >= MinimapMinHeight;
+    public static bool ShowsMinimap(Size canvas) => canvas.Width >= MinimapMinWidth;
 }

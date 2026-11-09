@@ -217,7 +217,7 @@ public sealed class ConversationWindowTests : IDisposable
         Shell.Invoke(shell.Find<Button>("CloseConversation"));
         shell.Render();
 
-        Assert.Equal((800.0, 800.0, 800.0, 800.0), (canvas, expanded, again, shell.Window.CanvasArea.Bounds.Height));
+        Assert.Equal((canvas, canvas, canvas), (expanded, again, shell.Window.CanvasArea.Bounds.Height));
     }
 
     [AvaloniaFact]

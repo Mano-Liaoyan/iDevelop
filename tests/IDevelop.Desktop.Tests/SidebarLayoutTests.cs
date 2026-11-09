@@ -100,7 +100,7 @@ public sealed class SidebarLayoutTests : IDisposable
         // The panel's tab sits on the splitter's centre.
         var grip = new Vector(0, 200);
         shell.Drag(shell.Center(splitter) + grip, shell.Center(splitter) + grip + new Vector(100, 0));
-        Assert.InRange(sidebar.ActualWidth, 371, 373);
+        Assert.InRange(sidebar.ActualWidth, 351, 353);
 
         shell.Drag(shell.Center(splitter) + grip, shell.Center(splitter) + grip - new Vector(200, 0));
         Assert.Equal(240, sidebar.ActualWidth);
@@ -353,7 +353,8 @@ public sealed class SidebarLayoutTests : IDisposable
         Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
         var shell = Shell.Open(reports);
         shell.OpenNodes(Reports, ReleaseNotes);
-        shell.Window.Height = 600;
+        // The Command Bar and the sheet's edge take 50 px of a window this size, as the title band did before them.
+        shell.Window.Height = 650;
         shell.Render();
         T Named<T>(string name) where T : Control => shell.Window.GetVisualDescendants().OfType<T>().Single(control => control.Name == name);
         var (tree, list) = (Named<ScrollViewer>("Tree"), shell.Find<ListBox>("SidebarTasks"));

@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:IDevelop.Desktop"
+             x:Class="IDevelop.Desktop.Chrome.IndexRail"
+             x:DataType="local:MainWindowViewModel"
+             AutomationProperties.AutomationId="IndexRail">
+  <!-- The Index's place while the Agent panel takes the window's room. Each item is 36 px square, and the flyout shows the full names. -->
+  <StackPanel Spacing="4" Margin="4,4,4,0">
+    <Button Classes="railItem" Click="OnProjects" ToolTip.Tip="Projects" ToolTip.Placement="Right"
+            Classes.active="{Binding IsIndexFlyoutOpen}"
+            AutomationProperties.AutomationId="RailProjects" AutomationProperties.Name="Projects">
+      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" />
+    </Button>
+    <Button Classes="railItem" Click="OnInbox" ToolTip.Placement="Right" ToolTip.Tip="{Binding Activity.InboxCount, StringFormat='Inbox: {0}'}"
+            AutomationProperties.AutomationId="RailInbox" AutomationProperties.Name="{Binding Activity.InboxCount, StringFormat='Inbox: {0}'}">
+      <StackPanel Spacing="0" HorizontalAlignment="Center">
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInbox}" />
+        <TextBlock Classes="caption railCount" Text="{Binding Activity.InboxCount}" IsVisible="{Binding Activity.HasInbox}" HorizontalAlignment="Center"
+                   AutomationProperties.AutomationId="RailInboxCount" />
+      </StackPanel>
+    </Button>
+    <Button Classes="railItem" Click="OnFind" ToolTip.Tip="Find (Ctrl+K)" ToolTip.Placement="Right"
+            AutomationProperties.AutomationId="RailFind" AutomationProperties.Name="Find">
+      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSearch}" />
+    </Button>
+  </StackPanel>
+</UserControl>

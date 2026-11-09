@@ -31,11 +31,11 @@ public sealed class RunBarTests
         shell.RunNode("A");
         shell.WaitForCard("A", "Failed");
 
-        Assert.True(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal("0/1 done", shell.Text("RunStatus"));
+        Assert.True(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
+        Assert.Equal("0/1", shell.Text("RunStatus"));
         Assert.Equal("1 failed", shell.Window.ViewModel.Canvas!.BarSummary);
         Assert.Equal("1 failed", Assert.Single(shell.Window.ViewModel.Canvas!.BarChips).Label);
-        Assert.True(shell.Find<Button>("NextWaiting").IsEffectivelyVisible);
+        Assert.True(shell.Find<Button>("RunPillFailed").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -49,7 +49,7 @@ public sealed class RunBarTests
         shell.WaitForCard("B", "Failed");
         Assert.NotEqual("B", canvas.SelectedNode?.Title);
 
-        shell.Click(shell.Find<Button>("NextWaiting"));
+        shell.Click(shell.Find<Button>("RunPillFailed"));
 
         Assert.Equal("B", canvas.SelectedNode?.Title);
     }
@@ -142,14 +142,16 @@ public sealed class RunBarTests
     }
 
     [AvaloniaFact]
-    public void The_band_counts_the_nodes_with_no_run_and_next_names_what_it_selects()
+    public void The_strip_shows_only_its_count_with_no_run_and_lists_the_six_counts_in_its_tooltip()
     {
         using var temp = AppTempFolder.New();
         var shell = Shell.Open(temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90), TaskAt(TestTasks.Build, "Build", 405, 90)));
         var canvas = shell.Window.ViewModel.Canvas!;
 
-        Assert.Equal("2 nodes", canvas.BarIdle);
-        Assert.Equal("Next failed", canvas.NextLabel);
+        Assert.Equal("0/2", canvas.StripCount);
+        Assert.Empty(canvas.RunPills);
+        Assert.False(canvas.ShowsRunProgress);
+        Assert.Equal("0 needs you\n0 failed\n0 running\n0 stale\n0 done\n2 not started", canvas.StripTip);
     }
 
 }

@@ -85,6 +85,8 @@
     { "key": "IconBadgeConflict", "asset": "Arrow Swap", "file": "ic_fluent_arrow_swap_16_filled.svg" },
     { "key": "IconBadgeRoundLimit", "asset": "Hand Left", "file": "ic_fluent_hand_left_16_filled.svg" },
     { "key": "IconIdle", "asset": "Circle", "file": "ic_fluent_circle_16_regular.svg" },
-    { "key": "IconExpandAll", "asset": "Arrow Expand All", "file": "ic_fluent_arrow_expand_all_16_regular.svg" }
+    { "key": "IconExpandAll", "asset": "Arrow Expand All", "file": "ic_fluent_arrow_expand_all_16_regular.svg" },
+    { "key": "IconInbox", "asset": "Mail Inbox", "file": "ic_fluent_mail_inbox_16_regular.svg" },
+    { "key": "IconPanelLeft", "asset": "Panel Left", "file": "ic_fluent_panel_left_16_regular.svg" }
   ]
 }

@@ -60,7 +60,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         ConnectCommand = new RelayCommand<(object Source, object? Target)>(drop => Connect(drop.Source, drop.Target));
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
         CommitMovesCommand = new RelayCommand(CommitMoves);
-        NextWaitingCommand = new RelayCommand(SelectNextAttention);
         GitEnvironment = git ?? new Dictionary<string, string>();
         InitializeEngine(GitEnvironment);
         Document.Changed += (_, _) => Sync();
@@ -164,6 +163,9 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     internal (Point Location, double Zoom)? FittedView { get; set; }
 
     /// <summary>The zoom as a percent, on the control that resets it.</summary>
+    /// <summary>The Map Footer's key hints, as a status bar has them.</summary>
+    public string KeyHints => $"Enter Chat   {CanvasKeys.Hint(CanvasKeys.Run)} Run   N Add";
+
     public string ZoomLabel => $"{Math.Round(ViewportZoom / ZoomTiers.ActualSize * 100)}%";
 
     /// <summary>The zoomed out card's text at this zoom, and how far a card draws under its box.</summary>
@@ -232,9 +234,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     /// <summary>How many nodes need the person's word. An interrupted node is not among them: <see cref="StateCounts"/> holds it apart.</summary>
     public int WaitingCount => Nodes.Count(node => node.IsWaiting);
-
-    /// <summary>Selects the next node that waits for the person or failed, after the selected one, in the order the sidebar lists them, and shows it.</summary>
-    public ICommand NextWaitingCommand { get; }
 
     internal ProjectViewModel Project { get; }
 
@@ -414,16 +413,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     {
         SelectedNodes.Clear();
         SelectedNodes.Add(node);
-    }
-
-    private void SelectNextAttention()
-    {
-        var ordered = Outline.ToList();
-        var start = SelectedNode is { } selected ? ordered.IndexOf(selected) + 1 : 0;
-        if (Enumerable.Range(0, ordered.Count).Select(step => ordered[(start + step) % ordered.Count]).FirstOrDefault(NeedsAttention) is { } next)
-        {
-            Reveal(next);
-        }
     }
 
     private void DeleteSelection() => Edit(new WorkflowEdit.Delete(

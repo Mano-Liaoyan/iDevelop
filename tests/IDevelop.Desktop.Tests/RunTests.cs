@@ -26,23 +26,24 @@ public sealed class RunTests
         using var f = new NodeFixture(Plan(A, "A", 105), Plan(B, "B", 105 + 300), Plan(C, "C", 405 + 300), Dependency(B, C));
         f.Install(Reply("s-1", "Done.", On().WaitForFile(f.Gate("never"))));
         var shell = f.Open();
-        Assert.False(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
+        Assert.Equal("0/3", shell.Text("RunStatus"));
 
         shell.Click(shell.Find<Button>("RunWorkflow"));
 
         shell.WaitForState("A", NodeState.Running);
         shell.WaitForState("B", NodeState.Running);
         Assert.Equal(NodeState.Idle, shell.NodeModel("C").State);
-        Assert.True(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal("0/3 done", shell.Text("RunStatus"));
+        Assert.True(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
+        Assert.Equal("0/3", shell.Text("RunStatus"));
         Assert.Equal("2 running", shell.Window.ViewModel.Canvas!.BarSummary);
-        Assert.Contains("\"A\", \"B\"", shell.Window.ViewModel.Canvas!.BarTip);
+        Assert.Equal(["2 running"], shell.Window.ViewModel.Canvas!.RunPills.Select(pill => pill.Label));
         Assert.False(shell.Find<Button>("MergeIntoBranch").IsEffectivelyVisible);
 
         shell.Click(shell.Find<Button>("StopAll"));
 
         shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.RunningCount == 0, "every node stops");
-        Assert.False(shell.Find<UserControl>("WorkflowRunBar").IsEffectivelyVisible);
+        Assert.DoesNotContain(shell.Window.ViewModel.Canvas!.RunPills, pill => pill.State == NodeState.Running);
     }
 
     [AvaloniaFact]
@@ -59,7 +60,7 @@ public sealed class RunTests
 
         f.Release("b");
         shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.CanMergeIntoBranch, "Merge into my branch is offered");
-        Assert.Equal("2/2 done", shell.Text("RunStatus"));
+        Assert.Equal("2/2", shell.Text("RunStatus"));
         Assert.True(shell.Find<Button>("MergeIntoBranch").IsEffectivelyVisible);
 
         shell.Click(shell.Find<Button>("MergeIntoBranch"));

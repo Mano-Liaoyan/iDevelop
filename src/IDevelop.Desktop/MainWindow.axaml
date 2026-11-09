@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:IDevelop.Desktop"
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
+        xmlns:chrome="using:IDevelop.Desktop.Chrome"
         xmlns:conversation="using:IDevelop.Desktop.Conversation"
         xmlns:inspector="using:IDevelop.Desktop.Inspector"
         xmlns:sidebar="using:IDevelop.Desktop.Sidebar"
@@ -9,7 +10,7 @@
         x:Class="IDevelop.Desktop.MainWindow"
         x:DataType="local:MainWindowViewModel"
         Title="{Binding Title}" Width="1280" Height="800" MinWidth="900" MinHeight="600"
-        Background="{DynamicResource AppTopbarBrush}"
+        Background="{DynamicResource AppShellBrush}"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="44"
         ExtendClientAreaChromeHints="PreferSystemChrome, OSXThickTitleBar">
@@ -19,296 +20,114 @@
     <KeyBinding Gesture="Meta+S" Command="{Binding SaveCommand}" />
   </Window.KeyBindings>
 
-  <!-- The sidebar and the inspector keep the width the person drags them to while the canvas keeps 336 px. The code-behind
-       lowers their columns' largest widths as the window narrows, which the splitters also keep to. The sidebar is never
-       narrower than 240 px, which leaves a tree row's name room for a word. -->
-  <Grid x:Name="Columns">
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="272" MinWidth="240" MaxWidth="400" />
-      <ColumnDefinition Width="1" />
-      <ColumnDefinition Width="*" />
-      <ColumnDefinition Width="1" />
-      <ColumnDefinition Width="320" MinWidth="280" MaxWidth="520" />
-    </Grid.ColumnDefinitions>
+  <Window.Styles>
+    <StyleInclude Source="/Chrome/ChromeStyles.axaml" />
+  </Window.Styles>
 
-    <!-- The left area has no fill of its own. The window's color shows through it. -->
-    <sidebar:SidebarView x:Name="Sidebar" ZIndex="2" IsVisible="{Binding IsSidebarShown}" />
+  <!-- The Command Bar spans the window. Under it the sheets sit on the shell with 4 px gaps, which are also their resize handles.
+       The code-behind applies the width tier: a sheet's width, its limits, and how the Index and the Rail trade places. -->
+  <Grid x:Name="Shell" RowDefinitions="44,*">
+    <chrome:CommandBar />
 
-    <GridSplitter Grid.Column="1" Width="8" Margin="-3.5,0" ZIndex="1" IsVisible="{Binding IsSidebarShown}" />
+    <Grid x:Name="Columns" Grid.Row="1" Margin="4,0,4,4">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="252" MinWidth="240" MaxWidth="400" />
+        <ColumnDefinition Width="4" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="4" />
+        <ColumnDefinition Width="400" MinWidth="360" MaxWidth="560" />
+      </Grid.ColumnDefinitions>
 
-    <Border Grid.Column="2" ClipToBounds="True" Background="{DynamicResource AppShellBrush}">
-      <DockPanel>
-        <Border DockPanel.Dock="Top" Height="44"
-                Background="{DynamicResource AppTopbarBrush}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border80Brush}"
-                IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
-                PointerPressed="OnTitleBandPressed" />
-        <!-- The conversation takes the main area over the canvas by default, or sits in a dock under it. -->
+      <!-- The Index. While the Rail stands in its place, the same sheet opens as a flyout over the Map. -->
+      <Border x:Name="IndexSheet" Classes="sheet index" Classes.flyout="{Binding IsIndexFlyoutOpen}" ZIndex="2">
+        <Border.IsVisible>
+          <MultiBinding Converter="{x:Static BoolConverters.Or}">
+            <Binding Path="IsSidebarShown" />
+            <Binding Path="IsIndexFlyoutOpen" />
+          </MultiBinding>
+        </Border.IsVisible>
+        <sidebar:SidebarView x:Name="Sidebar" />
+      </Border>
+      <chrome:IndexRail x:Name="Rail" IsVisible="{Binding ShowsRail}" />
+
+      <GridSplitter Grid.Column="1" Classes="sheetGap" ZIndex="1" IsVisible="{Binding CanResizeIndex}" />
+
+      <!-- The Map. Its fill is the canvas's background, so a corner never shows a different color. -->
+      <Border x:Name="MapSheet" Grid.Column="2" Classes="sheet">
+        <Border.Background>
+          <SolidColorBrush Color="{DynamicResource CanvasGrid.BackgroundColor}" />
+        </Border.Background>
+        <!-- The conversation takes the Map over the canvas by default, or sits in a dock under it. -->
         <Grid x:Name="MainArea" RowDefinitions="*,Auto,Auto">
-        <Grid x:Name="CanvasArea" RowDefinitions="Auto,*">
-        <Panel Grid.Row="1">
-          <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center"
-                      IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}">
-            <Button Classes="primary" HorizontalAlignment="Center" Click="OnOpenFolder"
-                    AutomationProperties.AutomationId="CanvasOpenFolder"
-                    AutomationProperties.Name="Open folder">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" />
-                <TextBlock Text="Open folder" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-            <TextBlock Classes="caption" Text="Open a project folder to start." HorizontalAlignment="Center" />
-          </StackPanel>
-          <ContentControl x:Name="CanvasHost" Content="{Binding Canvas}" IsVisible="{Binding ShowsCanvas}">
-            <ContentControl.ContentTemplate>
-              <canvas:CanvasViewTemplate />
-            </ContentControl.ContentTemplate>
-          </ContentControl>
-
-          <ContentControl Content="{Binding MainConversation}">
-            <ContentControl.DataTemplates>
-              <DataTemplate DataType="conversation:ConversationViewModel">
-                <conversation:ConversationView />
-              </DataTemplate>
-            </ContentControl.DataTemplates>
-          </ContentControl>
-        </Panel>
-
-        <!-- The top band docks over the canvas, so no card reaches its controls: the breadcrumb with Undo, Redo, and Save at the
-             left, Add, Generate, and Run Workflow at the right, and the status under the breadcrumb. On a compact canvas the
-             code-behind marks the bar compact: the breadcrumb shows only the workflow's name, and Generate only its glyph. -->
-        <Border Classes="canvasBand top" IsVisible="{Binding ShowsCanvasBar}">
-          <canvas:CanvasTopBar x:Name="TopBar" VerticalAlignment="Top" Margin="12,8">
-            <Border Classes="breadcrumb split" canvas:CanvasTopBar.Slot="Leading" HorizontalAlignment="Left"
-                    IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
-                    AutomationProperties.AutomationId="Breadcrumb">
-              <!-- The names come first and give up width first. The project's name, at most 120 px, gives up its width before the workflow's
-                   name does (CrumbNames). Undo, Redo, and Save keep theirs at the end, in that order for the keyboard too. -->
-              <theme:SpillRow Spacing="4">
-                <Border Classes="crumbPart">
-                <DockPanel Margin="0,0,6,0">
-                  <PathIcon DockPanel.Dock="Left" Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" Margin="8,0,6,0"
-                            Foreground="{DynamicResource TextMutedBrush}" ToolTip.Tip="{Binding ProjectName}" />
-                  <canvas:CrumbNames>
-                    <DockPanel ClipToBounds="True">
-                      <PathIcon DockPanel.Dock="Right" Classes="wideOnly" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" Margin="6,0,6,0"
-                                Foreground="{DynamicResource TextFaintBrush}" />
-                      <TextBlock Classes="wideOnly" Text="{Binding ProjectName}" theme:SpillRow.FollowsText="True" MaxWidth="120" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                                 FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource TextMutedBrush}"
-                                 ToolTip.Tip="{Binding ProjectName}"
-                                 AutomationProperties.AutomationId="BreadcrumbProject" />
-                    </DockPanel>
-                    <TextBlock HorizontalAlignment="Left" Text="{Binding WorkflowName}" theme:SpillRow.FollowsText="True" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                               FontSize="{StaticResource TypeSmallSize}" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
-                               ToolTip.Tip="{Binding WorkflowName}"
-                               AutomationProperties.AutomationId="BreadcrumbWorkflow" />
-                  </canvas:CrumbNames>
-                </DockPanel>
-                </Border>
-                <!-- The graph's edits are their own group, apart from where the person is. -->
-                <Border theme:SpillRow.Pinned="True" Classes="crumbPart">
-                  <StackPanel Orientation="Horizontal">
-                    <Button Classes="ghost glyph" CornerRadius="7,0,0,7" VerticalAlignment="Stretch"
-                            Command="{Binding UndoCommand}"
-                            ToolTip.Tip="Undo"
-                            AutomationProperties.AutomationId="Undo"
-                            AutomationProperties.Name="Undo">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconUndo}" />
-                    </Button>
-                    <Button Classes="ghost glyph" CornerRadius="0" VerticalAlignment="Stretch"
-                            Command="{Binding RedoCommand}"
-                            ToolTip.Tip="Redo"
-                            AutomationProperties.AutomationId="Redo"
-                            AutomationProperties.Name="Redo">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRedo}" />
-                    </Button>
-                    <!-- The dot is the one mark of unsaved work here, so the names keep the width that words would take. -->
-                    <Button Classes="ghost glyph" CornerRadius="0,7,7,0" VerticalAlignment="Stretch"
-                            Command="{Binding SaveCommand}"
-                            ToolTip.Tip="Save (Ctrl+S)"
-                            AutomationProperties.AutomationId="Save"
-                            AutomationProperties.Name="Save">
-                      <Panel>
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
-                        <Ellipse Width="7" Height="7" Margin="0,-2,-3,0" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                 Fill="{DynamicResource AccentBrush}" IsVisible="{Binding HasUnsavedChanges}"
-                                 ToolTip.Tip="Unsaved changes"
-                                 AutomationProperties.AutomationId="UnsavedChanges"
-                                 AutomationProperties.Name="Unsaved changes" />
-                      </Panel>
-                    </Button>
-                  </StackPanel>
-                </Border>
-              </theme:SpillRow>
-            </Border>
-
-            <!-- Run Workflow runs every node that has no current result, so it needs no selected node (ADR 0017). Add shows its glyph at every width, and Generate adds its word while
-                 the bar has room. Their tooltips name them. -->
-            <Panel canvas:CanvasTopBar.Slot="Trailing" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
-              <ContentControl Content="{Binding Canvas}">
-                <ContentControl.ContentTemplate>
-                  <DataTemplate x:DataType="canvas:WorkflowCanvasViewModel">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <!-- While the inspector edits a blueprint, the controls that change the workflow under it are off (ADR 0068). -->
-                      <Button Classes="action iconOnly" Click="OnAddNode"
-                              IsEnabled="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}"
-                              ToolTip.ShowOnDisabled="True"
-                              ToolTip.Tip="Add a node (N)"
-                              AutomationProperties.AutomationId="AddTask"
-                              AutomationProperties.Name="Add node">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
-                        </StackPanel>
-                      </Button>
-                      <Button Classes="action glyph" Click="OnGenerate" IsVisible="{Binding ShowsGenerate}"
-                              IsEnabled="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}"
-                              ToolTip.ShowOnDisabled="True"
-                              ToolTip.Tip="{Binding GenerateLabel, StringFormat='{}{0}&#10;Describe what to build, and a planner proposes the tasks'}"
-                              AutomationProperties.AutomationId="GenerateWorkflow"
-                              AutomationProperties.Name="{Binding GenerateLabel}">
-                        <StackPanel Orientation="Horizontal">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
-                          <theme:StateMark State="Running" IsVisible="{Binding IsPlanning}" />
-                          <TextBlock Classes="label" Text="Generate" Margin="6,0,0,0" VerticalAlignment="Center" />
-                          <!-- An open proposal shows a dot before its label, or on the glyph when the label hides. -->
-                          <Panel Classes="wideOnly" VerticalAlignment="Center">
-                            <Ellipse Width="8" Height="8" Margin="10,0,4,0" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}" />
-                          </Panel>
-                          <Panel Classes="compactOnly" VerticalAlignment="Center">
-                            <Panel IsVisible="{Binding IsReviewing}">
-                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" />
-                              <Ellipse Width="6" Height="6" Margin="0,-2,-3,0" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                       Fill="{DynamicResource AccentBrush}" />
-                            </Panel>
-                          </Panel>
-                        </StackPanel>
-                      </Button>
-                      <!-- While a node runs, the way out takes the place of the button that started the run. -->
-                      <Button Classes="destructive runSlot" Command="{Binding StopAllCommand}" IsVisible="{Binding !RunsNothing}"
-                              ToolTip.Placement="BottomEdgeAlignedRight"
-                              ToolTip.Tip="Stop Workflow&#10;Stop every running node. Finished results stay."
-                              AutomationProperties.AutomationId="StopAll"
-                              AutomationProperties.Name="Stop Workflow">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                          <TextBlock Text="Stop Workflow" VerticalAlignment="Center" />
-                        </StackPanel>
-                      </Button>
-                      <!-- The workflow's one primary action, which keeps its words and its width in every state, so the breadcrumb gives up its width first.
-                           It always reads "Run Workflow". The run bar says when it runs only part of the workflow, and its tooltip says why, or why nothing can run. Run and Stop share one width, so a run does not cut the breadcrumb. The run bar says how far the workflow is. An empty workflow's primary action is on the canvas's Generate card. -->
-                      <Button Classes="primary runSlot" Command="{Binding RunWorkflowCommand}"
-                              ToolTip.ShowOnDisabled="True"
-                              ToolTip.Placement="BottomEdgeAlignedRight"
-                              ToolTip.Tip="{Binding RunWorkflowTip}"
-                              AutomationProperties.AutomationId="RunWorkflow"
-                              AutomationProperties.Name="Run Workflow">
-                        <Button.IsVisible>
-                          <!-- While the inspector edits a blueprint, its Save is the one primary action. -->
-                          <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="RunsNothing" />
-                            <Binding Path="Blueprints.Editor" Converter="{x:Static ObjectConverters.IsNull}" />
-                          </MultiBinding>
-                        </Button.IsVisible>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-                          <TextBlock Text="Run Workflow" VerticalAlignment="Center" AutomationProperties.AutomationId="RunWorkflowLabel" />
-                        </StackPanel>
-                      </Button>
-                    </StackPanel>
-                  </DataTemplate>
-                </ContentControl.ContentTemplate>
-              </ContentControl>
-            </Panel>
-
-            <!-- The status sits under the breadcrumb so a long message never covers it. The line limit keeps it above
-                 the zoom panel and the minimap at the window's minimum height, and the tooltip holds the whole message. -->
-            <Border Classes="breadcrumb" canvas:CanvasTopBar.Slot="Below" HorizontalAlignment="Left" Padding="12,7" MaxWidth="420"
-                    IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <Grid x:Name="CanvasArea" RowDefinitions="Auto,*">
+            <Border Classes="mapNotice" IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
               <theme:EllipsisText Classes="caption" Whole="{Binding Status}" TextWrapping="Wrap" MaxLines="10"
-                         ToolTip.Tip="{Binding Status}"
-                         AutomationProperties.AutomationId="Status"
-                         AutomationProperties.Name="Status" />
+                                  ToolTip.Tip="{Binding Status}"
+                                  AutomationProperties.AutomationId="Status"
+                                  AutomationProperties.Name="Status" />
             </Border>
-          </canvas:CanvasTopBar>
-        </Border>
+        <Panel Grid.Row="1">
+            <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}">
+              <Button Classes="primary" HorizontalAlignment="Center" Click="OnOpenFolder"
+                      AutomationProperties.AutomationId="CanvasOpenFolder"
+                      AutomationProperties.Name="Open folder">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" />
+                  <TextBlock Text="Open folder" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <TextBlock Classes="caption" Text="Open a project folder to start." HorizontalAlignment="Center" />
+            </StackPanel>
+            <ContentControl x:Name="CanvasHost" Content="{Binding Canvas}" IsVisible="{Binding ShowsCanvas}">
+              <ContentControl.ContentTemplate>
+                <canvas:CanvasViewTemplate />
+              </ContentControl.ContentTemplate>
+            </ContentControl>
+
+            <ContentControl Content="{Binding MainConversation}">
+              <ContentControl.DataTemplates>
+                <DataTemplate DataType="conversation:ConversationViewModel">
+                  <conversation:ConversationView />
+                </DataTemplate>
+              </ContentControl.DataTemplates>
+            </ContentControl>
+            </Panel>
+          </Grid>
+          <GridSplitter x:Name="DockSplitter" Grid.Row="1" Height="8" Margin="0,-3.5" ZIndex="1"
+                        IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}"
+                  IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <ContentControl x:Name="DockedHost" Content="{Binding DockedConversation}">
+              <ContentControl.DataTemplates>
+                <DataTemplate DataType="conversation:ConversationViewModel">
+                  <conversation:ConversationView />
+                </DataTemplate>
+              </ContentControl.DataTemplates>
+            </ContentControl>
+          </Border>
         </Grid>
-        <GridSplitter x:Name="DockSplitter" Grid.Row="1" Height="8" Margin="0,-3.5" ZIndex="1"
-                      IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}" />
-        <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}"
-                IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <ContentControl x:Name="DockedHost" Content="{Binding DockedConversation}">
+      </Border>
+
+      <GridSplitter Grid.Column="3" Classes="sheetGap" ZIndex="1" IsVisible="{Binding CanResizePanel}" />
+
+      <!-- The Agent panel. Until stage 3 it holds the inspector's sections, and the conversation keeps its own dock and layouts. -->
+      <Border x:Name="InspectorFrame" Grid.Column="4" Classes="sheet panel" IsVisible="{Binding IsInspectorShown}">
+        <DockPanel x:Name="InspectorPanel" AutomationProperties.AutomationId="Inspector">
+          <ContentControl Content="{Binding Canvas}">
             <ContentControl.DataTemplates>
-              <DataTemplate DataType="conversation:ConversationViewModel">
-                <conversation:ConversationView />
+              <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
+                <inspector:InspectorView />
               </DataTemplate>
             </ContentControl.DataTemplates>
           </ContentControl>
-        </Border>
-        </Grid>
-      </DockPanel>
-    </Border>
+        </DockPanel>
+      </Border>
+    </Grid>
 
-    <GridSplitter Grid.Column="3" Width="8" Margin="-3.5,0" ZIndex="1" IsVisible="{Binding IsInspectorShown}" />
-
-    <!-- In a window too narrow for both panels, a selected node's inspector takes its column at its least width and the left
-         panel folds to its tab, so nothing lies over the canvas (ADR 0059). -->
-    <Border x:Name="InspectorFrame" Grid.Column="4" IsVisible="{Binding IsInspectorShown}">
-    <DockPanel x:Name="InspectorPanel" Background="{DynamicResource AppPanelBrush}" AutomationProperties.AutomationId="Inspector">
-      <!-- Windows draws the caption buttons over this band. Linux ignores the request to draw into the title bar, so the band
-           collapses there, as the left area's does. -->
-      <Border DockPanel.Dock="Top" Height="44"
-              Background="{DynamicResource AppTopbarBrush}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border80Brush}"
-              IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
-              PointerPressed="OnTitleBandPressed" />
-        <!-- The inspector scrolls its own sections, so its header and filter stay in place. -->
-        <ContentControl Content="{Binding Canvas}">
-          <ContentControl.DataTemplates>
-            <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
-              <inspector:InspectorView />
-            </DataTemplate>
-          </ContentControl.DataTemplates>
-        </ContentControl>
-    </DockPanel>
-    </Border>
-
-    <!-- A tab on each panel's edge hides the panel. An open panel's tab sits on the canvas's side of the seam, so a panel's scroll bar
-         never runs under it. A closed panel's seam widens to hold the tab, with the panel's name, at the window's edge, so the tab
-         takes its own space and no card ever lies under it. With no project the inspector has no tab. -->
-    <Button Grid.Column="1" Classes="panelEdge leading" Classes.closed="{Binding !IsSidebarShown}" ZIndex="1" HorizontalAlignment="Center"
-            Command="{Binding ToggleSidebarCommand}" ToolTip.Tip="{Binding SidebarToggleLabel, StringFormat='{}{0} (Ctrl+B)'}"
-            AutomationProperties.AutomationId="ToggleSidebar" AutomationProperties.Name="{Binding SidebarToggleLabel}">
-      <Panel>
-        <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" RenderTransform="scale(-1, 1)" IsVisible="{Binding IsSidebarShown}" />
-        <StackPanel Spacing="4" IsVisible="{Binding !IsSidebarShown}">
-          <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" />
-          <LayoutTransformControl HorizontalAlignment="Center">
-            <LayoutTransformControl.LayoutTransform>
-              <RotateTransform Angle="90" />
-            </LayoutTransformControl.LayoutTransform>
-            <TextBlock Classes="edgeLabel" Text="Projects" />
-          </LayoutTransformControl>
-        </StackPanel>
-      </Panel>
-    </Button>
-    <Button Grid.Column="3" Classes="panelEdge trailing" Classes.closed="{Binding !IsInspectorShown}" ZIndex="1" HorizontalAlignment="Center" IsVisible="{Binding HasProjects}"
-            Command="{Binding ToggleInspectorCommand}" ToolTip.Tip="{Binding InspectorToggleLabel, StringFormat='{}{0} (Ctrl+Alt+B)'}"
-            AutomationProperties.AutomationId="ToggleInspector" AutomationProperties.Name="{Binding InspectorToggleLabel}">
-      <Panel>
-        <StackPanel Spacing="4" IsVisible="{Binding !IsInspectorShown}">
-          <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" RenderTransform="scale(-1, 1)" />
-          <LayoutTransformControl HorizontalAlignment="Center">
-            <LayoutTransformControl.LayoutTransform>
-              <RotateTransform Angle="90" />
-            </LayoutTransformControl.LayoutTransform>
-            <TextBlock Classes="edgeLabel" Text="Inspector" />
-          </LayoutTransformControl>
-        </StackPanel>
-        <PathIcon Theme="{StaticResource Glyph}" Width="10" Height="10" Data="{StaticResource IconChevronRight}" IsVisible="{Binding IsInspectorShown}" />
-      </Panel>
-    </Button>
-
-    <!-- A modal sheet covers every column, so the breadcrumb, Save, and the sidebar take no click while it is open.
+    <!-- A modal sheet covers the whole window, so the Command Bar and the Index take no click while it is open.
          It sits above the splitters, whose ZIndex 1 would otherwise draw them over the scrim and let them take a drag. -->
-    <ContentControl Grid.Column="0" Grid.ColumnSpan="5" ZIndex="2" Content="{Binding Canvas.Sheet, FallbackValue={x:Null}}">
+    <ContentControl Grid.RowSpan="2" ZIndex="3" Content="{Binding Canvas.Sheet, FallbackValue={x:Null}}">
       <ContentControl.DataTemplates>
         <DataTemplate DataType="canvas:GenerateWorkflowViewModel">
           <canvas:GenerateSheet />

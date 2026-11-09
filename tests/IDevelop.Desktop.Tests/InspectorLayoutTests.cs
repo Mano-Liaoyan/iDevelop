@@ -36,9 +36,9 @@ public sealed class InspectorLayoutTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void The_workflow_the_task_and_the_connection_views_share_one_right_edge(double width)
     {
         Install(_fakes, ClientId.Codex);
@@ -48,7 +48,7 @@ public sealed class InspectorLayoutTests : IDisposable
                 new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)),
             _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
-        Assert.Equal(width, shell.Find<Control>("Inspector").Bounds.Width);
+        Assert.Equal(width - 2, shell.Find<Control>("Inspector").Bounds.Width);
 
         Assert.Equal("actions at 12, values at ", Edges(shell));
 
@@ -66,9 +66,9 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void A_picker_sits_beside_its_label_at_every_panel_width(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
@@ -87,9 +87,9 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void The_skill_picker_and_its_open_list_keep_the_panels_edges_and_cut_nothing_short(double width)
     {
         const string longName = "write-the-release-notes-for-every-storage-adapter";
@@ -132,9 +132,9 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void Antigravitys_skills_are_a_plain_value_whose_tooltip_says_why(double width)
     {
         Install(_fakes, ClientId.Antigravity);
@@ -284,9 +284,9 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(320)]
+    [InlineData(360)]
     [InlineData(400)]
-    [InlineData(520)]
+    [InlineData(560)]
     public void Labels_and_values_keep_one_column_each_at_every_width_from_300(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
@@ -295,18 +295,18 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Prompt"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal($"labels at 12, values at {Math.Max(116, width - 372)}", Columns(shell));
+        Assert.Equal($"labels at 12, values at {Math.Max(116, width - 374)}", Columns(shell));
 
         shell.Click(shell.ConnectionInto("Build"));
 
         Assert.Equal(["From", "To", "Kind"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal($"labels at 32, values at {Math.Max(116, width - 372)}", Columns(shell));
+        Assert.Equal($"labels at 32, values at {Math.Max(116, width - 374)}", Columns(shell));
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void A_row_without_a_glyph_starts_its_label_where_its_value_starts_under_it(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
@@ -345,9 +345,9 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void A_nodes_status_starts_at_the_inset_and_its_results_reach_the_action_edge(double width)
     {
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Replay(Fixture.Path("codex-success.jsonl")));
@@ -378,9 +378,9 @@ public sealed class InspectorLayoutTests : IDisposable
     };
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void The_filter_sits_under_the_pinned_header_on_a_task_and_a_connection_and_hides_with_nothing_selected(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
@@ -397,9 +397,9 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void Text_and_boxes_without_a_label_end_at_the_panels_one_right_edge(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
@@ -420,9 +420,9 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void A_long_title_shows_in_full_and_its_tooltip_holds_all_of_it(double width)
     {
         const string title = "Draft the release notes for the storage adapter and its migration and its rollback plan for every region";
@@ -448,9 +448,9 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void The_longest_model_names_of_every_client_read_whole_in_their_tooltips_and_their_lists(double width)
     {
         TaskId claude = TaskId.New(), codex = TaskId.New(), pi = TaskId.New(), agy = TaskId.New();

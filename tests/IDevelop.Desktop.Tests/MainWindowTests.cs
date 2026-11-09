@@ -68,6 +68,8 @@ public sealed class MainWindowTests : IDisposable
             TaskAt(Design, design, 105, 90),
             TaskAt(Build, build, 405, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        shell.Window.Width = 1500;
+        shell.AtOrigin();
         shell.Drag(shell.Center(shell.Output(build)), shell.Center(shell.Input(design)));
         Assert.Equal($"That would create a cycle: {build} → {design} → {build}.", shell.Status);
 
@@ -75,7 +77,7 @@ public sealed class MainWindowTests : IDisposable
         shell.Window.Height = shell.Window.MinHeight;
         shell.Render();
 
-        var status = shell.Bounds(Shell.Around(shell.Find<TextBlock>("Status"), "breadcrumb"));
+        var status = shell.Bounds(Shell.Around(shell.Find<TextBlock>("Status"), "mapNotice"));
         Assert.Equal(new Size(900, 600), shell.Window.ClientSize);
         Assert.All(
             [shell.Bounds(shell.Find<Border>("Breadcrumb")), shell.Bounds(shell.Find<Control>("ZoomPanel"))],
@@ -91,7 +93,6 @@ public sealed class MainWindowTests : IDisposable
         Assert.False(shell.ShowsAny("AddTask"));
         Assert.Equal([false, true], new[] { "Save", "CanvasOpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.False(shell.Find<Control>("Inspector").IsEffectivelyVisible);
-        Assert.False(shell.Find<Button>("ToggleInspector").IsEffectivelyVisible);
 
         shell.Window.ViewModel.Open(_temp.Create("plan"));
         shell.Render();

@@ -83,28 +83,6 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
-  <Style Selector="Border.breadcrumb">
-    <Setter Property="MinHeight" Value="32" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
-    <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
-  </Style>
-  <!-- A bar of two groups: each group draws the chrome, and the bar none. -->
-  <Style Selector="Border.breadcrumb.split">
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BoxShadow" Value="none" />
-  </Style>
-  <Style Selector="Border.crumbPart">
-    <Setter Property="MinHeight" Value="32" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
-    <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
-  </Style>
   <!-- A shadow outside a clipped border is cut off, so floating panels clip their content in an inner border. -->
   <Style Selector="Border.floating">
     <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
@@ -506,49 +484,6 @@
   </Style>
   <Style Selector="ToggleButton.projectRow:checked PathIcon:not(.markGlyph)">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
-  </Style>
-  <!-- The tab on a panel's edge. It stays at the window's edge while the panel is closed. -->
-  <Style Selector="Button.panelEdge">
-    <Setter Property="Width" Value="12" />
-    <Setter Property="Height" Value="44" />
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="MinWidth" Value="0" />
-    <Setter Property="MinHeight" Value="0" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="HorizontalContentAlignment" Value="Center" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <!-- A closed panel's tab names the panel, so a small window says where the panel went. -->
-  <!-- An open panel's tab shows only under the pointer or the keyboard, so it never sits on the conversation's or the canvas's margin. A closed panel's tab stays, as the way back. -->
-  <Style Selector="Button.panelEdge:not(.closed):not(:pointerover):not(:focus-visible) /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Opacity" Value="0" />
-  </Style>
-  <Style Selector="Button.panelEdge.leading">
-    <Setter Property="Margin" Value="6,0,-6,0" />
-  </Style>
-  <Style Selector="Button.panelEdge.trailing">
-    <Setter Property="Margin" Value="-6,0,6,0" />
-  </Style>
-  <Style Selector="Button.panelEdge.closed">
-    <Setter Property="Width" Value="18" />
-    <Setter Property="Height" Value="84" />
-    <Setter Property="Margin" Value="0" />
-  </Style>
-  <Style Selector="TextBlock.edgeLabel">
-    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
-    <Setter Property="LineHeight" Value="{StaticResource TypeCaptionLine}" />
-  </Style>
-  <Style Selector="Button.panelEdge /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-  </Style>
-  <Style Selector="Button.panelEdge:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="StackPanel.counts, StackPanel.count, StackPanel.rowActions">
     <Setter Property="Orientation" Value="Horizontal" />
@@ -979,13 +914,7 @@
     </Setter>
   </Style>
 
-  <!-- The band along the canvas's top edge, solid, as a node editor's header is. The canvas's own styles hold its bottom band. -->
-  <Style Selector="Border.canvasBand.top">
-    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-    <Setter Property="BorderThickness" Value="0,0,0,1" />
-  </Style>
-  <!-- A compact canvas, below 680 px, marks its chrome compact. A glyph button shows only its glyph there, in a 32 px
+  <!-- The Compact tier marks the Command Bar compact. A glyph button shows only its glyph there, in a 28 px
        square, and its tooltip's first line names it. An iconOnly button shows only its glyph at every width. A wideOnly part hides there, and a compactOnly part shows only there.
        These come last, so they win over the button styles above. -->
   <Style Selector=".compact Button.glyph, Button.iconOnly">
@@ -998,13 +927,5 @@
   </Style>
   <Style Selector=".compact :is(Control).compactOnly">
     <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <!-- Run Workflow and Stop Workflow take turns in one place at one width, so a run does not move or cut the breadcrumb. -->
-  <Style Selector="Button.runSlot">
-    <Setter Property="MinWidth" Value="132" />
-    <Setter Property="HorizontalContentAlignment" Value="Center" />
-  </Style>
-  <Style Selector=".compact Button.primary">
-    <Setter Property="Padding" Value="8,0" />
   </Style>
 </Styles>

@@ -77,8 +77,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The project and workflow the node belongs to, as the breadcrumb names them.</summary>
     public string Breadcrumb => $"{Target.Canvas.Project.Name} › {Target.Canvas.Name}";
 
-    /// <summary>The breadcrumb's tooltip, which adds what the workflow's bar says.</summary>
-    public string BreadcrumbTip => Canvas.ShowsBar ? $"{Breadcrumb}\n{Canvas.BarSummary}" : Breadcrumb;
+    /// <summary>The breadcrumb's tooltip, which adds what the Run Strip says.</summary>
+    public string BreadcrumbTip => string.IsNullOrEmpty(Canvas.BarSummary) ? Breadcrumb : $"{Breadcrumb}\n{Canvas.BarSummary}";
 
     /// <summary>The composer takes the keys when the conversation opens only while the node waits for the person's words.</summary>
     public bool WaitsForWords => Card is AttentionCard.Reply or AttentionCard.Question or AttentionCard.Interrupted;

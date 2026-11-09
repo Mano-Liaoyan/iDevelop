@@ -41,8 +41,7 @@
         Classes.docked="{Binding $parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=False}">
     <Border Classes="conversationHeader">
       <!-- The node on one line, where it is on the line under it, and the glyph buttons at the end. While the inspector shows the node, the inspector
-           holds its state and its neighbours, so the header leaves them out. The dock leaves the canvas and its bar in view, so
-           it leaves out the workflow's place and its actions too. -->
+           holds its state and its neighbours, so the header leaves them out. The dock leaves the canvas in view, so it leaves out the workflow's place too. -->
       <theme:SpillRow MinLeadWidth="186" Spacing="4" ItemsAlignment="Start" SpillIndent="28">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
           <!-- The header names the node in every layout, so the conversation says whose it is without the inspector (ADR 0063). -->
@@ -53,43 +52,9 @@
             <TextBlock Classes="caption" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
                        ToolTip.Tip="{Binding BreadcrumbTip}" AutomationProperties.AutomationId="ConversationBreadcrumb"
-                       AutomationProperties.HelpText="{Binding Canvas.BarSummary}" />
+                       />
           </StackPanel>
         </Grid>
-        <StackPanel theme:SpillRow.Pinned="True" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
-                    IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
-                    AutomationProperties.AutomationId="ConversationRun"
-                    AutomationProperties.Name="{Binding Canvas.BarSummary}">
-          <Button Classes="action" Height="24" Command="{Binding Canvas.NextWaitingCommand}" IsVisible="{Binding Canvas.HasAttention}"
-                  ToolTip.Tip="{x:Static canvas:WorkflowCanvasView.NextHelp}"
-                  AutomationProperties.AutomationId="ConversationNext"
-                  AutomationProperties.Name="Next">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock Text="{Binding Canvas.NextLabel}" />
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
-            </StackPanel>
-          </Button>
-          <Button Classes="ghost" Height="24"
-                  Command="{Binding Canvas.MergeIntoBranchCommand}" IsVisible="{Binding Canvas.CanMergeIntoBranch}"
-                  ToolTip.Tip="Merge the end nodes' work into the branch you have checked out"
-                  AutomationProperties.AutomationId="ConversationMergeIntoBranch"
-                  AutomationProperties.Name="Merge into my branch">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="12" Height="12" />
-              <TextBlock Text="Merge into my branch" />
-            </StackPanel>
-          </Button>
-          <Button Classes="ghost" Height="24"
-                  Command="{Binding Canvas.StopAllCommand}" IsVisible="{Binding !!Canvas.RunningCount}"
-                  ToolTip.Tip="Stop every running node. Finished results stay."
-                  AutomationProperties.AutomationId="ConversationStopAll"
-                  AutomationProperties.Name="Stop Workflow">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="12" Height="12" />
-              <TextBlock Text="Stop Workflow" />
-            </StackPanel>
-          </Button>
-        </StackPanel>
         <Button theme:SpillRow.Pinned="True" Classes="icon"
                 Command="{Binding $parent[local:MainWindow].ViewModel.ToggleConversationLayoutCommand, FallbackValue={x:Null}}"
                 ToolTip.Tip="{Binding $parent[local:MainWindow].ViewModel.ConversationLayoutLabel, FallbackValue={x:Null}}"

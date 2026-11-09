@@ -602,8 +602,6 @@ public partial class SidebarView : UserControl
     private void OnStickyProject(object? sender, RoutedEventArgs e) =>
         ScrollToRow(ProjectRows().FirstOrDefault(row => row.DataContext == StickyProject.DataContext));
 
-    private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e) => Window?.TitleBandPressed(e);
-
     // A click, a key, and UI Automation each check a segment their own way, so the checked segment is the choice.
     private void OnThemeChecked(object? sender, RoutedEventArgs e)
     {

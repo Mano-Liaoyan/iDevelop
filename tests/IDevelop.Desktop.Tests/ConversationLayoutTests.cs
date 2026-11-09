@@ -37,7 +37,7 @@ public sealed class ConversationLayoutTests
 
             var header = shell.Bounds(Shell.Around(shell.Find<TextBlock>("ConversationTitle"), "conversationHeader"));
             AssertWholeAndApart(shell, at, header.Intersect(view), 12, 4,
-                ("Title", shell.Find<Control>("ConversationTitle")), ("Next", shell.Find<Control>("ConversationNext")), ("Stop", shell.Find<Control>("ConversationStopAll")),
+                ("Title", shell.Find<Control>("ConversationTitle")),
                 ("Layout", shell.Find<Control>("ConversationLayout")), ("Close", shell.Find<Control>("CloseConversation")));
             Assert.Equal(header.Right - 12, shell.Bounds(shell.Find<Control>("CloseConversation")).Right, 0.5);
 
@@ -88,7 +88,6 @@ public sealed class ConversationLayoutTests
         shell.Render();
         var conversation = shell.Window.ViewModel.Conversation!;
         shell.WaitUntil(() => conversation.Items.OfType<MessageItemViewModel>().Any(), "the conversation shows its turn");
-        Assert.True(shell.Find<Control>("ConversationRun").IsEffectivelyVisible);
         return shell;
     }
 

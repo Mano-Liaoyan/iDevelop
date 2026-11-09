@@ -180,15 +180,6 @@
     </Panel>
   </DataTemplate>
 
-  <!-- A group of the run bar: its State Mark, its number, and its word. -->
-  <DataTemplate x:Key="BarChipTemplate" DataType="canvas:StateChip">
-    <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip.Tip="{Binding Tip}"
-                AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
-      <theme:StateMark VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" />
-      <TextBlock Classes="barText barWords" Text="{Binding Label}" />
-    </StackPanel>
-  </DataTemplate>
-
   <DataTemplate x:Key="ConnectionTemplate" DataType="canvas:ConnectionViewModel">
     <canvas:RoutedConnection Classes="wire" Source="{Binding SourcePoint}"
                              Target="{Binding TargetPoint}"

@@ -78,12 +78,11 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         _dots = Editor.Background;
         Editor.GotFocus += (_, e) => ShowKeyboardFocus(e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional);
         Editor.LostFocus += (_, _) => ShowKeyboardFocus(false);
-        // A compact canvas shows its run bar's buttons as glyphs.
+        // The Map Footer's hints hide on a narrow Map, and the minimap's toggle where the Map has no room for it.
         SizeChanged += (_, e) =>
         {
-            Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
-            Classes.Set("narrowBar", CanvasChrome.IsNarrowBar(e.NewSize));
-            Classes.Set("shortBar", CanvasChrome.IsShortBar(e.NewSize));
+            FooterHints.IsVisible = e.NewSize.Width >= CanvasChrome.HintsMinWidth;
+            MinimapToggle.IsVisible = CanvasChrome.ShowsMinimap(e.NewSize);
             ShowMinimap();
         };
         // A view that Fit made fits again at the editor's new size, so a resized panel, a dock, or the minimap never cuts the
@@ -115,13 +114,21 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         Classes.Set("keyboardFocus", shown);
     }
 
-    /// <summary>The tooltip of the run bar's Next, with its shortcut.</summary>
-    public static string NextHelp => $"Next\nShow the next node that waits for you or failed\n{CanvasKeys.Hint(CanvasKeys.NextAttention)}: next that waits. {CanvasKeys.Hint(CanvasKeys.NextFailed)}: next that failed.";
-
     private bool IsFitted => _viewModel?.FittedView is { } fit && fit.Location == Editor.ViewportLocation && fit.Zoom == Editor.ViewportZoom;
 
-    // The minimap shows on the person's choice, where the canvas has room for its dock.
-    private void ShowMinimap() => MinimapPanel.IsVisible = MinimapToggle.IsChecked == true && CanvasChrome.ShowsMinimap(Bounds.Size);
+    // The minimap shows on the person's choice, where the Map has room for it. A view that Fit made keeps its cards clear of it.
+    private void ShowMinimap()
+    {
+        var shown = MinimapToggle.IsChecked == true && CanvasChrome.ShowsMinimap(Bounds.Size);
+        if (shown != MinimapPanel.IsVisible)
+        {
+            MinimapPanel.IsVisible = shown;
+            if (IsFitted)
+            {
+                Dispatcher.UIThread.Post(FitToView, DispatcherPriority.Background);
+            }
+        }
+    }
 
     // The steps are even, so a zoom gesture measures the cards' text only when its size changes.
     private void ShowTitleText()
@@ -217,6 +224,11 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     {
         var whole = new Rect(Editor.Bounds.Size);
         var room = whole.Deflate(margin);
+        if (MinimapPanel.IsVisible)
+        {
+            room = room.WithWidth(Math.Max(0, room.Width - CanvasChrome.MinimapReach));
+        }
+
         return room.Width < MinFitRoom || room.Height < MinFitRoom ? whole : room;
     }
 
@@ -386,6 +398,15 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
+    /// <summary>Frames the running nodes, for Shift+Period and the Run Strip's Running pill.</summary>
+    internal void FrameRunning()
+    {
+        if (_viewModel is { } canvas)
+        {
+            Frame([.. canvas.Nodes.Where(node => node.State == NodeState.Running)]);
+        }
+    }
+
     public void ZoomToActual() => Editor.ZoomAtPosition(ZoomTiers.ActualSize / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -398,7 +419,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
 
         _viewModel = DataContext as WorkflowCanvasViewModel;
-        BottomBar.RefitChips();
         if (_viewModel is { } canvas)
         {
             canvas.View = this;
@@ -506,10 +526,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             ShowAdd();
         }
-        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.BarChips))
-        {
-            BottomBar.RefitChips();
-        }
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Tier))
         {
             ShowTier();
@@ -594,8 +610,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private void OnZoomOut(object? sender, RoutedEventArgs e) => EditorCommands.ZoomOut.Execute(null, Editor);
 
     private void OnFitToScreen(object? sender, RoutedEventArgs e) => FitToView();
-
-    private void OnMinimapMenu(object? sender, RoutedEventArgs e) => MinimapToggle.IsChecked = MinimapToggle.IsChecked != true;
 
     private void OnZoomActual(object? sender, RoutedEventArgs e) => ZoomToActual();
 
@@ -755,7 +769,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
                 Frame(canvas.SelectedNodes);
                 return true;
             case Key.OemPeriod when modifiers == KeyModifiers.Shift:
-                Frame([.. canvas.Nodes.Where(node => node.State == NodeState.Running)]);
+                FrameRunning();
                 return true;
             case Key.OemPlus or Key.Add when (modifiers & ~KeyModifiers.Shift) == KeyModifiers.None:
                 EditorCommands.ZoomIn.Execute(null, Editor);

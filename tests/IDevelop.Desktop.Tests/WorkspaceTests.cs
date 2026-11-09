@@ -181,7 +181,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(new Point(600, 300), shell.Editor.ViewportLocation);
         shell.Click(shell.Find<Button>("ZoomIn"));
         var build = (Math.Round(shell.Editor.ViewportZoom, 4), Shell.Rounded(shell.Editor.ViewportLocation));
-        Assert.Equal((1.2599, new Point(670.76, 372.93)), build);
+        Assert.Equal((1.2599, new Point(685.61, 384.38)), build);
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
@@ -235,22 +235,22 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
         shell.RunNode();
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarActivity));
+        Assert.Equal(("Running", "1 running"), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarSummary));
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
         Assert.Equal([true, false], shell.Window.ViewModel.Projects[0].Workflows.Select(canvas => canvas.Summary.Contains("running")));
         Assert.Equal([true, false], shell.Window.ViewModel.Projects.Select(project => project.IsRunning));
         shell.Click(shell.WorkflowRow("beta", "Build"));
-        Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
 
         shell.Click(ProjectButton(shell, "beta", "CloseProject"));
 
         Assert.Null(shell.Dialog);
         Assert.Equal([("alpha", ["Build", "Release"])], shell.Tree());
         Assert.Equal(("alpha", "Build"), shell.Breadcrumb());
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarActivity));
+        Assert.Equal(("Running", "1 running"), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarSummary));
 
         shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
         Assert.Equal(["\"Design\" is running. Stop it and close alpha?", "Stop and leave", "Keep running"], shell.DialogTexts());
@@ -273,7 +273,6 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(NodeStates.InterruptedDetailInMenu, shell.NodeModel("Design").InspectorDetail);
         Assert.Equal(1, reopened.Counts.Waiting);
         Assert.Equal("1\u00a0needs\u00a0you", Assert.Single(reopened.RowChips).Label);
-        Assert.Equal("Next that needs you", reopened.NextLabel);
         Assert.Equal(1, shell.Window.ViewModel.Activity.WaitingCount);
     }
 
@@ -707,7 +706,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], shell.Tree());
         Assert.Equal("alpha* - iDevelop: New task, Ship", Shown(shell));
         shell.Click(shell.WorkflowRow("alpha", "Build"));
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarActivity));
+        Assert.Equal(("Running", "1 running"), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarSummary));
         File.WriteAllText(_gate, "");
         shell.WaitUntil(() => !shell.Window.ViewModel.RunningNodes.Any(), "the run ends before its folder goes");
     }

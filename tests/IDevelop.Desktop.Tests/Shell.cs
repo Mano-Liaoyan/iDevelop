@@ -30,7 +30,7 @@ internal sealed partial class Shell
 
     public string Status => Find<Theme.EllipsisText>("Status").Whole ?? "";
 
-    public bool ShowsUnsavedChanges => Find<Avalonia.Controls.Shapes.Ellipse>("UnsavedChanges").IsVisible;
+    public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
 
     /// <summary>Opens the Generate sheet from the canvas's card on an empty workflow, or from the toolbar otherwise.</summary>
     public void OpenGenerate()
@@ -49,6 +49,9 @@ internal sealed partial class Shell
         // control (#86). A test that rests the pointer on a control turns the service back on.
         ToolTip.SetServiceEnabled(window, false);
         window.ViewModel.GitEnvironment = AppTempFolder.Git;
+        // A wide window, so a test's cards and ports fit beside the sheets. A test about a size sets its own.
+        window.Width = 1500;
+        window.Height = 900;
         window.Show();
         var shell = new Shell(window);
         shell.Render();
@@ -103,9 +106,11 @@ internal sealed partial class Shell
         Render();
     }
 
-    /// <summary>Shows the minimap, which the person opens.</summary>
+    /// <summary>Shows the minimap, which the person opens where the Map has room for it.</summary>
     public void ShowMinimap()
     {
+        Window.Width = Math.Max(Window.Width, 1500);
+        Render();
         if (!Find<Nodify.Minimap>("Minimap").IsEffectivelyVisible)
         {
             Click(Find<Avalonia.Controls.Primitives.ToggleButton>("ShowMinimap"));

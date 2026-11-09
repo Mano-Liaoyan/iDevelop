@@ -642,10 +642,10 @@
     <Setter Property="RadiusY" Value="10" />
   </Style>
 
-  <!-- The zoom panel's buttons are 28 by 28, with no lines between them. -->
+  <!-- The footer's buttons are 28 by 24, with no lines between them. -->
   <Style Selector="Button.zoom, ToggleButton.zoom">
     <Setter Property="Width" Value="28" />
-    <Setter Property="Height" Value="28" />
+    <Setter Property="Height" Value="24" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
@@ -698,110 +698,23 @@
     <Setter Property="FontWeight" Value="Medium" />
   </Style>
 
-  <!-- The run bar. All of it centres on one 40 px line. -->
-  <Style Selector="ItemsControl.barChips TextBlock.barText">
-    <Setter Property="TextTrimming" Value="None" />
-  </Style>
-  <Style Selector="TextBlock.barText">
-    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
-    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
-    <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  </Style>
-  <!-- A view control leaves the bar for the overflow menu only when the run's words need its room. -->
-  <Style Selector="Button.barTight">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- On its own row the run bar leaves the zoom controls their row, so they come back from the overflow menu. -->
-  <Style Selector=":is(Control).narrowBar Button.barTight, :is(Control).tightView:not(.ownRow) Button.barTight">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).narrowBar :is(Control).barRoomy, :is(Control).tightView:not(.ownRow) :is(Control).barRoomy">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector="Border.barRule">
-    <Setter Property="Width" Value="1" />
-    <Setter Property="Height" Value="20" />
-    <Setter Property="Margin" Value="6,0,0,0" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
-  </Style>
-  <!-- A chip says its group in words at every width. A bar that cannot hold them on one line wraps them to a second (ADR 0069). -->
-  <Style Selector="ItemsControl.barChips ContentPresenter > StackPanel">
-    <Setter Property="Spacing" Value="4" />
-    <Setter Property="MinHeight" Value="28" />
-  </Style>
-  <Style Selector="TextBlock.nextShort">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).tightNext:not(.ownRow) TextBlock.nextShort">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).tightNext:not(.ownRow) TextBlock.nextLabel">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- The zoom's steps and Fit leave the bar for the overflow menu before the run bar takes its own row, so the band keeps one row (ADR 0070). -->
-  <Style Selector="TextBlock.progressShort">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- The bar comes closer together and says its progress as a fraction before the zoom controls leave. Every count keeps its word. -->
-  <Style Selector=":is(Control).tightChips:not(.ownRow) WrapPanel.barGroup">
-    <Setter Property="ItemSpacing" Value="6" />
-  </Style>
-  <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.progressLong">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).tightChips:not(.ownRow) TextBlock.progressShort">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).tightZoom:not(.ownRow) Button.zoomStep, :is(Control).tightZoom:not(.ownRow) Button.barSpare">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).tightZoom:not(.ownRow) Button.barTight">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <!-- On its own row the run bar is not after the zoom controls, so no rule ends them. -->
-  <Style Selector=":is(Control).ownRow Border.barRule">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).tightFollow:not(.ownRow) Panel.barFollow, :is(Control).tightOwnRow Panel.barFollow">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector="Button.bar, ToggleButton.bar">
-    <Setter Property="Height" Value="28" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="MinHeight" Value="0" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-  </Style>
-  <Style Selector="ToggleButton.follow">
-    <Setter Property="MinWidth" Value="28" />
-    <Setter Property="Padding" Value="8,0" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="HorizontalContentAlignment" Value="Center" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  </Style>
-  <Style Selector="ToggleButton.follow /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="Transparent" />
-  </Style>
-  <Style Selector="ToggleButton.follow:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.follow:checked /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
-  </Style>
-  <!-- The bands along the canvas's top and bottom edges and the minimap's dock sit beside the editor, as a node editor's
-       header and status bars do, on the top bar's solid surface. -->
-  <Style Selector="Border.canvasBand.bottom, Border.canvasDock">
-    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+  <!-- The Map Footer. Its controls are one 24 px line, and a hairline parts it from the Map. -->
+  <Style Selector="Border.mapFooter">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
-  <Style Selector="Border.canvasBand.bottom">
-    <Setter Property="MinHeight" Value="44" />
-    <Setter Property="BorderThickness" Value="0,1,0,0" />
-  </Style>
-  <Style Selector="Border.canvasDock">
-    <Setter Property="BorderThickness" Value="1,0,0,0" />
-    <Setter Property="Padding" Value="8" />
+  <!-- The minimap floats in the Map's corner. -->
+  <Style Selector="Border.mapMinimap">
+    <Setter Property="Width" Value="176" />
+    <Setter Property="Height" Value="128" />
+    <Setter Property="Margin" Value="8" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
 </Styles>

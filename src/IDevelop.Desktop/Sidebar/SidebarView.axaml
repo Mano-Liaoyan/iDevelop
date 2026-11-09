@@ -33,11 +33,6 @@
   <!-- The rows are in the order they appear, which is also the Tab order. A row's width takes everything in the panel's
        8 px inset. Find, Activity, and the footer take the height they need, and the tree scrolls in the rest. -->
   <Grid x:Name="Rows" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
-    <!-- Linux ignores the request to draw into the title bar, so the band that stands in for it collapses there. -->
-    <Border Height="44" Background="Transparent"
-            IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
-            PointerPressed="OnTitleBandPressed" />
-
     <Border Grid.Row="1" Padding="8,8,8,4" IsVisible="{Binding HasProjects}">
       <TextBox x:Name="FindBox" Classes="search" Height="28" MinHeight="28"
                Text="{Binding Find.Query, Mode=TwoWay}"

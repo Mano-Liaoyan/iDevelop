@@ -15,19 +15,19 @@ using static IDevelop.Desktop.Tests.AppTempFolder;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The bars docked around the canvas never cover each other or a card, at the smallest and a large window and with the
-/// inspector at its least, default, and greatest width. The breadcrumb, Run Workflow, and Generate share the top band's
-/// centre line. The zoom controls and the run bar share the bottom band. A compact canvas shows the buttons as glyphs and
-/// hides the minimap. The canvas keeps 336 px however wide the panels beside it are.
+/// The Command Bar and the Map Footer never cover each other or a card, at the smallest and a large window and with the
+/// Agent panel at its least, default, and greatest width. The Command Bar's controls share one 44 px line. The Map keeps 336 px
+/// however wide the sheets beside it are.
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class CanvasChromeTests : IDisposable
 {
     private static readonly (double Width, double Height, double Inspector)[] Sizes =
     [
-        (900, 600, 280), (900, 600, 320), (900, 600, 520),
-        (1280, 800, 280), (1280, 800, 380), (1280, 800, 520),
-        (1600, 1000, 280), (1600, 1000, 320), (1600, 1000, 520),
+        (900, 600, 372),
+        (1280, 800, 360), (1280, 800, 400), (1280, 800, 560),
+        (1700, 1000, 360), (1700, 1000, 520), (1700, 1000, 720),
+        (2560, 1440, 880), (2560, 1440, 1008),
     ];
 
     private readonly TempFolder _temp = AppTempFolder.New();
@@ -35,37 +35,29 @@ public sealed class CanvasChromeTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [AvaloniaFact]
-    public void The_side_panels_leave_the_canvas_336_px_and_take_their_chosen_widths_back_when_the_window_widens()
+    public void The_Agent_panel_gives_up_width_first_so_the_Map_keeps_336_px_at_any_dragged_width()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
-        shell.SizeInspector(520);
-        Resize(shell, 1000, 600);
-
-        Assert.Equal((272, 390, 336), Widths(shell));
+        Resize(shell, 1180, 600);
+        shell.SizeInspector(560);
+        Assert.Equal((252, 560, 352), Widths(shell));
 
         shell.SizeSidebar(400);
-        Assert.Equal((382, 280, 336), Widths(shell));
-
-        // A narrow window closes the inspector, and it gives its width back to the canvas.
-        Resize(shell, 900, 600);
-        Assert.Equal((240, 0, 640), Widths(shell));
-
-        Resize(shell, 1600, 1000);
-        Assert.Equal((400, 520, 678), Widths(shell));
+        Assert.Equal((400, 428, 336), Widths(shell));
     }
 
     [AvaloniaFact]
-    public void The_inspectors_splitter_stops_where_the_canvas_would_get_narrower_than_336_px()
+    public void The_Agent_panels_splitter_stops_where_the_Map_would_get_narrower_than_336_px()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
-        Resize(shell, 1000, 600);
+        Resize(shell, 1180, 600);
+        shell.SizeSidebar(400);
         var splitter = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 3);
 
-        // The panel's tab sits on the splitter's centre.
-        var grip = shell.Center(splitter) + new Vector(0, 150);
-        shell.Drag(grip, grip - new Vector(200, 0));
+        var grip = shell.Center(splitter);
+        shell.Drag(grip, grip - new Vector(400, 0));
 
-        Assert.Equal((272, 390, 336), Widths(shell));
+        Assert.Equal((400, 428, 336), Widths(shell));
     }
 
     [AvaloniaFact]
@@ -76,8 +68,8 @@ public sealed class CanvasChromeTests : IDisposable
         FanOut.Generate(shell);
         Assert.Equal((1, "Review Proposal"), (shell.Window.ViewModel.Canvas!.WaitingCount, AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
         Assert.True(shell.ShowsUnsavedChanges);
-        // A refused connection's status sits under the breadcrumb.
-        // The view moves left first, so "Write docs"'s output is clear of the inspector's splitter.
+        // A refused connection's status sits over the Map. The window is wide enough for both of the ports the drag joins.
+        Resize(shell, 1500, 800);
         shell.AtOrigin();
         shell.Pan(shell.InEditor(260, 600), new Vector(-100, 0));
         shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
@@ -86,23 +78,24 @@ public sealed class CanvasChromeTests : IDisposable
         foreach (var (width, height, inspector) in Sizes)
         {
             Resize(shell, width, height, inspector);
-            AssertTopRow(shell, $"{width}x{height}, inspector {inspector}", "Breadcrumb", "RunWorkflow", "GenerateWorkflow", "Status");
+            AssertTopRow(shell, $"{width}x{height}, inspector {inspector}");
         }
     }
 
     [AvaloniaFact]
-    public void A_run_bar_that_lacks_room_for_its_words_sums_the_rest_and_cuts_no_word()
+    public void A_Run_Strip_that_lacks_room_for_its_pills_words_keeps_their_marks_and_counts()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
-        var bar = shell.Find<Control>("WorkflowRunBar");
+        var strip = shell.Find<Control>("RunStrip");
 
         foreach (var (width, height, inspector) in Sizes)
         {
             Resize(shell, width, height, inspector);
-            Assert.True(bar.DesiredSize.Width <= bar.GetVisualParent<Control>()!.Bounds.Width + 0.5, $"The bar at {width}x{height} wants {bar.DesiredSize.Width} px.");
+            AssertTopRow(shell, $"{width}x{height}");
+            Assert.True(strip.Bounds.Width <= 480.5, $"The strip at {width}x{height} is {strip.Bounds.Width} px wide.");
         }
     }
 
@@ -136,47 +129,30 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.Equal((NodeState.InputRequired, 4, "4 need you \u00b7 1 failed"), (row.State, row.Count, row.Label.Replace('\u00a0', ' ')));
         Assert.Equal("1 question, 1 reply, 2 interrupted\n1 failed", row.Tip);
 
-        void Sweep()
+        foreach (var width in new[] { 900.0, 1000, 1180, 1280, 1700, 2560 })
         {
-            var windows = new[] { 900.0, 1000, 1100, 1180, 1280, 1400, 1600, 2560 };
-            foreach (var width in windows.Concat(windows.Reverse()))
+            Resize(shell, width, 800);
+            AssertTopRow(shell, $"{width}x800");
+            AssertBottomRow(shell, $"{width}x800");
+            var pills = new[] { "RunPillNeedsYou", "RunPillFailed" }.Select(id => shell.Bounds(shell.Find<Control>(id))).ToArray();
+            Assert.All(pills, pill => Assert.True(shell.Bounds(shell.Find<Control>("RunStrip")).Inflate(0.5).Contains(pill), $"A pill at {pill} leaves the strip at {width}."));
+            if (width >= 1180)
             {
-                foreach (var inspector in new double[] { 280, 320, 400, 520 })
-                {
-                    Resize(shell, width, 800, inspector);
-                    AssertBottomRow(shell, $"{width}x800, inspector {inspector}, canvas {shell.Window.CanvasArea.Bounds.Width}, {canvas.BarSummary}");
-                }
+                Assert.Equal(["4", "need you"], shell.Find<Control>("RunPillNeedsYou").GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text));
             }
         }
 
-        Sweep();
-
-        // A bar with room takes no step it does not need: it sums only the reasons to wait, and it keeps the rest. The line that
-        // says what Run Workflow runs takes its room too.
-        Resize(shell, 1600, 800, 320);
-        Assert.True(shell.ShowsAny("FitToScreen"), "Fit left a bar with room.");
-        Assert.True(shell.ShowsAny("RunStatus"), "The progress left a bar with room.");
-        Assert.True(shell.ShowsAny("ShowMinimap"), "The view controls left a bar with room.");
-        Assert.Equal(["4 need you", "1 failed"], shell.Find<Control>("RunChips").GetVisualDescendants().OfType<Control>()
-            .Where(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "RunChip").Select(AutomationProperties.GetName));
-
-        // Another workflow's chips reach the bar with no change to the canvas's width.
-        Resize(shell, 1180, 800, 320);
-        shell.Window.ViewModel.NewWorkflow(shell.Window.ViewModel.Projects[0]);
-        shell.Render();
-        shell.Window.ViewModel.Select(canvas);
-        shell.Render();
-        AssertBottomRow(shell, "the return to the workflow");
-
         shell.RunNode("Runs");
         shell.WaitForState("Runs", NodeState.Running);
-        Sweep();
+        Resize(shell, 900, 800);
+        AssertTopRow(shell, "900x800 while a node runs");
+        Assert.True(shell.Find<Control>("RunPillRunning").IsEffectivelyVisible);
         f.Release("runs");
         shell.WaitUntil(() => canvas.RunningCount == 0, "the node ends");
     }
 
     [AvaloniaFact]
-    public void A_running_workflow_keeps_its_run_bar_in_the_bottom_band_beside_the_zoom_controls_at_every_size()
+    public void A_running_workflow_keeps_the_Command_Bar_and_the_Map_Footer_apart_at_every_size()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
@@ -188,7 +164,7 @@ public sealed class CanvasChromeTests : IDisposable
         {
             Resize(shell, width, height, inspector);
             var at = $"{width}x{height}, inspector {inspector}";
-            AssertTopRow(shell, at, "Breadcrumb", "GenerateWorkflow");
+            AssertTopRow(shell, at);
             AssertBottomRow(shell, at);
         }
     }
@@ -218,7 +194,7 @@ public sealed class CanvasChromeTests : IDisposable
             .Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 })
             .Select(shell.Bounds));
         Assert.True(lines <= 2, $"The docked header has {lines} lines.");
-        // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit behind the model chip.
+        // The Command Bar's breadcrumb names the project and the workflow, and the client's limitations sit behind the model chip.
         Assert.False(shell.Find<Control>("ConversationBreadcrumb").IsEffectivelyVisible);
         Assert.False(shell.Has<Control>("ClientLimitations"));
         Assert.True(shell.Find<Control>("ConversationModel").IsEffectivelyVisible);
@@ -229,7 +205,7 @@ public sealed class CanvasChromeTests : IDisposable
         }
 
         // The canvas above keeps its two bands apart, and the editor between them holds its cards.
-        AssertTopRow(shell, "the dock", "Breadcrumb", "GenerateWorkflow");
+        AssertTopRow(shell, "the dock");
         AssertBottomRow(shell, "the dock");
         var zoom = shell.Editor.ViewportZoom;
         Assert.All(shell.Nodes().Select(node => shell.Bounds(node).WithWidth(node.Bounds.Width * zoom).WithHeight(node.Bounds.Height * zoom)),
@@ -357,6 +333,7 @@ public sealed class CanvasChromeTests : IDisposable
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Run(shell);
+        Resize(shell, 1500, 800);
         shell.AtOrigin();
         shell.Pan(shell.InEditor(260, 600), new Vector(-100, 0));
         shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
@@ -572,30 +549,33 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.DoesNotContain(shell.Find<Control>("GenerateEmptyState").GetVisualDescendants().OfType<TextBlock>(), Trimmed);
     }
 
-    /// <summary>
-    /// The top band's controls sit inside the canvas's inset, at least 8 px apart, those of the first row on one centre
-    /// line, and none of their text is cut short. Add and Generate are 32 px glyphs that name themselves in their tooltips.
-    /// </summary>
-    private static void AssertTopRow(Shell shell, string at, params string[] ids)
+    /// <summary>The Command Bar's controls share one centre line, stay inside the window, and keep 8 px apart, with no name cut short but the breadcrumb's.</summary>
+    private static void AssertTopRow(Shell shell, string at)
     {
-        var canvas = shell.Bounds(shell.Window.CanvasArea);
-        var compact = canvas.Width < CanvasChrome.CompactWidth;
+        var bar = shell.Bounds(shell.Find<Control>("CommandBar"));
+        var ids = new[] { "ToggleSidebar", "Breadcrumb", "Undo", "RunStrip", "AddTask", "GenerateWorkflow", "RunWorkflow", "StopAll" }.Where(shell.ShowsAny).ToArray();
         var boxes = ids.Select(id => (Id: id, Box: shell.Bounds(shell.Find<Control>(id)))).ToArray();
-        AssertInsideAndApart(canvas, boxes, at);
-        var line = boxes.Single(box => box.Id == "Breadcrumb").Box.Center.Y;
-        foreach (var (id, box) in boxes.Where(box => box.Box.Top < line))
+        foreach (var (id, box) in boxes)
         {
-            Assert.True(Math.Abs(box.Center.Y - line) < 0.6, $"At {at}, {id} centres at {box.Center.Y}, off the row's line at {line}.");
+            Assert.True(bar.Inflate(0.5).Contains(box), $"At {at}, {id} at {box} leaves the bar {bar}.");
+            Assert.True(Math.Abs(box.Center.Y - bar.Center.Y) < 1, $"At {at}, {id} centres at {box.Center.Y}, off the bar's line at {bar.Center.Y}.");
         }
 
+        foreach (var (first, second) in boxes.SelectMany((a, index) => boxes.Skip(index + 1).Select(b => (a, b))))
+        {
+            Assert.False(first.Box.Inflate(1.5).Intersects(second.Box), $"At {at}, {first.Id} at {first.Box} and {second.Id} at {second.Box} touch.");
+        }
+
+        var compact = shell.Window.ViewModel.IsCompact;
+        Assert.Equal(compact, !shell.Find<TextBlock>("BreadcrumbProject").IsEffectivelyVisible);
         foreach (var id in ids.Where(id => id is "RunWorkflow" or "GenerateWorkflow"))
         {
             var button = shell.Find<Button>(id);
             var labels = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
             if (id == "RunWorkflow")
             {
-                // The workflow's primary action keeps its one name at every width.
-                Assert.Contains("Run Workflow", labels);
+                Assert.Equal(compact ? ["Run"] : ["Run Workflow"], labels);
+                Assert.Equal(compact ? 84 : 124, button.Bounds.Width);
             }
             else if (compact)
             {
@@ -605,13 +585,13 @@ public sealed class CanvasChromeTests : IDisposable
             else
             {
                 Assert.Contains("Generate", labels);
+                Assert.Equal(96, button.Bounds.Width);
             }
 
             Assert.Equal(AutomationProperties.GetName(button), ((string)ToolTip.GetTip(button)!).Split('\n')[0]);
         }
 
-        Assert.Equal(compact, !shell.Find<TextBlock>("BreadcrumbProject").IsEffectivelyVisible);
-        var texts = ids.SelectMany(id => shell.Find<Control>(id).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible);
+        var texts = new[] { "RunStrip", "RunWorkflow", "GenerateWorkflow" }.Where(shell.ShowsAny).SelectMany(id => shell.Find<Control>(id).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible);
         Assert.Empty(texts.Where(Trimmed).Select(text => $"At {at}, \"{text.Text}\" is cut short."));
     }
 
@@ -629,56 +609,16 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.Equal((projectWidth, workflowWidth), (project.Bounds.Width, workflow.Bounds.Width));
     }
 
-    /// <summary>
-    /// The zoom controls and the workflow's run bar sit in the bottom band, under the editor and at least 12 px apart side by side,
-    /// or 8 px apart when the bar takes its own row, with their text whole.
-    /// </summary>
+    /// <summary>The Map Footer sits under the editor, and its zoom controls keep inside the Map.</summary>
     private static void AssertBottomRow(Shell shell, string at)
     {
-        var canvas = shell.Bounds(shell.Window.CanvasArea);
-        var boxes = new[] { "ZoomPanel", "WorkflowRunBar" }.Select(id => (Id: id, Box: shell.Bounds(shell.Find<Control>(id)))).ToArray();
-        // Beside the zoom controls the bar keeps 12 px from them. On its own row above them it keeps 8 px.
-        var ownRow = boxes[1].Box.Bottom <= boxes[0].Box.Top + 0.5;
-        AssertInsideAndApart(canvas, boxes, at, gap: ownRow ? 8 : 12);
-        Assert.All(boxes, box => Assert.True(box.Box.Top >= shell.Bounds(shell.Editor).Bottom, $"At {at}, {box.Id} at {box.Box} is not under the editor."));
-
-        // The bar holds its status, its chips, and whichever of its buttons show, its text whole.
-        var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunStatus", "NextWaiting" }.Where(shell.ShowsAny).Select(shell.Find<Control>);
-        Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
-        var chips = bar.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "RunChip").ToArray();
-        var limit = shell.ShowsAny("NextWaiting") ? shell.Bounds(shell.Find<Control>("NextWaiting")).Left : shell.Bounds(bar).Right;
-        Assert.All(chips, chip => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(chip)) && shell.Bounds(chip).Right <= limit, $"At {at}, the chip \"{AutomationProperties.GetName(chip)}\" at {shell.Bounds(chip)} is cut by the bar at {shell.Bounds(bar)}."));
-        // Every count keeps its word at every width: a bar without room takes a second line, never a bare number.
-        Assert.All(chips, chip => Assert.Equal([AutomationProperties.GetName(chip)],
-            chip.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text)));
-        if (shell.ShowsAny("StopWorkflow"))
-        {
-            Assert.Equal(canvas.Width >= CanvasChrome.CompactWidth, shell.Find<Button>("StopWorkflow").GetVisualDescendants().OfType<TextBlock>().Single().IsEffectivelyVisible);
-        }
-
-        var cut = bar.GetVisualDescendants().OfType<TextBlock>()
-            .Where(text => text.IsEffectivelyVisible && (Trimmed(text) || text.TextLayout.Width > text.Bounds.Width + 0.5))
-            .Select(text => $"\"{text.Text}\" is {text.Bounds.Width} px wide and needs {text.TextLayout.Width}").ToList();
-        Assert.True(cut.Count == 0, $"At {at}: {string.Join("; ", cut)}.");
+        var (canvas, editor, zoom) = (shell.Bounds(shell.Window.CanvasArea), shell.Bounds(shell.Editor), shell.Bounds(shell.Find<Control>("ZoomPanel")));
+        Assert.True(canvas.Inflate(0.5).Contains(zoom), $"At {at}, the zoom panel at {zoom} leaves the Map {canvas}.");
+        Assert.True(zoom.Top >= editor.Bottom - 0.5, $"At {at}, the zoom panel at {zoom} is not under the editor {editor}.");
+        Assert.Equal(canvas.Bottom, shell.Bounds(shell.Find<Control>("MapFooter")).Bottom, 0.5);
     }
 
-    private static void AssertInsideAndApart(Rect canvas, (string Id, Rect Box)[] boxes, string at, double gap = 8)
-    {
-        var room = canvas.Deflate(8);
-        foreach (var (id, box) in boxes)
-        {
-            Assert.True(room.Inflate(0.5).Contains(box), $"At {at}, {id} at {box} leaves the canvas's inset {room}.");
-        }
-
-        foreach (var (first, second) in boxes.SelectMany((a, index) => boxes.Skip(index + 1).Select(b => (a, b))))
-        {
-            Assert.False(first.Box.Inflate(gap / 2 - 0.5).Intersects(second.Box.Inflate(gap / 2 - 0.5)),
-                $"At {at}, {first.Id} at {first.Box} and {second.Id} at {second.Box} are less than {gap} px apart.");
-        }
-    }
-
-    /// <summary>The control's drawn box in the window, through any transform.</summary>
+/// <summary>The control's drawn box in the window, through any transform.</summary>
     private static Rect Box(Shell shell, Visual visual) => new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(shell.Window)!.Value);
 
     private static bool Trimmed(TextBlock text) => text.TextLayout.TextLines.Any(line => line.HasCollapsed);

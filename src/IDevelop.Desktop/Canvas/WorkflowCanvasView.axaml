@@ -2,8 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:nodify="https://miroiu.github.io/nodify"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
-             xmlns:execution="using:IDevelop.Desktop.Execution"
-             xmlns:theme="using:IDevelop.Desktop.Theme"
+                          xmlns:theme="using:IDevelop.Desktop.Theme"
              x:Class="IDevelop.Desktop.Canvas.WorkflowCanvasView"
              x:DataType="canvas:WorkflowCanvasViewModel">
 
@@ -30,9 +29,9 @@
     <StyleInclude Source="/Canvas/CanvasStyles.axaml" />
   </UserControl.Styles>
 
-  <!-- The bars and the minimap dock around the editor, which clips its cards and wires, so nothing ever covers a card at any
-       zoom, pan, or size. -->
-  <Grid RowDefinitions="*,Auto" ColumnDefinitions="*,Auto">
+  <!-- The Map Footer docks under the editor, which clips its cards and wires. The minimap floats in the editor's corner, and a
+       fit keeps cards clear of it. -->
+  <Grid RowDefinitions="*,Auto">
     <nodify:NodifyEditor x:Name="Editor"
                          ItemsSource="{Binding Nodes}"
                          SelectedItem="{Binding SelectedNode}"
@@ -165,8 +164,8 @@
 
     <canvas:AddNodePopover x:Name="AddPopover" />
 
-    <!-- The minimap docks at the canvas's right, and the person opens it from the bottom band. -->
-    <Border x:Name="MinimapPanel" Classes="canvasDock" Grid.Column="1" Width="176" IsVisible="False">
+    <!-- The minimap floats in the Map's bottom-right corner, 8 px from its edges, and only when the Map has the room for it. -->
+    <Border x:Name="MinimapPanel" Classes="mapMinimap" IsVisible="False">
         <nodify:Minimap x:Name="Minimap"
                         ItemsSource="{Binding Converter={x:Static canvas:MinimapItems.Of}}"
                         ViewportLocation="{Binding ViewportLocation}"
@@ -200,159 +199,44 @@
         </nodify:Minimap>
     </Border>
 
-    <!-- The bottom band: the zoom controls at the left and the workflow's run at the centre. It has a canvas's width, and the
-         code-behind marks the view compact or short. -->
-    <Border Classes="canvasBand bottom" Grid.Row="1" Grid.ColumnSpan="2" IsVisible="{Binding !IsEmpty}">
-    <canvas:CanvasBottomBar x:Name="BottomBar" VerticalAlignment="Center" Margin="8,7,8,8">
-      <StackPanel x:Name="ZoomPanel" Orientation="Horizontal" canvas:CanvasBottomBar.Slot="Leading"
-                  AutomationProperties.AutomationId="ZoomPanel">
-        <Button Classes="icon zoom barSpare" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
-                AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
-        </Button>
-        <Button x:Name="ZoomOutButton" Classes="icon zoom zoomStep" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
-                AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
-        </Button>
-        <Button Classes="ghost zoom zoomValue" Click="OnZoomActual" ToolTip.Tip="Zoom to 100% (0)"
-                AutomationProperties.AutomationId="ZoomValue" AutomationProperties.Name="Reset the zoom">
-          <TextBlock Text="{Binding ZoomLabel}" AutomationProperties.AutomationId="ZoomLabel" />
-        </Button>
-        <Button Classes="icon zoom zoomStep" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
-                AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
-        </Button>
-        <!-- Expand All and Collapse All, for this workflow's cards only (ADR 0024), since it changes only this machine's view.
-             The tooltip's first line names it. -->
-        <Button Classes="icon zoom barRoomy" Command="{Binding ExpandCardsCommand}"
-                ToolTip.Tip="{Binding ExpandCardsLabel, StringFormat='{}{0}&#10;Show or hide the details of every card in this workflow'}"
-                AutomationProperties.AutomationId="ExpandAll"
-                AutomationProperties.Name="{Binding ExpandCardsLabel}">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconExpandAll}" />
-        </Button>
-        <ToggleButton x:Name="MinimapToggle" Classes="zoom barRoomy"
-                      ToolTip.Tip="Show the minimap"
-                      AutomationProperties.AutomationId="ShowMinimap" AutomationProperties.Name="Show the minimap">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMinimap}" />
-        </ToggleButton>
-        <!-- A tight bar keeps its view controls here, so the run's words keep their room. Zoom stays in the bar. -->
-        <Button Classes="icon zoom barTight" ToolTip.Tip="More view controls"
-                AutomationProperties.AutomationId="ZoomMore" AutomationProperties.Name="More view controls">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
-          <Button.Flyout>
-            <MenuFlyout Placement="TopEdgeAlignedLeft">
-              <MenuItem Header="Fit to screen" Click="OnFitToScreen" AutomationProperties.AutomationId="FitMenu"
-                        theme:MenuGlyph.Data="{StaticResource IconFit}" />
-              <MenuItem Header="Zoom in" Click="OnZoomIn" AutomationProperties.AutomationId="ZoomInMenu"
-                        IsVisible="{Binding !#ZoomOutButton.IsVisible}" theme:MenuGlyph.Data="{StaticResource IconZoomIn}" />
-              <MenuItem Header="Zoom out" Click="OnZoomOut" AutomationProperties.AutomationId="ZoomOutMenu"
-                        IsVisible="{Binding !#ZoomOutButton.IsVisible}" theme:MenuGlyph.Data="{StaticResource IconZoomOut}" />
-              <MenuItem Header="{Binding ExpandCardsLabel}" Command="{Binding ExpandCardsCommand}" AutomationProperties.AutomationId="ExpandAllMenu"
-                        theme:MenuGlyph.Data="{StaticResource IconExpandAll}" />
-              <MenuItem Header="Minimap" Click="OnMinimapMenu" AutomationProperties.AutomationId="MinimapMenu"
-                        theme:MenuGlyph.Data="{StaticResource IconMinimap}" />
-              <MenuItem Header="{Binding NextLabel}" Command="{Binding NextWaitingCommand}" AutomationProperties.AutomationId="NextWaitingMenu"
-                        theme:MenuGlyph.Data="{StaticResource IconChevronRight}">
-                <MenuItem.IsVisible>
-                  <MultiBinding Converter="{x:Static BoolConverters.And}">
-                    <Binding Path="HasAttention" />
-                    <Binding ElementName="NextSlot" Path="!IsVisible" />
-                  </MultiBinding>
-                </MenuItem.IsVisible>
-              </MenuItem>
-              <MenuItem Header="Follow running nodes" ToggleType="CheckBox" IsChecked="{Binding IsFollowing}"
-                        AutomationProperties.AutomationId="FollowMenu" theme:MenuGlyph.Data="{StaticResource IconFollow}">
-                <MenuItem.IsVisible>
-                  <MultiBinding Converter="{x:Static BoolConverters.And}">
-                    <Binding Path="!!RunningCount" />
-                    <Binding ElementName="FollowSlot" Path="!IsVisible" />
-                  </MultiBinding>
-                </MenuItem.IsVisible>
-              </MenuItem>
-            </MenuFlyout>
-          </Button.Flyout>
-        </Button>
-        <!-- The view's controls end here, and the run's begin. -->
-        <Border Classes="barRule" />
-      </StackPanel>
-
-      <!-- One bar for a run: how far it went, one labelled chip per group of nodes, Next, Follow, and Merge into my branch while
-           every node is completed and nothing is stale (ADR 0017). The chips are the canvas's badges with their words, so the bar
-           is also the badges' legend. Stop Workflow sits where Run Workflow was. UI Automation shows no plain border, so a user
-           control carries its id. As the canvas narrows, the buttons keep only their glyphs and move to the overflow menu, then
-           the bar takes its own row across the canvas and wraps, so every group keeps its words and no chip is cut. With no run, the band says how many nodes the workflow has. -->
-      <!-- While a blueprint is open in the inspector, the run bar's place says so and where to leave it. -->
-      <TextBlock Classes="barText" canvas:CanvasBottomBar.Slot="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                 IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}"
-                 Text="{Binding Blueprints.Editor.Name, StringFormat='Editing blueprint {0}. Save or Cancel in the inspector.', FallbackValue=''}"
-                 ToolTip.Tip="{Binding $self.Text}"
-                 AutomationProperties.AutomationId="BlueprintMode" />
-      <Panel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" MinHeight="28" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
-        <WrapPanel HorizontalAlignment="Left" VerticalAlignment="Center" ItemSpacing="10" LineSpacing="4" IsVisible="{Binding !ShowsBar}">
-          <TextBlock Classes="barText" Text="{Binding BarIdle}" AutomationProperties.AutomationId="RunIdle" />
-        </WrapPanel>
-        <UserControl HorizontalAlignment="Left" ClipToBounds="False"
-                     IsVisible="{Binding ShowsBar}"
-                     ToolTip.Tip="{Binding BarTip}"
-                     AutomationProperties.HelpText="{Binding BarTip}"
-                     AutomationProperties.AutomationId="WorkflowRunBar"
-                     AutomationProperties.Name="{Binding BarSummary}">
-          <DockPanel MinHeight="28">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Top">
-              <!-- Next keeps its words until the chips need their room; then it says "Next" and its tooltip names what it selects. -->
-              <Panel x:Name="NextSlot" Classes="barNext">
-              <Button Classes="action bar" Command="{Binding NextWaitingCommand}" IsVisible="{Binding HasAttention}"
-                      ToolTip.Tip="{x:Static canvas:WorkflowCanvasView.NextHelp}"
-                      AutomationProperties.AutomationId="NextWaiting"
-                      AutomationProperties.Name="{Binding NextLabel}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Classes="label nextLabel" Text="{Binding NextLabel}" VerticalAlignment="Center" />
-                  <TextBlock Classes="label nextShort" Text="Next" VerticalAlignment="Center" />
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
-                </StackPanel>
-              </Button>
-              </Panel>
-              <!-- A tight bar moves Follow to the overflow menu, so the chips keep their room on one row. -->
-              <Panel x:Name="FollowSlot" Classes="barFollow">
-              <ToggleButton Classes="bar follow" IsChecked="{Binding IsFollowing}" IsVisible="{Binding !!RunningCount}"
-                            ToolTip.Tip="{Binding FollowLabel}"
-                            AutomationProperties.AutomationId="FollowRunning"
-                            AutomationProperties.Name="{Binding FollowLabel}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFollow}" />
-                  <TextBlock Classes="followLabel" Text="Follow" VerticalAlignment="Center" />
-                </StackPanel>
-              </ToggleButton>
-              </Panel>
-              <Button Classes="primary glyph bar"
-                      Command="{Binding MergeIntoBranchCommand}" IsVisible="{Binding CanMergeIntoBranch}"
-                      ToolTip.Tip="Merge into my branch&#10;Merge the end nodes' work into the branch you have checked out"
-                      AutomationProperties.AutomationId="MergeIntoBranch"
-                      AutomationProperties.Name="Merge into my branch">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
-                  <TextBlock Classes="label" Text="Merge into my branch" />
-                </StackPanel>
-              </Button>
-            </StackPanel>
-            <!-- How far the work went and every group in its words. A bar on its own row wraps them. Run Workflow's tooltip says what it runs. -->
-            <WrapPanel Classes="barGroup" VerticalAlignment="Center" ItemSpacing="10" LineSpacing="4">
-              <Panel>
-                <TextBlock Classes="barText progressLong" Text="{Binding BarProgress}" AutomationProperties.AutomationId="RunStatus" />
-                <TextBlock Classes="barText progressShort" Text="{Binding RowProgress}" />
-              </Panel>
-              <ItemsControl Classes="barChips" ItemsSource="{Binding BarChips}" ItemTemplate="{StaticResource BarChipTemplate}" AutomationProperties.AutomationId="RunChips">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <WrapPanel Classes="barGroup" ItemSpacing="10" LineSpacing="4" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-              </ItemsControl>
-            </WrapPanel>
-          </DockPanel>
-        </UserControl>
-      </Panel>
-    </canvas:CanvasBottomBar>
+    <!-- The Map Footer: the view's controls at the left, and key hints at the right, as a status bar has them. It holds no counts. -->
+    <Border Classes="mapFooter" Grid.Row="1" IsVisible="{Binding !IsEmpty}" AutomationProperties.AutomationId="MapFooter">
+      <DockPanel VerticalAlignment="Center" Margin="4,0,8,0">
+        <TextBlock x:Name="FooterHints" DockPanel.Dock="Right" Classes="caption" VerticalAlignment="Center"
+                   Foreground="{DynamicResource TextFaintBrush}" Text="{Binding KeyHints}" TextTrimming="CharacterEllipsis"
+                   AutomationProperties.AutomationId="MapHints" />
+        <StackPanel x:Name="ZoomPanel" Orientation="Horizontal" VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="ZoomPanel">
+          <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
+                  AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
+          </Button>
+          <Button x:Name="ZoomOutButton" Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
+                  AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
+          </Button>
+          <Button Classes="ghost zoom zoomValue" Click="OnZoomActual" ToolTip.Tip="Zoom to 100% (0)"
+                  AutomationProperties.AutomationId="ZoomValue" AutomationProperties.Name="Reset the zoom">
+            <TextBlock Text="{Binding ZoomLabel}" AutomationProperties.AutomationId="ZoomLabel" />
+          </Button>
+          <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
+                  AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
+          </Button>
+          <!-- Expand All and Collapse All, for this workflow's cards only (ADR 0024), since it changes only this machine's view. -->
+          <Button Classes="icon zoom" Command="{Binding ExpandCardsCommand}"
+                  ToolTip.Tip="{Binding ExpandCardsLabel, StringFormat='{}{0}&#10;Show or hide the details of every card in this workflow'}"
+                  AutomationProperties.AutomationId="ExpandAll"
+                  AutomationProperties.Name="{Binding ExpandCardsLabel}">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconExpandAll}" />
+          </Button>
+          <ToggleButton x:Name="MinimapToggle" Classes="zoom"
+                        ToolTip.Tip="Show the minimap"
+                        AutomationProperties.AutomationId="ShowMinimap" AutomationProperties.Name="Show the minimap">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMinimap}" />
+          </ToggleButton>
+        </StackPanel>
+      </DockPanel>
     </Border>
   </Grid>
 </UserControl>

@@ -49,6 +49,11 @@ public sealed class ActivityViewModel : ObservableObject
     /// <summary>How many rows run. The three counts add up to <see cref="Count"/>.</summary>
     public int RunningCount => _ordered.Count(row => row.Node.State == NodeState.Running);
 
+    /// <summary>What the Inbox counts: the rows that need the person and the rows that failed.</summary>
+    public int InboxCount => WaitingCount + FailedCount;
+
+    public bool HasInbox => InboxCount > 0;
+
     public bool HasWaiting => WaitingCount > 0;
 
     public bool HasFailed => FailedCount > 0;
@@ -155,6 +160,8 @@ public sealed class ActivityViewModel : ObservableObject
         OnPropertyChanged(nameof(HasRows));
         OnPropertyChanged(nameof(Count));
         OnPropertyChanged(nameof(WaitingCount));
+        OnPropertyChanged(nameof(InboxCount));
+        OnPropertyChanged(nameof(HasInbox));
         OnPropertyChanged(nameof(WaitingLabel));
         OnPropertyChanged(nameof(FailedCount));
         OnPropertyChanged(nameof(HasWaiting));

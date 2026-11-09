@@ -244,7 +244,7 @@ public sealed class AddNodeTests : IDisposable
         shell.Click(shell.Find<Button>("AddTask"));
 
         var popover = shell.Bounds(shell.AddPopover);
-        Assert.True(Math.Abs(popover.X - button.X) <= 2 && popover.Y >= button.Bottom && popover.Y - button.Bottom <= 8, $"{popover} is not under {button}");
+        Assert.True(popover.Y >= button.Bottom && popover.Y - button.Bottom <= 8 && popover.Right <= shell.Window.Width, $"{popover} is not under {button}");
         Assert.Equal(BuiltInRows, shell.AddRows());
         shell.Click(shell.AddRow("Plan"));
 

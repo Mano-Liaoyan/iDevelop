@@ -1,0 +1,136 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:theme="using:IDevelop.Desktop.Theme">
+
+  <!-- A sheet: one rounded panel on the window's shell, with a 1 px edge. Its content is clipped to the corners. -->
+  <Style Selector="Border.sheet">
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.sheet.index">
+    <Setter Property="Background" Value="{DynamicResource AppSidebarBrush}" />
+  </Style>
+  <Style Selector="Border.sheet.panel">
+    <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
+  </Style>
+  <!-- The Index's flyout floats over the Map, so it is the one sheet with a shadow. -->
+  <Style Selector="Border.sheet.flyout">
+    <Setter Property="BoxShadow" Value="{DynamicResource PopoverShadow}" />
+  </Style>
+  <!-- The 4 px gap between two sheets is also the resize handle, with an 8 px hit area. -->
+  <Style Selector="GridSplitter.sheetGap">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Margin" Value="-2,0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="Transparent">
+          <Border Name="PART_Line" Width="2" HorizontalAlignment="Center" Background="Transparent" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="GridSplitter.sheetGap:pointerover /template/ Border#PART_Line">
+    <Setter Property="Background" Value="{DynamicResource Border100Brush}" />
+  </Style>
+
+  <!-- The Command Bar. -->
+  <Style Selector=":is(Control).commandBar Button.generate">
+    <Setter Property="Width" Value="96" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector=":is(Control).commandBar.compact Button.generate">
+    <Setter Property="Width" Value="28" />
+  </Style>
+  <Style Selector=":is(Control).commandBar Button.runSlot">
+    <Setter Property="Width" Value="124" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector=":is(Control).commandBar.compact Button.runSlot">
+    <Setter Property="Width" Value="84" />
+  </Style>
+  <Style Selector="Button.crumbSegment">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="4,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.crumbSegment:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Button.crumbSegment:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+
+  <!-- The Run Strip's progress bar: 120 px, 96 in the narrowest windows, and shorter still when the strip has less room. -->
+  <Style Selector="theme|StateBar.runProgress">
+    <Setter Property="Width" Value="120" />
+  </Style>
+  <Style Selector=":is(Control).commandBar.minimal theme|StateBar.runProgress">
+    <Setter Property="Width" Value="96" />
+  </Style>
+  <Style Selector=":is(Control).tightBar theme|StateBar.runProgress">
+    <Setter Property="Width" Value="48" />
+  </Style>
+  <Style Selector="Button.runPill">
+    <Setter Property="Height" Value="24" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.runPill:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Button.runPill:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector=":is(Control).tightPills TextBlock.pillWords">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
+  <!-- The Rail. -->
+  <Style Selector="Button.railItem">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Button.railItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Button.railItem.active /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.railCount">
+    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
+  </Style>
+
+  <!-- A message of the app, docked at the top of the Map, so it covers no card. -->
+  <Style Selector="Border.mapNotice">
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+</Styles>

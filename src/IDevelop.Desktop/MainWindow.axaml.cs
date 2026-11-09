@@ -52,41 +52,28 @@ public partial class MainWindow : Window
                 _docked = !_docked;
                 SizeDock();
             }
-            else if (e.PropertyName is nameof(MainWindowViewModel.IsSidebarShown) or nameof(MainWindowViewModel.IsInspectorShown))
+            else if (e.PropertyName is nameof(MainWindowViewModel.IsSidebarShown) or nameof(MainWindowViewModel.IsInspectorShown) or nameof(MainWindowViewModel.IsIndexFlyoutOpen))
             {
                 ShowPanels();
             }
         };
-        _sidebarMax = Columns.ColumnDefinitions[0].MaxWidth;
-        _inspectorMax = Columns.ColumnDefinitions[4].MaxWidth;
-        _sidebarMin = Columns.ColumnDefinitions[0].MinWidth;
-        _inspectorMin = Columns.ColumnDefinitions[4].MinWidth;
-        Columns.SizeChanged += (_, e) =>
-        {
-            ViewModel.IsNarrow = e.NewSize.Width < PanelWidths.NarrowWindow;
-            ShowPanels();
-        };
+        ViewModel.NextRequested += GoNext;
+        ViewModel.FrameRunningRequested += () => CanvasView?.FrameRunning();
+        // A click outside the flyout or Esc closes it. Anything that is not the flyout's own keeps working as it would.
+        AddHandler(PointerPressedEvent, (_, e) => CloseFlyoutOnClickOutside(e.Source), RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+        Shell.SizeChanged += (_, e) => ApplyTier(e.NewSize.Width);
         Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
         Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
-        CanvasArea.SizeChanged += (_, e) =>
-        {
-            TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
-        };
         MainArea.SizeChanged += (_, _) => LimitDock();
         DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
     }
 
-    // The largest widths the sidebar's and the inspector's columns declare for themselves, and the widths and least widths they
-    // go back to when they open.
-    private readonly double _sidebarMax;
-    private readonly double _inspectorMax;
-    private readonly double _sidebarMin;
-    private readonly double _inspectorMin;
-    private double _sidebarWidth;
-    private double _inspectorWidth;
-
-    // The width of a closed panel's seam, which holds the panel's tab.
-    private const double ClosedSeam = 19;
+    // The widths the Index and the Agent panel have now: their tier's, or what the person dragged them to since the tier began.
+    private double _indexWidth = PanelWidths.SizesOf(WidthTier.Default).Index.Width;
+    private double _panelWidth = PanelWidths.SizesOf(WidthTier.Default).Panel.Width;
+    private WidthTier? _appliedTier;
+    private bool _applyingWidths;
 
     // A panel that opens or closes keeps the selected card in view. A fitted view fits again by itself, and a view the person
     // moved otherwise stays.
@@ -98,10 +85,25 @@ public partial class MainWindow : Window
         }
     }, DispatcherPriority.Background);
 
-    // The panels' shown state as the columns last laid it out.
+    // The sheets' shown state as the columns last laid it out.
     private (bool Sidebar, bool Inspector) _panelsShown = (true, true);
 
-    // A closed panel's column takes no width, and its seam takes the tab's, so the canvas ends where the tab begins.
+    // A tier gives the sheets their widths on start and when the window enters it. A dragged width stays until then.
+    private void ApplyTier(double width)
+    {
+        var tier = PanelWidths.TierOf(width);
+        ViewModel.IsMinimal = width < PanelWidths.MinimalFrom;
+        if (tier != _appliedTier)
+        {
+            _appliedTier = tier;
+            ViewModel.Tier = tier;
+            (_indexWidth, _panelWidth) = (PanelWidths.SizesOf(tier).Index.Width, PanelWidths.SizesOf(tier).Panel.Width);
+        }
+
+        ShowPanels();
+    }
+
+    // The Index, or the Rail in its place, and the Agent panel take their tier's widths. The Rail stands flush at the window's left edge.
     private void ShowPanels()
     {
         var shown = (ViewModel.IsSidebarShown, ViewModel.IsInspectorShown);
@@ -111,53 +113,108 @@ public partial class MainWindow : Window
             KeepSelectionInView();
         }
 
-        Columns.ColumnDefinitions[1].Width = new GridLength(ViewModel.IsSidebarShown ? 1 : ClosedSeam);
-        Columns.ColumnDefinitions[3].Width = new GridLength(ViewModel.IsInspectorShown || !ViewModel.HasProjects ? 1 : ClosedSeam);
-        Fold(Columns.ColumnDefinitions[0], ViewModel.IsSidebarShown, ref _sidebarWidth, _sidebarMin, _sidebarMax);
-        Fold(Columns.ColumnDefinitions[4], ViewModel.IsInspectorShown, ref _inspectorWidth, _inspectorMin, _inspectorMax);
+        var (index, panel) = PanelWidths.SizesOf(ViewModel.Tier);
+        var (indexColumn, panelGap, panelColumn) = (Columns.ColumnDefinitions[0], Columns.ColumnDefinitions[3], Columns.ColumnDefinitions[4]);
+        _applyingWidths = true;
+        if (ViewModel.IsSidebarShown)
+        {
+            indexColumn.MinWidth = 0;
+            indexColumn.MaxWidth = index.Max;
+            indexColumn.MinWidth = index.Min;
+            indexColumn.Width = new GridLength(_indexWidth);
+        }
+        else
+        {
+            indexColumn.MinWidth = 0;
+            indexColumn.MaxWidth = PanelWidths.RailWidth;
+            indexColumn.Width = new GridLength(PanelWidths.RailWidth);
+        }
+
+        panelGap.Width = new GridLength(ViewModel.IsInspectorShown ? PanelWidths.SheetGap : 0);
+        if (ViewModel.IsInspectorShown)
+        {
+            panelColumn.MinWidth = 0;
+            panelColumn.MaxWidth = panel.Max;
+            panelColumn.MinWidth = panel.Min;
+            panelColumn.Width = new GridLength(_panelWidth);
+        }
+        else
+        {
+            panelColumn.MinWidth = 0;
+            panelColumn.MaxWidth = 0;
+            panelColumn.Width = new GridLength(0);
+        }
+
+        _applyingWidths = false;
+        Columns.Margin = new Thickness(ViewModel.ShowsRail ? 0 : PanelWidths.SheetGap, 0, PanelWidths.SheetGap, PanelWidths.SheetGap);
+        PlaceFlyout();
         LimitPanels();
     }
 
-    private static void Fold(ColumnDefinition column, bool open, ref double width, double min, double max)
+    // The flyout spans the body beside the Rail and covers the Map, which it does not rearrange. Closed, the sheet returns to its column.
+    private void PlaceFlyout()
     {
-        // A closed column keeps no least width. Its largest width can change while it is closed, as the other panel folds.
-        if (open && column.MinWidth == 0)
-        {
-            column.MaxWidth = max;
-            column.MinWidth = min;
-            column.Width = new GridLength(width);
-        }
-        else if (!open && column.MinWidth != 0)
-        {
-            width = column.Width.Value;
-            column.MinWidth = 0;
-            column.MaxWidth = 0;
-            column.Width = new GridLength(0);
-        }
+        var flyout = ViewModel.IsIndexFlyoutOpen && ViewModel.ShowsRail;
+        Grid.SetColumnSpan(IndexSheet, flyout ? 5 : 1);
+        IndexSheet.HorizontalAlignment = flyout ? Avalonia.Layout.HorizontalAlignment.Left : Avalonia.Layout.HorizontalAlignment.Stretch;
+        IndexSheet.Width = flyout ? PanelWidths.FlyoutWidth : double.NaN;
+        IndexSheet.Margin = flyout ? new Thickness(PanelWidths.RailWidth + PanelWidths.SheetGap, 0, 0, 0) : default;
     }
 
     private void OnPanelColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
-        if (e.Property == ColumnDefinition.WidthProperty)
+        if (e.Property != ColumnDefinition.WidthProperty || _applyingWidths)
         {
-            LimitPanels();
+            return;
         }
+
+        if (sender == Columns.ColumnDefinitions[0] && ViewModel.IsSidebarShown)
+        {
+            _indexWidth = Columns.ColumnDefinitions[0].Width.Value;
+        }
+        else if (sender == Columns.ColumnDefinitions[4] && ViewModel.IsInspectorShown)
+        {
+            _panelWidth = Columns.ColumnDefinitions[4].Width.Value;
+        }
+
+        LimitPanels();
     }
 
-    // Each panel keeps the width it was given, which its column's largest width caps while the window is too narrow for it.
+    // Each sheet keeps its width while the Map keeps its least width. Its column's largest width caps it, and the splitters keep to that.
     private void LimitPanels()
     {
         var (sidebar, inspector) = (Columns.ColumnDefinitions[0], Columns.ColumnDefinitions[4]);
-        var room = Columns.Bounds.Width - Columns.ColumnDefinitions[1].Width.Value - Columns.ColumnDefinitions[3].Width.Value - PanelWidths.CanvasMinWidth;
+        var body = Shell.Bounds.Width - Columns.Margin.Left - Columns.Margin.Right;
+        var room = body - Columns.ColumnDefinitions[1].Width.Value - Columns.ColumnDefinitions[3].Width.Value - PanelWidths.CanvasMinWidth;
         if (room <= 0)
         {
             return;
         }
 
-        var (sidebarMax, inspectorMax) = Columns.Bounds.Width < PanelWidths.NarrowWindow ? (sidebar.MinWidth, inspector.MinWidth) : PanelWidths.Limits(room,
-            new(sidebar.Width.Value, sidebar.MinWidth, ViewModel.IsSidebarShown ? _sidebarMax : sidebar.MinWidth), new(inspector.Width.Value, inspector.MinWidth, ViewModel.IsInspectorShown ? _inspectorMax : inspector.MinWidth));
+        var (index, panel) = PanelWidths.SizesOf(ViewModel.Tier);
+        var indexSide = ViewModel.IsSidebarShown ? new PanelWidths.Side(sidebar.Width.Value, index.Min, index.Max) : new PanelWidths.Side(sidebar.Width.Value, sidebar.Width.Value, sidebar.Width.Value);
+        var panelSide = ViewModel.IsInspectorShown ? new PanelWidths.Side(inspector.Width.Value, panel.Min, panel.Max) : new PanelWidths.Side(0, 0, 0);
+        var (sidebarMax, inspectorMax) = PanelWidths.Limits(room, indexSide, panelSide);
         sidebar.MaxWidth = sidebarMax;
         inspector.MaxWidth = inspectorMax;
+    }
+
+    private void CloseFlyoutOnClickOutside(object? source)
+    {
+        if (ViewModel.IsIndexFlyoutOpen && source is Visual visual && !IndexSheet.IsVisualAncestorOf(visual) && visual != IndexSheet && !Rail.IsVisualAncestorOf(visual))
+        {
+            ViewModel.IsIndexFlyoutOpen = false;
+        }
+    }
+
+    // Esc closes the flyout before any key handler below it acts on the key.
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e is { Key: Key.Escape, KeyModifiers: KeyModifiers.None } && ViewModel.IsIndexFlyoutOpen)
+        {
+            ViewModel.IsIndexFlyoutOpen = false;
+            e.Handled = true;
+        }
     }
 
     // The dock opens at its default height, keeps the height the person drags it to while it stays open, and gives the
@@ -319,11 +376,14 @@ public partial class MainWindow : Window
         // The longer gesture comes first, because a gesture with Shift also holds the shorter one's key.
         if (CanvasKeys.NextFailed.Matches(e) || CanvasKeys.NextAttention.Matches(e))
         {
-            if (ViewModel.ShowNext(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? NodeState.Failed : NodeState.InputRequired) is not null)
-            {
-                FocusNode();
-            }
+            GoNext(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? NodeState.Failed : NodeState.InputRequired);
+            return true;
+        }
 
+        if (e is { Key: Key.F2, KeyModifiers: KeyModifiers.None } && ViewModel.Canvas is { SelectedNodes.Count: 0 } canvas && FocusManager?.GetFocusedElement() is not TextBox)
+        {
+            ViewModel.ShowSidebar();
+            canvas.BeginRenameWorkflow();
             return true;
         }
 
@@ -348,6 +408,14 @@ public partial class MainWindow : Window
         }
 
         return false;
+    }
+
+    private void GoNext(NodeState state)
+    {
+        if (ViewModel.ShowNext(state) is not null)
+        {
+            FocusNode();
+        }
     }
 
     // Enter on the canvas opens the node's conversation. An open conversation has followed the selection, so its composer
@@ -399,6 +467,10 @@ public partial class MainWindow : Window
             {
                 yield return (Sidebar, Sidebar.FocusFirst);
             }
+            else
+            {
+                yield return (Rail, () => Rail.GetVisualDescendants().OfType<Button>().FirstOrDefault()?.Focus(NavigationMethod.Directional));
+            }
 
             if (ViewModel.ShowsCanvas && CanvasView is { } canvas)
             {
@@ -422,8 +494,6 @@ public partial class MainWindow : Window
         regions[((at < 0 ? (step > 0 ? -1 : 0) : at) + step + regions.Count) % regions.Count].Enter();
     }
 
-    private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e) => TitleBandPressed(e);
-
     /// <summary>A press on a band that stands in for the title bar moves the window, and a double press maximizes it.</summary>
     internal void TitleBandPressed(PointerPressedEventArgs e)
     {
@@ -444,7 +514,8 @@ public partial class MainWindow : Window
 
     private WorkflowCanvasView? CanvasView => CanvasHost.Presenter?.Child as WorkflowCanvasView;
 
-    private void OnGenerate(object? sender, RoutedEventArgs e)
+    /// <summary>Opens the Generate sheet from the Command Bar.</summary>
+    internal void Generate()
     {
         if (ViewModel.Canvas?.ShowGenerate() is { } planner)
         {
@@ -452,13 +523,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnAddNode(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Button button)
-        {
-            CanvasView?.OpenAddInView(button.TranslatePoint(new Point(0, button.Bounds.Height + 4), this) ?? default);
-        }
-    }
+    /// <summary>Opens the Add popover under the Command Bar's button.</summary>
+    internal void OpenAddAt(Button button) => CanvasView?.OpenAddInView(button.TranslatePoint(new Point(0, button.Bounds.Height + 4), this) ?? default);
 
     /// <summary>Brings a node's card into view on the canvas, if the canvas does not show it whole.</summary>
     internal void BringIntoViewIfHidden(TaskNodeViewModel node) => CanvasView?.BringIntoViewIfHidden(node);

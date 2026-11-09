@@ -1,0 +1,195 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:IDevelop.Desktop"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:chrome="using:IDevelop.Desktop.Chrome"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Chrome.CommandBar"
+             x:DataType="local:MainWindowViewModel"
+             Classes="commandBar" Height="44" Background="Transparent"
+             Classes.compact="{Binding IsCompact}" Classes.minimal="{Binding IsMinimal}"
+             AutomationProperties.AutomationId="CommandBar"
+             PointerPressed="OnBandPressed">
+  <!-- One 44 px line above every sheet. The breadcrumb gives up its width first, so the Run Strip and the workflow's commands keep theirs. -->
+  <chrome:CommandBarPanel x:Name="Layout" Margin="8,0">
+
+    <Button chrome:CommandBarPanel.Part="Toggle" Classes="ghost glyph" Width="28" Padding="0" HorizontalContentAlignment="Center"
+            Command="{Binding ToggleSidebarCommand}"
+            ToolTip.Tip="{Binding SidebarToggleLabel, StringFormat='{}{0} (Ctrl+B)'}"
+            AutomationProperties.AutomationId="ToggleSidebar"
+            AutomationProperties.Name="{Binding SidebarToggleLabel}">
+      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconPanelLeft}" />
+    </Button>
+
+    <Border chrome:CommandBarPanel.Part="Crumb" VerticalAlignment="Center"
+            IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
+            AutomationProperties.AutomationId="Breadcrumb">
+      <canvas:CrumbNames>
+        <DockPanel Classes="wideOnly" ClipToBounds="True">
+          <TextBlock DockPanel.Dock="Right" Text=" / " VerticalAlignment="Center" Foreground="{DynamicResource TextFaintBrush}" Margin="2,0" />
+          <Button Classes="crumbSegment" Click="OnShowIndex" MaxWidth="160"
+                  ToolTip.Tip="{Binding ProjectName}"
+                  AutomationProperties.Name="{Binding ProjectName}">
+            <TextBlock Classes="body" Text="{Binding ProjectName}" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       AutomationProperties.AutomationId="BreadcrumbProject" />
+          </Button>
+        </DockPanel>
+        <DockPanel HorizontalAlignment="Left">
+          <TextBlock DockPanel.Dock="Right" Classes="bodyStrong" Text="*" VerticalAlignment="Center" Margin="1,0,0,0" IsVisible="{Binding HasUnsavedChanges}"
+                     ToolTip.Tip="Unsaved changes"
+                     AutomationProperties.AutomationId="UnsavedChanges"
+                     AutomationProperties.Name="Unsaved changes" />
+          <Button Classes="crumbSegment" Click="OnShowIndex"
+                  ToolTip.Tip="{Binding WorkflowName}"
+                  AutomationProperties.Name="{Binding WorkflowName}">
+            <TextBlock Classes="bodyStrong" Text="{Binding WorkflowName}" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextStrongBrush}"
+                       AutomationProperties.AutomationId="BreadcrumbWorkflow" />
+          </Button>
+        </DockPanel>
+      </canvas:CrumbNames>
+    </Border>
+
+    <StackPanel chrome:CommandBarPanel.Part="History" Orientation="Horizontal" VerticalAlignment="Center"
+                IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Button Classes="ghost glyph" Width="28" Padding="0" HorizontalContentAlignment="Center" Command="{Binding UndoCommand}" ToolTip.Tip="Undo"
+              AutomationProperties.AutomationId="Undo" AutomationProperties.Name="Undo">
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconUndo}" />
+      </Button>
+      <Button Classes="ghost glyph" Width="28" Padding="0" HorizontalContentAlignment="Center" Command="{Binding RedoCommand}" ToolTip.Tip="Redo"
+              AutomationProperties.AutomationId="Redo" AutomationProperties.Name="Redo">
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRedo}" />
+      </Button>
+      <Button Classes="ghost glyph" Width="28" Padding="0" HorizontalContentAlignment="Center" Command="{Binding SaveCommand}" ToolTip.Tip="Save (Ctrl+S)"
+              AutomationProperties.AutomationId="Save" AutomationProperties.Name="Save">
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
+      </Button>
+    </StackPanel>
+
+    <!-- The one place that shows the workflow's counts. While a blueprint is open in the inspector, this place says so and where to leave it. -->
+    <ContentControl chrome:CommandBarPanel.Part="Strip" VerticalAlignment="Center"
+                    Content="{Binding Canvas}" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <ContentControl.ContentTemplate>
+        <DataTemplate x:DataType="canvas:WorkflowCanvasViewModel">
+          <Panel>
+            <TextBlock Classes="small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMutedBrush}"
+                       IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Text="{Binding Blueprints.Editor.Name, StringFormat='Editing blueprint {0}. Save or Cancel in the inspector.', FallbackValue=''}"
+                       ToolTip.Tip="{Binding $self.Text}"
+                       AutomationProperties.AutomationId="BlueprintMode" />
+            <chrome:RunStrip Height="28" Background="Transparent"
+                             IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}"
+                             ToolTip.Tip="{Binding StripTip}"
+                             AutomationProperties.AutomationId="RunStrip"
+                             AutomationProperties.Name="{Binding BarSummary}"
+                             AutomationProperties.HelpText="{Binding StripTip}">
+              <theme:StateBar Classes="runProgress" Height="6" VerticalAlignment="Center" Counts="{Binding Counts}"
+                              IsVisible="{Binding ShowsRunProgress}"
+                              AutomationProperties.AutomationId="RunProgress" />
+              <TextBlock Classes="caption" Text="{Binding StripCount}" VerticalAlignment="Center" FontFeatures="tnum"
+                         AutomationProperties.AutomationId="RunStatus" />
+              <ItemsControl ItemsSource="{Binding RunPills}" VerticalAlignment="Center" AutomationProperties.AutomationId="RunPills">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="4" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="canvas:RunPill">
+                    <Button Classes="runPill" Command="{Binding Command}" ToolTip.Tip="{Binding Tip}"
+                            AutomationProperties.AutomationId="{Binding AutomationId}" AutomationProperties.Name="{Binding Label}">
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <theme:StateMark Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" />
+                        <TextBlock Classes="small" Text="{Binding Count}" VerticalAlignment="Center" FontFeatures="tnum" />
+                        <TextBlock Classes="small pillWords" Text="{Binding Words}" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </chrome:RunStrip>
+          </Panel>
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
+
+    <ContentControl chrome:CommandBarPanel.Part="Trailing" VerticalAlignment="Center"
+                    Content="{Binding Canvas}" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <ContentControl.ContentTemplate>
+        <DataTemplate x:DataType="canvas:WorkflowCanvasViewModel">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <!-- While the inspector edits a blueprint, the controls that change the workflow under it are off (ADR 0068). -->
+            <Button Classes="action iconOnly" Click="OnAddNode"
+                    IsEnabled="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}"
+                    ToolTip.ShowOnDisabled="True"
+                    ToolTip.Tip="Add a node (N)"
+                    AutomationProperties.AutomationId="AddTask"
+                    AutomationProperties.Name="Add node">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
+            </Button>
+            <Button Classes="action glyph generate" Click="OnGenerate" IsVisible="{Binding ShowsGenerate}"
+                    IsEnabled="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}"
+                    ToolTip.ShowOnDisabled="True"
+                    ToolTip.Tip="{Binding GenerateLabel, StringFormat='{}{0}&#10;Describe what to build, and a planner proposes the tasks'}"
+                    AutomationProperties.AutomationId="GenerateWorkflow"
+                    AutomationProperties.Name="{Binding GenerateLabel}">
+              <Panel>
+                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
+                  <theme:StateMark State="Running" Width="14" Height="14" IsVisible="{Binding IsPlanning}" />
+                  <TextBlock Classes="label" Text="Generate" VerticalAlignment="Center" />
+                </StackPanel>
+                <!-- An open proposal shows the one accent dot on the button's corner. -->
+                <Ellipse Width="6" Height="6" Margin="0,-6,-6,0" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False"
+                         Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}"
+                         AutomationProperties.AutomationId="GenerateReviewing" />
+              </Panel>
+            </Button>
+            <Button Classes="action" Command="{Binding MergeIntoBranchCommand}" IsVisible="{Binding CanMergeIntoBranch}"
+                    ToolTip.Tip="Merge into my branch&#10;Merge the end nodes' work into the branch you have checked out"
+                    AutomationProperties.AutomationId="MergeIntoBranch"
+                    AutomationProperties.Name="Merge into my branch">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
+                <TextBlock Classes="wideOnly" Text="Merge into my branch" VerticalAlignment="Center" />
+                <TextBlock Classes="compactOnly" Text="Merge" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <!-- While a node runs, the way out takes the place of the button that started the run. -->
+            <Button Classes="destructive runSlot" Command="{Binding StopAllCommand}" IsVisible="{Binding !RunsNothing}"
+                    ToolTip.Placement="BottomEdgeAlignedRight"
+                    ToolTip.Tip="Stop Workflow&#10;Stop every running node. Finished results stay."
+                    AutomationProperties.AutomationId="StopAll"
+                    AutomationProperties.Name="Stop Workflow">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+                <TextBlock Classes="wideOnly" Text="Stop Workflow" VerticalAlignment="Center" />
+                <TextBlock Classes="compactOnly" Text="Stop" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <!-- The workflow's one primary action. While the inspector edits a blueprint, its Save is the one primary action. -->
+            <Button Classes="primary runSlot" Command="{Binding RunWorkflowCommand}"
+                    ToolTip.ShowOnDisabled="True"
+                    ToolTip.Placement="BottomEdgeAlignedRight"
+                    ToolTip.Tip="{Binding RunWorkflowTip}"
+                    AutomationProperties.AutomationId="RunWorkflow"
+                    AutomationProperties.Name="Run Workflow">
+              <Button.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                  <Binding Path="RunsNothing" />
+                  <Binding Path="Blueprints.Editor" Converter="{x:Static ObjectConverters.IsNull}" />
+                </MultiBinding>
+              </Button.IsVisible>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
+                <TextBlock Classes="wideOnly" Text="Run Workflow" VerticalAlignment="Center" AutomationProperties.AutomationId="RunWorkflowLabel" />
+                <TextBlock Classes="compactOnly" Text="Run" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
+  </chrome:CommandBarPanel>
+</UserControl>

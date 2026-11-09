@@ -11,8 +11,8 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// The workflow's engine and the controls that act on it (ADR 0017): Run Workflow beside Generate, and the bar at the
-/// bottom center that counts what runs and waits, with Stop Workflow, and Merge into my branch while the engine offers it.
+/// The workflow's engine and the controls that act on it: Run Workflow, or Stop Workflow while a node runs, and Merge into my
+/// branch while the engine offers it, on the Command Bar, and the Run Strip's counts beside them.
 /// The canvas keeps its engine while the project stays open, so switching to another workflow or project stops nothing.
 /// </summary>
 public sealed partial class WorkflowCanvasViewModel
@@ -22,7 +22,6 @@ public sealed partial class WorkflowCanvasViewModel
     private RelayCommand? _stopAll;
     private RelayCommand? _merge;
     private UiBatch _engineChanged = null!;
-    private HashSet<TaskNodeViewModel> _running = [];
 
     /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
     internal Func<string, Task<bool>> OpenFolder { get; init; } = _ => Task.FromResult(false);
@@ -74,12 +73,6 @@ public sealed partial class WorkflowCanvasViewModel
         private set => SetProperty(ref field, value);
     }
 
-    /// <summary>The bar shows while a node runs, waits for the person, or failed, or while Merge into my branch is offered.</summary>
-    public bool ShowsBar => RunningCount > 0 || HasAttention || CanMergeIntoBranch;
-
-    /// <summary>A node waits for the person or failed, so the bar offers Next.</summary>
-    public bool HasAttention => Nodes.Any(NeedsAttention);
-
     /// <summary>"5/9 done · 3 need you · 1 failed · 1 running", with the parts that are not zero.</summary>
     public string BarSummary
     {
@@ -88,7 +81,7 @@ public sealed partial class WorkflowCanvasViewModel
             var counts = Counts;
             return string.Join(" · ", new[]
             {
-                counts.Completed > 0 ? BarProgress : null,
+                counts.Completed > 0 ? $"{counts.Completed}/{counts.Total} done" : null,
                 counts.Waiting > 0 ? StateCounts.NeedYou(counts.Waiting) : null,
                 counts.Failed > 0 ? $"{counts.Failed} failed" : null,
                 counts.Running > 0 ? $"{counts.Running} running" : null,
@@ -96,14 +89,65 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
-    /// <summary>How far the work went, in the one format of every bar width: "5/9 done". The chips after it hold the other states.</summary>
-    public string BarProgress => $"{Counts.Completed}/{Counts.Total} done";
+    /// <summary>The Run Strip's count of finished nodes, such as "21/50".</summary>
+    public string StripCount => $"{Counts.Completed}/{Counts.Total}";
 
-    /// <summary>What the band says with no run: "9 nodes", or how far the work went.</summary>
-    public string BarIdle => Counts.Completed > 0 ? BarProgress : Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes";
+    /// <summary>The Run Strip's tooltip: all six counts, in the six state words.</summary>
+    public string StripTip
+    {
+        get
+        {
+            var counts = Counts;
+            return string.Join("\n", new[]
+            {
+                $"{counts.Waiting} {NodeStates.Word(NodeState.InputRequired).ToLowerInvariant()}",
+                $"{counts.Failed} {NodeStates.Word(NodeState.Failed).ToLowerInvariant()}",
+                $"{counts.Running} {NodeStates.Word(NodeState.Running).ToLowerInvariant()}",
+                $"{counts.Stale} {NodeStates.Word(NodeState.Stale).ToLowerInvariant()}",
+                $"{counts.Completed} {NodeStates.Word(NodeState.Completed).ToLowerInvariant()}",
+                $"{counts.Total - counts.Completed - counts.Running - counts.Waiting - counts.Failed - counts.Stale} {NodeStates.Word(NodeState.Idle).ToLowerInvariant()}",
+            });
+        }
+    }
+
+    /// <summary>Shows the next node in a state, as Ctrl+J and Ctrl+Shift+J do. The window sets it.</summary>
+    internal Action<NodeState> ShowNext { get; init; } = _ => { };
+
+    /// <summary>Frames the running nodes, as Shift+Period does. The window sets it.</summary>
+    internal Action FrameRunning { get; init; } = () => { };
+
+    private ICommand? _nextAttention;
+    private ICommand? _nextFailed;
+    private ICommand? _frameRunning;
+
+    /// <summary>The Run Strip's pills, in their order: what needs the person, what failed, and what runs. A group with no nodes has none.</summary>
+    public IReadOnlyList<RunPill> RunPills
+    {
+        get
+        {
+            var counts = Counts;
+            _nextAttention ??= new RelayCommand(() => ShowNext(NodeState.InputRequired));
+            _nextFailed ??= new RelayCommand(() => ShowNext(NodeState.Failed));
+            _frameRunning ??= new RelayCommand(() => FrameRunning());
+            var reasons = Nodes.Where(node => node.IsWaiting).GroupBy(node => node.WaitReason).OrderBy(group => group.Key).ToList();
+            return new[]
+                {
+                    RunPill.Of(NodeState.InputRequired, reasons is [var only] ? only.Key : WaitReason.Question, counts.Waiting, counts.Waiting == 1 ? "needs you" : "need you", _nextAttention, "RunPillNeedsYou",
+                        $"Show the next node that needs you ({CanvasKeys.Hint(CanvasKeys.NextAttention)})"),
+                    RunPill.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed", _nextFailed, "RunPillFailed",
+                        $"Show the next node that failed ({CanvasKeys.Hint(CanvasKeys.NextFailed)})"),
+                    RunPill.Of(NodeState.Running, WaitReason.None, counts.Running, "running", _frameRunning, "RunPillRunning",
+                        $"Frame the running nodes ({CanvasKeys.Hint(CanvasKeys.FrameRunning)})"),
+                }
+                .OfType<RunPill>().ToList();
+        }
+    }
+
+    /// <summary>The progress bar shows once any node ran. Before that the strip has only its count.</summary>
+    public bool ShowsRunProgress => Counts.HasRun;
 
     /// <summary>
-    /// One chip for each group of nodes that the bar names, in the rollup order: Needs you, Failed, Running, Stale. What waits for the
+    /// One chip for each group of nodes that a workflow row names, in the rollup order: Needs you, Failed, Running, Stale. What waits for the
     /// person is one group under one word, and its tooltip names the reasons.
     /// </summary>
     public IReadOnlyList<StateChip> BarChips
@@ -124,37 +168,6 @@ public sealed partial class WorkflowCanvasViewModel
         }
     }
 
-    /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
-    public string NextLabel => Counts.Waiting > 0 ? "Next that needs you" : "Next failed";
-
-    public StatusTone BarTone => RunningCount > 0 ? StatusTone.Running : HasAttention ? StatusTone.Waiting : StatusTone.Complete;
-
-    /// <summary>The running nodes' titles, or null.</summary>
-    public string? BarActivity => RunningCount == 0 ? null
-        : string.Join(", ", Nodes.Where(node => node.State == NodeState.Running).Select(node => $"\"{node.Title}\""));
-
-    /// <summary>The bar's tooltip: the whole summary, then the running nodes' titles.</summary>
-    public string BarTip => string.Join("\n", new[]
-    {
-        BarSummary,
-        BarActivity,
-    }.OfType<string>());
-
-    /// <summary>While this is on, the view shows each node that starts to run. The view never moves without this choice.</summary>
-    public bool IsFollowing
-    {
-        get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(FollowLabel));
-            }
-        }
-    }
-
-    public string FollowLabel => IsFollowing ? "Stop following running nodes" : "Follow running nodes";
-
     /// <summary>The tooltip of Run Workflow: what it runs, or why nothing can run.</summary>
     public string RunWorkflowTip => (Nodes.Count, RunWork) switch
     {
@@ -162,8 +175,6 @@ public sealed partial class WorkflowCanvasViewModel
         (_, 0) => "Run Workflow\nNothing to run. Each node has a current result or waits for you.",
         var (total, runs) => $"Run Workflow\n{CanvasKeys.Hint(CanvasKeys.RunWorkflow)}: run {(runs == total ? "every node" : $"{runs} of {total} nodes")} along the dependencies. Nodes with a current result keep it.",
     };
-
-    private static bool NeedsAttention(TaskNodeViewModel node) => node.IsWaiting || node.State == NodeState.Failed;
 
     private void InitializeEngine(IReadOnlyDictionary<string, string> git)
     {
@@ -218,29 +229,19 @@ public sealed partial class WorkflowCanvasViewModel
         }
 
         var running = Nodes.Where(node => node.State == NodeState.Running).ToHashSet();
-        if (IsFollowing && running.Except(_running).FirstOrDefault() is { } started)
-        {
-            View?.Reveal(started);
-        }
-
-        _running = running;
         RunningCount = running.Count;
         ArrangeTreeRows();
         CanMergeIntoBranch = Engine.CanMergeIntoBranch;
         IsRunning = RunningCount > 0;
         OnWaitingChanged();
-        OnPropertyChanged(nameof(ShowsBar));
         OnPropertyChanged(nameof(BarSummary));
-        OnPropertyChanged(nameof(BarProgress));
-        OnPropertyChanged(nameof(BarIdle));
-        OnPropertyChanged(nameof(NextLabel));
+        OnPropertyChanged(nameof(StripCount));
+        OnPropertyChanged(nameof(StripTip));
+        OnPropertyChanged(nameof(RunPills));
+        OnPropertyChanged(nameof(ShowsRunProgress));
         OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(RunWork));
         OnPropertyChanged(nameof(CanStartRun));
-        OnPropertyChanged(nameof(HasAttention));
-        OnPropertyChanged(nameof(BarTone));
-        OnPropertyChanged(nameof(BarActivity));
-        OnPropertyChanged(nameof(BarTip));
         OnPropertyChanged(nameof(RunWorkflowTip));
         OnSummaryChanged();
         _runWorkflow?.NotifyCanExecuteChanged();
