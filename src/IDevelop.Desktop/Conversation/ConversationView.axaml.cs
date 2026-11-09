@@ -216,6 +216,8 @@ public partial class ConversationView : UserControl
     // come and go, and a move to the extent's end would then repeat forever. With the last row realized its own place is the true end.
     private double RealEnd => LastRowBottom is { } bottom ? bottom + TranscriptEndGap - Scroller.Viewport.Height : End;
 
+    private double? LastRowHeight => _model is { Items.Count: > 0 } model ? Transcript.ContainerFromIndex(model.Items.Count - 1)?.Bounds.Height : null;
+
     private double? LastRowBottom => _model is { Items.Count: > 0 } model && Transcript.ContainerFromIndex(model.Items.Count - 1) is { } last && Top(last) is { } top
         ? top + last.Bounds.Height
         : null;
@@ -252,7 +254,10 @@ public partial class ConversationView : UserControl
         }
 
         var end = RealEnd;
-        var wanted = _restMovedEnd is { } moved && Math.Abs(moved - extent) < 0.5 ? end : OnWholeLine(end);
+        // A move up to a whole line that leaves the last row out of view would lose the row, and with it the real end.
+        var line = OnWholeLine(end);
+        var keepsLast = LastRowHeight is { } height && end - line < height;
+        var wanted = _restMovedEnd is { } moved && Math.Abs(moved - extent) < 0.5 || !keepsLast ? end : line;
         if (wanted < end && Math.Abs(Scroller.Offset.Y - wanted) > 0.5)
         {
             _restedAt = extent;
