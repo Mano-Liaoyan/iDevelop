@@ -216,7 +216,7 @@ public sealed class ActionDockTests
         var shell = f.Open();
         Open(shell, "A");
 
-        Assert.False(shell.Find<Control>("ActionDock").IsEffectivelyVisible);
+        Assert.False(shell.ShowsAny("ActionDock"));
         Assert.False(shell.Find<TextBox>("ConversationComposer").IsEnabled);
     }
 

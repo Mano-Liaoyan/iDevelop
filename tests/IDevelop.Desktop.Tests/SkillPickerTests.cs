@@ -301,7 +301,7 @@ public sealed class SkillPickerTests : IDisposable
         // The task is not refused: it runs with its choice as it is, and the row says the list couldn't be checked.
         Assert.Equal("Claude Code's skill list couldn't be read, so it gets the chosen skills as they are, unchecked.", shell.Find<TextBlock>("SkillsNote").Text);
         shell.Page(AgentPage.Chat);
-        Assert.False(shell.ShowsAny("StartProblem"), shell.Text("StartProblem"));
+        Assert.False(shell.ShowsAny("StartProblem"));
         Assert.Equal("verify-idevelop", Summary(shell));
 
         _fakes.Install("claude", ClaudeSignedIn, ClaudeSkills(_personal));
