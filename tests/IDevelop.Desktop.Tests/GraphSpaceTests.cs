@@ -104,6 +104,24 @@ public sealed class GraphSpaceTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_selected_cards_wires_carry_a_label_at_their_midpoint_that_names_the_target()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(TestTasks.Design, "Design", 100, 90),
+            TaskAt(TestTasks.Build, "Build", 460, 90),
+            new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Design, TestTasks.Build), ConnectionKind.Dependency)));
+        var canvas = shell.Window.ViewModel.Canvas!;
+        Assert.DoesNotContain(canvas.Decorations, decoration => decoration is WirePillViewModel);
+
+        canvas.Select(shell.NodeModel("Design"));
+        shell.Render();
+
+        var pill = Assert.Single(canvas.Decorations.OfType<WirePillViewModel>());
+        Assert.Equal(("Result", "Result for Build"), (pill.Label, pill.Tip));
+        Assert.True(shell.Has<Border>("WirePill"), "The label draws on the Map.");
+    }
+
+    [AvaloniaFact]
     public void A_workflow_file_stays_byte_identical_when_no_card_moved()
     {
         var shell = Shell.Open(_temp.Seed(

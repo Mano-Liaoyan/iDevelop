@@ -134,6 +134,16 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
+    // A press on a wire's label acts on the wire under it, as a press on the wire does.
+    private void OnWirePillPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: WirePillViewModel pill })
+        {
+            _viewModel?.SelectConnection(pill.Wire);
+            e.Handled = true;
+        }
+    }
+
     // Sets the sizes that keep a card's text and strokes near their size on screen. A zoom gesture changes them only when a card's text or stroke changes.
     private void ShowMetrics()
     {

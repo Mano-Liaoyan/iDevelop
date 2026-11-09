@@ -68,7 +68,7 @@ public sealed partial class WorkflowCanvasViewModel
     private void ShowPills()
     {
         var pills = Connections.Where(wire => wire.IsHighlighted && wire.Curve.Count > 0)
-            .Select(wire => new WirePillViewModel(WireCurve.Middle(wire.Curve), wire.PillText, wire.PillTip)).ToArray();
+            .Select(wire => new WirePillViewModel(WireCurve.Middle(wire.Curve), wire.PillText, wire.PillTip, wire)).ToArray();
         if (!pills.SequenceEqual(_pills))
         {
             _pills = pills;

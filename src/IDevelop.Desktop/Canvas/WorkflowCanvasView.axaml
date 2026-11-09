@@ -130,7 +130,7 @@
         <!-- A highlighted wire's label: "Result" or "Context", centered on the wire's midpoint. -->
         <DataTemplate DataType="canvas:WirePillViewModel">
           <canvas:WirePillAnchor>
-            <Border Classes="wirePill" ToolTip.Tip="{Binding Tip}" AutomationProperties.AutomationId="WirePill">
+            <Border Classes="wirePill" ToolTip.Tip="{Binding Tip}" PointerPressed="OnWirePillPressed" AutomationProperties.AutomationId="WirePill">
               <TextBlock Text="{Binding Label}" />
             </Border>
           </canvas:WirePillAnchor>

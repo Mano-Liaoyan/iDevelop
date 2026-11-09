@@ -14,7 +14,7 @@ public abstract record Ghost(Point Location)
 }
 
 /// <summary>A highlighted wire's label, at the wire's midpoint. Its tooltip names the wire's target.</summary>
-public sealed record WirePillViewModel(Point Location, string Label, string Tip) : Ghost(Location)
+public sealed record WirePillViewModel(Point Location, string Label, string Tip, ConnectionViewModel Wire) : Ghost(Location)
 {
     public override bool TakesPointer => true;
 }
