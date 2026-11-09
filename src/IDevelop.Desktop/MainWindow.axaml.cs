@@ -348,6 +348,13 @@ public partial class MainWindow : Window
             return true;
         }
 
+        // G switches the Map's view, and only outside a box that takes letters.
+        if (e is { Key: Key.G, KeyModifiers: KeyModifiers.None } && ViewModel.Canvas is { Blueprints.Editor: null } flowCanvas && FocusManager?.GetFocusedElement() is not TextBox)
+        {
+            flowCanvas.ToggleMode();
+            return true;
+        }
+
         if (CanvasKeys.RunWorkflow.Matches(e))
         {
             if (ViewModel.Canvas?.RunWorkflowCommand is { } run && run.CanExecute(null))
@@ -391,7 +398,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            CanvasView?.Editor.Focus(NavigationMethod.Directional);
+            CanvasView?.FocusMap();
         }
     }
 
@@ -443,7 +450,7 @@ public partial class MainWindow : Window
 
             if (CanvasView is { } canvas && !ViewModel.AgentPanel.IsRoom)
             {
-                yield return (canvas, () => canvas.Editor.Focus(NavigationMethod.Directional));
+                yield return (canvas, canvas.FocusMap);
             }
 
             if (ViewModel.IsInspectorShown)
@@ -504,7 +511,7 @@ public partial class MainWindow : Window
     internal void BringIntoViewIfHidden(TaskNodeViewModel node) => CanvasView?.BringIntoViewIfHidden(node);
 
     /// <summary>The control that takes the canvas's keys.</summary>
-    internal IInputElement? CanvasFocusTarget => CanvasView?.Editor;
+    internal IInputElement? CanvasFocusTarget => CanvasView?.MapFocusTarget;
 
     // Both questions come before either answer acts, and the project's runs stop only once it closes.
     internal void CloseProject(ProjectViewModel project) => UiWork.Start(() => CloseAsked(project), ShowFailure);

@@ -54,6 +54,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         Clients = clients;
         _setNotice = setNotice;
         _copy = copy;
+        Flow = new FlowViewModel(this);
         PendingConnection = new PendingConnectionViewModel(this);
         Blueprints = new BlueprintsViewModel(
             this, BlueprintLibrary.Project(document.ProjectFolder), personalBlueprints is null ? null : BlueprintLibrary.Personal(personalBlueprints));
@@ -161,10 +162,12 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     /// </summary>
     internal (Point Location, double Zoom)? FittedView { get; set; }
 
-    /// <summary>The zoom as a percent, on the control that resets it.</summary>
     /// <summary>The Map Footer's key hints, as a status bar has them.</summary>
-    public string KeyHints => $"Enter Chat   {CanvasKeys.Hint(CanvasKeys.Run)} Run   N Add";
+    public string KeyHints => IsFlow
+        ? $"Enter Chat   {CanvasKeys.Hint(CanvasKeys.Run)} Run   G to arrange"
+        : $"Enter Chat   {CanvasKeys.Hint(CanvasKeys.Run)} Run   N Add   G Flow";
 
+    /// <summary>The zoom as a percent, on the control that resets it.</summary>
     public string ZoomLabel => $"{Math.Round(ViewportZoom / ZoomTiers.ActualSize * 100)}%";
 
     /// <summary>The zoomed out card's text at this zoom, and how far a card draws under its box.</summary>
@@ -408,7 +411,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     private static WorkflowEdit.PlaceNode NewTask(Blueprint blueprint, CanvasPoint position) =>
         new(TaskId.New(), blueprint, position) { Title = "New task" };
 
-    private void Select(TaskNodeViewModel node)
+    internal void Select(TaskNodeViewModel node)
     {
         SelectedNodes.Clear();
         SelectedNodes.Add(node);

@@ -15,6 +15,7 @@ public sealed partial class WorkflowCanvasViewModel
             }
 
             Emphasize(Connections);
+            Flow.ShowActive();
             // A single selection adds the new node before it removes the old one, so Several waits for the selection to settle.
             Avalonia.Threading.Dispatcher.UIThread.Post(ShowSeveral, Avalonia.Threading.DispatcherPriority.Background);
         };

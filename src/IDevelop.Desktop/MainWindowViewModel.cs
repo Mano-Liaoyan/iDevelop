@@ -745,6 +745,7 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 canvas.RestoreExpandedCards(session.Cards.Where(saved => saved.Workflow.Is(canvas.Project.Folder, canvas.Workflow.Id))
                     .SelectMany(saved => saved.Tasks));
+                canvas.RestoreMode(session.Views.FirstOrDefault(saved => saved.Workflow.Is(canvas.Project.Folder, canvas.Workflow.Id))?.Mode);
                 canvas.IsExpanded = session.ExpandedWorkflows.Any(saved => saved.Is(canvas.Project.Folder, canvas.Workflow.Id));
             }
 
@@ -902,6 +903,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             case nameof(WorkflowCanvasViewModel.IsExpanded):
             case nameof(WorkflowCanvasViewModel.ExpandedCards):
+            case nameof(WorkflowCanvasViewModel.ModeChoice):
                 Persist();
                 break;
             case nameof(WorkflowCanvasViewModel.Summary):
@@ -962,6 +964,8 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             Cards = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.AnyCardExpanded)
                 .Select(canvas => new WorkflowCards(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ExpandedCards))],
+            Views = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.ModeChoice is not null)
+                .Select(canvas => new WorkflowViewChoice(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ModeChoice!.Value))],
             Folded = [.. Projects.Where(project => !project.IsExpanded).Select(project => project.Folder)],
             ExpandedWorkflows = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.IsExpanded)
                 .Select(canvas => new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id))],

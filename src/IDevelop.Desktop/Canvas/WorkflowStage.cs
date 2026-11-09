@@ -21,6 +21,9 @@ public sealed class WorkflowStage(int number) : ObservableObject
     /// <summary>The agents the Index lists: every agent of the stage, or none while it is folded.</summary>
     public ObservableCollection<TaskNodeViewModel> Agents { get; } = [];
 
+    /// <summary>Every agent of the stage, folded or not, in the stage's order.</summary>
+    public IReadOnlyList<TaskNodeViewModel> Members => _members;
+
     public StateCounts Counts { get; private set; }
 
     /// <summary>"7/8": how many agents of the stage are Done.</summary>
@@ -35,6 +38,9 @@ public sealed class WorkflowStage(int number) : ObservableObject
 
     /// <summary>Folds an open stage, or opens a folded one, as the person's own choice.</summary>
     public void ToggleFold() => Choose(!IsFolded);
+
+    /// <summary>The fold button of Flow's band.</summary>
+    public System.Windows.Input.ICommand ToggleFoldCommand => field ??= new RelayCommand(ToggleFold);
 
     /// <summary>Opens the stage, so a node in it has its row.</summary>
     public void Open()

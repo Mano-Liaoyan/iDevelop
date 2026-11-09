@@ -50,6 +50,7 @@
                          ConnectionTemplate="{StaticResource ConnectionTemplate}"
                          PendingConnectionTemplate="{StaticResource PendingConnectionTemplate}"
                          FocusAdorner="{x:Null}"
+                         IsVisible="{Binding !IsFlow}"
                          Classes.behindEditor="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}"
                          GridCellSize="15">
 
@@ -150,6 +151,10 @@
     </nodify:NodifyEditor>
 
 
+    <!-- The Map's other view: agents in rows by graph depth. It reads the workflow and never changes a position. -->
+    <canvas:FlowView x:Name="FlowPane" DataContext="{Binding Flow}" IsVisible="{Binding Canvas.IsFlow}"
+                     Classes.behindEditor="{Binding Canvas.Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
     <!-- The keyboard's place: the canvas took the focus by a key, so its keys act here. -->
     <Border x:Name="CanvasFocus" Classes="canvasFocus" IsHitTestVisible="False" IsVisible="False"
             AutomationProperties.AutomationId="CanvasFocus" />
@@ -205,7 +210,42 @@
         <TextBlock x:Name="FooterHints" DockPanel.Dock="Right" Classes="caption" VerticalAlignment="Center"
                    Foreground="{DynamicResource TextFaintBrush}" Text="{Binding KeyHints}" TextTrimming="CharacterEllipsis"
                    AutomationProperties.AutomationId="MapHints" />
-        <StackPanel x:Name="ZoomPanel" Orientation="Horizontal" VerticalAlignment="Center"
+        <!-- The view switch, then the controls of the view that shows. -->
+        <Border DockPanel.Dock="Left" Height="24" Width="104" Padding="2" Margin="0,0,6,0" VerticalAlignment="Center"
+                Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusSm}"
+                AutomationProperties.AutomationId="MapViewSwitch">
+          <UniformGrid Columns="2">
+            <RadioButton Classes="segment" GroupName="MapView" IsChecked="{Binding IsFlow}" Padding="0"
+                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                         ToolTip.Tip="Show the run in rows (G)"
+                         AutomationProperties.AutomationId="ViewFlow" AutomationProperties.Name="Flow">
+              <TextBlock Classes="small" Text="Flow" />
+            </RadioButton>
+            <RadioButton Classes="segment" GroupName="MapView" IsChecked="{Binding IsGraph}" Padding="0"
+                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                         ToolTip.Tip="Show the blueprint (G)"
+                         AutomationProperties.AutomationId="ViewGraph" AutomationProperties.Name="Graph">
+              <TextBlock Classes="small" Text="Graph" />
+            </RadioButton>
+          </UniformGrid>
+        </Border>
+        <Rectangle DockPanel.Dock="Left" Width="1" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" Fill="{DynamicResource Border80Brush}" />
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" IsVisible="{Binding IsFlow}"
+                    AutomationProperties.AutomationId="FlowTools">
+          <Button Classes="icon zoom" Click="OnDensityDown" IsEnabled="{Binding Flow.CanStepDown}" ToolTip.Tip="Smaller cards (-)"
+                  AutomationProperties.AutomationId="DensityDown" AutomationProperties.Name="Smaller cards">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
+          </Button>
+          <Button Classes="icon zoom" Click="OnDensityUp" IsEnabled="{Binding Flow.CanStepUp}" ToolTip.Tip="Larger cards (+)"
+                  AutomationProperties.AutomationId="DensityUp" AutomationProperties.Name="Larger cards">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
+          </Button>
+          <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Show the most stages (F)"
+                  AutomationProperties.AutomationId="FlowFit" AutomationProperties.Name="Show the most stages">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
+          </Button>
+        </StackPanel>
+        <StackPanel x:Name="ZoomPanel" Orientation="Horizontal" VerticalAlignment="Center" IsVisible="{Binding IsGraph}"
                     AutomationProperties.AutomationId="ZoomPanel">
           <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
                   AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">

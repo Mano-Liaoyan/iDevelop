@@ -62,6 +62,9 @@ public static class ZoomTiers
     /// <summary>The most title lines of a Block tier card.</summary>
     private const int BlockLines = 2;
 
+    /// <summary>Whether a card at <paramref name="tier"/> gives up its agent's name, so a workflow that fits only at this tier opens in Flow.</summary>
+    public static bool HidesNames(ZoomTier tier) => tier == ZoomTier.Block;
+
     /// <summary>A zoom that rises enters the larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
     private const double Gap = 0.012;
 
@@ -165,6 +168,6 @@ public static class ZoomTiers
         _ => null,
     };
 
-    private static ZoomTier Of(double zoom) =>
+    internal static ZoomTier Of(double zoom) =>
         zoom >= FullFrom ? ZoomTier.Full : zoom >= DetailFrom ? ZoomTier.Detail : zoom >= CompactFrom ? ZoomTier.Compact : zoom >= LabelFrom ? ZoomTier.Label : zoom >= TitleFrom ? ZoomTier.Title : ZoomTier.Block;
 }

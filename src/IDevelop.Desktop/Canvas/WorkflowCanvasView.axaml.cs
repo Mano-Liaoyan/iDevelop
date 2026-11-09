@@ -71,6 +71,9 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         Editor.PointerExited += (_, _) => ShowPortLabel(null, null);
         Editor.KeyDown += OnEditorKeyDown;
         Editor.KeyUp += OnEditorKeyUp;
+        FlowPane.KeyDown += OnEditorKeyDown;
+        FlowPane.GotFocus += (_, e) => ShowKeyboardFocus(e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional);
+        FlowPane.LostFocus += (_, _) => ShowKeyboardFocus(false);
         AddPopover.Closed += OnAddClosed;
         // NodifyAvalonia 6.6.0 zooms the minimap by the wheel delta's length, which drops its direction and is
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
@@ -119,7 +122,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // The minimap shows on the person's choice, where the Map has room for it. A view that Fit made keeps its cards clear of it.
     private void ShowMinimap()
     {
-        var shown = MinimapToggle.IsChecked == true && CanvasChrome.ShowsMinimap(Bounds.Size);
+        var shown = _viewModel is { IsFlow: false } && MinimapToggle.IsChecked == true && CanvasChrome.ShowsMinimap(Bounds.Size);
         if (shown != MinimapPanel.IsVisible)
         {
             MinimapPanel.IsVisible = shown;
@@ -182,6 +185,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>Brings a card whole into the editor, <see cref="CardMargin"/> clear of its edges, when it is not already.</summary>
     internal void BringIntoViewIfHidden(TaskNodeViewModel node)
     {
+        if (_viewModel is { IsFlow: true })
+        {
+            FlowPane.Reveal(node);
+            return;
+        }
+
         var card = node.DisplayRect;
         var zoom = Editor.ViewportZoom;
         var room = Room();
@@ -199,6 +208,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>Centres a card the person looked for and, at a zoom too low to read it, zooms in, so its title and its neighbours read.</summary>
     void ICanvasView.RevealFound(TaskNodeViewModel node)
     {
+        if (_viewModel is { IsFlow: true })
+        {
+            FlowPane.Reveal(node);
+            return;
+        }
+
         // A view that reads its cards' titles keeps its zoom, so a found card stays among its neighbours.
         if (Editor.ViewportZoom >= ZoomTiers.ReadableZoom)
         {
@@ -245,6 +260,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// </summary>
     public void FitToView()
     {
+        if (_viewModel is { IsFlow: true })
+        {
+            FlowPane.Fit();
+            return;
+        }
+
         if (Cards().Any())
         {
             // A fit can change the zoom tier, and with it how far the cards draw, so it measures again at the zoom it reached.
@@ -320,13 +341,28 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <summary>Frames the running nodes, for Shift+Period and the Run Strip's Running pill.</summary>
     internal void FrameRunning()
     {
-        if (_viewModel is { } canvas)
+        if (_viewModel is { IsFlow: true } flow)
+        {
+            if (flow.Nodes.FirstOrDefault(node => node.State == NodeState.Running) is { } running)
+            {
+                FlowPane.Reveal(running);
+            }
+        }
+        else if (_viewModel is { } canvas)
         {
             Frame([.. canvas.Nodes.Where(node => node.State == NodeState.Running)]);
         }
     }
 
-    public void ZoomToActual() => Editor.ZoomAtPosition(ZoomTiers.ActualSize / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
+    public void ZoomToActual()
+    {
+        if (_viewModel is not { IsFlow: true })
+        {
+            ZoomActual();
+        }
+    }
+
+    private void ZoomActual() => Editor.ZoomAtPosition(ZoomTiers.ActualSize / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -435,7 +471,15 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             Editor.LayoutUpdated -= PositionOnce;
             canvas.IsPositioned = true;
-            FitToView();
+            if (canvas.ModeChoice is null && Cards().Any())
+            {
+                canvas.ApplyDefaultMode(ZoomTiers.HidesNames(ZoomTiers.Of(CanvasChrome.FitZoom(Extent(), Room(FitMargin)))));
+            }
+
+            if (!canvas.IsFlow)
+            {
+                FitToView();
+            }
         }
     }
 
@@ -453,6 +497,56 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.FarText))
         {
             ShowTitleText();
+        }
+        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Mode))
+        {
+            ShowMinimap();
+            MoveFocusTo();
+            Dispatcher.UIThread.Post(FlowPane.OnShown, DispatcherPriority.Background);
+        }
+    }
+
+    // The view that the person just chose takes the keys.
+    private void MoveFocusTo()
+    {
+        if (Editor.IsKeyboardFocusWithin || FlowPane.IsKeyboardFocusWithin || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is null)
+        {
+            Dispatcher.UIThread.Post(FocusMap, DispatcherPriority.Background);
+        }
+    }
+
+    /// <summary>The shown view of the Map takes the keyboard's focus.</summary>
+    internal void FocusMap()
+    {
+        if (_viewModel is { IsFlow: true })
+        {
+            FlowPane.Focus(NavigationMethod.Directional);
+        }
+        else
+        {
+            Editor.Focus(NavigationMethod.Directional);
+        }
+    }
+
+    /// <summary>The shown view of the Map, which takes the focus when the Find palette closes.</summary>
+    internal IInputElement MapFocusTarget => _viewModel is { IsFlow: true } ? FlowPane : Editor;
+
+    /// <summary>The menu of the selected card, opened at a card in Flow as a card's menu is in Graph.</summary>
+    internal void OpenFlowMenu(Control card)
+    {
+        if (_viewModel is { } canvas)
+        {
+            Open("NodeMenu", canvas.NodeMenu(), card);
+        }
+    }
+
+    /// <summary>The Add popover from Flow, opened at the center of the Map for a node in view.</summary>
+    internal void AddFromFlow()
+    {
+        if (_viewModel is { } canvas && TopLevel.GetTopLevel(this) is { } window
+            && FlowPane.TranslatePoint(new Point(FlowPane.Bounds.Width / 2, FlowPane.Bounds.Height / 2), window) is { } center)
+        {
+            OpenAddInView(center);
         }
     }
 
@@ -531,6 +625,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private void OnFitToScreen(object? sender, RoutedEventArgs e) => FitToView();
 
     private void OnZoomActual(object? sender, RoutedEventArgs e) => ZoomToActual();
+
+    private void OnDensityDown(object? sender, RoutedEventArgs e) => _viewModel?.Flow.StepDensity(-1);
+
+    private void OnDensityUp(object? sender, RoutedEventArgs e) => _viewModel?.Flow.StepDensity(1);
 
     // One notch is a delta of 1, and the zoom buttons step by 2^(1/3), so a notch zooms one button step.
     private void OnMinimapWheel(object? sender, PointerWheelEventArgs e)
@@ -638,6 +736,11 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         var plain = modifiers == KeyModifiers.None;
         var command = modifiers == CanvasKeys.Command;
         var single = canvas.SelectedNodes is [var one] ? one : null;
+        if (canvas.IsFlow && FlowKey(canvas, key, plain, modifiers))
+        {
+            return true;
+        }
+
         switch (key)
         {
             case Key.N when plain:
@@ -710,6 +813,42 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
                 return true;
             case Key.D0 or Key.NumPad0 when plain:
                 ZoomToActual();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // Flow's own keys. The rest of the Map keys act as they do in Graph: Enter, Ctrl+Enter, Delete, Tab, Ctrl+D, F2.
+    private bool FlowKey(WorkflowCanvasViewModel canvas, Key key, bool plain, KeyModifiers modifiers)
+    {
+        switch (key)
+        {
+            case Key.Up when plain:
+                return canvas.SelectInFlow(FlowMove.Up);
+            case Key.Down when plain:
+                return canvas.SelectInFlow(FlowMove.Down);
+            case Key.Left when plain:
+                return canvas.SelectInFlow(FlowMove.Left);
+            case Key.Right when plain:
+                return canvas.SelectInFlow(FlowMove.Right);
+            case Key.OemPlus or Key.Add when (modifiers & ~KeyModifiers.Shift) == KeyModifiers.None:
+                canvas.Flow.StepDensity(1);
+                return true;
+            case Key.OemMinus or Key.Subtract when plain:
+                canvas.Flow.StepDensity(-1);
+                return true;
+            case Key.OemPeriod when plain:
+                if (canvas.SelectedNode is { } node)
+                {
+                    FlowPane.Reveal(node);
+                }
+
+                return true;
+            case Key.D0 or Key.NumPad0 or Key.Space when plain:
+                return true;
+            case Key.N when plain:
+                AddFromFlow();
                 return true;
             default:
                 return false;

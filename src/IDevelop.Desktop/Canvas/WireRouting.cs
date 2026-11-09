@@ -48,12 +48,13 @@ internal static class WireRouting
     /// <paramref name="target"/>, from the end of the source stub to the start of the target stub. <paramref name="cards"/>
     /// holds every card's bounds, the wire's own two included. <paramref name="reach"/> is how far those bounds run past a
     /// card's 64 px box at this zoom, which the gaps between its rows lose. <paramref name="closed"/> holds the channels that
-    /// have no free lane for this wire (<see cref="WireRouter"/>).
+    /// have no free lane for this wire (<see cref="WireRouter"/>). <paramref name="sourceStub"/> and <paramref name="targetStub"/> are
+    /// the wire's straight runs out of its ports: Flow's short gaps between rows take shorter runs than the canvas's.
     /// </summary>
-    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards, double reach = 0, IReadOnlyList<Rect>? closed = null)
+    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards, double reach = 0, IReadOnlyList<Rect>? closed = null, double sourceStub = Stub, double targetStub = Stub)
     {
-        var start = new Point(source.X + Stub, source.Y);
-        var end = new Point(target.X - Stub, target.Y);
+        var start = new Point(source.X + sourceStub, source.Y);
+        var end = new Point(target.X - targetStub, target.Y);
         var step = Step(start, end);
         // A channel with a port in it stays open, because the wire must leave from there.
         Rect[] shut = [.. closed?.Where(channel => !Inside(start, channel) && !Inside(end, channel)) ?? []];
@@ -77,7 +78,7 @@ internal static class WireRouting
 
         // Cards that stand too close for a wire's clear space still leave it a way between them, so a wire never takes a card's body.
         return close ?? Tight.Select(gap => Detour(start, end, cards, gap, shut)).FirstOrDefault(detour => detour is not null)
-            ?? (shut.Length > 0 ? Route(source, target, cards, reach) : step);
+            ?? (shut.Length > 0 ? Route(source, target, cards, reach, null, sourceStub, targetStub) : step);
     }
 
     // About 12 px on screen at the zooms where cards draw this far under their boxes. A row gap that leaves less than twice

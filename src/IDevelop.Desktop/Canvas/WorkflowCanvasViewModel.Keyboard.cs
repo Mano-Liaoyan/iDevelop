@@ -62,6 +62,18 @@ public sealed partial class WorkflowCanvasViewModel
     private static IEnumerable<TaskNodeViewModel> ByPlace(IEnumerable<TaskNodeViewModel> nodes) =>
         nodes.OrderBy(node => node.Location.Y).ThenBy(node => node.Location.X);
 
+    /// <summary>Selects the card Flow's arrow keys reach, and shows it.</summary>
+    internal bool SelectInFlow(FlowMove move)
+    {
+        if (Flow.Neighbor(SelectedNode, move) is not { } next)
+        {
+            return false;
+        }
+
+        Reveal(next);
+        return true;
+    }
+
     /// <summary>Shows a card that the person looked for, once a workflow that just came into view has made its first fit.</summary>
     internal void ShowFound(TaskNodeViewModel node) =>
         Dispatcher.UIThread.Post(() => View?.RevealFound(node), DispatcherPriority.Background);

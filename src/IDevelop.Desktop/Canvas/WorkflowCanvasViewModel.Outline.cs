@@ -88,11 +88,13 @@ public sealed partial class WorkflowCanvasViewModel
             Stages.Add(new WorkflowStage(Stages.Count + 1));
         }
 
-        for (var index = 0; index < stages.Count; index++)
+        Flow.Hold(() =>
         {
-            Stages[index].Show([.. stages[index].Select(id => _nodes[id])]);
-        }
-
+            for (var index = 0; index < stages.Count; index++)
+            {
+                Stages[index].Show([.. stages[index].Select(id => _nodes[id])]);
+            }
+        });
         OnPropertyChanged(nameof(ShowsStages));
     }
 

@@ -698,6 +698,142 @@
     <Setter Property="FontWeight" Value="Medium" />
   </Style>
 
+  <!-- Flow: a band's header is one row with a hairline that runs to its mark, and a plate keeps text clear of the wires behind it. -->
+  <Style Selector="canvas|FlowView.behindEditor">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+  <Style Selector="Button.flowBand">
+    <Setter Property="Height" Value="26" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.flowBand /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.flowBand:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Button.flowBand:pointerover Border.flowPlate">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.flowPlate">
+    <Setter Property="Background" Value="{DynamicResource CanvasPlainBrush}" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.flowBand.folded">
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+  <Style Selector="Button.flowBand.folded /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Button.flowBand.folded Border.flowPlate">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="TextBlock.flowBandName">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Rectangle.flowHairline">
+    <Setter Property="Fill" Value="{DynamicResource Border80Brush}" />
+  </Style>
+
+  <Style Selector="Panel.flowCard">
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+  <Style Selector="Panel.flowCard.dim">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+  <Style Selector="Border.flowBody">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Panel.flowCard:pointerover Border.flowBody">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Grid.flowContent">
+    <Setter Property="Margin" Value="10,8" />
+  </Style>
+  <Style Selector="Panel.flowCard.chip Grid.flowContent">
+    <Setter Property="Margin" Value="10,6" />
+  </Style>
+  <Style Selector="Panel.flowTitle">
+    <Setter Property="Height" Value="34" />
+  </Style>
+  <Style Selector="Panel.flowCard.chip Panel.flowTitle">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Margin" Value="0,0,20,0" />
+  </Style>
+  <Style Selector="TextBlock.flowName">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="17" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Panel.flowCard.chip TextBlock.flowName">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="Grid.flowMeta">
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Margin" Value="0,4,20,0" />
+  </Style>
+  <Style Selector="theme|StateMark.flowMark">
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Margin" Value="0,0,10,8" />
+  </Style>
+  <Style Selector="Panel.flowCard.chip theme|StateMark.flowMark">
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,7,8,0" />
+  </Style>
+  <!-- Selection: a 1.5 px accent ring just outside the card, its 3 px halo outside that, so a state's ring stays whole inside them. -->
+  <Style Selector="Border.flowRing">
+    <Setter Property="Margin" Value="-1.5" />
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Panel.flowCard.selected Border.flowRing">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource SelectionHalo}" />
+  </Style>
+  <Style Selector="Ellipse.flowSocket">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="Fill" Value="{DynamicResource CanvasPlainBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+  <Style Selector="Ellipse.flowSocket.connected">
+    <Setter Property="Fill" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="Ellipse.flowSocket.feeding">
+    <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource StateRunningBrush}" />
+  </Style>
+  <Style Selector="Ellipse.flowSocket.stopped">
+    <Setter Property="Fill" Value="{DynamicResource StateFailedStrokeBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource StateFailedStrokeBrush}" />
+  </Style>
+
   <!-- The Map Footer. Its controls are one 24 px line, and a hairline parts it from the Map. -->
   <Style Selector="Border.mapFooter">
     <Setter Property="Height" Value="32" />

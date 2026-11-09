@@ -11,7 +11,7 @@ public sealed class CardTitleBox : RenameBox
 
     protected override string? ItemText => Node?.Title;
 
-    protected override Control? FocusTarget => this.FindAncestorOfType<NodifyEditor>();
+    protected override Control? FocusTarget => (Control?)this.FindAncestorOfType<NodifyEditor>() ?? this.FindAncestorOfType<FlowView>();
 
     protected override void End(string? text) => Node?.EndRename(text);
 }
