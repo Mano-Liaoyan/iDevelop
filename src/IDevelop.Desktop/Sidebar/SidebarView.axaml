@@ -1,0 +1,460 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:IDevelop.Desktop"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:execution="using:IDevelop.Desktop.Execution"
+             xmlns:sidebar="using:IDevelop.Desktop.Sidebar"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Sidebar.SidebarView"
+             ClipToBounds="False"
+             x:DataType="local:MainWindowViewModel">
+
+  <UserControl.Resources>
+    <!-- UI Automation shows no plain panel, so the summary carries the row's id and its reason. The summary names the
+         reason in a few words, and the row's tooltip holds all of it. The name and the summary wrap in full, and the dot
+         centres on the name's first line. -->
+    <DataTemplate x:Key="AgentRowTemplate" DataType="execution:AgentRow">
+      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8"
+            Background="Transparent"
+            ToolTip.Tip="{Binding Detail}">
+        <Ellipse Classes="status" VerticalAlignment="Top" Margin="0,5,0,0"
+                 Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                 Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                 Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                 Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}" />
+        <TextBlock Grid.Row="0" Grid.Column="1" Classes="rowName" Text="{Binding Name}" />
+        <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="{Binding AutomationId}"
+                   AutomationProperties.HelpText="{Binding Detail}" />
+      </Grid>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <!-- The Index: a 40 px header with its two views, one view that scrolls in the rest, what still needs setup, and a 32 px footer. -->
+  <Grid x:Name="Rows" RowDefinitions="40,*,Auto,Auto">
+    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4" Margin="8,0,6,0">
+      <Border HorizontalAlignment="Stretch" MaxWidth="192" Height="28" Padding="2" Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusSm}">
+        <UniformGrid Columns="2">
+          <RadioButton Classes="segment" GroupName="IndexView" IsChecked="{Binding IsProjectsView}" Padding="0"
+                       HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                       AutomationProperties.AutomationId="IndexProjects" AutomationProperties.Name="Projects">
+            <TextBlock Classes="small" Text="Projects" />
+          </RadioButton>
+          <RadioButton Classes="segment" GroupName="IndexView" IsChecked="{Binding IsInboxView}" Padding="0"
+                       HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                       AutomationProperties.AutomationId="IndexInbox" AutomationProperties.Name="{Binding Activity.InboxCount, StringFormat='Inbox: {0}'}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Classes="small" Text="Inbox" VerticalAlignment="Center" />
+              <TextBlock Classes="caption inboxCount" Text="{Binding Activity.InboxCount}" VerticalAlignment="Center"
+                         IsVisible="{Binding Activity.HasInbox}"
+                         AutomationProperties.AutomationId="InboxCount" />
+            </StackPanel>
+          </RadioButton>
+        </UniformGrid>
+      </Border>
+      <Button Grid.Column="1" Classes="icon" Click="OnFind" ToolTip.Tip="{Binding Source={x:Static sidebar:FindViewModel.Hint}, StringFormat='Find ({0})'}"
+              AutomationProperties.AutomationId="IndexFind" AutomationProperties.Name="Find">
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSearch}" />
+      </Button>
+      <Button Grid.Column="2" Classes="icon" ToolTip.Tip="New workflow or open folder"
+              AutomationProperties.AutomationId="IndexAdd" AutomationProperties.Name="New workflow or open folder">
+        <Button.Flyout>
+          <MenuFlyout Placement="BottomEdgeAlignedRight">
+            <MenuItem Header="New workflow" Click="OnNewWorkflowHere" IsEnabled="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
+                      theme:MenuGlyph.Data="{StaticResource IconAdd}"
+                      AutomationProperties.AutomationId="NewWorkflowHere" />
+            <MenuItem Header="Open folder" Click="OnOpenFolder"
+                      theme:MenuGlyph.Data="{StaticResource IconFolder}"
+                      AutomationProperties.AutomationId="OpenFolder" />
+          </MenuFlyout>
+        </Button.Flyout>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
+      </Button>
+    </Grid>
+
+    <!-- Nothing is open: one line and one Open button, then the folders the person closed. -->
+    <StackPanel Grid.Row="1" Margin="12,8" Spacing="8" IsVisible="{Binding !HasProjects}">
+      <TextBlock Classes="rowName strong" Text="No project open" AutomationProperties.AutomationId="NoProject" />
+      <Button Classes="secondary" HorizontalAlignment="Left" Click="OnOpenFolder" Content="Open folder" AutomationProperties.AutomationId="EmptyOpenFolder" />
+      <TextBlock Classes="section" Text="Recent" Margin="0,8,0,0" IsVisible="{Binding HasRecent}" />
+      <ItemsControl ItemsSource="{Binding Recent}" IsVisible="{Binding HasRecent}" Margin="-8,0"
+                    AutomationProperties.AutomationId="RecentProjects" AutomationProperties.Name="Recent projects">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="local:RecentProject">
+            <Button Classes="nav" Click="OnOpenRecent" ToolTip.Tip="{Binding Folder}"
+                    AutomationProperties.AutomationId="RecentProject" AutomationProperties.Name="{Binding Name}">
+              <TextBlock Classes="rowName" Text="{Binding Name}" />
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+
+    <!-- Projects: one scroll, four levels. Each level has its own grammar, and names show in full and wrap (issue 108). Marks, counts, and
+         buttons keep one right edge. The current workflow takes the neutral fill and the accent bar, and a selected agent the blue fill. -->
+    <ScrollViewer x:Name="Tree" Grid.Row="1" Margin="4,0,0,0" HorizontalScrollBarVisibility="Disabled">
+      <ScrollViewer.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="HasProjects" />
+          <Binding Path="IsProjectsView" />
+        </MultiBinding>
+      </ScrollViewer.IsVisible>
+      <StackPanel x:Name="TreeRows" Margin="0,0,8,8" Spacing="8">
+        <ItemsControl ItemsSource="{Binding Projects}"
+                      AutomationProperties.AutomationId="Projects"
+                      AutomationProperties.Name="Open projects">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="8" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="local:ProjectViewModel">
+              <StackPanel Spacing="1">
+                <Panel Classes="projectRow">
+                  <ToggleButton Classes="projectRow" IsChecked="{Binding IsExpanded}"
+                                ToolTip.Tip="{Binding Folder}"
+                                AutomationProperties.AutomationId="ProjectExpand"
+                                AutomationProperties.Name="{Binding ExpandLabel}">
+                    <Grid ColumnDefinitions="20,*,14" RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                      <Border Grid.RowSpan="2" Classes="projectTile" Classes.current="{Binding IsCurrent}" VerticalAlignment="Top" Margin="0,2,0,0">
+                        <TextBlock Text="{Binding Initial}" />
+                      </Border>
+                      <TextBlock Grid.Column="1" Classes="bodyStrong projectName" Text="{Binding Name}" TextWrapping="Wrap"
+                                 AutomationProperties.AutomationId="ProjectName" />
+                      <TextBlock Grid.Column="1" Grid.Row="1" Classes="caption" Text="{Binding FolderTail}" TextWrapping="NoWrap"
+                                 TextTrimming="{x:Static TextTrimming.LeadingCharacterEllipsis}"
+                                 AutomationProperties.AutomationId="ProjectPath" />
+                      <theme:StateMark Grid.Column="2" Classes="projectMark" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                                       IsVisible="{Binding HasRollup}" State="{Binding Rollup}" Why="{Binding RollupWhy}"
+                                       AutomationProperties.AutomationId="ProjectState" />
+                    </Grid>
+                  </ToggleButton>
+                  <!-- On hover or focus the row's mark gives way to its two buttons. Close asks before it stops anything. -->
+                  <StackPanel Classes="rowActions">
+                    <Button Classes="icon small" Click="OnNewWorkflow" ToolTip.Tip="New workflow"
+                            AutomationProperties.AutomationId="NewWorkflow"
+                            AutomationProperties.Name="{Binding Name, StringFormat='New workflow in {0}'}">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
+                    </Button>
+                    <Button Classes="icon small" ToolTip.Tip="Project menu"
+                            AutomationProperties.AutomationId="ProjectMenu"
+                            AutomationProperties.Name="{Binding Name, StringFormat='Menu of {0}'}">
+                      <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                          <MenuItem Header="Close project" Click="OnCloseProject" theme:MenuGlyph.Data="{StaticResource IconDismiss}"
+                                    AutomationProperties.AutomationId="CloseProject"
+                                    AutomationProperties.Name="{Binding Name, StringFormat='Close {0}'}" />
+                        </MenuFlyout>
+                      </Button.Flyout>
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
+                    </Button>
+                  </StackPanel>
+                </Panel>
+                <StackPanel Spacing="1" IsVisible="{Binding IsExpanded}">
+                  <Button Classes="nav newWorkflow" IsVisible="{Binding HasNoWorkflows}" Click="OnNewWorkflow"
+                          AutomationProperties.AutomationId="EmptyNewWorkflow" AutomationProperties.Name="New workflow">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <PathIcon Theme="{StaticResource Glyph}" Width="14" Height="14" Data="{StaticResource IconAdd}" />
+                      <TextBlock Text="New workflow" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <ItemsControl ItemsSource="{Binding Workflows}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="1" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
+                        <StackPanel Spacing="1">
+                          <Panel Classes="workflowRow">
+                            <Button Classes="nav workflow" Classes.selected="{Binding IsSelected}" HorizontalContentAlignment="Stretch"
+                                    IsVisible="{Binding !IsRenamingWorkflow}"
+                                    Click="OnWorkflowClick"
+                                    KeyDown="OnWorkflowKeyDown"
+                                    ToolTip.Tip="{Binding RowTip}"
+                                    AutomationProperties.AutomationId="WorkflowRow"
+                                    AutomationProperties.Name="{Binding Name}"
+                                    AutomationProperties.HelpText="{Binding Summary}">
+                              <Button.ContextMenu>
+                                <ContextMenu>
+                                  <MenuItem Header="Rename" InputGesture="F2"
+                                            Click="OnRenameWorkflow"
+                                            AutomationProperties.AutomationId="WorkflowRename"
+                                            AutomationProperties.Name="Rename" theme:MenuGlyph.Data="{StaticResource IconRename}" />
+                                </ContextMenu>
+                              </Button.ContextMenu>
+                              <!-- The progress line draws in the row's bottom padding, so a row with a run and a row without one hold one height. -->
+                              <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="4">
+                                <TextBlock Classes="body workflowName" Classes.shown="{Binding IsSelected}" Text="{Binding Name}" TextWrapping="Wrap"
+                                           AutomationProperties.AutomationId="WorkflowName" />
+                                <Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Top" Margin="0,6,0,0" Fill="{DynamicResource AccentBrush}"
+                                         IsVisible="{Binding HasUnsavedChanges}" AutomationProperties.AutomationId="WorkflowUnsaved" />
+                                <TextBlock Grid.Column="2" Classes="caption tabular" Text="{Binding RowProgress}" MinWidth="30" TextAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
+                                           AutomationProperties.AutomationId="WorkflowSummary" />
+                                <theme:StateBar Grid.Row="1" Height="2" Margin="0,2,0,-4" Counts="{Binding Counts}" IsVisible="{Binding Counts.HasRun}"
+                                                AutomationProperties.AutomationId="WorkflowProgress" />
+                              </Grid>
+                            </Button>
+                            <Border Classes="currentBar" IsVisible="{Binding IsSelected}" />
+                            <!-- The rollup mark stands in the 14 px slot, and on hover or while expanded the chevron takes its place. A row with no mark shows the chevron. -->
+                            <theme:StateMark Classes="rowSlot" Width="14" Height="14" Margin="7,8,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                             IsHitTestVisible="False" State="{Binding Rollup}" Why="{Binding RollupWhy}"
+                                             AutomationProperties.AutomationId="WorkflowState">
+                              <theme:StateMark.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                  <Binding Path="HasRollup" />
+                                  <Binding Path="!IsExpanded" />
+                                </MultiBinding>
+                              </theme:StateMark.IsVisible>
+                            </theme:StateMark>
+                            <ToggleButton Classes="chevron rowSlot" Classes.noMark="{Binding !HasRollup}" Width="22" Height="22" Margin="3,4,0,0"
+                                          HorizontalAlignment="Left" VerticalAlignment="Top"
+                                          IsChecked="{Binding IsExpanded}"
+                                          ToolTip.Tip="{Binding ExpandLabel}"
+                                          AutomationProperties.AutomationId="WorkflowExpand"
+                                          AutomationProperties.Name="{Binding ExpandLabel}">
+                              <PathIcon Theme="{StaticResource Glyph}" />
+                            </ToggleButton>
+                            <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="28" Margin="26,1,4,0" VerticalAlignment="Top"
+                                                   AutomationProperties.AutomationId="WorkflowNameBox"
+                                                   AutomationProperties.Name="Workflow name" />
+                          </Panel>
+                          <!-- Stages and agents under a workflow, on one indent guide. -->
+                          <Panel IsVisible="{Binding ShowsStages}">
+                            <Border Classes="indentGuide" />
+                            <ItemsControl ItemsSource="{Binding Stages}" Margin="20,1,0,0">
+                              <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                  <StackPanel Spacing="1" />
+                                </ItemsPanelTemplate>
+                              </ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="canvas:WorkflowStage">
+                                  <StackPanel Spacing="1">
+                                    <Button Classes="nav stage" Click="OnStageClick" HorizontalContentAlignment="Stretch"
+                                            ToolTip.Tip="{Binding FoldLabel}"
+                                            AutomationProperties.AutomationId="StageRow"
+                                            AutomationProperties.Name="{Binding FoldLabel}">
+                                      <Grid ColumnDefinitions="*,Auto,14" ColumnSpacing="4">
+                                        <TextBlock Classes="caption stageName" Text="{Binding Title}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Classes="caption tabular" Text="{Binding Progress}" VerticalAlignment="Center"
+                                                   AutomationProperties.AutomationId="StageCount" />
+                                        <PathIcon Grid.Column="2" Theme="{StaticResource Glyph}" Classes="groupChevron" Classes.folded="{Binding IsFolded}" Width="12" Height="12" />
+                                      </Grid>
+                                    </Button>
+                                    <ItemsControl ItemsSource="{Binding Agents}">
+                                      <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                          <StackPanel Spacing="1" />
+                                        </ItemsPanelTemplate>
+                                      </ItemsControl.ItemsPanel>
+                                      <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="canvas:TaskNodeViewModel">
+                                          <Button Classes="nav agent" Classes.selected="{Binding IsSelected}" HorizontalContentAlignment="Stretch"
+                                                  Click="OnAgentClick"
+                                                  DoubleTapped="OnAgentDoubleTapped"
+                                                  ContextRequested="OnAgentMenu"
+                                                  AutomationProperties.AutomationId="AgentRow"
+                                                  AutomationProperties.Name="{Binding Title}"
+                                                  AutomationProperties.HelpText="{Binding StatusLabel}">
+                                            <Grid ColumnDefinitions="14,*,14" ColumnSpacing="6">
+                                              <theme:KindTile Kind="{Binding Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                              <TextBlock Grid.Column="1" Classes="body nodeName" Text="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}"
+                                                         AutomationProperties.AutomationId="NodeRowName" />
+                                              <theme:StateMark Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" State="{Binding State}" Why="{Binding WaitReason}"
+                                                               ToolTip.Tip="{Binding StatusLabel}"
+                                                               AutomationProperties.AutomationId="NodeRowState"
+                                                               AutomationProperties.Name="{Binding StatusLabel}" />
+                                            </Grid>
+                                          </Button>
+                                        </DataTemplate>
+                                      </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                  </StackPanel>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </Panel>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <ItemsControl ItemsSource="{Binding Unopened}"
+                      AutomationProperties.AutomationId="UnopenedProjects"
+                      AutomationProperties.Name="Projects that did not open">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="2" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="local:UnopenedProject">
+              <Grid Classes="unopenedRow" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="8,5,0,5" ColumnSpacing="8"
+                    Background="Transparent"
+                    ToolTip.Tip="{Binding Reason}">
+                <TextBlock Grid.Row="0" Classes="bodyStrong projectName" Text="{Binding Name}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="UnopenedName" />
+                <TextBlock Grid.Row="1" Classes="caption warning" Text="{Binding Summary}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="UnopenedReason"
+                           AutomationProperties.HelpText="{Binding Reason}" />
+                <Button Grid.Row="0" Grid.Column="1" Classes="icon small" VerticalAlignment="Top" Margin="0,-3,0,0"
+                        Click="OnForgetProject"
+                        ToolTip.Tip="Forget this folder"
+                        AutomationProperties.AutomationId="ForgetProject"
+                        AutomationProperties.Name="{Binding Name, StringFormat='Forget {0}'}">
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
+                </Button>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Inbox: every agent that needs the person, failed, or runs, across all projects, in three groups. -->
+    <Panel Grid.Row="1" IsVisible="{Binding IsInboxView}">
+      <ScrollViewer x:Name="InboxScroller" Margin="4,0,0,0" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding Activity.HasRows}">
+        <ItemsControl ItemsSource="{Binding Activity.Groups}" Margin="0,0,8,8"
+                      AutomationProperties.AutomationId="Inbox" AutomationProperties.Name="Inbox">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="4" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="sidebar:InboxGroup">
+              <StackPanel IsVisible="{Binding HasRows}" Spacing="1">
+                <Grid ColumnDefinitions="*,Auto" Height="24" Margin="8,0,4,0">
+                  <TextBlock Classes="caption stageName" Text="{Binding Title}" VerticalAlignment="Center" AutomationProperties.AutomationId="InboxGroup" />
+                  <TextBlock Grid.Column="1" Classes="caption tabular" Text="{Binding Count}" VerticalAlignment="Center" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Rows}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="1" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="sidebar:ActivityRow">
+                      <Button Classes="activity" Command="{Binding OpenCommand}"
+                              ToolTip.Tip="{Binding Tip}"
+                              AutomationProperties.AutomationId="ActivityRow"
+                              AutomationProperties.Name="{Binding Node.Title}"
+                              AutomationProperties.HelpText="{Binding Detail}">
+                        <Grid ColumnDefinitions="14,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                          <theme:StateMark VerticalAlignment="Top" Margin="0,2,0,0" Width="14" Height="14" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
+                          <TextBlock Grid.Column="1" Classes="body nodeName" Text="{Binding Node.Title, Converter={x:Static theme:NameBreaks.KeepTokens}}"
+                                     AutomationProperties.AutomationId="ActivityName" />
+                          <DockPanel Grid.Row="1" Grid.Column="1">
+                            <TextBlock DockPanel.Dock="Left" Classes="caption" Text="{Binding ReasonLead}" Margin="0,0,4,0"
+                                       IsVisible="{Binding ReasonLead, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       AutomationProperties.AutomationId="ActivityReason" />
+                            <TextBlock Classes="caption" Text="{Binding Place}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                       AutomationProperties.AutomationId="ActivityPlace" />
+                          </DockPanel>
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+      <TextBlock Classes="body muted" Text="Nothing needs you." HorizontalAlignment="Center" VerticalAlignment="Center"
+                 IsVisible="{Binding !Activity.HasRows}"
+                 AutomationProperties.AutomationId="InboxEmpty" />
+    </Panel>
+
+    <!-- A problem never hides behind a flyout: a client that needs setup shows here until the problem clears. -->
+    <Border Grid.Row="2" Padding="12,8" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}"
+            IsVisible="{Binding HasAgentsNeedingSetup}">
+      <ItemsControl ItemsSource="{Binding AgentsNeedingSetup}" ItemTemplate="{StaticResource AgentRowTemplate}"
+                    AutomationProperties.AutomationId="AgentsNeedingSetup"
+                    AutomationProperties.Name="Agents that need setup">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="8" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+      </ItemsControl>
+    </Border>
+
+    <Border Grid.Row="3" Height="32" Padding="4,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <Button x:Name="AgentsStatus" Classes="ghost" Height="24" Padding="6,0" HorizontalAlignment="Left"
+                Command="{Binding RefreshAgentsCommand}"
+                ToolTip.Tip="{Binding AgentsTip}"
+                AutomationProperties.AutomationId="AgentsStatus"
+                AutomationProperties.Name="{Binding AgentsSummary, StringFormat='Agents: {0}. Check them again.'}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Ellipse Classes="status small" VerticalAlignment="Center"
+                     Classes.running="{Binding AgentsTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                     Classes.complete="{Binding AgentsTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                     Classes.problem="{Binding AgentsTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                     Classes.waiting="{Binding AgentsTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}" />
+            <ItemsControl ItemsSource="{Binding Agents}" Width="0" Height="0">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="execution:AgentRow">
+                  <!-- UI Automation reads each client's status here. The text takes no room. -->
+                  <TextBlock Width="0" Height="0" Opacity="0" Text="{Binding Summary}"
+                             AutomationProperties.AutomationId="{Binding AutomationId}"
+                             AutomationProperties.HelpText="{Binding Detail}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="caption" Text="{Binding AgentsSummary}" VerticalAlignment="Center"
+                       AutomationProperties.AutomationId="AgentsSummary" />
+          </StackPanel>
+        </Button>
+        <Border Grid.Column="1" Width="66" Height="24" Padding="2" Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusSm}">
+          <UniformGrid Columns="3">
+            <RadioButton Classes="segment glyph" GroupName="Theme"
+                         Tag="{x:Static ThemeVariant.Default}"
+                         IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                     Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Default}}"
+                         IsCheckedChanged="OnThemeChecked"
+                         ToolTip.Tip="System theme"
+                         AutomationProperties.AutomationId="ThemeSystem"
+                         AutomationProperties.Name="System theme">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconThemeSystem}" Width="14" Height="14" />
+            </RadioButton>
+            <RadioButton Classes="segment glyph" GroupName="Theme"
+                         Tag="{x:Static ThemeVariant.Light}"
+                         IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                     Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Light}}"
+                         IsCheckedChanged="OnThemeChecked"
+                         ToolTip.Tip="Light theme"
+                         AutomationProperties.AutomationId="ThemeLight"
+                         AutomationProperties.Name="Light theme">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconThemeLight}" Width="14" Height="14" />
+            </RadioButton>
+            <RadioButton Classes="segment glyph" GroupName="Theme"
+                         Tag="{x:Static ThemeVariant.Dark}"
+                         IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                     Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Dark}}"
+                         IsCheckedChanged="OnThemeChecked"
+                         ToolTip.Tip="Dark theme"
+                         AutomationProperties.AutomationId="ThemeDark"
+                         AutomationProperties.Name="Dark theme">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconThemeDark}" Width="14" Height="14" />
+            </RadioButton>
+          </UniformGrid>
+        </Border>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

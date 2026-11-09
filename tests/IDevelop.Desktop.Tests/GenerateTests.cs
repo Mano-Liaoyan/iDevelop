@@ -208,11 +208,8 @@ public sealed class GenerateTests : IDisposable
         var input = WorkflowCanvasViewModel.InputPortCenter;
 
         Assert.Equal(
-            [(origin + output, api + input), (api + output, button + input), (api + output, tests + input)],
+            [(Whole(origin + output), Whole(api + input)), (Whole(api + output), Whole(button + input)), (Whole(api + output), Whole(tests + input))],
             GhostWires(shell));
-        Assert.Equal(
-            ["kind-implement", "kind-implement", "kind-plan"],
-            GhostWireLines(shell).Select(wire => wire.Classes.Single(name => name.StartsWith("kind-", StringComparison.Ordinal))).Order());
         Assert.All(GhostWireLines(shell), wire => Assert.Equal([4.0, 3.0], wire.StrokeDashArray!));
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
@@ -226,7 +223,7 @@ public sealed class GenerateTests : IDisposable
     {
         var shell = Generated();
 
-        Assert.Equal("Here is the plan.", shell.InView<TextBox>("LastReply").Text);
+        Assert.Equal("Here is the plan.", shell.Window.ViewModel.Canvas!.SelectedNode!.LastReply);
         Assert.Equal(3, shell.InView<StackPanel>("Proposal").GetVisualDescendants().OfType<CheckBox>().Count(box => box.IsChecked == true && AutomationProperties.GetAutomationId(box) != "ProposalUsePlannerAgent"));
     }
 
@@ -243,7 +240,7 @@ public sealed class GenerateTests : IDisposable
         shell.WaitUntil(() => node.State == NodeState.Completed, "the planner is done");
         Assert.Equal("Added 3 tasks.", shell.Status);
         shell.ShowTasks();
-        Assert.Equal([Prompt, "Export API", "Export button", "Export tests"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
+        Assert.Equal(["Export API", "Export button", "Export tests"], shell.AgentRowTitles().Take(3));
 
         var workflow = canvas.Workflow;
         var added = workflow.Tasks.Values.Where(task => task.Id != planner).ToDictionary(task => task.Title);
@@ -312,7 +309,7 @@ public sealed class GenerateTests : IDisposable
 
         Assert.Equal("Planning…", ButtonLabel(shell));
         canvas.SelectedNodes.Clear();
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         Assert.Same(planner, canvas.SelectedNode);
         Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
 
@@ -323,7 +320,7 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => planner.State == NodeState.Completed, "the planner is done");
         Assert.Equal("Generate", ButtonLabel(shell));
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         Assert.True(shell.Has<GenerateSheet>("GenerateSheet"));
     }
 
@@ -558,8 +555,8 @@ public sealed class GenerateTests : IDisposable
         var shell = GeneratedChoosing();
 
         Install(_fakes, ClientId.Pi);
-        shell.Click(shell.Find<Button>("RefreshAgents"));
-        shell.WaitUntil(() => shell.Find<Button>("RefreshAgents").IsEffectivelyEnabled, "the check ends");
+        shell.RefreshAgents();
+        shell.WaitUntil(() => shell.AgentsChecked, "the check ends");
         shell.Render();
 
         Assert.Equal("Pi · deepseek · DeepSeek V4.1 Flash · low Export tests", Ghosts(shell)[2]);
@@ -840,7 +837,7 @@ public sealed class GenerateTests : IDisposable
 
     private static void OpenSheet(Shell shell)
     {
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         Assert.True(shell.Find<TextBox>("GeneratePrompt").IsFocused);
     }
 
@@ -855,6 +852,9 @@ public sealed class GenerateTests : IDisposable
         shell.Window.GetVisualDescendants().OfType<StepConnection>().Where(wire => AutomationProperties.GetAutomationId(wire) == "GhostWire");
 
     /// <summary>Each ghost wire's two ends on the canvas.</summary>
+    // A wire's ends sit on whole pixels of the window.
+    private static Point Whole(Point point) => new(Math.Round(point.X, MidpointRounding.AwayFromZero), Math.Round(point.Y, MidpointRounding.AwayFromZero));
+
     private static (Point From, Point To)[] GhostWires(Shell shell) =>
         [.. GhostWireLines(shell)
             .Select(shell.Ends)

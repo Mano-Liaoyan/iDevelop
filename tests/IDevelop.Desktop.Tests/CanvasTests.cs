@@ -34,7 +34,7 @@ public sealed class CanvasTests : IDisposable
         shell.AddNode();
 
         Assert.Equal("New task", shell.Find<TextBox>("TaskTitle").Text);
-        shell.Click(shell.Find<TextBox>("TaskTitle"));
+        shell.EditTitle();
         shell.Press(Key.A, RawInputModifiers.Control);
         shell.Type("Plan release");
         Assert.Equal("plan* - iDevelop", shell.Window.Title);
@@ -75,28 +75,31 @@ public sealed class CanvasTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 60, 60)));
         var canvasOrigin = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
-        shell.Pan(canvasOrigin + new Vector(700, 400), new Vector(-pan, 0));
+        shell.Pan(canvasOrigin + new Vector(680, 400), new Vector(-pan, 0));
         shell.AddNode();
 
         var (existing, added) = (shell.Node(title), shell.Node("New task"));
         Assert.Equal(60 + pan, added.Location.X);
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
-        Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title).TextLayout.TextLines.Single().HasCollapsed);
+        Assert.EndsWith("…", shell.InCard<TextBlock>(title, "CardTitle").Text);
         // The peek names the whole title that the card cuts short.
         Assert.Equal(title, shell.PeekTexts(title)![0]);
     }
 
     [AvaloniaFact]
-    public void A_selected_card_shows_its_ring_in_the_selection_color()
+    public void A_selected_card_shows_an_accent_ring_and_a_halo_outside_it()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        // The ring is 2 px wide and sits 2 px outside the card, so this pixel is on its straight top edge.
-        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -3));
-        Assert.Equal(Color.Parse("#FBFBF9"), Ring());
+        // The ring is 1.5 px wide just outside the card's edge, and the 3 px halo lies outside it.
+        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -1));
+        Color Halo() => shell.ColorAt(shell.Node("Design"), new Point(130, -3));
+        var canvas = Halo();
+        Assert.NotEqual(Color.Parse("#1E6EF4"), Ring());
 
         shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Equal(Color.Parse("#0088FF"), Ring());
+        Assert.Equal(Color.Parse("#1E6EF4"), Ring());
+        Assert.NotEqual(canvas, Halo());
 
         shell.Click(shell.Find<RadioButton>("ThemeDark"));
         Assert.Equal(Color.Parse("#0091FF"), Ring());
@@ -106,15 +109,15 @@ public sealed class CanvasTests : IDisposable
     public void A_card_shows_its_title_and_one_subtitle_and_its_tooltip_previews_its_instructions()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        Assert.Equal(["Build", "No agent"], Shell.Texts(shell.Node("Build")));
-        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Nothing written yet.", "Instructions is empty."], shell.PeekTexts("Build")!);
+        Assert.Equal(["Build", "Input", "No result", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Nothing written yet.", "Instructions is empty.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Build")!);
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
-        Assert.Equal(["Build", "No agent"], Shell.Texts(shell.Node("Build")));
-        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Compile", "The node has no agent."], shell.PeekTexts("Build")!);
+        Assert.Equal(["Build", "Input", "No result", "No agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Compile", "The node has no agent.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Build")!);
     }
 
     [AvaloniaFact]
@@ -146,15 +149,50 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Fit_to_screen_brings_a_distant_task_into_view()
+    public void The_pointer_over_a_port_names_what_passes_through_it_beside_the_port_and_only_then()
     {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
+            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        var label = shell.Find<Border>("CanvasPortLabel");
+        Assert.False(label.IsVisible);
+
+        var port = shell.Thumb(shell.Input("Build"));
+        shell.Window.MouseMove(port);
+        shell.Render();
+
+        Assert.True(label.IsVisible);
+        Assert.Equal("Input: Design", Shell.Texts(label).Single());
+        var box = shell.Bounds(label);
+        Assert.True(box.Right <= port.X, $"The label at {box} is not left of the input port at {port}.");
+
+        shell.Window.MouseMove(shell.Header(shell.Node("Build")));
+        shell.Render();
+        Assert.False(label.IsVisible);
+    }
+
+[AvaloniaFact]
+    public void Fit_to_screen_stops_at_the_least_zoom_and_keeps_the_selected_task_in_view()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 24000, 16000)));
+        // A fit this far out hides the names, so the workflow opens in Flow, and this test is about Graph's fit.
+        shell.Window.ViewModel.Canvas!.Choose(Desktop.Canvas.MapMode.Graph);
+        shell.Render();
+        shell.AtOrigin();
         var editor = new Rect(shell.Editor.Bounds.Size);
         Assert.False(editor.Intersects(shell.CardRect("Build")));
 
         shell.Click(shell.Find<Button>("FitToScreen"));
 
+        Assert.Equal(CanvasChrome.LeastFitZoom, shell.Editor.ViewportZoom);
         Assert.True(editor.Contains(shell.CardRect("Design")), $"{shell.CardRect("Design")} is outside {editor}");
+        Assert.False(editor.Intersects(shell.CardRect("Build")));
+
+        shell.Window.ViewModel.Canvas!.SelectedNode = shell.NodeModel("Build");
+        shell.Render();
+        shell.Click(shell.Find<Button>("FitToScreen"));
+
         Assert.True(editor.Contains(shell.CardRect("Build")), $"{shell.CardRect("Build")} is outside {editor}");
     }
 
@@ -162,20 +200,24 @@ public sealed class CanvasTests : IDisposable
     public void Dragging_a_task_moves_its_minimap_item()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
+        shell.ShowMinimap();
         Point Item(string title) => shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
             .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == title).Bounds.Position;
-        Assert.Equal((new Point(0, 0), new Point(300, 0)), (Item("Design"), Item("Build")));
+        Assert.Equal((new Point(0, 0), new Point(264, 0)), (Item("Design"), Item("Build")));
 
+        // The minimap takes the editor's room, so the view may fit again, and a drag moves by its screen distance at that zoom.
+        shell.Render();
         var from = shell.Header(shell.Node("Design"));
-        shell.Drag(from, from + new Vector(150, 75));
+        shell.Drag(from, from + new Vector(150, 75) * shell.Editor.ViewportZoom);
 
-        Assert.Equal((new Point(0, 75), new Point(150, 0)), (Item("Design"), Item("Build")));
+        Assert.Equal((new Point(0, 75), new Point(116, 0)), (Item("Design"), Item("Build")));
     }
 
     [AvaloniaFact]
     public void Turning_the_wheel_over_the_minimap_zooms_the_canvas_one_step_per_notch()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
+        shell.ShowMinimap();
         var minimap = shell.Center(shell.Find<Minimap>("Minimap"));
 
         shell.Window.MouseWheel(minimap, new Vector(0, 1));
@@ -190,13 +232,14 @@ public sealed class CanvasTests : IDisposable
     public void Clicking_the_minimap_centers_the_canvas_on_that_point()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
+        shell.ShowMinimap();
         var build = shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
             .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == "Build");
 
         shell.Click(build);
 
         var editor = shell.Editor;
-        Assert.Equal(new Point(2530, 1632), Shell.Rounded(editor.ViewportLocation + new Vector(editor.ViewportSize.Width, editor.ViewportSize.Height) / 2));
+        Assert.Equal(new Point(2520, 1647), Shell.Rounded(editor.ViewportLocation + new Vector(editor.ViewportSize.Width, editor.ViewportSize.Height) / 2));
     }
 
     [AvaloniaFact]
@@ -205,27 +248,26 @@ public sealed class CanvasTests : IDisposable
         var shell = Shell.Open(_temp.Create("plan"));
         var canvasOrigin = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
-        shell.RightClick(canvasOrigin + new Vector(300, 405));
+        shell.RightClick(canvasOrigin + new Vector(300, 305));
         shell.Click(shell.AddRow("Implement"));
 
         var node = Assert.Single(shell.Nodes());
-        Assert.Equal(new Point(300 - WorkflowCanvasViewModel.TaskCardWidth / 2, 405 - WorkflowCanvasViewModel.TaskCardHeight / 2), node.Location);
+        Assert.Equal(new Point(300 - WorkflowCanvasViewModel.TaskCardWidth / 2, 305 - WorkflowCanvasViewModel.TaskCardHeight / 2), node.Location);
         Assert.Equal("New task", shell.Find<TextBox>("TaskTitle").Text);
         Assert.Equal("plan* - iDevelop", shell.Window.Title);
     }
 
     [AvaloniaFact]
-    public void The_inspector_asks_for_a_selection_until_a_task_is_selected()
+    public void The_Agent_panel_shows_the_workflow_page_until_a_task_is_selected()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
 
-        Assert.True(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
-        Assert.Equal("Select a task or connection to edit it.", shell.Find<TextBlock>("InspectorHint").Text);
+        Assert.True(shell.Find<Control>("WorkflowPage").IsEffectivelyVisible);
         Assert.False(shell.Has<TextBox>("TaskTitle"));
 
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.False(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
+        Assert.False(shell.Has<Control>("WorkflowPage"));
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
     }
 
@@ -271,7 +313,7 @@ public sealed class CanvasTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.Find<TextBox>("TaskTitle"));
+        shell.EditTitle();
         shell.Press(Key.Home);
 
         shell.Press(Key.Delete);
@@ -296,14 +338,16 @@ public sealed class CanvasTests : IDisposable
 
         Assert.Equal("seed - iDevelop", titleDuringDrag);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
-        Assert.Equal(new Point(255, 165), shell.Node("Design").Location);
+        Assert.Equal(new Point(240, 165), Shell.Rounded(shell.Node("Design").Location));
+        var saved = shell.Window.ViewModel.Canvas!.Workflow.Positions[Design];
         Assert.Equal(
             (Shell.Rounded(shell.Thumb(shell.Output("Design"))), Shell.Rounded(shell.Thumb(shell.Input("Build")))),
-            Shell.Rounded(shell.Ends(Assert.Single(shell.Connections()))));
+            Shell.Whole(shell.Ends(Assert.Single(shell.Connections()))));
         shell.Press(Key.S, RawInputModifiers.Meta);
         Assert.Equal("seed - iDevelop", shell.Window.Title);
         var reopened = Shell.Open(folder);
-        Assert.Equal(new Point(255, 165), reopened.Node("Design").Location);
-        Assert.Equal(new Point(405, 90), reopened.Node("Build").Location);
+        var reopenedCanvas = reopened.Window.ViewModel.Canvas!;
+        Assert.Equal(saved, reopenedCanvas.Workflow.Positions[Design]);
+        Assert.Equal(new CanvasPoint(405, 90), reopenedCanvas.Workflow.Positions[Build]);
     }
 }

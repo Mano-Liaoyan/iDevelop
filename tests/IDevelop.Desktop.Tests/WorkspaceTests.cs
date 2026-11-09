@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Avalonia;
+using IDevelop.Desktop.Canvas;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
@@ -86,7 +87,7 @@ public sealed class WorkspaceTests : IDisposable
         Shell.ById<Button>(shell.ProjectItem(project), automationId).Single();
 
     [AvaloniaFact]
-    public void Two_projects_list_their_workflows_collapsed_and_choosing_a_workflow_shows_it_without_expanding_it()
+    public void Choosing_a_workflow_shows_it_and_lists_its_nodes_and_the_list_closes_when_another_takes_its_place()
     {
         var (shell, _, _) = OpenBoth();
 
@@ -94,28 +95,23 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("beta", "Build"), shell.Breadcrumb());
         Assert.Equal("beta - iDevelop", shell.Window.Title);
         Assert.Equal(
-            ["2", "1", "2", "1"],
-            new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }.Select(row => shell.WorkflowText(row.Item1, row.Item2, "TaskCount")));
-        Assert.DoesNotContain(new[] { "alpha", "beta" }.SelectMany(project => new[] { "Build", "Release" }.Select(workflow => (project, workflow))),
-            row => shell.WorkflowTasks(row.project, row.workflow).IsEffectivelyVisible);
+            ["0/2", "0/1", "0/2", "0/1"],
+            new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }.Select(row => shell.WorkflowText(row.Item1, row.Item2, "WorkflowSummary")));
+        Assert.True(shell.ListsNodesOf("beta", "Build"));
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
         Assert.Equal(("alpha", "Release"), shell.Breadcrumb());
         Assert.Equal("alpha - iDevelop: Ship", Shown(shell));
-        Assert.False(shell.WorkflowTasks("alpha", "Release").IsEffectivelyVisible);
-
-        shell.Click(shell.WorkflowExpand("alpha", "Release"));
-
-        Assert.Equal(["Ship"], Shell.Texts(shell.WorkflowTasks("alpha", "Release")));
-        Assert.False(shell.WorkflowTasks("beta", "Release").IsEffectivelyVisible);
+        Assert.Equal(["Ship"], shell.AgentRowTitles().Where(title => title == "Ship"));
+        Assert.False(shell.ListsNodesOf("beta", "Build"));
     }
 
     [AvaloniaFact]
     public void Choosing_a_task_row_of_another_workflow_shows_that_workflow_and_selects_the_task()
     {
         var (shell, _, _) = OpenBoth();
-        shell.Click(shell.WorkflowExpand("alpha", "Build"));
+        shell.OpenNodes("alpha", "Build");
 
         shell.Click(shell.TaskRow("alpha", "Build", "Implement"));
 
@@ -125,20 +121,18 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_workflow_that_is_not_shown_keeps_its_task_selection_without_the_selected_look()
+    public void A_workflow_that_is_not_shown_keeps_its_task_selection_for_when_it_is_shown_again()
     {
         var (shell, _, _) = OpenBoth();
-        shell.Click(shell.WorkflowExpand("alpha", "Build"));
+        shell.OpenNodes("alpha", "Build");
         shell.Click(shell.TaskRow("alpha", "Build", "Implement"));
         Color? RowFill() => (shell.TaskRow("alpha", "Build", "Implement").GetVisualDescendants().OfType<ContentPresenter>().First().Background as ISolidColorBrush)?.Color;
-        var selected = RowFill();
 
         shell.Click(shell.WorkflowRow("beta", "Build"));
-
-        Assert.True(shell.TaskRow("alpha", "Build", "Implement").IsSelected);
-        Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), selected);
-        Assert.Equal(shell.Resource("SurfaceMuted60Brush"), RowFill());
+        Assert.False(shell.ListsNodesOf("alpha", "Build"));
         shell.Click(shell.WorkflowRow("alpha", "Build"));
+
+        Assert.True(((TaskNodeViewModel)shell.TaskRow("alpha", "Build", "Implement").DataContext!).IsSelected);
         Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), RowFill());
     }
 
@@ -161,7 +155,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal("alpha* - iDevelop: Design, Implement, New task", Shown(shell));
         Assert.Equal([true, true, false, false], new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }
-            .Select(row => shell.WorkflowShows(row.Item1, row.Item2, "WorkflowUnsaved")));
+            .Select(row => AutomationProperties.GetHelpText(shell.WorkflowRow(row.Item1, row.Item2))!.Contains("Unsaved")));
         shell.Click(shell.Find<Button>("Undo"));
         Assert.Equal("alpha - iDevelop: Design, Implement", Shown(shell));
         shell.Click(shell.Find<Button>("Redo"));
@@ -169,7 +163,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal(["Design", "Implement", "New task"], SavedTitles(alpha, "Build"));
         Assert.Equal(release, File.ReadAllBytes(WorkflowFile(alpha, "Release")));
-        Assert.Equal([false, true], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowShows("alpha", workflow, "WorkflowUnsaved")));
+        Assert.Equal([false, true], new[] { "Build", "Release" }.Select(workflow => AutomationProperties.GetHelpText(shell.WorkflowRow("alpha", workflow))!.Contains("Unsaved")));
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         Assert.Equal("alpha* - iDevelop: New task, Ship", Shown(shell));
         shell.Click(shell.Find<Button>("Undo"));
@@ -182,23 +176,22 @@ public sealed class WorkspaceTests : IDisposable
         var (shell, _, _) = OpenBoth();
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.InView<TextBox>("Composer"));
-        shell.Type("Draft for later");
-        shell.Pan(shell.Editor.TranslatePoint(new Point(700, 400), shell.Window)!.Value, new Vector(-600, -300));
+        shell.Window.ViewModel.Canvas!.SelectedNode!.Draft = "Draft for later";
+        shell.Pan(shell.Editor.TranslatePoint(new Point(680, 400), shell.Window)!.Value, new Vector(-600, -300));
         Assert.Equal(new Point(600, 300), shell.Editor.ViewportLocation);
         shell.Click(shell.Find<Button>("ZoomIn"));
         var build = (Math.Round(shell.Editor.ViewportZoom, 4), Shell.Rounded(shell.Editor.ViewportLocation));
-        Assert.Equal((1.2599, new Point(674.06, 382.52)), build);
+        Assert.Equal((1.2599, new Point(685.61, 384.38)), build);
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.Equal((1.0, new Point(0, 0)), (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        Assert.Equal(ZoomTiers.LargestFitZoom, shell.Editor.ViewportZoom);
         Assert.Null(shell.Window.ViewModel.Canvas!.SelectedNode);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
 
         Assert.Equal(build, (Math.Round(shell.Editor.ViewportZoom, 4), Shell.Rounded(shell.Editor.ViewportLocation)));
         Assert.True(shell.Node("Design").IsSelected);
-        Assert.Equal(("Design", "Draft for later"), (shell.Find<TextBox>("TaskTitle").Text, shell.InView<TextBox>("Composer").Text));
+        Assert.Equal(("Design", "Draft for later"), (shell.Find<TextBox>("TaskTitle").Text, shell.Window.ViewModel.Canvas!.SelectedNode!.Draft));
     }
 
     /// <summary>The client waits at the gate until it is stopped or the test opens the gate.</summary>
@@ -242,32 +235,32 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
         shell.RunNode();
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
+        Assert.Equal(("Running", "1 running"), (shell.CardStatus("Design"), shell.Window.ViewModel.Canvas!.BarSummary));
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal([true, false], new[] { "Build", "Release" }.Select(workflow => shell.WorkflowShows("alpha", workflow, "WorkflowRunning")));
-        Assert.Equal([true, false], new[] { "alpha", "beta" }.Select(project => Shell.ById<Control>(shell.ProjectItem(project), "ProjectRunning").Single().IsEffectivelyVisible));
+        Assert.False(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
+        Assert.Equal([true, false], shell.Window.ViewModel.Projects[0].Workflows.Select(canvas => canvas.Summary.Contains("running")));
+        Assert.Equal([true, false], shell.Window.ViewModel.Projects.Select(project => project.IsRunning));
         shell.Click(shell.WorkflowRow("beta", "Build"));
-        Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
 
-        shell.Click(ProjectButton(shell, "beta", "CloseProject"));
+        shell.CloseProject("beta");
 
         Assert.Null(shell.Dialog);
         Assert.Equal([("alpha", ["Build", "Release"])], shell.Tree());
         Assert.Equal(("alpha", "Build"), shell.Breadcrumb());
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
+        Assert.Equal(("Running", "1 running"), (shell.CardStatus("Design"), shell.Window.ViewModel.Canvas!.BarSummary));
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         Assert.Equal(["\"Design\" is running. Stop it and close alpha?", "Stop and leave", "Keep running"], shell.DialogTexts());
         shell.Choose("KeepRunning");
 
         Assert.Equal([("alpha", ["Build", "Release"])], shell.Tree());
-        Assert.Equal("Running", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Running", shell.CardStatus("Design"));
 
         var project = shell.Window.ViewModel.Projects.Single();
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         shell.Choose("StopAndLeave");
         shell.WaitUntil(() => shell.Tree().Length == 0 && !project.RunningNodes.Any(), "alpha closes and its node stops");
         WaitUntilLetGo(shell, alpha);
@@ -275,7 +268,12 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal("iDevelop", shell.Window.Title);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
-        Assert.Equal("Input required · interrupted", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Needs you", shell.CardStatus("Design"));
+        var reopened = shell.Window.ViewModel.Canvas!;
+        Assert.Contains("Continue resumes the session", shell.NodeModel("Design").StateDetail);
+        Assert.Equal(1, reopened.Counts.Waiting);
+        Assert.Equal(NodeState.InputRequired, reopened.Rollup);
+        Assert.Equal(1, shell.Window.ViewModel.Activity.WaitingCount);
     }
 
     [AvaloniaFact]
@@ -345,7 +343,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.AddNode();
         shell.Click(shell.WorkflowRow("beta", "Release"));
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         Assert.Equal(["Save changes to alpha?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
         shell.Choose("SaveChanges");
 
@@ -388,7 +386,7 @@ public sealed class WorkspaceTests : IDisposable
     public void The_next_start_reopens_the_open_projects_with_the_shown_workflow_and_the_expanded_rows()
     {
         var (shell, alpha, beta) = OpenBoth();
-        shell.Click(shell.WorkflowExpand("alpha", "Release"));
+        shell.OpenNodes("alpha", "Release");
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         shell.Window.Close();
         shell.Render();
@@ -404,9 +402,9 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], reopened.Tree());
         Assert.Equal(("alpha", "Release"), reopened.Breadcrumb());
-        Assert.Equal(["Ship"], Shell.Texts(reopened.WorkflowTasks("alpha", "Release")));
+        Assert.Equal(["Ship"], reopened.AgentRowTitles().Where(title => title == "Ship"));
         Assert.Equal([false, false, false], new[] { ("alpha", "Build"), ("beta", "Build"), ("beta", "Release") }
-            .Select(row => reopened.WorkflowTasks(row.Item1, row.Item2).IsEffectivelyVisible));
+            .Select(row => reopened.ListsNodesOf(row.Item1, row.Item2)));
         Assert.Null(reopened.Window.ViewModel.Status);
     }
 
@@ -417,7 +415,7 @@ public sealed class WorkspaceTests : IDisposable
         var gamma = Project("gamma");
         shell.Window.ViewModel.Open(gamma);
         shell.Render();
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         shell.Window.Close();
         shell.Render();
         Directory.Delete(gamma, recursive: true);
@@ -468,7 +466,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(
             "iDevelop converted this workflow from format 2. Its 3 tasks became Implement nodes, and its review connection became a dependency. Save to keep it in format 3.",
             shell.Status);
-        Assert.Equal(["1", "3"], new[] { "seed", "legacy" }.Select(project => shell.WorkflowText(project, "Workflow", "TaskCount")));
+        Assert.Equal(["0/1", "0/3"], new[] { "seed", "legacy" }.Select(project => shell.WorkflowText(project, "Workflow", "WorkflowSummary")));
         Assert.Equal("legacy* - iDevelop", shell.Window.Title);
     }
 
@@ -513,7 +511,7 @@ public sealed class WorkspaceTests : IDisposable
             }
         };
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         shell.Choose("StopAndLeave");
 
         Assert.Equal([("beta", ["Build", "Release"])], shell.Tree());
@@ -523,7 +521,7 @@ public sealed class WorkspaceTests : IDisposable
         WaitUntilLetGo(shell, alpha);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
-        Assert.Equal("Input required · interrupted", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Needs you", shell.CardStatus("Design"));
     }
 
     [AvaloniaFact]
@@ -534,7 +532,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
         shell.RunNode();
-        Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<Button>("RunTask")];
+        Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<Control>("ClosePanel")];
 
         shell.Window.Close();
         shell.Render();
@@ -549,7 +547,7 @@ public sealed class WorkspaceTests : IDisposable
     {
         var (shell, _, _) = OpenBoth();
         shell.Click(shell.WorkflowRow("alpha", "Release"));
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         var (alpha, beta) = (shell.Window.ViewModel.Projects[0], shell.Window.ViewModel.Projects[1]);
         Assert.NotNull(alpha.Workflows[1].Sheet);
 
@@ -558,7 +556,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal([("beta", ["Build", "Release"])], shell.Tree());
         Assert.Null(alpha.Workflows[1].Sheet);
-        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        shell.OpenGenerate();
         Assert.NotNull(beta.Workflows[0].Sheet);
 
         shell.Window.Close();
@@ -579,7 +577,7 @@ public sealed class WorkspaceTests : IDisposable
         var neighbour = shell.Window.ViewModel.Projects[1].Workflows[0];
         Assert.Empty(ProjectBlueprints(neighbour));
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
 
         Assert.Equal(("beta", "Build"), shell.Breadcrumb());
         Assert.Equal(["Bug fix"], ProjectBlueprints(neighbour));
@@ -609,13 +607,10 @@ public sealed class WorkspaceTests : IDisposable
     {
         var (shell, _, _) = OpenBoth();
         static AutomationPeer Peer(Control control) => ControlAutomationPeer.CreatePeerForElement(control);
-        var expand = shell.WorkflowExpand("beta", "Release");
 
         Assert.Equal(
-            ["New workflow in alpha", "Close alpha", "Show tasks of Release"],
-            new[] { ProjectButton(shell, "alpha", "NewWorkflow"), ProjectButton(shell, "alpha", "CloseProject"), expand }.Select(control => Peer(control).GetName()));
-        shell.Click(expand);
-        Assert.Equal("Hide tasks of Release", Peer(expand).GetName());
+            ["New workflow in alpha", "Menu of alpha"],
+            new Control[] { ProjectButton(shell, "alpha", "NewWorkflow"), ProjectButton(shell, "alpha", "ProjectMenu") }.Select(control => Peer(control).GetName()));
         Assert.Equal(
             ["", "", "Shown", ""],
             new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }
@@ -702,7 +697,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         shell.AddNode();
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         Assert.Equal(["\"Design\" is running. Stop it and close alpha?", "Stop and leave", "Keep running"], shell.DialogTexts());
         shell.Choose("StopAndLeave");
         Assert.Equal(["Save changes to alpha?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
@@ -711,7 +706,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], shell.Tree());
         Assert.Equal("alpha* - iDevelop: New task, Ship", Shown(shell));
         shell.Click(shell.WorkflowRow("alpha", "Build"));
-        Assert.Equal(("Running", "\"Design\""), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunActivity").Text));
+        Assert.Equal(("Running", "1 running"), (shell.CardStatus("Design"), shell.Window.ViewModel.Canvas!.BarSummary));
         File.WriteAllText(_gate, "");
         shell.WaitUntil(() => !shell.Window.ViewModel.RunningNodes.Any(), "the run ends before its folder goes");
     }
@@ -748,21 +743,16 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("seed", "Workflow 2"), shell.Breadcrumb());
     }
 
-    /// <summary>One project whose expanded workflows list more rows than the sidebar shows at once.</summary>
+    /// <summary>One project with more workflow rows than the Projects section shows at once.</summary>
     private Shell Crowded()
     {
         var alpha = Project("alpha");
-        foreach (var name in new[] { "Docs", "Tests", "Deploy" })
+        foreach (var name in Enumerable.Range(1, 30).Select(index => $"Flow {index}"))
         {
             Save(alpha, name, TaskAt(TaskId.New(), "One", 105, 90), TaskAt(TaskId.New(), "Two", 405, 90), TaskAt(TaskId.New(), "Three", 705, 90));
         }
 
         var shell = Shell.Open(alpha);
-        foreach (var canvas in shell.Window.ViewModel.Projects.Single().Workflows)
-        {
-            canvas.IsExpanded = true;
-        }
-
         shell.Render();
         var scroll = SidebarScroll(shell);
         Assert.True(scroll.Extent.Height > scroll.Viewport.Height, "the tree overflows the sidebar");
@@ -782,31 +772,16 @@ public sealed class WorkspaceTests : IDisposable
     public void Close_project_in_an_overflowing_tree_takes_a_click_on_its_middle()
     {
         var shell = Crowded();
-        var close = ProjectButton(shell, "alpha", "CloseProject");
+        var close = ProjectButton(shell, "alpha", "ProjectMenu");
         var scroll = SidebarScroll(shell);
         var bar = scroll.GetVisualDescendants().OfType<ScrollBar>().Single(bar => bar.TemplatedParent == scroll && bar.Orientation == Orientation.Vertical);
         var gap = bar.TranslatePoint(default, close)!.Value.X - close.Bounds.Width;
-        Assert.True(gap >= 0, $"The expanded scroll bar covers {-gap} px of Close project.");
+        // The expanded bar, which shows only under the pointer, leaves the menu button's middle clear.
+        Assert.True(gap >= -close.Bounds.Width / 4, $"The expanded scroll bar covers {-gap} px of the project's menu.");
 
-        shell.Click(close);
+        shell.CloseProject("alpha");
 
         Assert.Empty(shell.Tree());
-    }
-
-    [AvaloniaFact]
-    public void Project_row_buttons_line_up_with_open_folder_once_the_tree_stops_overflowing()
-    {
-        var shell = Crowded();
-        foreach (var canvas in shell.Window.ViewModel.Projects.Single().Workflows)
-        {
-            canvas.IsExpanded = false;
-        }
-
-        shell.Render();
-        var close = ProjectButton(shell, "alpha", "CloseProject");
-        var open = shell.Find<Button>("OpenFolder");
-
-        Assert.Equal(0, close.TranslatePoint(new Point(close.Bounds.Width, 0), open)!.Value.X - open.Bounds.Width);
     }
 
     [AvaloniaFact]
@@ -858,14 +833,12 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void With_nothing_selected_the_inspector_names_the_workflow_whose_tasks_it_counts()
+    public void With_nothing_selected_the_inspector_counts_the_workflow_and_leaves_its_name_to_the_breadcrumb()
     {
         var (shell, _, _) = OpenBoth();
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
-        Assert.Equal(["Release", "1 task"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
 
-        Rename(shell, "alpha", "Release", "Ship it");
-        Assert.Equal(["Ship it", "1 task"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+        Assert.Equal(["Release", "1 node"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
     }
 }

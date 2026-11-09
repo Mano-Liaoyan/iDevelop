@@ -31,6 +31,33 @@ public sealed class QuestionTests
     private static string Answered(NodeFixture f) => File.ReadAllText(Path.Combine(f.Evidence, "answer.json"));
 
     [AvaloniaFact]
+    public void A_digit_in_the_empty_composer_picks_its_choice_in_the_Action_Dock_and_Enter_answers()
+    {
+        using var f = Asking();
+        var shell = f.Open();
+        var node = shell.NodeModel("Paint");
+        node.RunCommand.Execute(null);
+        shell.WaitUntil(() => node.IsAsking, "the agent asks");
+        node.OpenConversationCommand.Execute(null);
+        shell.Render();
+        var model = shell.Window.ViewModel.Conversation!;
+
+        Assert.Equal((Conversation.ActionDockKind.Question, "Answer in your own words"), (model.Dock.Kind, model.Watermark));
+        Assert.True(shell.Find<Control>("ActionDock").IsEffectivelyVisible);
+        Assert.Equal(["1", "2"], node.Questions.Single().Choices.Select(choice => choice.Digit));
+        shell.Find<TextBox>("ConversationComposer").Focus();
+        shell.Press(Avalonia.Input.Key.D2);
+        Assert.True(node.Questions.Single().Choices[1].IsChosen);
+        Assert.Equal("", shell.Find<TextBox>("ConversationComposer").Text);
+        Assert.False(model.PickChoice(3));
+
+        shell.Press(Avalonia.Input.Key.Enter);
+
+        shell.WaitForState("Paint", NodeState.Completed);
+        Assert.Contains("\"Which color?\":\"Blue\"", Answered(f));
+    }
+
+    [AvaloniaFact]
     public void The_card_shows_the_question_with_its_choices_and_Send_answers_with_the_chosen_one_while_the_turn_runs()
     {
         using var f = Asking();
@@ -41,7 +68,7 @@ public sealed class QuestionTests
         shell.WaitUntil(() => node.IsAsking, "the agent asks");
         shell.Render();
 
-        Assert.Equal(("The agent asks", "Which color?"), (node.Detail!.Heading, node.Detail.Text));
+        Assert.Equal(("Question", "Which color?"), (node.Detail!.Heading, node.Detail.Text));
         Assert.True(node.ShowsStop);
         Assert.False(node.ShowsRetry);
         Assert.False(node.SendCommand.CanExecute(null));
@@ -83,13 +110,13 @@ public sealed class QuestionTests
         node.RunCommand.Execute(null);
         shell.WaitUntil(() => node.IsAsking, "the agent asks");
         node.OpenConversationCommand.Execute(null);
-        shell.WaitUntil(() => shell.Has<Control>("ConversationQuestions"), "the conversation opens");
+        shell.WaitUntil(() => shell.Has<Control>("ActionDockQuestions"), "the conversation opens");
         shell.Render();
 
         var conversation = shell.Window.ViewModel.Conversation!;
         Assert.Equal("Sending answers the agent's question with your choices and your words.", conversation.ComposerHint);
         Assert.Equal(["Red", "Blue"], conversation.Node.Questions.Single().Choices.Select(choice => choice.Label));
-        Assert.True(shell.Find<Control>("ConversationQuestions").IsEffectivelyVisible);
+        Assert.True(shell.Find<Control>("ActionDockQuestions").IsEffectivelyVisible);
         shell.Find<TextBox>("ConversationComposer").Text = "Green, please.";
         Shell.Invoke(shell.Find<Button>("ConversationSend"));
 

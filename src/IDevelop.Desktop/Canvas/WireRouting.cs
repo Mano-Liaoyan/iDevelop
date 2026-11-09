@@ -6,21 +6,31 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>
 /// The path a wire takes from an output port to an input port. It keeps the step the canvas has always drawn, out of the
 /// output, across at the midpoint, and into the input, unless that step passes behind a card. Then it takes the
-/// orthogonal detour around every card that weighs least in length and turns. Of those it takes the one that runs least
-/// away from its own ports' rows and stub columns, so a wire never seems to come out of a card it does not join, and
-/// then the one that passes below the cards rather than above.
+/// orthogonal detour around every card that weighs least in length and turns. A detour first keeps to the middle of the
+/// gaps of a saved layout, so it never frames a card it passes, and it comes closer only where cards stand too close for
+/// that. Of the detours it takes the one that runs least away from its own ports' rows and stub columns, so a wire never
+/// seems to come out of a card it does not join, and then the one that passes below the cards rather than above.
 /// </summary>
 internal static class WireRouting
 {
-    /// <summary>
-    /// How far a wire runs straight out of a port before it turns: the connection's 6 px offset to the edge of the
-    /// handle and its 20 px spacing, both set in CanvasStyles.axaml.
-    /// </summary>
-    private const double Stub = 26;
+    /// <summary>How far a wire runs straight out of a socket's center before it turns: just past the card's gutter, into the channel between two columns.</summary>
+    private const double Stub = 12;
 
-    // How far a detour keeps from a card's container: half the gap that FreeSpot leaves between the cards it stacks, so a
-    // detour can still pass between them.
-    private static readonly double Clearance = (WorkflowCanvasViewModel.TaskFootprint.Height - WorkflowCanvasViewModel.TaskCardHeight) / 2;
+    // How far a detour keeps from a card's container in the channels that a compacted layout leaves: a 24 px gap between columns
+    // and a 26 px gap between rows.
+    private static readonly Thickness Clearance = new(6, 8);
+
+    // A wide detour keeps to the middle of those channels.
+    private static readonly Thickness WideClearance = new(11, 12);
+
+    // A wire that goes straight past a card keeps this far from its top and bottom edges, or it reads as the card's own wire.
+    private static readonly Thickness PassClearance = new(0, 8);
+
+    // What a detour keeps where cards stand closer than the clearance: the columns' port gutters and a wire's width.
+    private static readonly Thickness[] Tight = [new(2, 4), new(0, 2)];
+
+    // How much longer a wide detour may run than a close one, so it never goes around a whole group of cards for clearance.
+    private const double WideDetour = 320;
 
     // One turn weighs as much as this much length, so a detour turns no more than it has to.
     private const double TurnCost = 60;
@@ -30,17 +40,47 @@ internal static class WireRouting
     /// <summary>
     /// The corners of a wire from the output port centered at <paramref name="source"/> to the input port centered at
     /// <paramref name="target"/>, from the end of the source stub to the start of the target stub. <paramref name="cards"/>
-    /// holds every card's bounds, the wire's own two included.
+    /// holds every card's bounds, the wire's own two included. <paramref name="closed"/> holds the channels that
+    /// have no free lane for this wire (<see cref="WireRouter"/>). <paramref name="sourceStub"/> and <paramref name="targetStub"/> are
+    /// the wire's straight runs out of its ports: Flow's short gaps between rows take shorter runs than the canvas's. <paramref name="only"/>, when set, is the one clearance every detour keeps.
     /// </summary>
-    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards)
+    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards, IReadOnlyList<Rect>? closed = null, double sourceStub = Stub, double targetStub = Stub, Thickness? only = null)
     {
-        var start = new Point(source.X + Stub, source.Y);
-        var end = new Point(target.X - Stub, target.Y);
+        var start = new Point(source.X + sourceStub, source.Y);
+        var end = new Point(target.X - targetStub, target.Y);
         var step = Step(start, end);
-        return cards.Any(card => Crosses(step, card)) ? Detour(start, end, cards) ?? step : step;
+        // A channel with a port in it stays open, because the wire must leave from there.
+        Rect[] shut = [.. closed?.Where(channel => !Inside(start, channel) && !Inside(end, channel)) ?? []];
+        if (!cards.Any(card => Crosses(step, card.Inflate(PassClearance))) && !shut.Any(channel => Crosses(step, channel)))
+        {
+            return step;
+        }
+
+        // Flow's cards stand 10 px apart, so its detours take the gaps at one small clearance and never run around a whole row.
+        if (only is { } clearance)
+        {
+            return Detour(start, end, cards, clearance, shut) ?? step;
+        }
+
+        // A wire that leaves a full channel keeps out of the other narrow gaps between rows, so it takes open space and not the next tight gap.
+        if (shut.Length > 0 && Detour(start, end, cards, WideClearance, shut) is { } open)
+        {
+            return open;
+        }
+
+        var (close, wide) = (Detour(start, end, cards, Clearance, shut), Detour(start, end, cards, WideClearance, shut));
+        if (wide is { } clear && (close is not { } near || Length(clear) <= Length(near) + WideDetour))
+        {
+            return clear;
+        }
+
+        // Cards that stand too close for a wire's clear space still leave it a way between them, so a wire never takes a card's body.
+        return close ?? Tight.Select(gap => Detour(start, end, cards, gap, shut)).FirstOrDefault(detour => detour is not null)
+            ?? (shut.Length > 0 ? Route(source, target, cards, null, sourceStub, targetStub) : step);
     }
 
-    // Nodify's step: across at the middle when the input lies ahead, back along the middle row when it lies behind.
+    private static double Length(ImmutableArray<Point> route) => route.Zip(route.Skip(1)).Sum(run => Point.Distance(run.First, run.Second));
+
     private static ImmutableArray<Point> Step(Point start, Point end)
     {
         if (end.X >= start.X)
@@ -54,11 +94,12 @@ internal static class WireRouting
     }
 
     // A shortest path on the grid of lines through the stubs' ends and the cards' edges pushed out by the clearance.
-    private static ImmutableArray<Point>? Detour(Point start, Point end, IReadOnlyList<Rect> cards)
+    private static ImmutableArray<Point>? Detour(Point start, Point end, IReadOnlyList<Rect> cards, Thickness clearance, Rect[] shut)
     {
-        // A card closer to a stub's end than the clearance gives up its clearance, so the wire can still leave.
-        var walls = cards.Select(card => card.Inflate(Clearance))
-            .Select((wall, index) => Inside(start, wall) || Inside(end, wall) ? cards[index] : wall)
+        // A card closer to a stub's end than the clearance gives up as much of it as it must, so the wire can still leave.
+        var walls = cards.Select(card => new[] { card.Inflate(clearance), card.Inflate(Clearance), card.Inflate(1) }
+                .Where(wall => !Inside(start, wall) && !Inside(end, wall)).DefaultIfEmpty(card).First())
+            .Concat(shut)
             .ToArray();
         if (walls.Any(wall => Inside(start, wall) || Inside(end, wall)))
         {

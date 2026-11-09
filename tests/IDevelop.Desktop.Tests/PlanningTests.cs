@@ -58,7 +58,7 @@ public sealed class PlanningTests : IDisposable
             ```
             """);
 
-        Assert.Equal("Proposal · 3 tasks", shell.CardText("Design export", "CardStatus"));
+        Assert.Equal("Needs you", shell.CardStatus("Design export"));
         Assert.Equal(["Fills Backend API", "Fills Frontend", "New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Fill \"Backend\" as \"Backend API\"", "Fill \"Frontend\"", "Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
         Assert.Equal(["Backend API Fills Backend", "Frontend Fills Frontend", "Wire export"], Items(shell).Select(Shell.TextOf));
@@ -145,13 +145,13 @@ public sealed class PlanningTests : IDisposable
             """,
             ConversationMode.Autonomous,
             Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "The wire task calls the endpoint.")));
-        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed", "the first run succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Done", "the first run succeeds");
 
-        shell.Click(shell.InView<TextBox>("Composer"));
-        shell.Type("Why the wire task?");
-        shell.Click(shell.InView<Button>("SendMessage"));
+        var planner = shell.Window.ViewModel.Canvas!.SelectedNode!;
+        planner.Draft = "Why the wire task?";
+        planner.SendCommand.Execute(null);
 
-        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Completed" && shell.Find<TextBox>("LastReply").Text == "The wire task calls the endpoint.", "the continuation succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("RunTaskStatus").Text == "Done" && planner.LastReply == "The wire task calls the endpoint.", "the continuation succeeds");
         Assert.Equal(["New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
     }
@@ -173,7 +173,7 @@ public sealed class PlanningTests : IDisposable
             new WorkflowEdit.Delete([], [new ConnectionKey(Architect, Backend)])]));
         shell.Click(shell.Header(shell.Node("Backend")));
         shell.RunNode();
-        shell.WaitUntil(() => shell.CardText("Backend", "CardStatus") == "Completed", "the drawn task runs");
+        shell.WaitUntil(() => shell.CardStatus("Backend") == "Done", "the drawn task runs");
         shell.Click(shell.Header(shell.Node("Design export")));
 
         var backend = Items(shell).First();
@@ -320,6 +320,7 @@ public sealed class PlanningTests : IDisposable
             ```
             """);
         shell.Window.RequestedThemeVariant = theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        shell.Window.Width = 1400;
         shell.Render();
         var ghost = shell.Window.GetVisualDescendants().OfType<Panel>().Single(panel => AutomationProperties.GetAutomationId(panel) == "GhostCard");
         var surface = ghost.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("ghost"));

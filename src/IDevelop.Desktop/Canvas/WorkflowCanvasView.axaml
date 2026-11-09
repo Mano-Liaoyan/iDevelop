@@ -2,8 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:nodify="https://miroiu.github.io/nodify"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
-             xmlns:execution="using:IDevelop.Desktop.Execution"
-             xmlns:theme="using:IDevelop.Desktop.Theme"
+                          xmlns:theme="using:IDevelop.Desktop.Theme"
              x:Class="IDevelop.Desktop.Canvas.WorkflowCanvasView"
              x:DataType="canvas:WorkflowCanvasViewModel">
 
@@ -13,6 +12,31 @@
         <ResourceInclude Source="/Canvas/CanvasTemplates.axaml" />
         <ResourceInclude Source="/Canvas/CanvasMenus.axaml" />
       </ResourceDictionary.MergedDictionaries>
+      <!-- Below a zoom of 0.5 the dots turn into a texture, so the canvas has only its color. -->
+      <SolidColorBrush x:Key="CanvasPlainBrush" Color="{DynamicResource CanvasGrid.BackgroundColor}" />
+      <!-- The view sets these from the zoom (ZoomTiers.Metrics), so a card's text and strokes stay near their size on screen. -->
+      <x:Double x:Key="CardTitleSize">13</x:Double>
+      <x:Double x:Key="CardTitleLine">18</x:Double>
+      <x:Double x:Key="CardCaptionSize">11.5</x:Double>
+      <x:Double x:Key="CardCaptionLine">14</x:Double>
+      <x:Double x:Key="PlateTitleSize">12</x:Double>
+      <x:Double x:Key="PlateTitleLine">14</x:Double>
+      <x:Int32 x:Key="PlateTitleLines">2</x:Int32>
+      <x:Double x:Key="PlateMarkSize">14</x:Double>
+      <x:Double x:Key="PlateSocketSize">6</x:Double>
+      <x:Double x:Key="PlateSocketStroke">1</x:Double>
+      <Thickness x:Key="PlateTitleMargin">4</Thickness>
+      <Thickness x:Key="PlateMarkMargin">0,0,4,0</Thickness>
+      <Thickness x:Key="EdgeThickness">1</Thickness>
+      <Thickness x:Key="RingThickness">1.5</Thickness>
+      <Thickness x:Key="RingMargin">8.5,-1.5</Thickness>
+      <Thickness x:Key="HaloThickness">3</Thickness>
+      <Thickness x:Key="HaloMargin">5.5,-4.5</Thickness>
+      <x:Double x:Key="StaleEdgeWidth">1.5</x:Double>
+      <x:Double x:Key="WirePillSize">11.5</x:Double>
+      <Thickness x:Key="WirePillPadding">6,1</Thickness>
+      <Thickness x:Key="WirePillEdge">1</Thickness>
+      <CornerRadius x:Key="WirePillRadius">4</CornerRadius>
     </ResourceDictionary>
   </UserControl.Resources>
 
@@ -20,7 +44,9 @@
     <StyleInclude Source="/Canvas/CanvasStyles.axaml" />
   </UserControl.Styles>
 
-  <Panel>
+  <!-- The Map Footer docks under the editor, which clips its cards and wires. The minimap floats in the editor's corner, and a
+       fit keeps cards clear of it. -->
+  <Grid RowDefinitions="*,Auto">
     <nodify:NodifyEditor x:Name="Editor"
                          ItemsSource="{Binding Nodes}"
                          SelectedItem="{Binding SelectedNode}"
@@ -29,15 +55,18 @@
                          SelectedConnection="{Binding SelectedConnection}"
                          SelectedConnections="{Binding SelectedConnections}"
                          PendingConnection="{Binding PendingConnection}"
-                         ViewportLocation="{Binding ViewportLocation}"
                          ViewportZoom="{Binding ViewportZoom, Mode=TwoWay}"
+                         ViewportLocation="{Binding ViewportLocation}"
                          ConnectionCompletedCommand="{Binding ConnectCommand}"
                          RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                          ItemsDragCompletedCommand="{Binding CommitMovesCommand}"
-                         Decorators="{Binding Ghosts}"
+                         Decorators="{Binding Decorations}"
                          ItemTemplate="{StaticResource TaskCardTemplate}"
                          ConnectionTemplate="{StaticResource ConnectionTemplate}"
                          PendingConnectionTemplate="{StaticResource PendingConnectionTemplate}"
+                         FocusAdorner="{x:Null}"
+                         IsVisible="{Binding !IsFlow}"
+                         Classes.behindEditor="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}"
                          GridCellSize="15">
 
       <nodify:NodifyEditor.Background>
@@ -68,23 +97,24 @@
            A proposal's tasks draw as dashed cards over the empty cards they fill, and its connections as dashed wires.
            A wire dropped on empty canvas stays as the line it was while the Add popover is open. -->
       <nodify:NodifyEditor.DataTemplates>
-        <!-- A ghost has a card's three lines. A tab hanging from it says why the planner's choice of agent falls back. -->
+        <!-- A ghost has a card's three lines, its form follows the zoom tiers. A tab hanging from it says why the planner's choice of agent falls back. -->
         <DataTemplate DataType="canvas:GhostCardViewModel">
           <StackPanel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
                       AutomationProperties.AutomationId="GhostCard"
                       AutomationProperties.Name="{Binding Title}">
             <Panel Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}">
-              <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
-              <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
+              <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusMd}" />
+              <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="8" RadiusY="8" StrokeThickness="1.5" StrokeDashArray="4,3"
                          theme:StyleClass.Kind="{Binding Kind}" />
-              <Grid Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
-                <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Classes="cardText">
-                  <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                             AutomationProperties.AutomationId="GhostTitle" />
-                  <TextBlock Classes="cardAgent" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
+              <theme:EllipsisText Classes="ghostFar plateTitle" Whole="{Binding Title}" />
+              <Grid Classes="ghostFull" Margin="18,10" ColumnDefinitions="20,*" ColumnSpacing="8">
+                <theme:KindTile Kind="{Binding Kind}" TileSize="20" Opacity="0.55" VerticalAlignment="Top" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                  <theme:EllipsisText Classes="cardTitle" Whole="{Binding Title}"
+                                      AutomationProperties.AutomationId="GhostTitle" />
+                  <TextBlock Classes="ghostAgent" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="GhostLabel" />
-                  <TextBlock Classes="cardAgent" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
+                  <TextBlock Classes="ghostAgent" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="GhostDetail" />
                 </StackPanel>
               </Grid>
@@ -97,14 +127,21 @@
             </Border>
           </StackPanel>
         </DataTemplate>
+        <!-- A highlighted wire's label: "Result" or "Context", centered on the wire's midpoint. -->
+        <DataTemplate DataType="canvas:WirePillViewModel">
+          <canvas:WirePillAnchor>
+            <Border Classes="wirePill" ToolTip.Tip="{Binding Tip}" PointerPressed="OnWirePillPressed" AutomationProperties.AutomationId="WirePill">
+              <TextBlock Text="{Binding Label}" />
+            </Border>
+          </canvas:WirePillAnchor>
+        </DataTemplate>
         <DataTemplate DataType="canvas:GhostWireViewModel">
-          <nodify:StepConnection Classes="ghost" Source="{Binding Source}" Target="{Binding Target}"
-                                 theme:StyleClass.Kind="{Binding Kind}" Classes.context="{Binding IsContext}"
-                                 AutomationProperties.AutomationId="GhostWire" />
+          <canvas:RoutedConnection Classes="ghost" Source="{Binding Source}" Target="{Binding Target}"
+                                   Classes.context="{Binding IsContext}"
+                                   AutomationProperties.AutomationId="GhostWire" />
         </DataTemplate>
         <DataTemplate DataType="canvas:DanglingWireViewModel">
           <nodify:LineConnection Classes="dangling" Source="{Binding Source}" Target="{Binding Target}"
-                                 theme:StyleClass.Kind="{Binding Kind}"
                                  AutomationProperties.AutomationId="DanglingWire" />
         </DataTemplate>
       </nodify:NodifyEditor.DataTemplates>
@@ -122,13 +159,14 @@
         </ControlTheme>
       </nodify:NodifyEditor.ItemContainerTheme>
 
-      <!-- A proposal's tasks and connections, and a dropped wire, draw as ghosts that take no input. -->
+      <!-- A proposal's tasks and connections and a dropped wire draw as ghosts that take no input. A highlighted wire's label takes the pointer. -->
       <nodify:NodifyEditor.DecoratorContainerStyle>
         <ControlTheme TargetType="nodify:DecoratorContainer"
                       BasedOn="{StaticResource {x:Type nodify:DecoratorContainer}}"
                       x:DataType="canvas:Ghost">
           <Setter Property="Location" Value="{Binding Location}" />
-          <Setter Property="IsHitTestVisible" Value="False" />
+          <Setter Property="IsHitTestVisible" Value="{Binding TakesPointer}" />
+          <Setter Property="ClipToBounds" Value="False" />
           <!-- NodifyAvalonia 6.6.0 undoes the editor's zoom on each decorator, so a ghost would keep its size as the cards
                shrink and cover its neighbours. Without that transform, a ghost takes the zoom as the cards do. -->
           <Setter Property="RenderTransform" Value="{x:Null}" />
@@ -136,148 +174,137 @@
       </nodify:NodifyEditor.DecoratorContainerStyle>
     </nodify:NodifyEditor>
 
+
+    <!-- The Map's other view: agents in rows by graph depth. It reads the workflow and never changes a position. -->
+    <canvas:FlowView x:Name="FlowPane" DataContext="{Binding Flow}" IsVisible="{Binding Canvas.IsFlow}"
+                     Classes.behindEditor="{Binding Canvas.Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+    <!-- The Run frame: while an agent runs, the Map sheet's edge says so. It draws no text, and the Run Strip gives the count. -->
+    <Border Classes="runFrame" Grid.RowSpan="2" IsHitTestVisible="False" IsVisible="{Binding IsRunning}"
+            AutomationProperties.AutomationId="RunFrame" />
+
+    <!-- The keyboard's place: the canvas took the focus by a key, so its keys act here. -->
+    <Border x:Name="CanvasFocus" Classes="canvasFocus" IsHitTestVisible="False" IsVisible="False"
+            AutomationProperties.AutomationId="CanvasFocus" />
+
+    <!-- The pointer over a port or a wire names, at the port, what passes through it (ADR 0065). -->
+    <Border x:Name="PortLabel" Classes="portLabel" IsHitTestVisible="False" IsVisible="False"
+            AutomationProperties.AutomationId="CanvasPortLabel">
+      <TextBlock x:Name="PortLabelText" />
+    </Border>
+
     <canvas:GenerateLayer />
 
     <canvas:AddNodePopover x:Name="AddPopover" />
 
-    <!-- The zoom controls, the bar, and the minimap share the canvas's bottom edge, 12 px above it. On a compact or a
-         short canvas the code-behind hides the minimap. -->
-    <canvas:CanvasBottomBar x:Name="BottomBar" VerticalAlignment="Bottom" Margin="12">
-      <Border x:Name="ZoomPanel" Classes="floating" canvas:CanvasBottomBar.Slot="Leading">
-        <Border>
-          <StackPanel>
-            <!-- Expand All and Collapse All, for this workflow's cards only (ADR 0024), with the zoom controls, since it
-                 changes only this machine's view. The chevron points down to expand every card, and right to collapse
-                 them, as a card's points when it is expanded or collapsed, and the tooltip's first line names it. It shows
-                 with the minimap, which is taller than the four buttons, so the bottom row keeps its height. A compact or
-                 short canvas has room for one expanded card at most, and each card's chevron still expands it. -->
-            <Panel x:Name="ExpandAllSlot">
-              <Button Classes="icon zoom" Command="{Binding ExpandCardsCommand}" IsVisible="{Binding !IsEmpty}"
-                      ToolTip.Tip="{Binding ExpandCardsLabel, StringFormat='{}{0}&#10;Show or hide the details of every card in this workflow'}"
-                      AutomationProperties.AutomationId="ExpandAll"
-                      AutomationProperties.Name="{Binding ExpandCardsLabel}">
-                <Panel>
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" IsVisible="{Binding !AnyCardExpanded}" />
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" IsVisible="{Binding AnyCardExpanded}" />
-                </Panel>
-              </Button>
-            </Panel>
-            <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
-                    AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
-            </Button>
-            <Button Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
-                    AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
-            </Button>
-            <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
-                    AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
-            </Button>
-          </StackPanel>
-        </Border>
-      </Border>
+    <!-- The minimap floats in the Map's bottom-right corner, 8 px from its edges, and only when the Map has the room for it. -->
+    <Border x:Name="MinimapPanel" Classes="mapMinimap" IsVisible="False">
+        <nodify:Minimap x:Name="Minimap"
+                        ItemsSource="{Binding Converter={x:Static canvas:MinimapItems.Of}}"
+                        ViewportLocation="{Binding ViewportLocation}"
+                        ViewportSize="{Binding #Editor.ViewportSize}"
+                        ViewportStyle="{StaticResource MinimapViewportTheme}"
+                        ResizeToViewport="True"
+                        AutomationProperties.AutomationId="Minimap"
+                        AutomationProperties.Name="Minimap">
+          <!-- An item is a small card in its state's fill, as a card is at the Block tier. A proposal's ghost card is a faint
+               fill in a dashed ring of its kind, as on the canvas. -->
+          <nodify:Minimap.DataTemplates>
+            <DataTemplate DataType="canvas:TaskNodeViewModel">
+              <Border Classes="minimapItem stateBlock" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
+            </DataTemplate>
+            <DataTemplate DataType="canvas:GhostCardViewModel">
+              <Panel>
+                <Border Classes="minimapItem ghost" theme:StyleClass.Kind="{Binding Kind}" />
+                <Rectangle Classes="minimapRing kindStroke" theme:StyleClass.Kind="{Binding Kind}" />
+              </Panel>
+            </DataTemplate>
+          </nodify:Minimap.DataTemplates>
+          <nodify:Minimap.ItemContainerTheme>
+            <!-- The items are cards and ghost cards, two types that each have a Location, so the binding finds it by name. -->
+            <ControlTheme TargetType="nodify:MinimapItem"
+                          BasedOn="{StaticResource {x:Type nodify:MinimapItem}}">
+              <Setter Property="Location" Value="{ReflectionBinding Location, Mode=OneWay}" />
+              <Setter Property="Width" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}" />
+              <Setter Property="Height" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" />
+            </ControlTheme>
+          </nodify:Minimap.ItemContainerTheme>
+        </nodify:Minimap>
+    </Border>
 
-      <!-- The bar counts the nodes that run and wait for the person, with Stop All, and Merge into my branch while every
-           node is completed and nothing is stale (ADR 0017). UI Automation shows no plain border, so a user control carries
-           its id. On a compact canvas its buttons show only their glyphs. -->
-      <StackPanel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" VerticalAlignment="Bottom" Spacing="8">
-        <UserControl HorizontalAlignment="Center"
-                     IsVisible="{Binding ShowsBar}"
-                     AutomationProperties.AutomationId="WorkflowRunBar"
-                     AutomationProperties.Name="{Binding BarSummary}">
-          <Border Classes="floating">
-            <Border Padding="12,6,6,6">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                <StackPanel VerticalAlignment="Center" Spacing="2">
-                  <!-- While nodes wait, the pill selects the next one that waits for the person. -->
-                  <Button Classes="ghost" Padding="2" Command="{Binding NextWaitingCommand}"
-                          IsHitTestVisible="{Binding HasWaiting}" Focusable="{Binding HasWaiting}"
-                          ToolTip.Tip="Show the next node that waits for you"
-                          AutomationProperties.AutomationId="RunAttention"
-                          AutomationProperties.Name="Show the next node that waits for you">
-                    <Border Classes="pill" HorizontalAlignment="Left"
-                            Classes.running="{Binding BarTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                            Classes.complete="{Binding BarTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                            Classes.waiting="{Binding BarTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-                      <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Theme="{StaticResource Glyph}" />
-                        <TextBlock Text="{Binding BarSummary}" AutomationProperties.AutomationId="RunStatus" />
-                      </StackPanel>
-                    </Border>
-                  </Button>
-                  <!-- Several running nodes' titles wrap to a second line, between titles, before they are cut. -->
-                  <TextBlock Classes="caption" Text="{Binding BarActivity}" MaxWidth="360" HorizontalAlignment="Left"
-                             TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding BarActivity}"
-                             IsVisible="{Binding BarActivity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                             AutomationProperties.AutomationId="RunActivity" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                  <Button Classes="primary glyph" Height="32"
-                          Command="{Binding MergeIntoBranchCommand}" IsVisible="{Binding CanMergeIntoBranch}"
-                          ToolTip.Tip="Merge into my branch&#10;Merge the end nodes' work into the branch you have checked out"
-                          AutomationProperties.AutomationId="MergeIntoBranch"
-                          AutomationProperties.Name="Merge into my branch">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
-                      <TextBlock Classes="label" Text="Merge into my branch" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="ghost glyph" Height="32"
-                          Command="{Binding StopAllCommand}" IsVisible="{Binding !!RunningCount}"
-                          ToolTip.Tip="Stop All&#10;Stop every running node. Finished results stay."
-                          AutomationProperties.AutomationId="StopAll"
-                          AutomationProperties.Name="Stop All">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                      <TextBlock Classes="label" Text="Stop All" />
-                    </StackPanel>
-                  </Button>
-                </StackPanel>
-              </Grid>
-            </Border>
-          </Border>
-        </UserControl>
-      </StackPanel>
-
-      <Border x:Name="MinimapPanel" Classes="floating" canvas:CanvasBottomBar.Slot="Trailing" Width="200" Height="150">
-        <Border>
-          <nodify:Minimap x:Name="Minimap"
-                          ItemsSource="{Binding Converter={x:Static canvas:MinimapItems.Of}}"
-                          ViewportLocation="{Binding ViewportLocation}"
-                          ViewportSize="{Binding #Editor.ViewportSize}"
-                          ViewportStyle="{StaticResource MinimapViewportTheme}"
-                          AutomationProperties.AutomationId="Minimap"
-                          AutomationProperties.Name="Minimap">
-            <!-- A card is a small card: its kind's fill, and its state's ring where the state is not idle. A proposal's
-                 ghost card is a faint fill in a dashed ring of its kind, as on the canvas. -->
-            <nodify:Minimap.DataTemplates>
-              <DataTemplate DataType="canvas:TaskNodeViewModel">
-                <Panel>
-                  <Border Classes="minimapItem" theme:StyleClass.Kind="{Binding Kind}" />
-                  <Border Classes="minimapRing stateStroke"
-                          theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-                </Panel>
-              </DataTemplate>
-              <DataTemplate DataType="canvas:GhostCardViewModel">
-                <Panel>
-                  <Border Classes="minimapItem ghost" theme:StyleClass.Kind="{Binding Kind}" />
-                  <Rectangle Classes="minimapRing kindStroke" theme:StyleClass.Kind="{Binding Kind}" />
-                </Panel>
-              </DataTemplate>
-            </nodify:Minimap.DataTemplates>
-            <nodify:Minimap.ItemContainerTheme>
-              <!-- The items are cards and ghost cards, two types that each have a Location, so the binding finds it by name. -->
-              <ControlTheme TargetType="nodify:MinimapItem"
-                            BasedOn="{StaticResource {x:Type nodify:MinimapItem}}">
-                <Setter Property="Location" Value="{ReflectionBinding Location, Mode=OneWay}" />
-                <Setter Property="Width" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}" />
-                <Setter Property="Height" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" />
-              </ControlTheme>
-            </nodify:Minimap.ItemContainerTheme>
-          </nodify:Minimap>
+    <!-- The Map Footer: the view's controls at the left, and key hints at the right, as a status bar has them. It holds no counts. -->
+    <Border Classes="mapFooter" Grid.Row="1" IsVisible="{Binding !IsEmpty}" AutomationProperties.AutomationId="MapFooter">
+      <DockPanel VerticalAlignment="Center" Margin="4,0,8,0">
+        <TextBlock x:Name="FooterHints" DockPanel.Dock="Right" Classes="caption" VerticalAlignment="Center"
+                   Foreground="{DynamicResource TextFaintBrush}" Text="{Binding KeyHints}" TextTrimming="CharacterEllipsis"
+                   AutomationProperties.AutomationId="MapHints" />
+        <!-- The view switch, then the controls of the view that shows. -->
+        <Border DockPanel.Dock="Left" Height="24" Width="104" Padding="2" Margin="0,0,6,0" VerticalAlignment="Center"
+                Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusSm}"
+                AutomationProperties.AutomationId="MapViewSwitch">
+          <UniformGrid Columns="2">
+            <RadioButton Classes="segment" GroupName="MapView" IsChecked="{Binding IsFlow}" Padding="0"
+                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                         ToolTip.Tip="Show the run in rows (G)"
+                         AutomationProperties.AutomationId="ViewFlow" AutomationProperties.Name="Flow">
+              <TextBlock Classes="small" Text="Flow" />
+            </RadioButton>
+            <RadioButton Classes="segment" GroupName="MapView" IsChecked="{Binding IsGraph}" Padding="0"
+                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                         ToolTip.Tip="Show the blueprint (G)"
+                         AutomationProperties.AutomationId="ViewGraph" AutomationProperties.Name="Graph">
+              <TextBlock Classes="small" Text="Graph" />
+            </RadioButton>
+          </UniformGrid>
         </Border>
-      </Border>
-    </canvas:CanvasBottomBar>
-  </Panel>
+        <Rectangle DockPanel.Dock="Left" Width="1" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" Fill="{DynamicResource Border80Brush}" />
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" IsVisible="{Binding IsFlow}"
+                    AutomationProperties.AutomationId="FlowTools">
+          <Button Classes="icon zoom" Click="OnDensityDown" IsEnabled="{Binding Flow.CanStepDown}" ToolTip.Tip="Smaller cards (-)"
+                  AutomationProperties.AutomationId="DensityDown" AutomationProperties.Name="Smaller cards">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
+          </Button>
+          <Button Classes="icon zoom" Click="OnDensityUp" IsEnabled="{Binding Flow.CanStepUp}" ToolTip.Tip="Larger cards (+)"
+                  AutomationProperties.AutomationId="DensityUp" AutomationProperties.Name="Larger cards">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
+          </Button>
+          <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Show the most stages (F)"
+                  AutomationProperties.AutomationId="FlowFit" AutomationProperties.Name="Show the most stages">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
+          </Button>
+        </StackPanel>
+        <StackPanel x:Name="ZoomPanel" Orientation="Horizontal" VerticalAlignment="Center" IsVisible="{Binding IsGraph}"
+                    AutomationProperties.AutomationId="ZoomPanel">
+          <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
+                  AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
+          </Button>
+          <Button x:Name="ZoomOutButton" Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
+                  AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
+          </Button>
+          <Button Classes="ghost zoom zoomValue" Click="OnZoomActual" ToolTip.Tip="Zoom to 100% (0)"
+                  AutomationProperties.AutomationId="ZoomValue" AutomationProperties.Name="Reset the zoom">
+            <TextBlock Text="{Binding ZoomLabel}" AutomationProperties.AutomationId="ZoomLabel" />
+          </Button>
+          <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
+                  AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
+          </Button>
+          <!-- Expand All and Collapse All, for this workflow's cards only (ADR 0024), since it changes only this machine's view. -->
+          <Button Classes="icon zoom" Command="{Binding ExpandCardsCommand}"
+                  ToolTip.Tip="{Binding ExpandCardsLabel, StringFormat='{}{0}&#10;Show or hide the details of every card in this workflow'}"
+                  AutomationProperties.AutomationId="ExpandAll"
+                  AutomationProperties.Name="{Binding ExpandCardsLabel}">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconExpandAll}" />
+          </Button>
+          <ToggleButton x:Name="MinimapToggle" Classes="zoom"
+                        ToolTip.Tip="Show the minimap"
+                        AutomationProperties.AutomationId="ShowMinimap" AutomationProperties.Name="Show the minimap">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMinimap}" />
+          </ToggleButton>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
 </UserControl>

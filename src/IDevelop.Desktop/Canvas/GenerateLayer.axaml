@@ -6,7 +6,7 @@
              x:Class="IDevelop.Desktop.Canvas.GenerateLayer"
              x:DataType="canvas:WorkflowCanvasViewModel">
   <Panel>
-    <!-- Only the card's button takes input, so a right-click or a pan anywhere else on the card reaches the canvas.
+    <!-- Only the card's buttons take input, so a right-click or a pan anywhere else on the card reaches the canvas.
          UI Automation shows no plain border, so a user control carries the card's id. A user control clips to its
          bounds by default, which would cut off the card's shadow. The card keeps 24 px from the canvas's sides, so on the
          narrowest canvas it narrows and its text wraps. -->
@@ -23,18 +23,24 @@
                       Foreground="{DynamicResource OnAccentBrush}" />
           </Border>
           <TextBlock Text="Start with a description" HorizontalAlignment="Center" IsHitTestVisible="False"
-                     FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
+                     FontSize="{StaticResource TypeTitleSize}" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
           <TextBlock Text="Describe what you want to build. A planner proposes the tasks, and you choose which to add."
                      TextAlignment="Center" TextWrapping="Wrap" IsHitTestVisible="False"
-                     FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+                     FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource TextMutedBrush}" />
           <Button Classes="primary" HorizontalAlignment="Center"
                   Command="{Binding OpenGenerateCommand}"
                   AutomationProperties.AutomationId="GenerateStart"
                   AutomationProperties.Name="Generate Workflow…">
             <TextBlock Text="Generate Workflow…" />
           </Button>
-          <TextBlock Text="or right-click the canvas to add a node" HorizontalAlignment="Center" IsHitTestVisible="False"
-                     FontSize="11" Foreground="{DynamicResource TextFaintBrush}" />
+          <Button Classes="action" HorizontalAlignment="Center" Click="OnAddNode"
+                  ToolTip.Tip="Add one node by hand (N)"
+                  AutomationProperties.AutomationId="EmptyAddNode" AutomationProperties.Name="Add a node">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Add a node" VerticalAlignment="Center" />
+              <TextBlock Classes="keyHint" Text="N" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
         </StackPanel>
       </Panel>
     </UserControl>

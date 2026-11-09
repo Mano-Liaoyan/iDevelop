@@ -51,7 +51,7 @@ public sealed class UndoTests : IDisposable
 
         shell.Press(Key.Z, RawInputModifiers.Control);
 
-        Assert.Equal(["Design", "Build", "Review"], shell.Find<ListBox>("SidebarTasks").Items.Cast<TaskNodeViewModel>().Select(node => node.Title));
+        Assert.Equal(["Design", "Build", "Review"], shell.AgentRowTitles());
         Assert.Equal(
             [("Build", "Review", ConnectionKind.Dependency), ("Design", "Build", ConnectionKind.Dependency), ("Design", "Review", ConnectionKind.Context)],
             shell.Drawn());
@@ -118,7 +118,7 @@ public sealed class UndoTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.Find<TextBox>("TaskTitle"));
+        shell.EditTitle();
         shell.Press(Key.End);
         shell.Type(" the API");
         Assert.Equal("Design the API", ((TaskNodeViewModel)shell.Node("Design the API").DataContext!).Title);
@@ -129,6 +129,21 @@ public sealed class UndoTests : IDisposable
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
         Assert.Equal("seed - iDevelop", shell.Window.Title);
         Assert.False(shell.Find<Button>("Undo").IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public void Undo_and_Redo_take_the_faint_ink_while_they_have_no_step()
+    {
+        var shell = OpenChain();
+        Assert.Equal((Color(shell, "TextFaintBrush"), Color(shell, "TextFaintBrush")), (Ink(shell.Find<Button>("Undo")), Ink(shell.Find<Button>("Redo"))));
+
+        Delete(shell, "Build");
+
+        Assert.Equal(Color(shell, "TextMutedBrush"), Ink(shell.Find<Button>("Undo")));
+        Assert.Equal(Color(shell, "TextFaintBrush"), Ink(shell.Find<Button>("Redo")));
+
+        static Avalonia.Media.Color Ink(Button button) => ((Avalonia.Media.ISolidColorBrush)button.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(part => part.Name == "PART_ContentPresenter").Foreground!).Color;
+        static Avalonia.Media.Color Color(Shell shell, string key) => shell.Resource(key);
     }
 
     [AvaloniaFact]

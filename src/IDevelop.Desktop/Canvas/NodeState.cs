@@ -5,11 +5,14 @@ using EngineState = IDevelop.Engine.NodeState;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>The engine's state of a node, which its ring, tint, glyph, and status show (ADR 0017).</summary>
+/// <summary>The engine's state of a node, which its ring, State Mark, and status show (ADR 0017).</summary>
 public enum NodeState { Idle, Running, InputRequired, Completed, Failed, Stale }
 
 /// <summary>What the node is to another node, drawn over its state: a running review's subject, or a planner with an open proposal.</summary>
 public enum NodeRole { None, UnderReview, Proposing }
+
+/// <summary>What a node that needs the person needs, which its glyph tells apart. None for every other state.</summary>
+public enum WaitReason { None, Question, Reply, Approval, Conflict, Interrupted, RoundLimit }
 
 public static class NodeStates
 {
@@ -23,34 +26,66 @@ public static class NodeStates
         _ => NodeState.Idle,
     };
 
-    /// <summary>The card's status, which names why a node needs the person, such as "Input required · approval".</summary>
-    public static string Label(EngineState state) => state switch
+    /// <summary>What <paramref name="state"/> waits for.</summary>
+    public static WaitReason Why(EngineState state) => state switch
     {
-        EngineState.Running => "Running",
-        EngineState.InputRequired waiting => $"Input required · {Reason(waiting.Why)}",
-        EngineState.Completed => "Completed",
-        EngineState.Failed => "Failed",
-        EngineState.Stale => "Stale",
-        _ => "Idle",
+        EngineState.InputRequired { Why: EngineState.Approval } => WaitReason.Approval,
+        EngineState.InputRequired { Why: EngineState.Reply } => WaitReason.Reply,
+        EngineState.InputRequired { Why: EngineState.Conflict } => WaitReason.Conflict,
+        EngineState.InputRequired { Why: EngineState.Interrupted } => WaitReason.Interrupted,
+        EngineState.InputRequired { Why: EngineState.RoundLimit } => WaitReason.RoundLimit,
+        EngineState.InputRequired => WaitReason.Question,
+        _ => WaitReason.None,
+    };
+
+    /// <summary>The state's one word. The app shows exactly these six.</summary>
+    public static string Word(NodeState state) => state switch
+    {
+        NodeState.Running => "Running",
+        NodeState.InputRequired => "Needs you",
+        NodeState.Completed => "Done",
+        NodeState.Failed => "Failed",
+        NodeState.Stale => "Stale",
+        _ => "Not started",
+    };
+
+    /// <summary>The state's word. A node that needs the person adds the reason, such as "Needs you · Approval".</summary>
+    public static string Label(EngineState state) => state is EngineState.InputRequired
+        ? $"{Word(NodeState.InputRequired)} · {Need(Why(state))}"
+        : Word(Of(state));
+
+    /// <summary>What a waiting node needs, in the one word that a zoomed out card has room for.</summary>
+    /// <summary>The reason a rollup mark shows: the one reason every waiting node shares, or a question for several reasons.</summary>
+    public static WaitReason CommonReason(IEnumerable<TaskNodeViewModel> nodes) =>
+        nodes.Where(node => node.IsWaiting).Select(node => node.WaitReason).Distinct().ToList() is [var only] ? only : WaitReason.Question;
+
+    public static string Need(WaitReason why) => why switch
+    {
+        WaitReason.Reply => "Reply",
+        WaitReason.Approval => "Approval",
+        WaitReason.Conflict => "Conflict",
+        WaitReason.Interrupted => "Interrupted",
+        WaitReason.RoundLimit => "Round limit",
+        _ => "Question",
     };
 
     /// <summary>
-    /// The status of a running node whose client waits for <paramref name="background"/> work, such as "Waiting for a
-    /// background subagent" (ADR 0030), and otherwise the state's own.
+    /// The status of a running node whose client waits for <paramref name="background"/> work, such as "Running · Background
+    /// subagent" (ADR 0030), and otherwise the state's own.
     /// </summary>
     public static string Label(EngineState state, ImmutableArray<BackgroundTask> background) =>
         state is not EngineState.Running || background.IsDefaultOrEmpty ? Label(state)
-        : background.Any(task => task.IsSubagent) ? "Waiting for a background subagent"
-        : "Waiting for background work";
+        : background.Any(task => task.IsSubagent) ? $"{Word(NodeState.Running)} · Background subagent"
+        : $"{Word(NodeState.Running)} · Background work";
 
     /// <summary>What the node needs from the person, or why it stopped, in a sentence, or null when its status says enough.</summary>
     public static string? Detail(EngineState state) => state switch
     {
         EngineState.InputRequired { Why: EngineState.Approval } => "Approve what the nodes before it handed on, or send it back with a note.",
-        EngineState.InputRequired { Why: EngineState.Reply } => "The agent replied. Write back, or approve its reply as the result.",
+        EngineState.InputRequired { Why: EngineState.Reply } => "The agent replied. Write back, or accept its reply as the result.",
         EngineState.InputRequired { Why: EngineState.Conflict } =>
             "The work handed on conflicts. Resolve the conflict in the node's worktree, then mark it resolved.",
-        EngineState.InputRequired { Why: EngineState.Interrupted } => "iDevelop closed during its turn. Continue the session, or retry.",
+        EngineState.InputRequired { Why: EngineState.Interrupted } => "The app closed during this turn. Continue resumes the session. Retry starts a new attempt.",
         EngineState.InputRequired { Why: EngineState.RoundLimit } =>
             "The review reached its round limit. Approve the work, send it back with a note, or edit the workflow.",
         EngineState.InputRequired waiting => waiting.Why,
@@ -67,15 +102,5 @@ public static class NodeStates
         NodeState.InputRequired => StatusTone.Waiting,
         NodeState.Stale => StatusTone.Warning,
         _ => StatusTone.Neutral,
-    };
-
-    private static string Reason(string why) => why switch
-    {
-        EngineState.Approval => "approval",
-        EngineState.Reply => "reply",
-        EngineState.Conflict => "conflict",
-        EngineState.Interrupted => "interrupted",
-        EngineState.RoundLimit => "round limit",
-        _ => "question",
     };
 }

@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -9,6 +10,7 @@ using Avalonia;
 using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Inspector;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Projects;
 
@@ -34,103 +36,196 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = ViewModel;
         PickFolder = PickFolderWithStorageProvider;
-        // A press or the focus in a workflow's task list shows that workflow first, so the list's choice selects a card
-        // on the canvas that shows it.
-        AddHandler(PointerPressedEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Tunnel, handledEventsToo: true);
-        AddHandler(GotFocusEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Bubble, handledEventsToo: true);
         ConversationLinkRouter.SetRouter(this, new ConversationLinkRouter(uri => Launcher.LaunchUriAsync(uri), text => Copy(text)));
         ViewModel.OpenFolder = folder => Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folder));
+        ViewModel.OpenFile = file => Launcher.LaunchFileInfoAsync(new FileInfo(file));
+        ViewModel.LayOut = UpdateLayout;
+        ViewModel.NodeShown += BringIntoViewIfHidden;
+        ViewModel.ComposerRequested += FocusComposer;
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainWindowViewModel.DockedConversation) && (ViewModel.DockedConversation is not null) != _docked)
+            if (e.PropertyName is nameof(MainWindowViewModel.IsSidebarShown) or nameof(MainWindowViewModel.IsInspectorShown) or nameof(MainWindowViewModel.IsIndexFlyoutOpen))
             {
-                _docked = !_docked;
-                SizeDock();
+                ShowPanels();
             }
         };
-        _sidebarMax = Columns.ColumnDefinitions[0].MaxWidth;
-        _inspectorMax = Columns.ColumnDefinitions[4].MaxWidth;
-        Columns.SizeChanged += (_, _) => LimitPanels();
+        ViewModel.AgentPanel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AgentPanelViewModel.IsRoom))
+            {
+                PlaceRoom();
+            }
+        };
+        InspectorFrame.SizeChanged += (_, e) => ViewModel.AgentPanel.Width = e.NewSize.Width;
+        ViewModel.NextRequested += GoNext;
+        ViewModel.FrameRunningRequested += () => CanvasView?.FrameRunning();
+        // A click outside the flyout or Esc closes it. Anything that is not the flyout's own keeps working as it would.
+        AddHandler(PointerPressedEvent, (_, e) => CloseFlyoutOnClickOutside(e.Source), RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+        Shell.SizeChanged += (_, e) => ApplyTier(e.NewSize.Width);
         Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
         Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
-        CanvasArea.SizeChanged += (_, e) => TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
-        MainArea.SizeChanged += (_, _) => LimitDock();
-        DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
     }
 
-    // The largest widths the sidebar's and the inspector's columns declare for themselves.
-    private readonly double _sidebarMax;
-    private readonly double _inspectorMax;
+    // The widths the Index and the Agent panel have now: their tier's, or what the person dragged them to since the tier began.
+    private double _indexWidth = PanelWidths.SizesOf(WidthTier.Default).Index.Width;
+    private double _panelWidth = PanelWidths.SizesOf(WidthTier.Default).Panel.Width;
+    private WidthTier? _appliedTier;
+    private bool _applyingWidths;
 
-    private void OnPanelColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    // A panel that opens or closes keeps the selected card in view. A fitted view fits again by itself, and a view the person
+    // moved otherwise stays.
+    private void KeepSelectionInView() => Dispatcher.UIThread.Post(() =>
     {
-        if (e.Property == ColumnDefinition.WidthProperty)
+        if (ViewModel.Canvas?.SelectedNode is { } node)
         {
-            LimitPanels();
+            CanvasView?.BringIntoViewIfHidden(node);
+        }
+    }, DispatcherPriority.Background);
+
+    // The sheets' shown state as the columns last laid it out.
+    private (bool Sidebar, bool Inspector) _panelsShown = (true, true);
+
+    // A tier gives the sheets their widths on start and when the window enters it. A dragged width stays until then.
+    private void ApplyTier(double width)
+    {
+        var tier = PanelWidths.TierOf(width);
+        ViewModel.IsMinimal = width < PanelWidths.MinimalFrom;
+        if (tier != _appliedTier)
+        {
+            _appliedTier = tier;
+            ViewModel.Tier = tier;
+            (_indexWidth, _panelWidth) = (PanelWidths.SizesOf(tier).Index.Width, PanelWidths.SizesOf(tier).Panel.Width);
+        }
+
+        ShowPanels();
+    }
+
+    // The Index, or the Rail in its place, and the Agent panel take their tier's widths. The Rail stands flush at the window's left edge.
+    private void ShowPanels()
+    {
+        var shown = (ViewModel.IsSidebarShown, ViewModel.IsInspectorShown);
+        if (shown != _panelsShown)
+        {
+            _panelsShown = shown;
+            KeepSelectionInView();
+        }
+
+        var (index, panel) = PanelWidths.SizesOf(ViewModel.Tier);
+        var (indexColumn, panelGap, panelColumn) = (Columns.ColumnDefinitions[0], Columns.ColumnDefinitions[3], Columns.ColumnDefinitions[4]);
+        _applyingWidths = true;
+        if (ViewModel.IsSidebarShown)
+        {
+            indexColumn.MinWidth = 0;
+            indexColumn.MaxWidth = index.Max;
+            indexColumn.MinWidth = index.Min;
+            indexColumn.Width = new GridLength(_indexWidth);
+        }
+        else
+        {
+            indexColumn.MinWidth = 0;
+            indexColumn.MaxWidth = PanelWidths.RailWidth;
+            indexColumn.Width = new GridLength(PanelWidths.RailWidth);
+        }
+
+        panelGap.Width = new GridLength(ViewModel.IsInspectorShown ? PanelWidths.SheetGap : 0);
+        if (ViewModel.IsInspectorShown)
+        {
+            panelColumn.MinWidth = 0;
+            panelColumn.MaxWidth = panel.Max;
+            panelColumn.MinWidth = panel.Min;
+            panelColumn.Width = new GridLength(_panelWidth);
+        }
+        else
+        {
+            panelColumn.MinWidth = 0;
+            panelColumn.MaxWidth = 0;
+            panelColumn.Width = new GridLength(0);
+        }
+
+        _applyingWidths = false;
+        Columns.Margin = new Thickness(ViewModel.ShowsRail ? 0 : PanelWidths.SheetGap, 0, PanelWidths.SheetGap, PanelWidths.SheetGap);
+        PlaceFlyout();
+        LimitPanels();
+    }
+
+    // The Room takes the Map's column and the panel's. On the way back the selected card comes into view again.
+    private void PlaceRoom()
+    {
+        var room = ViewModel.AgentPanel.IsRoom;
+        Grid.SetColumn(InspectorFrame, room ? 2 : 4);
+        Grid.SetColumnSpan(InspectorFrame, room ? 3 : 1);
+        if (!room)
+        {
+            KeepSelectionInView();
         }
     }
 
-    // Each panel keeps the width it was given, which its column's largest width caps while the window is too narrow for it.
+    // The flyout spans the body beside the Rail and covers the Map, which it does not rearrange. Closed, the sheet returns to its column.
+    private void PlaceFlyout()
+    {
+        var flyout = ViewModel.IsIndexFlyoutOpen && ViewModel.ShowsRail;
+        Grid.SetColumnSpan(IndexSheet, flyout ? 5 : 1);
+        IndexSheet.HorizontalAlignment = flyout ? Avalonia.Layout.HorizontalAlignment.Left : Avalonia.Layout.HorizontalAlignment.Stretch;
+        IndexSheet.Width = flyout ? PanelWidths.FlyoutWidth : double.NaN;
+        IndexSheet.Margin = flyout ? new Thickness(PanelWidths.RailWidth + PanelWidths.SheetGap, 0, 0, 0) : default;
+    }
+
+    private void OnPanelColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != ColumnDefinition.WidthProperty || _applyingWidths)
+        {
+            return;
+        }
+
+        if (sender == Columns.ColumnDefinitions[0] && ViewModel.IsSidebarShown)
+        {
+            _indexWidth = Columns.ColumnDefinitions[0].Width.Value;
+        }
+        else if (sender == Columns.ColumnDefinitions[4] && ViewModel.IsInspectorShown)
+        {
+            _panelWidth = Columns.ColumnDefinitions[4].Width.Value;
+        }
+
+        LimitPanels();
+    }
+
+    // Each sheet keeps its width while the Map keeps its least width. Its column's largest width caps it, and the splitters keep to that.
     private void LimitPanels()
     {
         var (sidebar, inspector) = (Columns.ColumnDefinitions[0], Columns.ColumnDefinitions[4]);
-        var room = Columns.Bounds.Width - Columns.ColumnDefinitions[1].Width.Value - Columns.ColumnDefinitions[3].Width.Value - PanelWidths.CanvasMinWidth;
+        var body = Shell.Bounds.Width - Columns.Margin.Left - Columns.Margin.Right;
+        var room = body - Columns.ColumnDefinitions[1].Width.Value - Columns.ColumnDefinitions[3].Width.Value - PanelWidths.CanvasMinWidth;
         if (room <= 0)
         {
             return;
         }
 
-        var (sidebarMax, inspectorMax) = PanelWidths.Limits(room,
-            new(sidebar.Width.Value, sidebar.MinWidth, _sidebarMax), new(inspector.Width.Value, inspector.MinWidth, _inspectorMax));
+        var (index, panel) = PanelWidths.SizesOf(ViewModel.Tier);
+        var indexSide = ViewModel.IsSidebarShown ? new PanelWidths.Side(sidebar.Width.Value, index.Min, index.Max) : new PanelWidths.Side(sidebar.Width.Value, sidebar.Width.Value, sidebar.Width.Value);
+        var panelSide = ViewModel.IsInspectorShown ? new PanelWidths.Side(inspector.Width.Value, panel.Min, panel.Max) : new PanelWidths.Side(0, 0, 0);
+        var (sidebarMax, inspectorMax) = PanelWidths.Limits(room, indexSide, panelSide);
         sidebar.MaxWidth = sidebarMax;
         inspector.MaxWidth = inspectorMax;
     }
 
-    // The dock opens at its default height, keeps the height the person drags it to while it stays open, and gives the
-    // space back when it closes. It is never shorter than the conversation needs for its header, its composer, and a few
-    // lines of transcript, and while it can be, it leaves the canvas above it CanvasMinHeight. Its splitter keeps to both.
-    private const double DockHeight = 400;
-
-    /// <summary>The canvas's least height above the docked conversation, while the conversation keeps what it needs.</summary>
-    internal const double CanvasMinHeight = 280;
-
-    private bool _docked;
-
-    private void SizeDock()
+    private void CloseFlyoutOnClickOutside(object? source)
     {
-        var dock = MainArea.RowDefinitions[2];
-        if (ViewModel.DockedConversation is null)
+        if (ViewModel.IsIndexFlyoutOpen && source is Visual visual && !IndexSheet.IsVisualAncestorOf(visual) && visual != IndexSheet && !Rail.IsVisualAncestorOf(visual))
         {
-            dock.MinHeight = 0;
-            dock.MaxHeight = double.PositiveInfinity;
-            dock.Height = GridLength.Auto;
-            MainArea.RowDefinitions[0].Height = GridLength.Star;
-        }
-        else
-        {
-            dock.Height = new GridLength(DockHeight);
-            LimitDock();
-            // Once the dock has its height, the canvas above it moves its cards out from under its floating controls, if
-            // the cards in view before would end up under them. Resizing later never moves the person's view.
-            var shown = CanvasView?.CardsInView() ?? [];
-            Dispatcher.UIThread.Post(() => CanvasView?.FitIfCovered(shown), DispatcherPriority.Background);
+            ViewModel.IsIndexFlyoutOpen = false;
         }
     }
 
-    private void LimitDock()
+    // Esc closes the flyout before any key handler below it acts on the key.
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
-        if (ViewModel.DockedConversation is null || MainArea.Bounds.Height <= 0)
+        if (e is { Key: Key.Escape, KeyModifiers: KeyModifiers.None } && ViewModel.IsIndexFlyoutOpen)
         {
-            return;
+            ViewModel.IsIndexFlyoutOpen = false;
+            e.Handled = true;
         }
-
-        var dock = MainArea.RowDefinitions[2];
-        // The dock's border adds its top line to what the conversation needs.
-        var needed = DockedHost.Presenter?.Child is ConversationView { RequiredHeight: > 0 } view ? view.RequiredHeight + 1 : 160;
-        dock.MinHeight = Math.Max(160, needed);
-        dock.MaxHeight = Math.Max(dock.MinHeight, MainArea.Bounds.Height - MainArea.RowDefinitions[1].ActualHeight - CanvasMinHeight);
     }
-
 
     public MainWindowViewModel ViewModel { get; }
 
@@ -200,9 +295,178 @@ public partial class MainWindow : Window
             command.Execute(null);
             e.Handled = true;
         }
+        else if (!e.Handled)
+        {
+            e.Handled = RunKey(e);
+        }
     }
 
-    private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e)
+    // The window's key map. A modal sheet covers the window, so no key here acts under it.
+    private bool RunKey(KeyEventArgs e)
+    {
+        if (ViewModel.Canvas?.Sheet is not null)
+        {
+            return false;
+        }
+
+        if (e is { Key: Key.F6 } && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift)
+        {
+            MoveRegion(e.KeyModifiers == KeyModifiers.Shift ? -1 : 1);
+            return true;
+        }
+
+        // A key that nothing took on its way here, such as Esc with the focus in the Index, still leaves the Room.
+        if (e is { Key: Key.Escape, KeyModifiers: KeyModifiers.None } && ViewModel.AgentPanel.IsRoom)
+        {
+            StepBack();
+            return true;
+        }
+
+        if (CanvasKeys.ToggleInspector.Matches(e) || CanvasKeys.ToggleSidebar.Matches(e))
+        {
+            (e.KeyModifiers.HasFlag(KeyModifiers.Alt) ? ViewModel.ToggleInspectorCommand : ViewModel.ToggleSidebarCommand).Execute(null);
+            return true;
+        }
+
+        if (CanvasKeys.Find.Matches(e) || CanvasKeys.FindAlso.Matches(e))
+        {
+            OpenFind();
+            return true;
+        }
+
+        // The longer gesture comes first, because a gesture with Shift also holds the shorter one's key.
+        if (CanvasKeys.NextFailed.Matches(e) || CanvasKeys.NextAttention.Matches(e))
+        {
+            GoNext(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? NodeState.Failed : NodeState.InputRequired);
+            return true;
+        }
+
+        if (e is { Key: Key.F2, KeyModifiers: KeyModifiers.None } && ViewModel.Canvas is { SelectedNodes.Count: 0 } canvas && FocusManager?.GetFocusedElement() is not TextBox)
+        {
+            ViewModel.ShowSidebar();
+            canvas.BeginRenameWorkflow();
+            return true;
+        }
+
+        // G switches the Map's view, and only outside a box that takes letters.
+        if (e is { Key: Key.G, KeyModifiers: KeyModifiers.None } && ViewModel.Canvas is { Blueprints.Editor: null } flowCanvas && FocusManager?.GetFocusedElement() is not TextBox)
+        {
+            flowCanvas.ToggleMode();
+            return true;
+        }
+
+        if (CanvasKeys.RunWorkflow.Matches(e))
+        {
+            if (ViewModel.Canvas?.RunWorkflowCommand is { } run && run.CanExecute(null))
+            {
+                run.Execute(null);
+            }
+
+            return true;
+        }
+
+        if (CanvasKeys.ModelPicker.Matches(e))
+        {
+            return FocusModelPicker();
+        }
+
+        if (CanvasKeys.Page(e) is { } page && ViewModel.Canvas?.Inspected is TaskNodeViewModel node && AgentPanelViewModel.Has(node, page))
+        {
+            ViewModel.ShowInspector();
+            ViewModel.AgentPanel.Show(page);
+            if (ViewModel.AgentPanel is { IsChat: true, IsPinned: true })
+            {
+                FocusComposer();
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // The next node's Chat page takes the keys, so a person can reply at once.
+    private void GoNext(NodeState state) => ViewModel.ShowNext(state);
+
+    /// <summary>Esc moves one distance back: from the Room to the panel of the same node, and from the panel to its card on the Map.</summary>
+    internal void StepBack()
+    {
+        if (ViewModel.AgentPanel.IsRoom)
+        {
+            ViewModel.LeaveRoom();
+            Dispatcher.UIThread.Post(FocusInspector, DispatcherPriority.Background);
+        }
+        else
+        {
+            CanvasView?.FocusMap();
+        }
+    }
+
+    private ConversationView? ShownConversation => this.GetVisualDescendants().OfType<ConversationView>().FirstOrDefault(view => view.IsEffectivelyVisible);
+
+    private void FocusComposer() => Dispatcher.UIThread.Post(() => ShownConversation?.FocusComposer(), DispatcherPriority.Background);
+
+    // The panel's first control takes the focus: the first tab, or on a page without tabs its first button.
+    private Control? FirstPanelControl() => InspectorPanel.GetVisualDescendants().OfType<Control>().FirstOrDefault(control =>
+        control is Button or TextBox && control is { Focusable: true, IsEffectivelyVisible: true, IsEffectivelyEnabled: true });
+
+    // The Chat page takes the keys in its composer, and any other page in its first control.
+    private void FocusInspector()
+    {
+        if (ViewModel.AgentPanel.IsChat && ShownConversation is { } conversation)
+        {
+            conversation.FocusComposer();
+        }
+        else
+        {
+            FirstPanelControl()?.Focus(NavigationMethod.Directional);
+        }
+    }
+
+    private bool FocusModelPicker()
+    {
+        ViewModel.ShowInspector();
+        ViewModel.AgentPanel.Show(Inspector.AgentPage.Agent);
+        UpdateLayout();
+        var picker = InspectorPanel.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(box =>
+            box.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(box) == "TaskModel");
+        picker?.BringIntoView();
+        return picker?.Focus(NavigationMethod.Tab) == true;
+    }
+
+    // F6 moves through the regions a person can see: the Index, the Map, and the Agent panel.
+    private void MoveRegion(int step)
+    {
+        IEnumerable<(Control Region, Action Enter)> Regions()
+        {
+            if (ViewModel.IsSidebarShown)
+            {
+                yield return (Sidebar, Sidebar.FocusFirst);
+            }
+            else
+            {
+                yield return (Rail, () => Rail.GetVisualDescendants().OfType<Button>().FirstOrDefault()?.Focus(NavigationMethod.Directional));
+            }
+
+            if (CanvasView is { } canvas && !ViewModel.AgentPanel.IsRoom)
+            {
+                yield return (canvas, canvas.FocusMap);
+            }
+
+            if (ViewModel.IsInspectorShown)
+            {
+                yield return (InspectorPanel, FocusInspector);
+            }
+        }
+
+        var regions = Regions().ToList();
+        var focused = FocusManager?.GetFocusedElement() as Visual;
+        var at = regions.FindIndex(region => focused is not null && (region.Region == focused || region.Region.IsVisualAncestorOf(focused)));
+        regions[((at < 0 ? (step > 0 ? -1 : 0) : at) + step + regions.Count) % regions.Count].Enter();
+    }
+
+    /// <summary>A press on a band that stands in for the title bar moves the window, and a double press maximizes it.</summary>
+    internal void TitleBandPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -219,18 +483,10 @@ public partial class MainWindow : Window
         }
     }
 
-    // A click, a key, and UI Automation each check a segment their own way, so the checked segment is the choice.
-    private void OnThemeChecked(object? sender, RoutedEventArgs e)
-    {
-        if (sender is RadioButton { IsChecked: true, Tag: ThemeVariant variant })
-        {
-            ((App)Application.Current!).Choose(variant);
-        }
-    }
-
     private WorkflowCanvasView? CanvasView => CanvasHost.Presenter?.Child as WorkflowCanvasView;
 
-    private void OnGenerate(object? sender, RoutedEventArgs e)
+    /// <summary>Opens the Generate sheet from the Command Bar.</summary>
+    internal void Generate()
     {
         if (ViewModel.Canvas?.ShowGenerate() is { } planner)
         {
@@ -238,84 +494,31 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnAddNode(object? sender, RoutedEventArgs e) =>
-        CanvasView?.OpenAddInView(AddNode.TranslatePoint(new Point(0, AddNode.Bounds.Height + 4), this) ?? default);
+    /// <summary>Opens the Add popover under the Command Bar's button.</summary>
+    internal void OpenAddAt(Button button) => CanvasView?.OpenAddInView(button.TranslatePoint(new Point(0, button.Bounds.Height + 4), this) ?? default);
 
-    // The list also follows its canvas's selection, so only a change made while the list has focus is a choice in it.
-    private void OnSidebarSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    /// <summary>Opens the node's menu at its Index row.</summary>
+    internal void OpenNodeMenu(Control row) => CanvasView?.OpenNodeMenu(row);
+
+    /// <summary>Opens the Find palette and puts the focus in its field. A Rail's flyout closes first.</summary>
+    internal void OpenFind()
     {
-        if (sender is ListBox { IsKeyboardFocusWithin: true, SelectedItem: TaskNodeViewModel task })
-        {
-            CanvasView?.BringIntoViewIfHidden(task);
-        }
+        ViewModel.IsIndexFlyoutOpen = false;
+        Palette.Focus(FocusManager?.GetFocusedElement());
     }
 
-    private void ShowWorkflowOf(object? source)
-    {
-        if ((source as Visual)?.FindAncestorOfType<ListBox>(includeSelf: true) is { DataContext: WorkflowCanvasViewModel canvas } list
-            && list.Classes.Contains("tasks") && canvas != ViewModel.Canvas)
-        {
-            ViewModel.Select(canvas);
-            // The new canvas view lays out now, so a card it brings into view is measured against its real size.
-            UpdateLayout();
-        }
-    }
+    /// <summary>Brings a node's card into view on the canvas, if the canvas does not show it whole.</summary>
+    internal void BringIntoViewIfHidden(TaskNodeViewModel node) => CanvasView?.BringIntoViewIfHidden(node);
 
-    private void OnWorkflowClick(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
-        {
-            ViewModel.Select(canvas);
-        }
-    }
-
-    private void OnWorkflowKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e is { Key: Key.F2, KeyModifiers: KeyModifiers.None } && (sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
-        {
-            RenameWorkflow(canvas);
-            e.Handled = true;
-        }
-    }
-
-    private void OnRenameWorkflow(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
-        {
-            RenameWorkflow(canvas);
-        }
-    }
-
-    // The renamed workflow is shown, so Undo takes the rename back.
-    private void RenameWorkflow(WorkflowCanvasViewModel canvas)
-    {
-        ViewModel.Select(canvas);
-        canvas.BeginRenameWorkflow();
-    }
-
-    private void OnNewWorkflow(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is ProjectViewModel project && ViewModel.NewWorkflow(project) is { } canvas)
-        {
-            UpdateLayout();
-            this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();
-        }
-    }
-
-    private void OnForgetProject(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is UnopenedProject project)
-        {
-            ViewModel.Forget(project);
-        }
-    }
+    /// <summary>The control that takes the canvas's keys.</summary>
+    internal IInputElement? CanvasFocusTarget => CanvasView?.MapFocusTarget;
 
     // Both questions come before either answer acts, and the project's runs stop only once it closes.
-    private void OnCloseProject(object? sender, RoutedEventArgs e) => UiWork.Start(() => CloseProject(sender), ShowFailure);
+    internal void CloseProject(ProjectViewModel project) => UiWork.Start(() => CloseAsked(project), ShowFailure);
 
-    private async Task CloseProject(object? sender)
+    private async Task CloseAsked(ProjectViewModel project)
     {
-        if (_waitingForUser || (sender as Control)?.DataContext is not ProjectViewModel project)
+        if (_waitingForUser)
         {
             return;
         }
@@ -330,34 +533,12 @@ public partial class MainWindow : Window
         _waitingForUser = false;
     }
 
-    // Choosing the task that is already selected changes no selection, so a tap on a row and Space or Enter on the
-    // focused row also count as choices.
-    private void OnSidebarTapped(object? sender, TappedEventArgs e) => BringRowIntoView(e.Source);
-
-    private void OnSidebarKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key is Key.Space or Key.Enter)
-        {
-            BringRowIntoView(e.Source);
-        }
-    }
-
-    // A tap between rows also reaches the list, and it chooses no task.
-    private void BringRowIntoView(object? source)
-    {
-        if ((source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: TaskNodeViewModel task })
-        {
-            CanvasView?.BringIntoViewIfHidden(task);
-        }
-    }
-
-    private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e) =>
-        TreeRows.Margin = new Thickness(0, 0, Tree.ScrollBarMaximum.Y > 0 ? 16 : 8, 0);
-
     // A question, the folder picker, or a project that is still closing holds a second open or close until it ends.
-    private void OnOpenFolder(object? sender, RoutedEventArgs e) => UiWork.Start(OpenFolder, ShowFailure);
+    private void OnOpenFolder(object? sender, RoutedEventArgs e) => OpenFolder();
 
-    private async Task OpenFolder()
+    internal void OpenFolder() => UiWork.Start(AskForFolder, ShowFailure);
+
+    private async Task AskForFolder()
     {
         if (_waitingForUser)
         {

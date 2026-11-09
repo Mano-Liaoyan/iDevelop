@@ -16,11 +16,17 @@ public static class StyleClass
 
     public static readonly AttachedProperty<NodeRole?> RoleProperty = AvaloniaProperty.RegisterAttached<StyledElement, NodeRole?>("Role", typeof(StyleClass));
 
+    public static readonly AttachedProperty<WireFlow?> FlowProperty = AvaloniaProperty.RegisterAttached<StyledElement, WireFlow?>("Flow", typeof(StyleClass));
+
+    public static readonly AttachedProperty<WaitReason?> WhyProperty = AvaloniaProperty.RegisterAttached<StyledElement, WaitReason?>("Why", typeof(StyleClass));
+
     static StyleClass()
     {
         Swap(KindProperty, kind => NodeKinds.Info(kind).StyleClass);
         Swap(StateProperty, state => $"state-{state.ToString().ToLowerInvariant()}");
         Swap(RoleProperty, role => $"role-{role.ToString().ToLowerInvariant()}");
+        Swap(FlowProperty, flow => $"flow-{flow.ToString().ToLowerInvariant()}");
+        Swap(WhyProperty, why => $"why-{why.ToString().ToLowerInvariant()}");
     }
 
     public static NodeKind? GetKind(StyledElement element) => element.GetValue(KindProperty);
@@ -34,6 +40,14 @@ public static class StyleClass
     public static NodeRole? GetRole(StyledElement element) => element.GetValue(RoleProperty);
 
     public static void SetRole(StyledElement element, NodeRole? value) => element.SetValue(RoleProperty, value);
+
+    public static WireFlow? GetFlow(StyledElement element) => element.GetValue(FlowProperty);
+
+    public static void SetFlow(StyledElement element, WireFlow? value) => element.SetValue(FlowProperty, value);
+
+    public static WaitReason? GetWhy(StyledElement element) => element.GetValue(WhyProperty);
+
+    public static void SetWhy(StyledElement element, WaitReason? value) => element.SetValue(WhyProperty, value);
 
     private static void Swap<T>(AttachedProperty<T?> property, Func<T, string> className) where T : struct, Enum =>
         property.Changed.AddClassHandler<StyledElement, T?>((element, change) =>

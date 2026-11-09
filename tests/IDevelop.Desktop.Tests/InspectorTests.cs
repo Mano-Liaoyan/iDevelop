@@ -21,7 +21,7 @@ using static IDevelop.TestSupport.FakeAgents;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>The Godot-style inspector: its header, filter, folds, reverts, and the connection, workflow, and proposal views.</summary>
+/// <summary>The Agent panel's pages: fold panels, decorators, and the connection, workflow, and proposal views.</summary>
 [Collection(ProcessCollection.Name)]
 public sealed class InspectorTests : IDisposable
 {
@@ -37,17 +37,24 @@ public sealed class InspectorTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    [Theory]
-    [InlineData("acc", "Acceptance criteria", true)]
-    [InlineData("rsn", "Reasoning", true)]
-    [InlineData("RSN", "reasoning", true)]
-    [InlineData("criteria", "Acceptance criteria", true)]
-    [InlineData("acc", "Agent", false)]
-    [InlineData("nsr", "Reasoning", false)]
-    [InlineData("", "Agent", true)]
-    [InlineData("a", null, false)]
-    public void The_filter_matches_a_substring_or_the_letters_in_order(string query, string? text, bool matches) =>
-        Assert.Equal(matches, InspectorFilter.Matches(query, text));
+    [AvaloniaFact]
+    public void A_changed_model_shows_an_arrow_that_counts_and_goes_back_to_the_saved_model()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        var node = shell.Window.ViewModel.Canvas!.Nodes.Single();
+        var (changes, model) = (node.AgentChanges, node.AgentModel);
+        Assert.False(node.ModelDiffers);
+
+        node.SetSkills(Codex with { Model = "gpt-5.4" });
+
+        Assert.True(node.ModelChanged);
+        Assert.Equal(changes + 1, node.AgentChanges);
+
+        node.RevertAgentCommand.Execute(null);
+
+        Assert.False(node.ModelChanged);
+        Assert.Equal((changes, model), (node.AgentChanges, node.AgentModel));
+    }
 
     [AvaloniaFact]
     public void The_header_shows_the_kind_tile_and_keeps_the_type_and_its_version()
@@ -56,89 +63,13 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["Implement", "Built-in, version 1"], new[] { "TaskType", "TaskTypeVersion" }.Select(id => shell.Find<TextBlock>(id).Text));
+        Assert.Equal("Implement", shell.Find<TextBlock>("TaskType").Text);
+        Assert.StartsWith("Built-in, version 1", shell.Window.ViewModel.Canvas!.SelectedNode!.KindTip);
         Assert.Equal(Color.Parse("#564ADE"), shell.ColorAt(HeaderTile(shell), new Point(3, 16)));
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
 
         shell.Click(shell.Find<RadioButton>("ThemeDark"));
         Assert.Equal(Color.Parse("#6D7CFF"), shell.ColorAt(HeaderTile(shell), new Point(3, 16)));
-    }
-
-    [AvaloniaFact]
-    public void Filtering_by_acc_leaves_only_acceptance_criteria_and_Escape_brings_everything_back()
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
-        shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Contains("Client", shell.ShownRows());
-
-        shell.FilterInspector("acc");
-
-        Assert.Equal(["Acceptance criteria"], shell.ShownRows());
-        Assert.Equal((true, false, false), (shell.Shows("Task"), shell.Shows("Agent"), shell.Shows("Blueprint")));
-        Assert.False(shell.Find<TextBox>("TaskInstructions").IsEffectivelyVisible);
-        Assert.True(shell.Find<TextBox>("TaskAcceptanceCriteria").IsEffectivelyVisible);
-
-        shell.Press(Key.Escape);
-
-        Assert.Equal("", shell.Find<TextBox>("InspectorFilter").Text);
-        Assert.True(shell.Shows("Agent"));
-        Assert.Equal(["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation"], shell.ShownRows().Take(7));
-    }
-
-    [AvaloniaFact]
-    public void The_filter_keeps_its_text_when_another_task_is_selected()
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)));
-        shell.Click(shell.Header(shell.Node("Design")));
-        shell.FilterInspector("acc");
-
-        shell.Click(shell.Header(shell.Node("Build")));
-
-        Assert.Equal("Build", shell.Find<TextBox>("TaskTitle").Text);
-        Assert.Equal("acc", shell.Find<TextBox>("InspectorFilter").Text);
-        Assert.Equal(["Acceptance criteria"], shell.ShownRows());
-    }
-
-    [AvaloniaFact]
-    public void Folding_the_agent_counts_a_changed_client_and_the_fold_holds_for_the_next_task()
-    {
-        Install(_fakes, ClientId.Codex);
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)), _fakes.DiscoverAsync().Result);
-        shell.Click(shell.Header(shell.Node("Design")));
-        shell.Pick("TaskClient", "Codex");
-
-        shell.Fold("Agent");
-
-        Assert.Equal("(1)", shell.Section("Agent").Badge);
-        Assert.Contains("(1)", Shell.Texts(shell.Section("Agent")));
-        Assert.False(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
-
-        shell.Click(shell.Header(shell.Node("Build")));
-
-        Assert.True(shell.Section("Agent").IsFolded);
-        Assert.Equal("", shell.Section("Agent").Badge);
-
-        shell.Fold("Agent");
-
-        Assert.True(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
-    }
-
-    [AvaloniaFact]
-    public void Collapse_All_folds_every_section_and_Expand_All_opens_them_again()
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
-        shell.Click(shell.Header(shell.Node("Design")));
-        string[] keys = ["Task", "Agent", "Run", "Conversation", "Blueprint"];
-
-        Choose(shell, "CollapseAllSections");
-
-        Assert.All(keys, key => Assert.True(shell.Section(key).IsFolded, key));
-        Assert.Empty(shell.ShownRows());
-
-        Choose(shell, "ExpandAllSections");
-
-        Assert.All(keys, key => Assert.False(shell.Section(key).IsFolded, key));
-        Assert.Contains("Client", shell.ShownRows());
     }
 
     [AvaloniaFact]
@@ -184,7 +115,7 @@ public sealed class InspectorTests : IDisposable
     [InlineData(ClientId.ClaudeCode, "May ask", "Edits files and runs any command.", "May stop to ask you a question.")]
     [InlineData(ClientId.Pi, "Chat", "Edits files and runs any command.", "Waits for you after every turn.")]
     [InlineData(ClientId.Antigravity, "Autonomous", "Edits files. Runs no commands.", "Works without waiting for you.")]
-    public void Each_agent_note_lives_in_its_info_glyph_and_no_line_under_the_pickers_repeats_it(ClientId client, string conversation, string permission, string mode)
+    public void Each_agent_note_lives_in_its_label_and_no_line_under_the_pickers_repeats_it(ClientId client, string conversation, string permission, string mode)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(client))));
         shell.Click(shell.Header(shell.Node("Design")));
@@ -195,22 +126,26 @@ public sealed class InspectorTests : IDisposable
             var glyph = shell.Find<Control>(id);
             var peer = ControlAutomationPeer.CreatePeerForElement(glyph);
             var full = Info(shell, editor) as string;
-            Assert.Same(InfoGlyph(shell, editor), glyph);
+            Assert.Same(RowLabel(shell, editor), glyph);
             Assert.True(glyph.IsEffectivelyVisible);
             Assert.True(summary.Length < full!.Length, $"{id}'s tooltip \"{full}\" is no longer than \"{summary}\".");
             Assert.Equal((id, summary, full, true), (peer.GetAutomationId(), peer.GetName(), peer.GetHelpText(), peer.IsControlElement()));
-            Assert.DoesNotContain(summary, Shell.Texts(shell.Section("Agent")));
+            if (id == "ConversationNote")
+            {
+                Assert.DoesNotContain(summary, Shell.Texts(shell.Find<Control>("AgentPage")));
+            }
         }
     }
 
     [AvaloniaFact]
-    public void After_each_run_the_Run_section_lists_its_results_newest_first_and_marks_the_current_one()
+    public void After_each_run_the_Output_page_shows_the_newest_result_in_full_and_folds_the_earlier_ones()
     {
         using var f = new NodeFixture(NodeFixture.Plan(Design, "Say hi", 105));
         f.Install(AgyTurn.Reply("s-1", "Said hi."));
         var shell = f.Open();
         shell.Click(shell.Header(shell.Node("Say hi")));
-        Assert.False(shell.Find<ItemsControl>("Results").IsEffectivelyVisible);
+        shell.Page(AgentPage.Output);
+        Assert.True(shell.Find<TextBlock>("NoResult").IsEffectivelyVisible);
 
         shell.RunNode();
         shell.WaitForState("Say hi", NodeState.Completed);
@@ -219,12 +154,18 @@ public sealed class InspectorTests : IDisposable
             "the retry completes");
         shell.Render();
 
-        Assert.Equal("Completed", shell.Find<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal(["Result 2 · Current", "Said hi.", "Result 1", "Said hi."], Shell.Texts(shell.InView<ItemsControl>("Results")));
+        Assert.Equal("Done", shell.Find<TextBlock>("RunTaskStatus").Text);
+        shell.Page(AgentPage.Output);
+        Assert.False(shell.Find<TextBlock>("NoResult").IsEffectivelyVisible);
+        Assert.Equal("Result 2 · Current", shell.Find<TextBlock>("ResultHeading").Text);
+        Assert.Contains("Said hi.", shell.Find<Conversation.MarkdownView>("ResultReport").Markdown);
+        Assert.True(shell.Section("EarlierResults").IsFolded);
+        shell.Fold("EarlierResults");
+        Assert.Equal(["Result 1", "Said hi."], Shell.Texts(shell.Find<ItemsControl>("EarlierResults")));
     }
 
     [AvaloniaFact]
-    public void The_connection_inspector_draws_the_source_kinds_swatch_and_selects_its_ends()
+    public void The_connection_inspector_draws_the_wires_swatch_and_selects_its_ends()
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
@@ -233,10 +174,10 @@ public sealed class InspectorTests : IDisposable
 
         shell.Click(shell.ConnectionInto("Build"));
 
-        Assert.Equal(["Dependency", "Connection"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+        Assert.Equal(["Connection", "Dependency"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
         var swatch = shell.Find<Button>("KindDependency").GetVisualDescendants().OfType<Line>().Single();
-        Assert.Equal(Color.Parse("#564ADE"), ((ISolidColorBrush)swatch.Stroke!).Color);
-        Assert.Equal("Build", Shell.TextOf(shell.Find<Button>("ConnectionTo")));
+        Assert.Equal(Color.Parse("#5A6168"), ((ISolidColorBrush)swatch.Stroke!).Color);
+        Assert.Equal(["Build", "Input socket"], Shell.Texts(shell.Find<Button>("ConnectionTo")));
 
         shell.Click(shell.Find<Button>("ConnectionFrom"));
 
@@ -245,15 +186,16 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void With_nothing_selected_the_inspector_counts_the_workflows_kinds()
+    public void With_nothing_selected_the_inspector_names_the_workflow_and_lists_the_library()
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
             new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Review, new CanvasPoint(825, 90)) { Title = "Check" },
             new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, new CanvasPoint(105, 330)) { Title = "Plan it" }));
 
-        Assert.Equal(["Workflow", "4 tasks"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
-        Assert.Equal(["Overview", "Implement", "2", "Plan", "1", "Review", "1"], Shell.Texts(shell.Section("Overview")));
+        Assert.Equal(["Workflow", "4 nodes"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+        Assert.Equal(["Implement 2", "Review 1", "Plan 1"], shell.Window.ViewModel.Canvas!.Overview.Kinds.OrderBy(kind => kind.Kind).Select(kind => $"{kind.Label} {kind.Count}").OrderBy(text => text == "Implement 2" ? 0 : text == "Review 1" ? 1 : 2));
+        Assert.True(shell.Section("Overview").IsEffectivelyVisible);
         Assert.True(shell.Section("Library").IsEffectivelyVisible);
     }
 
@@ -274,7 +216,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Single(shell.Window.ViewModel.Canvas!.Workflow.Tasks.Values, task => task.Title == "Wire export");
         Assert.Equal("Added 1 task.", shell.Status);
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Completed", "the planner is done");
+        shell.WaitUntil(() => shell.CardStatus("Design export") == "Done", "the planner is done");
         Assert.False(shell.Has<StackPanel>("Proposal"));
     }
 
@@ -285,13 +227,26 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal(["ProposalAcceptFinish"], PrimaryButtons(shell));
         Assert.Equal((false, false, false, false), (Shows(shell, "RunTask"), Shows(shell, "Approve"), Shows(shell, "StopTask"), Shows(shell, "StartProblem")));
-        Assert.Equal("Input required · reply", shell.InView<TextBlock>("RunTaskStatus").Text);
+        Assert.StartsWith("Needs you", shell.InView<TextBlock>("RunTaskStatus").Text);
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Completed", "the planner is done");
+        shell.WaitUntil(() => shell.CardStatus("Design export") == "Done", "the planner is done");
 
-        Assert.Empty(PrimaryButtons(shell));
         Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "RetryTask")));
+        shell.Page(AgentPage.Chat);
+        Assert.Empty(PrimaryButtons(shell));
+    }
+
+    [AvaloniaFact]
+    public void Alt_6_opens_the_proposal_page_and_its_tab_counts_the_items()
+    {
+        var shell = WaitingArchitect();
+
+        shell.Press(Key.D6, RawInputModifiers.Alt);
+
+        Assert.True(shell.Window.ViewModel.AgentPanel.IsExtra);
+        Assert.True(shell.Find<Control>("ExtraPage").IsEffectivelyVisible);
+        Assert.Equal(("Proposal", "1"), (shell.Find<PageTab>("PageExtra").Label, shell.Find<PageTab>("PageExtra").Count));
     }
 
     [AvaloniaFact]
@@ -316,21 +271,24 @@ public sealed class InspectorTests : IDisposable
     {
         var gate = System.IO.Path.Combine(_temp.Create("evidence"), "go");
         var shell = WaitingArchitect(Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(gate).Print(ReplyLines(ClientId.Codex, "Noted.")));
-        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Page(AgentPage.Chat);
+        shell.Talk();
+        shell.Click(shell.InView<TextBox>("ConversationComposer"));
         shell.Type("Keep the export small.");
 
-        shell.Click(shell.InView<Button>("SendMessage"));
+        shell.Click(shell.InView<Button>("ConversationSend"));
         shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Running", "the next turn runs");
         shell.Render();
 
         Assert.True(shell.Has<StackPanel>("Proposal"));
         Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "StopTask")));
+        shell.Page(AgentPage.Extra);
         Assert.Equal(["AcceptProposal"], PrimaryButtons(shell));
         Assert.True(shell.Find<Button>("StopTask").IsEffectivelyEnabled);
-        Assert.False(shell.Find<Button>("SendBack").IsEffectivelyVisible);
+        Assert.False(Shows(shell, "SendBack"));
 
         File.WriteAllText(gate, "");
-        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · reply", "the turn ends waiting");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text?.StartsWith("Needs you") == true, "the turn ends waiting");
 
         Assert.Equal((false, false), (Shows(shell, "RunTask"), Shows(shell, "StopTask")));
     }
@@ -342,43 +300,73 @@ public sealed class InspectorTests : IDisposable
             .Print(SessionLine(ClientId.Codex, Session))
             .Print("""{"type":"turn.failed","error":{"message":"You've hit your usage limit. Try again later."}}""")
             .Exit(1));
-        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Page(AgentPage.Chat);
+        shell.Talk();
+        shell.Click(shell.InView<TextBox>("ConversationComposer"));
         shell.Type("Keep the export small.");
 
-        shell.Click(shell.InView<Button>("SendMessage"));
+        shell.Click(shell.InView<Button>("ConversationSend"));
         shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Failed", "the next turn fails");
 
         Assert.True(shell.Has<StackPanel>("Proposal"));
+        shell.Page(AgentPage.Extra);
         Assert.Equal(["AcceptProposal"], PrimaryButtons(shell));
         Assert.True(Shows(shell, "RunTaskDetail"));
         Assert.Contains("You've hit your usage limit.", shell.Find<TextBlock>("RunTaskDetail").Text);
     }
 
     [AvaloniaFact]
-    public void A_long_title_wraps_as_its_box_wraps_it_once_the_box_has_focus()
+    public void A_field_grows_to_twelve_lines_and_scrolls_after_that()
     {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Add CSV export to the reports page with tests for quoting", 105, 90)));
-        shell.Click(shell.Header(shell.Node("Add CSV export to the reports page with tests for quoting")));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        var node = shell.Window.ViewModel.Canvas!.Nodes.Single();
+        node.Canvas.Inspect(node);
+        node.SetField("instructions", string.Join("\n", Enumerable.Range(1, 30).Select(index => $"Line {index}.")));
+        node.Fields.Single(field => field.AutomationId == "TaskInstructions").IsEditing = true;
+        var box = shell.Find<TextBox>("TaskInstructions");
+        shell.Render();
+
+        Assert.Equal(228, box.Bounds.Height, 0.5);
+        Assert.Contains("Line 30.", box.Text);
+    }
+
+    [AvaloniaFact]
+    public void A_fold_panel_holds_its_fold_for_the_next_task()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)));
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Task);
+
+        shell.Fold("TaskInstructions");
+        Assert.False(shell.Find<TextBox>("TaskInstructions").IsEffectivelyVisible);
+
+        shell.Click(shell.Header(shell.Node("Build")));
+        Assert.True(shell.Section("TaskInstructions").IsFolded);
+
+        shell.Fold("TaskInstructions");
+        Assert.True(shell.Find<TextBox>("TaskInstructions").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_long_name_ends_in_an_ellipsis_on_one_line_and_a_double_click_renames_it()
+    {
+        const string title = "Add CSV export to the reports page with tests for quoting and every other delimiter that a person may choose";
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 105, 90)));
+        shell.Click(shell.Header(shell.Node(title)));
         var box = shell.Find<TextBox>("TaskTitle");
         var shown = shell.Find<Control>("InspectorHeader").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("headerTitle"));
-        var typed = box.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.TextPresenter>().Single();
 
-        Assert.True(shown.IsEffectivelyVisible);
-        Assert.DoesNotContain(shown.TextLayout.TextLines, line => line.HasCollapsed);
-        Assert.True(shown.TextLayout.TextLines.Count > 1, "The title wraps.");
-        Assert.Equal(shown.TextLayout.TextLines.Count, typed.TextLayout.TextLines.Count);
-        Assert.Equal(0, typed.Opacity);
-        Assert.Equal(shell.Bounds(typed).X, shell.Bounds(shown).X, 0.5);
-        Assert.Equal(shell.Center(typed).Y, shell.Center(shown).Y, 0.5);
+        Assert.EndsWith("…", shown.Text);
+        Assert.Single(shown.TextLayout.TextLines);
+        Assert.False(box.IsKeyboardFocusWithin);
 
-        shell.Click(box);
-        // The title wraps, so End would stop at the end of its first line.
+        shell.DoubleClick(shell.Center(shown));
+        shell.Render();
+
+        Assert.True(box.IsKeyboardFocusWithin);
         shell.Press(Key.End, RawInputModifiers.Control);
-
-        Assert.False(shown.IsEffectivelyVisible);
-        Assert.Equal(1, typed.Opacity);
         shell.Type("!");
-        Assert.Equal("Add CSV export to the reports page with tests for quoting!", shell.Window.ViewModel.Canvas!.Workflow.Tasks[Design].Title);
+        Assert.Equal($"{title}!", shell.Window.ViewModel.Canvas!.Workflow.Tasks[Design].Title);
     }
 
     /// <summary>A Chat Architect that ran once and waits with a proposal to add one task after it.</summary>
@@ -404,7 +392,7 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design export")));
         shell.RunNode();
         shell.WaitForProposal();
-        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Input required · reply", "the planner waits");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text?.StartsWith("Needs you") == true, "the planner waits");
         return shell;
     }
 
@@ -416,10 +404,10 @@ public sealed class InspectorTests : IDisposable
 
     private static bool Shows(Shell shell, string automationId) => shell.Has<Control>(automationId) && shell.Find<Control>(automationId).IsEffectivelyVisible;
 
-    /// <summary>Opens the sections menu and chooses the entry. A headless popup takes no clicks, so the entry raises its own.</summary>
+    /// <summary>Opens the More menu and chooses the entry. A headless popup takes no clicks, so the entry raises its own.</summary>
     private static void Choose(Shell shell, string automationId)
     {
-        var tools = shell.Find<Button>("InspectorTools");
+        var tools = shell.Find<Button>("InspectorMore");
         shell.Click(tools);
         var item = shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(menu => AutomationProperties.GetAutomationId(menu) == automationId);
         item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
@@ -427,11 +415,11 @@ public sealed class InspectorTests : IDisposable
         shell.Render();
     }
 
-    /// <summary>The tooltip of the info glyph in the row that holds the editor.</summary>
-    private static object? Info(Shell shell, string editor) => ToolTip.GetTip(InfoGlyph(shell, editor));
+    /// <summary>The tooltip of the label in the row that holds the editor.</summary>
+    private static object? Info(Shell shell, string editor) => ToolTip.GetTip(RowLabel(shell, editor));
 
-    private static Border InfoGlyph(Shell shell, string editor) =>
-        shell.Find<Control>(editor).FindAncestorOfType<InspectorRow>()!.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("infoGlyph"));
+    private static Panel RowLabel(Shell shell, string editor) =>
+        shell.Find<Control>(editor).FindAncestorOfType<InspectorRow>()!.GetVisualDescendants().OfType<Panel>().Single(line => line.Name == "PART_LabelLine");
 
     private static KindTile HeaderTile(Shell shell) => shell.Find<Control>("InspectorHeader").GetVisualDescendants().OfType<KindTile>().Single();
 }

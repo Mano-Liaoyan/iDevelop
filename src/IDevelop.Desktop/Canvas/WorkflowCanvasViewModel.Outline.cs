@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Windows.Input;
+using IDevelop.Desktop.Mvvm;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
@@ -43,27 +45,86 @@ public sealed partial class WorkflowCanvasViewModel
         return order;
     }
 
+    /// <summary>The workflow's depth stages, in order. The Index lists them under the workflow's row, and Flow lays them out in rows.</summary>
+    public ObservableCollection<WorkflowStage> Stages { get; } = [];
+
+    /// <summary>The Index lists the workflow's stages under its row. Opening a workflow expands it, and the window remembers it.</summary>
+    public bool IsExpanded
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ExpandLabel));
+                OnPropertyChanged(nameof(ShowsStages));
+            }
+        }
+    }
+
+    /// <summary>What the row's chevron does now, for a screen reader.</summary>
+    public string ExpandLabel => $"{(IsExpanded ? "Fold" : "Unfold")} {Name}";
+
+    /// <summary>The Index shows stage rows under the workflow's row.</summary>
+    public bool ShowsStages => IsExpanded && Stages.Count > 0;
+
+    /// <summary>The node's row shows in the Index: its workflow expands and its stage opens.</summary>
+    internal void RevealInIndex(TaskNodeViewModel node)
+    {
+        IsExpanded = true;
+        Stages.FirstOrDefault(stage => stage.Holds(node))?.Open();
+    }
+
+    private void ArrangeStages()
+    {
+        var stages = FlowLayout.Stages(Workflow);
+        while (Stages.Count > stages.Count)
+        {
+            Stages.RemoveAt(Stages.Count - 1);
+        }
+
+        while (Stages.Count < stages.Count)
+        {
+            Stages.Add(new WorkflowStage(Stages.Count + 1));
+        }
+
+        Flow.Hold(() =>
+        {
+            for (var index = 0; index < stages.Count; index++)
+            {
+                Stages[index].Show([.. stages[index].Select(id => _nodes[id])]);
+            }
+        });
+        OnPropertyChanged(nameof(ShowsStages));
+    }
+
     private void ArrangeOutline()
     {
-        List<TaskNodeViewModel> order = [.. ReadingOrder(Workflow).Select(id => _nodes[id])];
-        if (Outline.SequenceEqual(order))
+        Arrange(Outline, [.. ReadingOrder(Workflow).Select(id => _nodes[id])], SelectedNode);
+        ArrangeStages();
+    }
+
+    internal static void Arrange<T>(ObservableCollection<T> rows, IReadOnlyList<T> order, TaskNodeViewModel? selected)
+        where T : class
+    {
+        if (rows.SequenceEqual(order))
         {
             return;
         }
 
         // A list forgets its selection when the selected row leaves it, even to come straight back, and tells the canvas.
         // So the selected row stays, and the other rows take their places around it.
-        var stays = SelectedNode is { } selected && order.Contains(selected) ? selected : null;
-        foreach (var row in Outline.Where(row => row != stays).ToList())
+        var stays = selected is T row && rows.Contains(row) && order.Contains(row) ? row : null;
+        foreach (var other in rows.Where(other => other != stays).ToList())
         {
-            Outline.Remove(row);
+            rows.Remove(other);
         }
 
         for (var index = 0; index < order.Count; index++)
         {
             if (order[index] != stays)
             {
-                Outline.Insert(index, order[index]);
+                rows.Insert(index, order[index]);
             }
         }
     }

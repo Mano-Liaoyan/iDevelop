@@ -1,5 +1,5 @@
-<!-- The Library section of the workflow inspector: one line per blueprint with its kind tile, Place as a glyph button,
-     and Derive and Edit in its More menu. The Add popover is where people add nodes; this is where they manage blueprints. -->
+<!-- The Library section of the workflow inspector: one line per blueprint with its kind tile, and Place, Derive, and Edit in
+     its More menu. The canvas's Add popover is where people add nodes; this is where they manage blueprints. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
@@ -15,11 +15,8 @@
       <ItemsControl.ItemTemplate>
         <DataTemplate DataType="blueprints:PaletteGroup">
           <StackPanel>
-            <inspector:InspectorRow Layout="Full">
+            <inspector:InspectorRow Layout="Full" IsShown="{Binding !IsEmpty}">
               <TextBlock Classes="groupHeading" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
-            </inspector:InspectorRow>
-            <inspector:InspectorRow Layout="Full" IsShown="{Binding IsEmpty}">
-              <TextBlock Classes="note" Text="None yet. Derive a blueprint to add one." TextWrapping="Wrap" MaxLines="0" />
             </inspector:InspectorRow>
             <ItemsControl ItemsSource="{Binding Entries}">
               <ItemsControl.ItemTemplate>
@@ -34,21 +31,18 @@
                       </StackPanel>
                     </ToolTip.Tip>
                     <inspector:InspectorRow.Lead>
-                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="16" />
+                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="14" />
                     </inspector:InspectorRow.Lead>
                     <inspector:InspectorRow.Actions>
-                      <StackPanel Orientation="Horizontal" Spacing="4">
-                        <Button Classes="glyph" Command="{Binding PlaceCommand}" ToolTip.Tip="Place in view"
-                                AutomationProperties.AutomationId="PlaceBlueprint"
-                                AutomationProperties.Name="{Binding PlaceName}">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
-                        </Button>
-                        <Button Classes="glyph" ToolTip.Tip="More"
+                        <Button Classes="glyph quiet" ToolTip.Tip="More"
                                 AutomationProperties.AutomationId="BlueprintMore"
                                 AutomationProperties.Name="{Binding MoreName}">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
                           <Button.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedRight">
+                              <MenuItem Header="Place in View" Command="{Binding PlaceCommand}"
+                                        AutomationProperties.AutomationId="PlaceBlueprint"
+                                        AutomationProperties.Name="{Binding PlaceName}" theme:MenuGlyph.Data="{StaticResource IconAdd}" />
                               <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}"
                                         AutomationProperties.AutomationId="DeriveBlueprint"
                                         AutomationProperties.Name="{Binding DeriveName}" theme:MenuGlyph.Data="{StaticResource IconDerive}" />
@@ -58,7 +52,6 @@
                             </MenuFlyout>
                           </Button.Flyout>
                         </Button>
-                      </StackPanel>
                     </inspector:InspectorRow.Actions>
                   </inspector:InspectorRow>
                 </DataTemplate>
@@ -68,6 +61,11 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+    <!-- One message for every library with nothing in it. -->
+    <inspector:InspectorRow Layout="Full" IsShown="{Binding HasEmptyLibrary}">
+      <TextBlock Classes="note" Text="{Binding EmptyNote}" Margin="0,6,0,0"
+                 AutomationProperties.AutomationId="EmptyLibrary" />
+    </inspector:InspectorRow>
     <inspector:InspectorRow Layout="Full" IsShown="{Binding HasProblems}">
       <ItemsControl ItemsSource="{Binding Problems}"
                     AutomationProperties.AutomationId="BlueprintProblems">

@@ -29,8 +29,7 @@ public sealed class BlueprintTests : IDisposable
         Assert.Equal(["Implement", "Plan", "Architect", "Review", "Approval", "Merge"], EntryNames(shell, "BUILT-IN"));
         Assert.All(["Implement", "Plan", "Architect", "Review", "Approval", "Merge"], name =>
         {
-            Assert.True(Button(shell, name, "PlaceBlueprint").IsEffectivelyVisible);
-            Assert.Equal(["Derive Blueprint…"], MenuEntries(shell, name));
+            Assert.Equal(["Place in View", "Derive Blueprint…"], MenuEntries(shell, name));
         });
         Assert.Empty(EntryNames(shell, "PROJECT"));
     }
@@ -42,38 +41,43 @@ public sealed class BlueprintTests : IDisposable
         var shell = Shell.Open(project);
 
         Press(shell, "Implement", "DeriveBlueprint");
-        Assert.Equal("Derived from Implement, version 1. Saving makes version 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
+        Assert.Equal("A new blueprint from Implement, version 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
         shell.Find<TextBox>("BlueprintName").Text = "Bug fix";
+        shell.Render();
+        // The run bar's place names the open blueprint and how to leave it.
+        Assert.Equal("Editing blueprint Bug fix. Save or Cancel in the inspector.", shell.Find<TextBlock>("BlueprintMode").Text);
+        Assert.True(shell.Find<TextBlock>("BlueprintMode").IsVisible);
         shell.Click(shell.InView<Button>("SaveBlueprint"));
 
         Assert.Equal("Saved Bug fix, version 1, to the project library.", shell.Status);
+        Assert.False(shell.Find<TextBlock>("BlueprintMode").IsVisible);
         Assert.Equal(["Bug fix"], EntryNames(shell, "PROJECT"));
         var key = Assert.Single(BlueprintLibrary.Project(project).Read().Blueprints).Key;
         Assert.Equal(1, key.Version);
 
         Press(shell, "Bug fix", "PlaceBlueprint");
-        Assert.Equal(["Bug fix", "Version 1"], [shell.Find<TextBlock>("TaskType").Text ?? "", shell.Find<TextBlock>("TaskTypeVersion").Text ?? ""]);
+        Assert.Equal(["Bug fix", "Version 1"], [shell.Find<TextBlock>("TaskType").Text ?? "", shell.Window.ViewModel.Canvas!.SelectedNode!.KindTip.Split((char)10)[0] ?? ""]);
         shell.Find<TextBox>("TaskTitle").Text = "First";
         ClearSelection(shell);
 
         Press(shell, "Bug fix", "EditBlueprint");
         Assert.Equal(
-            "Version 1 in the project library. Saving makes version 2, and nodes placed before keep their version.",
+            "Version 1 in the project library.",
             shell.Find<TextBlock>("BlueprintCaption").Text);
         shell.Find<TextBox>("BlueprintTemplate").Text = "Fix it: {{instructions}}";
         shell.Click(shell.InView<Button>("SaveBlueprint"));
 
         Assert.Equal("Saved Bug fix, version 2, to the project library.", shell.Status);
         Press(shell, "Bug fix", "PlaceBlueprint");
-        Assert.Equal("Version 2", shell.Find<TextBlock>("TaskTypeVersion").Text);
+        Assert.Equal("Version 2", shell.Window.ViewModel.Canvas!.SelectedNode!.KindTip.Split((char)10)[0]);
         shell.Find<TextBox>("TaskTitle").Text = "Second";
         shell.Press(Key.S, RawInputModifiers.Control);
 
         var reopened = Shell.Open(project);
         reopened.Click(reopened.Header(reopened.Node("First")));
-        Assert.Equal(["Bug fix", "Version 1"], [reopened.Find<TextBlock>("TaskType").Text ?? "", reopened.Find<TextBlock>("TaskTypeVersion").Text ?? ""]);
+        Assert.Equal(["Bug fix", "Version 1"], [reopened.Find<TextBlock>("TaskType").Text ?? "", reopened.Window.ViewModel.Canvas!.SelectedNode!.KindTip.Split((char)10)[0]]);
         reopened.Click(reopened.Header(reopened.Node("Second")));
-        Assert.Equal("Version 2", reopened.Find<TextBlock>("TaskTypeVersion").Text);
+        Assert.Equal("Version 2", reopened.Window.ViewModel.Canvas!.SelectedNode!.KindTip.Split((char)10)[0]);
         var workflow = WorkflowDocument.OpenProject(project).Single().Current;
         Assert.Equal([key, key with { Version = 2 }], workflow.Blueprints.Keys);
     }
@@ -110,7 +114,9 @@ public sealed class BlueprintTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90, execution, "Draft it.", ConversationMode.Chat)));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.Click(shell.InView<Button>("SaveAsBlueprint"));
+        shell.Page(Inspector.AgentPage.Task);
+        shell.Fold("Blueprint");
+        shell.Click(shell.Find<Button>("SaveAsBlueprint"));
         Assert.Equal("Design", shell.Find<TextBox>("BlueprintName").Text);
         Assert.Equal(["Draft it.", ""], [.. Rows(shell).Select(row => ById<TextBox>(row, "FieldDefault").Text ?? "")]);
         Assert.Equal("Codex", shell.Picked("BlueprintClient"));
@@ -156,8 +162,6 @@ public sealed class BlueprintTests : IDisposable
 
         Press(shell, "Implement copy", "PlaceBlueprint");
         Assert.Equal("Bug", shell.Find<TextBox>("TaskBug").GetValue(AutomationProperties.NameProperty));
-        var icons = new[] { "TaskInstructions", "TaskBug" }.Select(id => shell.Find<TextBox>(id).FindAncestorOfType<InspectorRow>()!.Icon);
-        Assert.Equal([Resource("IconEdit"), Resource("IconField")], icons);
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(["acceptanceCriteria", "bug", "instructions"], WorkflowDocument.OpenProject(project).Single().Current.Blueprints.Values.Single().Fields.Select(field => field.Key).Order());
     }
@@ -172,7 +176,7 @@ public sealed class BlueprintTests : IDisposable
         shell.Click(shell.InView<Button>("CancelBlueprint"));
 
         Assert.False(shell.Has<StackPanel>("BlueprintEditor"));
-        Assert.True(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
+        Assert.True(shell.Find<Control>("WorkflowPage").IsEffectivelyVisible);
         Assert.False(Directory.Exists(Path.Combine(project, ".idp", "blueprints")));
     }
 
@@ -197,11 +201,11 @@ public sealed class BlueprintTests : IDisposable
             shell.Render();
 
             var glyphs = host.GetVisualDescendants().OfType<Button>()
-                .Where(button => AutomationProperties.GetAutomationId(button) is "PlaceBlueprint" or "BlueprintMore" or "RemoveField")
+                .Where(button => AutomationProperties.GetAutomationId(button) is "BlueprintMore" or "RemoveField")
                 .ToLookup(button => AutomationProperties.GetAutomationId(button)!);
             Assert.Equal(
-                (true, true, 2),
-                (glyphs["PlaceBlueprint"].Any(), glyphs["BlueprintMore"].Any(), glyphs["RemoveField"].Count()));
+                (true, 2),
+                (glyphs["BlueprintMore"].Any(), glyphs["RemoveField"].Count()));
             Assert.Equal([new Size(24, 24)], glyphs.SelectMany(group => group).Select(button => button.Bounds.Size).Distinct().ToArray());
         }
         finally
@@ -228,18 +232,9 @@ public sealed class BlueprintTests : IDisposable
             Containers(shell.Find<StackPanel>("Palette")).Single(container => container.DataContext is BlueprintEntryViewModel entry && entry.Name == name),
             automationId);
 
-    /// <summary>Clicks Place, or chooses Derive or Edit from the entry's More menu. A headless popup takes no clicks, so the entry raises its own.</summary>
+    /// <summary>Chooses Place, Derive, or Edit from the entry's More menu. A headless popup takes no clicks, so the entry raises its own.</summary>
     private static void Press(Shell shell, string name, string automationId)
     {
-        if (automationId == "PlaceBlueprint")
-        {
-            var button = Button(shell, name, automationId);
-            button.BringIntoView();
-            shell.Render();
-            shell.Click(button);
-            return;
-        }
-
         var more = OpenMore(shell, name);
         var item = ById<MenuItem>(shell.Window, automationId);
         Assert.True(item.IsVisible, $"{automationId} is not in {name}'s More menu.");

@@ -3,51 +3,113 @@
      kind classes they would otherwise hide. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:nodify="https://miroiu.github.io/nodify">
+        xmlns:canvas="using:IDevelop.Desktop.Canvas"
+        xmlns:nodify="https://miroiu.github.io/nodify"
+        xmlns:theme="using:IDevelop.Desktop.Theme">
+  <!-- A selected card has a 1.5 px accent ring just outside its edge and a 3 px halo outside that, in canvas units the view keeps near
+       their size on screen, so a state's own ring on the card's edge stays whole inside them. -->
   <Style Selector="Border.ring">
+    <Setter Property="Margin" Value="{DynamicResource RingMargin}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource RingThickness}" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
-  <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  <Style Selector="Border.halo">
+    <Setter Property="Margin" Value="{DynamicResource HaloMargin}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource HaloThickness}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
-  <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring, nodify|ItemContainer:previewing-selection Border.ring">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
   </Style>
-  <!-- A card is 240 wide in its 260 wide container, and an expanded card 320 in 340 (ADR 0024). An expanded card's state
-       tint stays on its header, so its details read on the card's own surface. -->
+  <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.halo, nodify|ItemContainer:previewing-selection Border.halo">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSelected25Brush}" />
+  </Style>
+  <!-- A card is 220 wide in its 240 wide container, and an expanded card 320 in 340 (ADR 0024). -->
   <Style Selector="Panel.taskCard">
-    <Setter Property="Width" Value="260" />
-    <Setter Property="MinHeight" Value="64" />
+    <Setter Property="Width" Value="240" />
+    <Setter Property="MinHeight" Value="94" />
   </Style>
   <Style Selector="Panel.taskCard.expanded">
     <Setter Property="Width" Value="340" />
   </Style>
-  <Style Selector="Panel.taskCard Border.stateTint">
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+  <Style Selector="Panel.cardBody">
+    <Setter Property="MinHeight" Value="94" />
   </Style>
-  <Style Selector="Panel.taskCard.expanded Border.stateTint">
-    <Setter Property="CornerRadius" Value="14,14,0,0" />
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource NodeShadow}" />
   </Style>
-  <!-- The card's disclosure: a 28 px target drawn in the 16 px glyph column, right while collapsed and down while expanded,
-       as the sidebar's rows show theirs. -->
+  <Style Selector="nodify|ItemContainer:pointerover Border.card">
+    <Setter Property="BoxShadow" Value="{DynamicResource NodeHoverShadow}" />
+  </Style>
+  <Style Selector="Border.cardHeader">
+    <Setter Property="CornerRadius" Value="8,8,0,0" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <Style Selector="Grid.cardFull">
+    <Setter Property="Height" Value="94" />
+  </Style>
+  <Style Selector="TextBlock.cardCaption">
+    <Setter Property="FontSize" Value="{DynamicResource CardCaptionSize}" />
+    <Setter Property="LineHeight" Value="{DynamicResource CardCaptionLine}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.cardCaption.noResult">
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="TextBlock.cardCaption.mono">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+  </Style>
+  <!-- The header's hover glyphs take 56 px, which moves the State Mark left; the title gives up the width. -->
+  <Style Selector="StackPanel.cardHover">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Width" Value="56" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+  </Style>
+  <Style Selector="nodify|ItemContainer:pointerover Panel.taskCard:not(.expanded) StackPanel.cardHover">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="Button.cardHoverAction">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.cardHoverAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <!-- The disclosure shows on hover and on an expanded card: a 24 px target drawn in the row's 12 px column, right while collapsed and down
+       while expanded. -->
   <Style Selector="ToggleButton.cardChevron">
-    <Setter Property="Width" Value="28" />
-    <Setter Property="Height" Value="28" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="nodify|ItemContainer:pointerover ToggleButton.cardChevron, ToggleButton.cardChevron:checked">
+    <Setter Property="Opacity" Value="1" />
   </Style>
   <Style Selector="ToggleButton.cardChevron /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:checked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="ToggleButton.cardChevron:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="ToggleButton.cardChevron PathIcon">
@@ -58,27 +120,103 @@
   <Style Selector="ToggleButton.cardChevron:checked PathIcon">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
   </Style>
-  <Style Selector="Border.card">
-    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource NodeShadow}" />
+
+  <!-- Three tiers. A collapsed card gives up its zones below the Full tier, and an expanded card stays Full so it can be used. -->
+  <Style Selector=":is(Control).tier-plate Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-block Panel.taskCard:not(.expanded) Grid.cardFull">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector="nodify|ItemContainer:pointerover Border.card">
-    <Setter Property="BoxShadow" Value="{DynamicResource NodeHoverShadow}" />
+  <Style Selector="Grid.cardPlate, Border.cardBlock">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Height" Value="94" />
+    <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
-  <Style Selector="nodify|ItemContainer:pointerover Border.stateStroke.state-idle:not(.role-proposing)">
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+  <Style Selector=":is(Control).tier-plate Panel.taskCard:not(.expanded) Grid.cardPlate">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector="Border.roleBadge">
-    <Setter Property="Padding" Value="1.5" />
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+  <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) Border.cardBlock">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="TextBlock.plateTitle">
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="{DynamicResource PlateTitleMargin}" />
+    <Setter Property="FontSize" Value="{DynamicResource PlateTitleSize}" />
+    <Setter Property="LineHeight" Value="{DynamicResource PlateTitleLine}" />
+    <Setter Property="MaxLines" Value="{DynamicResource PlateTitleLines}" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Panel.plateMark">
+    <Setter Property="Width" Value="{DynamicResource PlateMarkSize}" />
+    <Setter Property="Height" Value="{DynamicResource PlateMarkSize}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="{DynamicResource PlateMarkMargin}" />
+  </Style>
+  <Style Selector="theme|StateMark.blockMark">
+    <Setter Property="Width" Value="{DynamicResource PlateMarkSize}" />
+    <Setter Property="Height" Value="{DynamicResource PlateMarkSize}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.cardBlock">
+    <Setter Property="Background" Value="{DynamicResource StateNeutral10Brush}" />
+  </Style>
+  <Style Selector="Border.cardBlock.state-completed">
+    <Setter Property="Background" Value="{DynamicResource StateSuccess10Brush}" />
+  </Style>
+  <Style Selector="Border.cardBlock.state-running">
+    <Setter Property="Background" Value="{DynamicResource Accent10Brush}" />
+  </Style>
+  <Style Selector="Border.cardBlock.state-inputrequired">
+    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+  </Style>
+  <Style Selector="Border.cardBlock.state-failed">
+    <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
+  </Style>
+  <Style Selector="Border.cardBlock.state-stale">
+    <Setter Property="Background" Value="{DynamicResource StateWarning10Brush}" />
+  </Style>
+  <Style Selector="Button.attention.farAttention">
+    <Setter Property="Width" Value="NaN" />
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+  <Style Selector="Button.attention.farAttention:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <!-- A card's edge and ring keep their weight on screen as the cards shrink. An idle or done card keeps a 1 px edge. -->
+  <Style Selector="Panel.taskCard Border.stateStroke">
+    <Setter Property="BorderThickness" Value="{DynamicResource EdgeThickness}" />
+  </Style>
+  <Style Selector="Panel.taskCard Border.stateStroke.state-running, Panel.taskCard Border.stateStroke.state-inputrequired, Panel.taskCard Border.stateStroke.state-failed">
+    <Setter Property="BorderThickness" Value="{DynamicResource RingThickness}" />
+  </Style>
+  <Style Selector="Panel.taskCard Rectangle.staleEdge">
+    <Setter Property="StrokeThickness" Value="{DynamicResource StaleEdgeWidth}" />
+  </Style>
+  <!-- A ghost keeps a card's form at each zoom: its three lines close up, and far out only its title shows, as large as a card's. -->
+  <Style Selector="TextBlock.ghostFar">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=":is(Control).tier-plate TextBlock.ghostFar">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Margin" Value="18,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector=":is(Control).tier-plate Grid.ghostFull, :is(Control).tier-block Grid.ghostFull">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
        show through it (#85). Its dashed edge and faded tile say it is a proposal. -->
   <Style Selector="Border.ghost">
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
   </Style>
-  <!-- A card's and a ghost's three text lines, 18 + 16 + 16 px, sit 7 px from the card's top and bottom edges. -->
+  <!-- A ghost's three text lines, 18 + 16 + 16 px, sit 7 px from the card's top and bottom edges. -->
   <Style Selector="StackPanel.cardText">
     <Setter Property="Margin" Value="0,7,0,0" />
   </Style>
@@ -99,14 +237,17 @@
     <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
   </Style>
   <Style Selector="Border.ghostNote TextBlock">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="TextBlock.cardTitle">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{DynamicResource CardTitleSize}" />
+    <Setter Property="LineHeight" Value="{DynamicResource CardTitleLine}" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Height" Value="18" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+    <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- The box is its font's line plus a 1 px border at the top and bottom, so no font loses its descenders. The -5 left
@@ -114,7 +255,7 @@
        bottom margin the box takes 5 px less than its line, so the row keeps the 18 px of its Panel's MinHeight for any line
        up to 23 px, and a taller box reaches into the empty top of the subtitle's row. -->
   <Style Selector="TextBox.cardTitle">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="VerticalAlignment" Value="Top" />
@@ -123,38 +264,45 @@
     <Setter Property="CornerRadius" Value="5" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus">
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="Height" Value="16" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  </Style>
-  <Style Selector="TextBlock.cardAgent">
+  <!-- Ghost cards use these two lines under a title. -->
+  <Style Selector="TextBlock.ghostAgent">
+    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeCaptionLine}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-
-  <!-- A port's ring is neutral until a connection uses it. Then Kinds.axaml paints it in its node's kind. -->
-  <Style Selector="Ellipse.port:not(.kindStroke)">
-    <Setter Property="Stroke" Value="{DynamicResource Border100Brush}" />
+  <!-- A socket: 10 px on the card's edge, 6 px on screen at the Plate tier. The Block tier shows none. -->
+  <Style Selector="Ellipse.port">
+    <Setter Property="Width" Value="10" />
+    <Setter Property="Height" Value="10" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+  </Style>
+  <Style Selector=":is(Control).tier-plate Panel.taskCard:not(.expanded) Ellipse.port">
+    <Setter Property="Width" Value="{DynamicResource PlateSocketSize}" />
+    <Setter Property="Height" Value="{DynamicResource PlateSocketSize}" />
+    <Setter Property="StrokeThickness" Value="{DynamicResource PlateSocketStroke}" />
+  </Style>
+  <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) Ellipse.port">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
 
   <!-- Nodify's own rule that draws connections below the cards never matches its internal host type. -->
   <Style Selector="nodify|NodifyEditor /template/ :is(Control)#PART_ConnectionsHost">
     <Setter Property="ZIndex" Value="-1" />
   </Style>
+  <!-- The wires: one solid quiet line for a dependency, the same line dashed for context, in canvas units the view keeps near their
+       weight on screen. A wire reaches the socket's center and a filled socket covers its end. -->
   <Style Selector="nodify|StepConnection">
     <Setter Property="StrokeThickness" Value="2" />
     <Setter Property="Opacity" Value="1" />
-    <!-- A routed wire ignores the spacing. WireRouting.Stub is the spacing plus the offset, one value for both ends, so
-         a change to the spacing or to both offsets needs the same change in Stub. -->
-    <Setter Property="Spacing" Value="20" />
-    <Setter Property="CornerRadius" Value="5" />
-    <!-- Half a handle's width, so each end meets the edge of its 12 px handle. -->
-    <Setter Property="SourceOffset" Value="6,0" />
-    <Setter Property="TargetOffset" Value="6,0" />
-    <Setter Property="ArrowSize" Value="9,9" />
+    <Setter Property="Spacing" Value="0" />
+    <Setter Property="SourceOffset" Value="0,0" />
+    <Setter Property="TargetOffset" Value="0,0" />
+    <Setter Property="ArrowSize" Value="0,0" />
     <!-- An invisible solid outline gives the pointer a 12 px target around the line, gaps in a dash included. -->
     <Setter Property="OutlineBrush" Value="Transparent" />
     <Setter Property="OutlineThickness" Value="5" />
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextFaintBrush}" />
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="StrokeThickness" Duration="0:0:0.12" />
@@ -162,94 +310,84 @@
       </Transitions>
     </Setter>
   </Style>
-  <!-- A wire's stroke and arrow take its source node's kind. Nodify's connections are not Avalonia shapes, so Kinds.axaml's
-       shape rules miss them. -->
-  <Style Selector=":is(nodify|BaseConnection).kind-implement">
-    <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindImplementStrokeBrush}" />
+  <Style Selector="nodify|StepConnection.wire">
+    <Setter Property="StrokeThickness" Value="{ReflectionBinding Stroke}" />
   </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-plan">
-    <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindPlanStrokeBrush}" />
+  <!-- A selected or hovered card's wires go to the strong neutral, and every other wire recedes. -->
+  <Style Selector="nodify|StepConnection.wire.highlighted">
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-architect">
-    <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindArchitectStrokeBrush}" />
+  <Style Selector="nodify|StepConnection.wire.dimmed">
+    <Setter Property="Stroke" Value="{DynamicResource WireDimBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource WireDimBrush}" />
   </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-review">
-    <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindReviewStrokeBrush}" />
+  <!-- A wire from a failed agent is red. -->
+  <Style Selector="nodify|StepConnection.wire.flow-stopped:not(.dimmed)">
+    <Setter Property="Stroke" Value="{DynamicResource StateFailedStrokeBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-approval">
-    <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-merge">
-    <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindMergeStrokeBrush}" />
-  </Style>
-  <Style Selector=":is(nodify|BaseConnection).kind-readonlyagent">
-    <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
+  <!-- A wire into a running agent moves: the only wires that do, a 1 s dash offset. Its color stays even while another node is selected. -->
+  <Style Selector="nodify|StepConnection.wire.flow-feeding">
+    <Setter Property="Stroke" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="StrokeDashArray" Value="4,3" />
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="StrokeDashOffset" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="StrokeDashOffset" Value="-7" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
   </Style>
   <Style Selector="nodify|StepConnection.context">
     <Setter Property="StrokeDashArray" Value="4,3" />
-    <Setter Property="Opacity" Value="0.8" />
   </Style>
   <!-- Every proposed connection is dashed, so a proposed context connection is dotted to stay apart from a proposed
        dependency. -->
   <Style Selector="nodify|StepConnection.ghost">
     <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeDashArray" Value="4,3" />
-    <Setter Property="Opacity" Value="0.7" />
-    <Setter Property="ArrowSize" Value="7,7" />
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="nodify|StepConnection.ghost.context">
     <Setter Property="StrokeDashArray" Value="1,3" />
   </Style>
   <!-- The line Nodify's pending connection draws while a wire is dragged. -->
   <Style Selector="nodify|LineConnection.dangling">
-    <Setter Property="StrokeThickness" Value="3" />
+    <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeDashArray" Value="4,4" />
     <Setter Property="Spacing" Value="0" />
     <Setter Property="ArrowSize" Value="0,0" />
     <Setter Property="SourceOffsetMode" Value="None" />
     <Setter Property="TargetOffsetMode" Value="None" />
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.highlighted">
-    <Setter Property="StrokeThickness" Value="2.5" />
-  </Style>
-  <Style Selector="nodify|StepConnection.dimmed">
-    <Setter Property="Opacity" Value="0.35" />
-  </Style>
-  <Style Selector="nodify|StepConnection:pointerover">
-    <Setter Property="StrokeThickness" Value="3" />
+  <Style Selector="nodify|StepConnection.wire:pointerover">
+    <Setter Property="StrokeThickness" Value="{ReflectionBinding HotStroke}" />
     <Setter Property="Opacity" Value="1" />
   </Style>
-  <Style Selector="nodify|StepConnection[(nodify|BaseConnection.IsSelected)=true]">
-    <Setter Property="StrokeThickness" Value="3" />
+  <Style Selector="nodify|StepConnection.wire[(nodify|BaseConnection.IsSelected)=true]">
+    <Setter Property="StrokeThickness" Value="{ReflectionBinding HotStroke}" />
     <Setter Property="Opacity" Value="1" />
   </Style>
-  <Style Selector="nodify|PendingConnection.kind-implement">
-    <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
+  <!-- A highlighted wire's label, at its midpoint, at a Caption's size on screen. -->
+  <Style Selector="Border.wirePill">
+    <Setter Property="Padding" Value="{DynamicResource WirePillPadding}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource WirePillRadius}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource WirePillEdge}" />
   </Style>
-  <Style Selector="nodify|PendingConnection.kind-plan">
-    <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
+  <Style Selector="Border.wirePill TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource WirePillSize}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="nodify|PendingConnection.kind-architect">
-    <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-review">
-    <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-approval">
-    <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-merge">
-    <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
-  </Style>
-  <Style Selector="nodify|PendingConnection.kind-readonlyagent">
-    <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
+  <Style Selector="nodify|PendingConnection">
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="nodify|PendingConnection.rejected">
     <Setter Property="Stroke" Value="{DynamicResource StateFailedStrokeBrush}" />
@@ -262,59 +400,258 @@
   <Style Selector="nodify|MinimapItem">
     <Setter Property="Background" Value="Transparent" />
   </Style>
+  <!-- An item is a card in canvas units, which the minimap draws about eight times smaller. It takes its state's fill, as a
+       card does at the Block tier. A ghost is a faint fill in a dashed ring. -->
   <Style Selector="Border.minimapItem">
-    <Setter Property="Opacity" Value="0.7" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+  </Style>
+  <!-- A node that has not run stays visible on the map's surface, under the states that have happened. -->
+  <Style Selector="Border.minimapItem.state-idle">
+    <Setter Property="Background" Value="{DynamicResource TextFaintBrush}" />
   </Style>
   <Style Selector="Border.minimapItem.ghost">
     <Setter Property="Opacity" Value="0.3" />
-  </Style>
-  <!-- An item is a card in canvas units, which the minimap draws about eight times smaller, so a ring a quarter of the
-       card's height shows as a line of a pixel or two. -->
-  <Style Selector="Border.minimapRing">
-    <Setter Property="BorderThickness" Value="16" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
-  </Style>
-  <Style Selector="Border.minimapRing.state-idle:not(.role-proposing)">
-    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
   <Style Selector="Rectangle.minimapRing">
     <Setter Property="StrokeThickness" Value="16" />
     <Setter Property="StrokeDashArray" Value="2,1.5" />
-    <Setter Property="RadiusX" Value="14" />
-    <Setter Property="RadiusY" Value="14" />
-  </Style>
-  <Style Selector="Border.minimapItem.kind-implement">
-    <Setter Property="Background" Value="{DynamicResource KindImplementBrush}" />
-  </Style>
-  <Style Selector="Border.minimapItem.kind-plan">
-    <Setter Property="Background" Value="{DynamicResource KindPlanBrush}" />
-  </Style>
-  <Style Selector="Border.minimapItem.kind-architect">
-    <Setter Property="Background" Value="{DynamicResource KindArchitectBrush}" />
-  </Style>
-  <Style Selector="Border.minimapItem.kind-review">
-    <Setter Property="Background" Value="{DynamicResource KindReviewBrush}" />
-  </Style>
-  <Style Selector="Border.minimapItem.kind-approval">
-    <Setter Property="Background" Value="{DynamicResource KindApprovalBrush}" />
-  </Style>
-  <Style Selector="Border.minimapItem.kind-merge">
-    <Setter Property="Background" Value="{DynamicResource KindMergeBrush}" />
-  </Style>
-  <Style Selector="Border.minimapItem.kind-readonlyagent">
-    <Setter Property="Background" Value="{DynamicResource KindReadOnlyAgentBrush}" />
+    <Setter Property="RadiusX" Value="10" />
+    <Setter Property="RadiusY" Value="10" />
   </Style>
 
-  <Style Selector="Button.zoom">
-    <Setter Property="Width" Value="30" />
-    <Setter Property="Height" Value="30" />
-    <Setter Property="CornerRadius" Value="0" />
+  <!-- The footer's buttons are 28 by 24, with no lines between them. -->
+  <Style Selector="Button.zoom, ToggleButton.zoom">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="BorderThickness" Value="0,0,0,1" />
-  </Style>
-  <Style Selector="Button.zoom:nth-last-child(1)">
     <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ToggleButton.zoom /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ToggleButton.zoom:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.zoom:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Button.zoomValue">
+    <Setter Property="Width" Value="40" />
+  </Style>
+  <!-- The app's one focus ring, inside the canvas's edge, so no panel covers it. -->
+  <!-- While the inspector edits a blueprint, the canvas stays in view behind the edit and is not a part of it. -->
+  <Style Selector="nodify|NodifyEditor.behindEditor">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+  <Style Selector="Border.portLabel">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="MaxWidth" Value="260" />
+    <Setter Property="Padding" Value="6,2" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.portLabel TextBlock">
+    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeCaptionLine}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <!-- The canvas has the keys: the one focus ring, inside the canvas's edges. -->
+  <Style Selector="Border.canvasFocus">
+    <Setter Property="Margin" Value="1" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
+  </Style>
+  <Style Selector="Button.zoomValue TextBlock">
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <!-- Flow: a band's header is one row with a hairline that runs to its mark, and a plate keeps text clear of the wires behind it. -->
+  <Style Selector="canvas|FlowView.behindEditor">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+  <Style Selector="Button.flowBand">
+    <Setter Property="Height" Value="26" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.flowBand /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.flowBand:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Button.flowBand:pointerover Border.flowPlate">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.flowPlate">
+    <Setter Property="Background" Value="{DynamicResource CanvasPlainBrush}" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.flowBand.folded">
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+  <Style Selector="Button.flowBand.folded /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Button.flowBand.folded Border.flowPlate">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="TextBlock.flowBandName">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Rectangle.flowHairline">
+    <Setter Property="Fill" Value="{DynamicResource Border80Brush}" />
+  </Style>
+
+  <Style Selector="Panel.flowCard">
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+  <Style Selector="Panel.flowCard.dim">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+  <Style Selector="Border.flowBody">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Panel.flowCard:pointerover Border.flowBody">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Grid.flowContent">
+    <Setter Property="Margin" Value="10,8" />
+  </Style>
+  <Style Selector="Panel.flowCard.chip Grid.flowContent">
+    <Setter Property="Margin" Value="10,6" />
+  </Style>
+  <Style Selector="Panel.flowTitle">
+    <Setter Property="Height" Value="34" />
+  </Style>
+  <Style Selector="Panel.flowCard.chip Panel.flowTitle">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Margin" Value="0,0,20,0" />
+  </Style>
+  <Style Selector="TextBlock.flowName">
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
+    <Setter Property="LineHeight" Value="17" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Panel.flowCard.chip TextBlock.flowName">
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="Grid.flowMeta">
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Margin" Value="0,4,20,0" />
+  </Style>
+  <Style Selector="theme|StateMark.flowMark">
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Margin" Value="0,0,10,8" />
+  </Style>
+  <Style Selector="Panel.flowCard.chip theme|StateMark.flowMark">
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,7,8,0" />
+  </Style>
+  <!-- Selection: a 1.5 px accent ring just outside the card, its 3 px halo outside that, so a state's ring stays whole inside them. -->
+  <Style Selector="Border.flowRing">
+    <Setter Property="Margin" Value="-1.5" />
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Panel.flowCard.selected Border.flowRing">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource SelectionHalo}" />
+  </Style>
+  <Style Selector="Ellipse.flowSocket">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="Fill" Value="{DynamicResource CanvasPlainBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+  <Style Selector="Ellipse.flowSocket.connected">
+    <Setter Property="Fill" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="Ellipse.flowSocket.feeding">
+    <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource StateRunningBrush}" />
+  </Style>
+  <Style Selector="Ellipse.flowSocket.stopped">
+    <Setter Property="Fill" Value="{DynamicResource StateFailedStrokeBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource StateFailedStrokeBrush}" />
+  </Style>
+
+  <!-- The Map Footer. Its controls are one 24 px line, and a hairline parts it from the Map. -->
+  <Style Selector="Border.mapFooter">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <!-- The minimap floats in the Map's corner. -->
+  <Style Selector="Border.mapMinimap">
+    <Setter Property="Width" Value="176" />
+    <Setter Property="Height" Value="128" />
+    <Setter Property="Margin" Value="8" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+  </Style>
+
+  <!-- Flow's moving wires: the wires into running agents, in their own layer, so only that layer redraws each frame. -->
+  <Style Selector="canvas|FlowWires.moving">
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="DashOffset" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="DashOffset" Value="-7" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- The Run frame: while an agent runs, a 2 px inset border on the Map sheet, as Unreal shows a simulating graph. -->
+  <Style Selector="Border.runFrame">
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
+  </Style>
+  <!-- Rows of chips stand 8 px apart, so a chip's socket is 6 px and two sockets across a gap keep apart. -->
+  <Style Selector="Panel.flowCard.chip Ellipse.flowSocket">
+    <Setter Property="Width" Value="6" />
+    <Setter Property="Height" Value="6" />
   </Style>
 </Styles>

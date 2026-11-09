@@ -36,6 +36,9 @@ public sealed class WorkflowDocument
     /// <summary>Compares with the saved workflow, so undoing back to it reads as saved.</summary>
     public bool HasUnsavedChanges => !ReferenceEquals(Current, _saved);
 
+    /// <summary>The workflow as it was last saved, or null before a first save.</summary>
+    public Workflow? Saved => _saved;
+
     public bool CanUndo => _undo.Count > 0;
 
     public bool CanRedo => _redo.Count > 0;

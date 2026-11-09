@@ -1,4 +1,5 @@
 using Avalonia;
+using IDevelop.Desktop.Conversation;
 
 namespace IDevelop.Desktop.Canvas;
 
@@ -82,11 +83,24 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The card's container where it shows.</summary>
     public Rect DisplayRect => new(DisplayLocation, _cardSize);
 
+    /// <summary>The card's size as it draws.</summary>
+    internal Size DrawnSize => _cardSize;
+
+    /// <summary>The card as it draws, which the wires go around.</summary>
+    internal Rect DrawnRect => new(DisplayLocation, DrawnSize);
+
     /// <summary>The details while the card is expanded or its peek shows, else null.</summary>
     public CardDetailViewModel? Detail
     {
         get => _detail;
         private set => SetProperty(ref _detail, value);
+    }
+
+    /// <summary>The Action Dock the expanded card shows, the same one as the Chat page's, while the card is expanded or its peek shows.</summary>
+    public ActionDockViewModel? CardDock
+    {
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     /// <summary>The peek's line under the title, such as "Implement · Codex · GPT-5.5 · high".</summary>
@@ -102,7 +116,7 @@ public sealed partial class TaskNodeViewModel
         LastReply = Latest,
         Report = _history.Count > 0 ? _history[^1].Report : null,
         Detail = StateDetail,
-        Proposal = Proposal is { HasItems: true } ? Subtitle : null,
+        Proposal = Proposal is { HasItems: true } ? CardStatus : null,
         Review = ReviewSummary,
         FieldLabel = Fields.Count > 0 ? Fields[0].Spec.Label : "Task",
         FieldText = Fields.Count > 0 ? Fields[0].Text : null,
@@ -135,12 +149,18 @@ public sealed partial class TaskNodeViewModel
         CloseDetail();
     }
 
-    private void OpenDetail() => Detail = new CardDetailViewModel(this);
+    private void OpenDetail()
+    {
+        Detail = new CardDetailViewModel(this);
+        CardDock = new ActionDockViewModel(this);
+    }
 
     private void CloseDetail()
     {
-        var detail = Detail;
+        var (detail, dock) = (Detail, CardDock);
         Detail = null;
+        CardDock = null;
         detail?.Dispose();
+        dock?.Dispose();
     }
 }

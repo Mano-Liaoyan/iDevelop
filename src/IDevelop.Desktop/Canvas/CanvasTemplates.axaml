@@ -4,155 +4,210 @@
                     xmlns:canvas="using:IDevelop.Desktop.Canvas"
                     xmlns:theme="using:IDevelop.Desktop.Theme"
                     xmlns:workflows="using:IDevelop.Workflows">
+  <!-- A socket is a 10 px ring in a 20 px target, on the card's edge, one per side. It is filled only while a wire joins it, and it takes
+       its wire's color, so a socket's fill has one meaning: the label beside it says whether a result exists. -->
   <ControlTheme x:Key="PortTheme" TargetType="nodify:Connector">
+    <Setter Property="ClipToBounds" Value="False" />
     <Setter Property="Template">
       <ControlTemplate>
-        <TemplatedControl Name="PART_Connector" Width="20" Height="20" Background="{DynamicResource SurfaceRaisedBrush}">
+        <TemplatedControl Name="PART_Connector" Width="20" Height="20" ClipToBounds="False"
+                          Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource TextFaintBrush}">
           <TemplatedControl.Template>
             <ControlTemplate>
-              <!-- The transparent panel lets the whole 20 px square take the pointer, not only the 12 px handle. -->
-              <Panel Background="Transparent">
-                <Ellipse Classes="port" Width="12" Height="12" StrokeThickness="2"
-                         x:DataType="canvas:PortViewModel"
-                         Classes.kindStroke="{Binding IsConnected}"
-                         theme:StyleClass.Kind="{Binding Node.Kind}"
-                         Fill="{TemplateBinding Background}" />
+              <!-- The transparent panel lets the whole 20 px square take the pointer, not only the 10 px ring. -->
+              <Panel Background="Transparent" ClipToBounds="False">
+                <Ellipse Classes="port" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Panel>
             </ControlTemplate>
           </TemplatedControl.Template>
         </TemplatedControl>
       </ControlTemplate>
     </Setter>
+    <Style Selector="^[IsConnected=True] /template/ TemplatedControl#PART_Connector">
+      <Setter Property="Background" Value="{DynamicResource TextFaintBrush}" />
+    </Style>
+    <Style Selector="^[IsConnected=True].feeding /template/ TemplatedControl#PART_Connector">
+      <Setter Property="Background" Value="{DynamicResource StateRunningBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateRunningBrush}" />
+    </Style>
+    <Style Selector="^[IsConnected=True].stopped /template/ TemplatedControl#PART_Connector">
+      <Setter Property="Background" Value="{DynamicResource StateFailedStrokeBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
+    </Style>
     <Style Selector="^:pointerover /template/ TemplatedControl#PART_Connector">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     </Style>
     <Style Selector="^.isOverElement /template/ TemplatedControl#PART_Connector">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     </Style>
   </ControlTheme>
   <!-- The minimap's background is PlanWeave's muted mask, and the opaque viewport is the clear window in it. -->
   <ControlTheme x:Key="MinimapViewportTheme" TargetType="Rectangle">
     <Setter Property="Fill" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <!-- In canvas units, which the minimap draws about eight times smaller. -->
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="StrokeThickness" Value="14" />
   </ControlTheme>
 
-  <!-- The card is 240 by 64 in a 260 wide container, whose 10 px gutters hold the ports on the card's edges. Kind lives in
-       the tile; state lives in the ring, the tint, the glyph, and the subtitle. The state ring, the tint, and the card are
-       separate layers, because a running ring pulses and must not take the text with it. An expanded card is 320 wide
-       and as tall as its details (ADR 0024). Its header stays 64 px, and the ports stay on the header's middle line, so a
-       card that unfolds never moves its wires' rows. The state glyph sits on the title's line and the disclosure on the
-       last line, both in the 16 px column the glyph always had, so the title keeps its width. -->
+  <!-- The card is 220 by 94 in a 240 wide container, whose 10 px gutters hold the sockets on the card's edges (brief S2, Unreal's
+       colored title bars and named pins in PlanWeave's calm hues). Three zones: the 44 px header in the kind's tint, the 22 px socket row
+       that names Input and Result, and the 22 px agent row. An expanded card is 320 wide and as tall as its details (ADR 0024); it stays
+       full at every zoom. Three tiers: Full, Plate (the box, the title at a constant 12 px on screen, the State Mark, 6 px sockets),
+       and Block (the box in its state's tint and a mark; its tooltip names it). The state's ring, a dashed Stale edge, and the selection's
+       ring and halo stand apart from the card's layers. -->
   <DataTemplate x:Key="TaskCardTemplate" DataType="canvas:TaskNodeViewModel">
-    <Panel Classes="taskCard" Classes.expanded="{Binding IsExpanded}"
+    <Panel Classes="taskCard" ClipToBounds="False" Classes.expanded="{Binding IsExpanded}"
            canvas:CardBehaviors.ReportsSize="True"
            canvas:CardBehaviors.Peek="{Binding ShowsPeek}"
            AutomationProperties.AutomationId="TaskCard"
            AutomationProperties.Name="{Binding Title}">
-      <Border Classes="card" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
-      <Border Classes="stateTint" Margin="10,0" VerticalAlignment="Top" Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
-              IsHitTestVisible="False"
-              theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-      <StackPanel Margin="10,0">
-        <Grid Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" Margin="12,0" ColumnDefinitions="32,*,16" ColumnSpacing="12">
-          <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" VerticalAlignment="Center"
-                          AutomationProperties.AutomationId="CardKind"
-                          AutomationProperties.HelpText="{Binding KindHelp}" />
-          <!-- Three lines in every state: the title, the client or the status, then the model and level, which stays while a
-               status shows. A line without text keeps its place, so every card's text sits the same. -->
-          <StackPanel Grid.Column="1" Classes="cardText">
-            <!-- The row keeps the title's height while the rename box replaces the title. -->
-            <Panel MinHeight="18">
-              <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                         IsVisible="{Binding !IsRenaming}"
-                         AutomationProperties.AutomationId="CardTitle" />
-              <canvas:CardTitleBox Classes="cardTitle" IsVisible="{Binding IsRenaming}"
-                                   AutomationProperties.AutomationId="CardTitleBox"
-                                   AutomationProperties.Name="Title" />
-            </Panel>
-            <Panel>
-              <TextBlock Classes="cardAgent" Text="{Binding AgentClient}" TextTrimming="CharacterEllipsis"
-                         IsVisible="{Binding ShowsAgent}"
+      <Panel Classes="cardBody">
+        <Border Classes="card" Margin="10,0" CornerRadius="{StaticResource RadiusMd}" />
+        <StackPanel Margin="10,0">
+          <Grid Classes="cardFull" RowDefinitions="44,3,22,22,3">
+            <!-- The title bar: the kind's tint, tile, the title in two lines, and the State Mark. Hover adds Run or Retry and Chat. -->
+            <Border Classes="cardHeader kindTint" theme:StyleClass.Kind="{Binding Kind}">
+              <Grid Margin="8,0" ColumnDefinitions="20,*,Auto,Auto" ColumnSpacing="6">
+                <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" KeepsBadge="True" TileSize="20" VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="CardKind"
+                                AutomationProperties.HelpText="{Binding KindHelp}" />
+                <!-- The row keeps the title's height while the rename box replaces the title. -->
+                <Panel Grid.Column="1" MinHeight="18" VerticalAlignment="Center">
+                  <theme:EllipsisText Classes="cardTitle" Whole="{Binding Title}" Key="{Binding TitleKey}"
+                                      IsVisible="{Binding !IsRenaming}"
+                                      AutomationProperties.AutomationId="CardTitle" />
+                  <canvas:CardTitleBox Classes="cardTitle" IsVisible="{Binding IsRenaming}"
+                                       AutomationProperties.AutomationId="CardTitleBox"
+                                       AutomationProperties.Name="Title" />
+                </Panel>
+                <!-- While the task needs the person, its State Mark is a button that opens the conversation at what it needs,
+                     or, for an approval, selects it so the Agent panel shows its request. -->
+                <Panel Grid.Column="2" Width="16" Height="16" VerticalAlignment="Center">
+                  <theme:StateMark IsVisible="{Binding !HasAttention}" State="{Binding State}" Why="{Binding WaitReason}" Role="{Binding Role}"
+                                   ToolTip.Tip="{Binding MarkTip}"
+                                   AutomationProperties.AutomationId="CardStateGlyph" />
+                  <Button Classes="attention" Margin="{x:Static canvas:CardBehaviors.GlyphMargin}" IsVisible="{Binding HasAttention}"
+                          Command="{Binding AttendCommand}"
+                          ToolTip.Tip="{Binding AttentionLabel}"
+                          AutomationProperties.AutomationId="CardAttention"
+                          AutomationProperties.Name="{Binding AttentionLabel}"
+                          AutomationProperties.HelpText="{Binding AttendHelp}">
+                    <theme:StateMark State="{Binding State}" Why="{Binding WaitReason}" Role="{Binding Role}" />
+                  </Button>
+                </Panel>
+                <StackPanel Grid.Column="3" Classes="cardHover" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <Button Classes="cardHoverAction" Command="{Binding RunCommand}" IsVisible="{Binding ShowsRun}"
+                          ToolTip.Tip="Run this agent"
+                          AutomationProperties.AutomationId="CardHoverRun" AutomationProperties.Name="Run">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
+                  </Button>
+                  <Button Classes="cardHoverAction" Command="{Binding RetryCommand}" IsVisible="{Binding ShowsRetry}"
+                          ToolTip.Tip="{Binding RetryLabel}"
+                          AutomationProperties.AutomationId="CardHoverRetry" AutomationProperties.Name="{Binding RetryLabel}">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" />
+                  </Button>
+                  <Button Classes="cardHoverAction" Command="{Binding OpenConversationCommand}" IsVisible="{Binding HasAgent}"
+                          ToolTip.Tip="Open the conversation (Enter)"
+                          AutomationProperties.AutomationId="CardHoverChat" AutomationProperties.Name="Open conversation">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconConversation}" />
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+            <!-- Named sockets: the row beside each socket says what it carries. -->
+            <Grid Grid.Row="2" Margin="14,0,14,0" ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Classes="cardCaption" Text="{Binding CardInput}" AutomationProperties.AutomationId="CardInputLabel" />
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                <TextBlock Classes="cardCaption" Classes.noResult="{Binding !HasResults}" Text="{Binding CardResult}"
+                           AutomationProperties.AutomationId="CardResultLabel" />
+                <TextBlock Classes="cardCaption" Classes.mono="{Binding CardResultIsCommit}" Text="{Binding CardResultDetail}"
+                           IsVisible="{Binding CardResultDetail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           AutomationProperties.AutomationId="CardResultDetail" />
+              </StackPanel>
+            </Grid>
+            <!-- The agent: its client, its model and level, or Approval for a person's node. The disclosure shows on hover. -->
+            <Grid Grid.Row="3" Margin="14,0,8,0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+              <TextBlock Classes="cardCaption cardAgent" Text="{Binding CardClient}" TextTrimming="CharacterEllipsis" MaxWidth="96" ToolTip.Tip="{Binding AgentClient}"
                          AutomationProperties.AutomationId="CardAgent" />
-              <!-- A status names what it waits for when the name fits whole, and counts it when it does not. -->
-              <canvas:FittingText Classes="cardStatus" Choices="{Binding SubtitleChoices}" TextTrimming="CharacterEllipsis"
-                                  IsVisible="{Binding !ShowsAgent}"
-                                  AutomationProperties.AutomationId="CardStatus" />
-            </Panel>
-            <TextBlock Classes="cardAgent" Text="{Binding AgentModel}" TextTrimming="CharacterEllipsis"
-                       AutomationProperties.AutomationId="CardModel" />
-          </StackPanel>
-          <!-- While the task needs the person, its state glyph is a button that opens the conversation at what it needs, or,
-               for an approval, selects it so the inspector shows its request. It sits on the title's line. -->
-          <Panel Grid.Column="2" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.GlyphMargin}" Height="16">
-            <!-- The state styles hide the glyph of some states, so the attention switch sits on a panel around it. -->
-            <Panel IsVisible="{Binding !HasAttention}">
-              <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
-                        theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}"
-                        AutomationProperties.AutomationId="CardStateGlyph" />
-            </Panel>
-            <Button Classes="attention" IsVisible="{Binding HasAttention}"
+              <TextBlock Grid.Column="1" Classes="cardCaption cardModel" Text="{Binding CardModel}" TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding HasModel}" ToolTip.Tip="{Binding AgentModel}"
+                         AutomationProperties.AutomationId="CardModel" />
+              <!-- The disclosure: a 24 px target drawn in the 12 px column. -->
+              <ToggleButton Grid.Column="2" Classes="cardChevron" Margin="{x:Static canvas:CardBehaviors.ChevronMargin}"
+                            IsChecked="{Binding IsExpanded}"
+                            ToolTip.Tip="{Binding ExpandName}"
+                            AutomationProperties.AutomationId="CardExpand"
+                            AutomationProperties.Name="{Binding ExpandName}">
+                <PathIcon Theme="{StaticResource Glyph}" />
+              </ToggleButton>
+            </Grid>
+          </Grid>
+          <canvas:CardDetail IsVisible="{Binding IsExpanded}" />
+        </StackPanel>
+        <!-- The Plate tier: the title at 12 px on screen and the State Mark. -->
+        <Grid Classes="cardPlate" Margin="10,0" ColumnDefinitions="*,Auto" IsHitTestVisible="{Binding HasAttention}"
+              AutomationProperties.AccessibilityView="Raw">
+          <theme:EllipsisText Classes="plateTitle" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}" Key="{Binding TitleKey}" IsHitTestVisible="False" />
+          <Panel Classes="plateMark" Grid.Column="1">
+            <theme:StateMark State="{Binding State}" Why="{Binding WaitReason}" Role="{Binding Role}" AutomationProperties.AutomationId="CardFarGlyph" />
+            <Button Classes="attention farAttention" IsVisible="{Binding HasAttention}"
                     Command="{Binding AttendCommand}"
                     ToolTip.Tip="{Binding AttentionLabel}"
-                    AutomationProperties.AutomationId="CardAttention"
+                    AutomationProperties.AutomationId="CardFarAttention"
                     AutomationProperties.Name="{Binding AttentionLabel}"
-                    AutomationProperties.HelpText="{Binding AttendHelp}">
-              <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
-                        theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-            </Button>
+                    AutomationProperties.HelpText="{Binding AttendHelp}" />
           </Panel>
-          <!-- The disclosure, on the last line under the glyph: a 28 px target drawn in the 16 px column. -->
-          <ToggleButton Grid.Column="2" Classes="cardChevron" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.ChevronMargin}"
-                        IsChecked="{Binding IsExpanded}"
-                        ToolTip.Tip="{Binding ExpandName}"
-                        AutomationProperties.AutomationId="CardExpand"
-                        AutomationProperties.Name="{Binding ExpandName}">
-            <PathIcon Theme="{StaticResource Glyph}" />
-          </ToggleButton>
         </Grid>
-        <canvas:CardDetail IsVisible="{Binding IsExpanded}" />
-      </StackPanel>
-      <!-- A review that goes on with this node marks its tile with the Review tile. -->
-      <Border Classes="roleBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="38.5,36.5,0,0"
-              IsVisible="{Binding IsUnderReview}" ToolTip.Tip="{Binding ReviewerTip}"
-              AutomationProperties.AutomationId="CardUnderReview">
-        <theme:KindTile Kind="Review" TileSize="18" />
-      </Border>
-      <Border Classes="stateStroke" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" BorderThickness="1.5" IsHitTestVisible="False"
-              theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-      <!-- The selection ring lies outside the card, over the card's shadow. -->
-      <Border Classes="ring" Margin="6,-4" CornerRadius="18" BorderThickness="2" IsHitTestVisible="False" />
-      <!-- The ports sit on the header's middle line, 32 px down, however tall the card is. -->
-      <ContentControl Content="{Binding Input}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.PortMargin}">
-        <ContentControl.ContentTemplate>
-          <DataTemplate DataType="canvas:PortViewModel">
-            <nodify:NodeInput Theme="{StaticResource PortTheme}"
-                              Anchor="{Binding Anchor, Mode=OneWayToSource}"
-                              IsConnected="{Binding IsConnected}"
-                              AutomationProperties.Name="Task input" />
-          </DataTemplate>
-        </ContentControl.ContentTemplate>
-      </ContentControl>
-      <ContentControl Content="{Binding Output}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.PortMargin}">
-        <ContentControl.ContentTemplate>
-          <DataTemplate DataType="canvas:PortViewModel">
-            <nodify:NodeOutput Theme="{StaticResource PortTheme}"
-                               Anchor="{Binding Anchor, Mode=OneWayToSource}"
-                               IsConnected="{Binding IsConnected}"
-                               AutomationProperties.Name="Task output" />
-          </DataTemplate>
-        </ContentControl.ContentTemplate>
-      </ContentControl>
+        <!-- The Block tier: the box in its state's tint and a mark. No text; the tooltip names the agent. -->
+        <Border Classes="cardBlock" Margin="10,0" CornerRadius="{StaticResource RadiusMd}" IsHitTestVisible="False"
+                theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}">
+          <theme:StateMark Classes="blockMark" State="{Binding State}" Why="{Binding WaitReason}" Role="{Binding Role}" />
+        </Border>
+        <Border Classes="stateStroke" Margin="10,0" CornerRadius="{StaticResource RadiusMd}" IsHitTestVisible="False"
+                theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
+        <Rectangle Classes="staleEdge" Margin="10,0" RadiusX="8" RadiusY="8" IsHitTestVisible="False"
+                   theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
+        <!-- The selection ring sits just outside the card's edge, and its halo outside it, so a state's ring stays whole inside them. -->
+        <Border Classes="halo" CornerRadius="12" IsHitTestVisible="False" />
+        <Border Classes="ring" CornerRadius="9" IsHitTestVisible="False" />
+        <!-- The sockets stand on the card's edges at the socket row, however tall the card is. -->
+        <ContentControl Content="{Binding Input}" ClipToBounds="False" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.PortMargin}">
+          <ContentControl.ContentTemplate>
+            <DataTemplate DataType="canvas:PortViewModel">
+              <nodify:NodeInput Theme="{StaticResource PortTheme}"
+                                Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                IsConnected="{Binding IsConnected}"
+                                Classes.feeding="{Binding IsFeeding}" Classes.stopped="{Binding IsStopped}"
+                                AutomationProperties.Name="Task input" />
+            </DataTemplate>
+          </ContentControl.ContentTemplate>
+        </ContentControl>
+        <ContentControl Content="{Binding Output}" ClipToBounds="False" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="{x:Static canvas:CardBehaviors.PortMargin}">
+          <ContentControl.ContentTemplate>
+            <DataTemplate DataType="canvas:PortViewModel">
+              <nodify:NodeOutput Theme="{StaticResource PortTheme}"
+                                 Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                 IsConnected="{Binding IsConnected}"
+                                 Classes.feeding="{Binding IsFeeding}" Classes.stopped="{Binding IsStopped}"
+                                 AutomationProperties.Name="Task output" />
+            </DataTemplate>
+          </ContentControl.ContentTemplate>
+        </ContentControl>
+      </Panel>
     </Panel>
   </DataTemplate>
 
   <DataTemplate x:Key="ConnectionTemplate" DataType="canvas:ConnectionViewModel">
-    <canvas:RoutedConnection Source="{Binding From.Output.Anchor}"
-                             Target="{Binding To.Input.Anchor}"
-                             Route="{Binding Route}"
-                             theme:StyleClass.Kind="{Binding SourceKind}"
+    <canvas:RoutedConnection Classes="wire" Source="{Binding SourcePoint}"
+                             Target="{Binding TargetPoint}"
+                             Curve="{Binding Curve}"
+                             theme:StyleClass.Flow="{Binding Flow}"
+                             Classes.highlighted="{Binding IsHighlighted}"
+                             Classes.dimmed="{Binding IsDimmed}"
                              Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
-                             canvas:WireLayer.IsBelow="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
-                             Classes.highlighted="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Highlighted}}"
-                             Classes.dimmed="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Dimmed}}"
+                             canvas:WireLayer.Level="{Binding Layer}"
                              nodify:BaseConnection.IsSelectable="True" />
   </DataTemplate>
 
@@ -161,7 +216,6 @@
                               PreviewTarget="{Binding PreviewTarget, Mode=OneWayToSource}"
                               EnablePreview="True"
                               Content="{Binding PreviewText}"
-                              theme:StyleClass.Kind="{Binding $self.Source, Converter={x:Static canvas:PortViewModel.KindOfSource}}"
                               Classes.rejected="{Binding IsRejected}" />
   </DataTemplate>
 </ResourceDictionary>

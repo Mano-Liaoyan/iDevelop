@@ -16,6 +16,40 @@ public static class CanvasKeys
 
     public static KeyGesture Run => new(Key.Enter, Command);
 
+    /// <summary>Runs the shown workflow, or Stop and send in a composer.</summary>
+    public static KeyGesture RunWorkflow => new(Key.Enter, Command | KeyModifiers.Shift);
+
+    /// <summary>Opens a node's Room.</summary>
+    public static KeyGesture Room { get; } = new(Key.Enter, KeyModifiers.Shift);
+
+    /// <summary>Puts the focus in the left area's Find box.</summary>
+    public static KeyGesture Find => new(Key.K, Command);
+
+    /// <summary>Selects the next node that waits for the person or failed.</summary>
+    public static KeyGesture NextAttention => new(Key.J, Command);
+
+    /// <summary>Shows the next node that failed. A failed node does not wait, so it has its own key.</summary>
+    public static KeyGesture NextFailed => new(Key.J, Command | KeyModifiers.Shift);
+
+    /// <summary>The Model row's tooltip.</summary>
+    public static string ModelHint => $"Model ({Hint(ModelPicker)})";
+
+    /// <summary>Shows or hides the left panel.</summary>
+    public static KeyGesture ToggleSidebar => new(Key.B, Command);
+
+    /// <summary>Shows or hides the inspector.</summary>
+    public static KeyGesture ToggleInspector => new(Key.B, Command | KeyModifiers.Alt);
+
+    public static KeyGesture ModelPicker { get; } = new(Key.M, KeyModifiers.Alt);
+
+    /// <summary>Also puts the focus in Find.</summary>
+    public static KeyGesture FindAlso => new(Key.F, Command);
+
+    /// <summary>The Agent panel's page for Alt+1 to Alt+6, or null for any other key.</summary>
+    public static Inspector.AgentPage? Page(KeyEventArgs e) => e.KeyModifiers == KeyModifiers.Alt && e.Key is >= Key.D1 and <= Key.D6
+        ? (Inspector.AgentPage)(e.Key - Key.D1)
+        : null;
+
     public static KeyGesture Rename { get; } = new(Key.F2);
 
     public static KeyGesture Duplicate => new(Key.D, Command);
@@ -25,6 +59,10 @@ public static class CanvasKeys
     public static KeyGesture Delete { get; } = new(Key.Delete);
 
     public static KeyGesture Fit { get; } = new(Key.F);
+
+    public static KeyGesture FrameSelection { get; } = new(Key.OemPeriod);
+
+    public static KeyGesture FrameRunning { get; } = new(Key.OemPeriod, KeyModifiers.Shift);
 
     public static KeyGesture ZoomToActual { get; } = new(Key.D0);
 

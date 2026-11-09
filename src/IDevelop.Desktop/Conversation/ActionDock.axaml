@@ -1,0 +1,134 @@
+<!-- The Action Dock: the one place above the composer where a node's required human action appears. Primary action first. It scrolls inside
+     its own cap, so the transcript keeps its least height. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:conversation="using:IDevelop.Desktop.Conversation"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Conversation.ActionDock"
+             x:DataType="conversation:ActionDockViewModel"
+             IsVisible="{Binding IsShown}">
+  <Border Classes="actionDock" Classes.failed="{Binding IsFailed}" Classes.warning="{Binding IsWarning}"
+          AutomationProperties.AutomationId="ActionDock" AutomationProperties.Name="{Binding Title}">
+    <!-- The heading and the actions stay in view. Only the words between them scroll when the dock meets its cap. -->
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding HasHeading}">
+          <theme:StateMark Width="16" Height="16" VerticalAlignment="Center" State="{Binding MarkState}" Why="{Binding MarkWhy}"
+                           AutomationProperties.AutomationId="ActionDockMark" />
+          <TextBlock Grid.Column="1" Classes="dockTitle" Text="{Binding Title}" AutomationProperties.AutomationId="ActionDockTitle" />
+        </Grid>
+
+      <ScrollViewer Grid.Row="1" Classes="dockBody" Classes.afterHeading="{Binding HasHeading}" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasBody}">
+        <StackPanel Spacing="8">
+
+        <conversation:MarkdownView Markdown="{Binding Offered}" IsVisible="{Binding HasOffered}"
+                                   AutomationProperties.AutomationId="ActionDockOffered" />
+        <SelectableTextBlock Classes="dockText" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
+                             AutomationProperties.AutomationId="RunTaskDetail" />
+
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding HasRefusal}">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                    Foreground="{DynamicResource StateWarningStrongBrush}" />
+          <TextBlock Grid.Column="1" Classes="dockRefusal" Text="{Binding Refusal}" AutomationProperties.AutomationId="StartProblem" />
+        </Grid>
+
+        <!-- The questions a running turn waits on. Digits 1 to 9 pick a choice while the composer is empty, and the composer's Send answers. -->
+        <ItemsControl ItemsSource="{Binding Node.Questions}" IsVisible="{Binding ShowsQuestions}" AutomationProperties.AutomationId="ActionDockQuestions">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="8" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="canvas:QuestionViewModel">
+              <StackPanel Spacing="4">
+                <TextBlock Classes="dockTitle" Text="{Binding Header}" IsVisible="{Binding ShowsHeader}" />
+                <TextBlock Classes="dockText" Text="{Binding Prompt}" IsVisible="{Binding Prompt, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <ItemsControl ItemsSource="{Binding Choices}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="2" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="canvas:ChoiceViewModel">
+                      <ToggleButton Classes="choice" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Detail}"
+                                    AutomationProperties.AutomationId="ConversationChoice" AutomationProperties.Name="{Binding Label}">
+                        <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="4">
+                          <TextBlock Classes="choiceDigit" Text="{Binding Digit}" />
+                          <theme:FairRow Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <TextBlock Classes="choiceDetail" theme:FairRow.End="True" Text="{Binding Detail}" />
+                          </theme:FairRow>
+                          <PathIcon Grid.Column="2" Classes="choiceCheck" Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
+                        </Grid>
+                      </ToggleButton>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <StackPanel Grid.Row="2" Spacing="8" Margin="0,8,0,0" IsVisible="{Binding HasPinned}">
+        <TextBox Classes="sendBackNote" Text="{Binding Node.SendBackNote}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
+                 IsVisible="{Binding ShowsSendBack}" Margin="0" MinHeight="52" MaxHeight="52"
+                 Watermark="Why send it back? The note goes to the nodes before it."
+                 AutomationProperties.AutomationId="SendBackNote"
+                 AutomationProperties.Name="Note to send back" />
+
+        <!-- The primary action comes first and takes the primary fill. -->
+        <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding HasActions}" AutomationProperties.AutomationId="ActionDockActions">
+          <Button Classes.primary="{Binding IsApprovePrimary}" Classes.action="{Binding !IsApprovePrimary}" Height="28"
+                  Command="{Binding Node.ApproveCommand}" IsVisible="{Binding ShowsApprove}"
+                  ToolTip.Tip="{Binding ApproveTip}"
+                  AutomationProperties.AutomationId="Approve" AutomationProperties.Name="{Binding ApproveLabel}">
+            <TextBlock Text="{Binding ApproveLabel}" />
+          </Button>
+          <Button Classes="action" Height="28" Command="{Binding Node.SendBackCommand}" IsVisible="{Binding ShowsSendBack}"
+                  ToolTip.ShowOnDisabled="True" ToolTip.Tip="Write a note first. It goes to the nodes before this one."
+                  AutomationProperties.AutomationId="SendBack" AutomationProperties.Name="Send back">
+            <TextBlock Text="Send back" />
+          </Button>
+          <Button Classes="primary" Height="28" Command="{Binding Node.MarkResolvedCommand}" IsVisible="{Binding ShowsConflict}"
+                  AutomationProperties.AutomationId="MarkResolved" AutomationProperties.Name="Mark resolved">
+            <TextBlock Text="Mark resolved" />
+          </Button>
+          <Button Classes="action" Height="28" Command="{Binding Node.OpenWorktreeCommand}" IsVisible="{Binding ShowsConflict}"
+                  AutomationProperties.AutomationId="OpenConflict" AutomationProperties.Name="Open worktree">
+            <TextBlock Text="Open worktree" />
+          </Button>
+          <Button Classes="primary" Height="28" Command="{Binding Node.ContinueCommand}" IsVisible="{Binding ShowsContinue}"
+                  ToolTip.Tip="Resumes the same session where the agent stopped"
+                  AutomationProperties.AutomationId="ContinueTask" AutomationProperties.Name="Continue">
+            <TextBlock Text="Continue" />
+          </Button>
+          <Button Classes.primary="{Binding IsRetryPrimary}" Classes.action="{Binding !IsRetryPrimary}" Height="28"
+                  Command="{Binding Node.RetryCommand}" IsVisible="{Binding ShowsRetry}"
+                  ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding Node.RunRefusal, FallbackValue='Starts a new attempt in a fresh session, then runs each node after it'}"
+                  AutomationProperties.AutomationId="RetryTask" AutomationProperties.Name="{Binding RetryLabel}">
+            <TextBlock Text="{Binding RetryLabel}" />
+          </Button>
+          <Button Classes="action" Height="28" Click="OnChangeModel" IsVisible="{Binding ShowsChangeModel}"
+                  ToolTip.Tip="Choose another client, model, or level for this agent"
+                  AutomationProperties.AutomationId="DockChangeModel" AutomationProperties.Name="Change model">
+            <TextBlock Text="Change model" />
+          </Button>
+          <Button Classes="action" Height="28" Command="{Binding BlockerCommand}" IsVisible="{Binding HasBlocker}"
+                  ToolTip.Tip="{Binding BlockerTip}"
+                  AutomationProperties.AutomationId="DockOpenBlocker" AutomationProperties.Name="{Binding BlockerLabel}">
+            <TextBlock Text="{Binding BlockerLabel}" TextTrimming="CharacterEllipsis" MaxWidth="280" />
+          </Button>
+          <Button Classes="action" Height="28" Command="{Binding Node.OpenInTerminalCommand}" IsVisible="{Binding ShowsTerminal}"
+                  ToolTip.Tip="Copies the command that continues the session in a terminal"
+                  AutomationProperties.AutomationId="DockOpenInTerminal" AutomationProperties.Name="Open in terminal">
+            <TextBlock Text="Open in terminal" />
+          </Button>
+        </WrapPanel>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

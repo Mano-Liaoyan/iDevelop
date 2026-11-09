@@ -229,7 +229,7 @@ public sealed class ProposalViewModel : ObservableObject
         var shift = shown.GetValueOrDefault(proposal.Planner) is { } planner
             ? planner.ViewOffset + new Vector(planner.CardSize.Width - WorkflowCanvasViewModel.TaskCardWidth, 0)
             : default;
-        Point Place(TaskId id, CanvasPoint saved) => shown.GetValueOrDefault(id) is { } node ? node.DisplayLocation : WorkflowCanvasViewModel.ToPoint(saved) + shift;
+        Point Place(TaskId id, CanvasPoint saved) => shown.GetValueOrDefault(id) is { } node ? node.DisplayLocation : _canvas.Space.ToDisplay(saved) + shift;
         Point Output(TaskId id, CanvasPoint saved) => shown.GetValueOrDefault(id) is { } node
             ? node.DisplayLocation + new Vector(node.CardSize.Width - WorkflowCanvasViewModel.InputPortCenter.X, WorkflowCanvasViewModel.OutputPortCenter.Y)
             : Place(id, saved) + (Vector)WorkflowCanvasViewModel.OutputPortCenter;

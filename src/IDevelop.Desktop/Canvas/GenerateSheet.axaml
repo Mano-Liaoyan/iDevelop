@@ -14,17 +14,17 @@
 
   <UserControl.Styles>
     <Style Selector="TextBlock.sheetCaption">
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
     <Style Selector="TextBlock.sheetLabel">
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
     <Style Selector="Button.action">
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     </Style>
   </UserControl.Styles>
 
@@ -39,7 +39,7 @@
                       Foreground="{DynamicResource OnAccentBrush}" />
           </Border>
           <TextBlock Text="Generate Workflow" VerticalAlignment="Center"
-                     FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
+                     FontSize="{StaticResource TypeTitleSize}" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
         </StackPanel>
 
         <StackPanel Spacing="6">
@@ -81,12 +81,12 @@
               IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" VerticalAlignment="Top"
                     Foreground="{DynamicResource StateWarningStrongBrush}" />
-          <TextBlock Grid.Column="1" Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+          <TextBlock Grid.Column="1" Text="{Binding Problem}" TextWrapping="Wrap" FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource TextBrush}"
                      AutomationProperties.AutomationId="GenerateProblem" />
         </Grid>
 
         <TextBlock Text="The planner reads the project and changes no file. It chooses an agent for each task from the clients ready here, and a task it gives none uses this agent unless its type has one."
-                   TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextFaintBrush}" />
+                   TextWrapping="Wrap" FontSize="{StaticResource TypeCaptionSize}" Foreground="{DynamicResource TextFaintBrush}" />
 
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
           <Button Classes="action" Command="{Binding CancelCommand}"

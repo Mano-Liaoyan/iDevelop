@@ -5,17 +5,17 @@ using Avalonia.VisualTree;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// Draws a context connection under the dependencies. Where the two share a run from one output, the solid line on top
-/// is the one a click or a right-click reaches. Nodify wraps each connection in a container of its own, so the layer is
-/// the container's.
+/// Sets the layer of a wire. A context connection draws under the dependencies, so where the two share a run the solid line
+/// is the one a click or a right-click reaches. A wire that feeds a running node draws over the rest, so the active path stays
+/// the loudest wire where wires cross. Nodify wraps each connection in a container of its own, so the layer is the container's.
 /// </summary>
 public static class WireLayer
 {
-    public static readonly AttachedProperty<bool> IsBelowProperty = AvaloniaProperty.RegisterAttached<Control, bool>("IsBelow", typeof(WireLayer));
+    public static readonly AttachedProperty<int> LevelProperty = AvaloniaProperty.RegisterAttached<Control, int>("Level", typeof(WireLayer));
 
     static WireLayer()
     {
-        IsBelowProperty.Changed.AddClassHandler<Control>((wire, _) =>
+        LevelProperty.Changed.AddClassHandler<Control>((wire, _) =>
         {
             wire.AttachedToVisualTree -= OnAttached;
             wire.AttachedToVisualTree += OnAttached;
@@ -23,9 +23,9 @@ public static class WireLayer
         });
     }
 
-    public static bool GetIsBelow(Control wire) => wire.GetValue(IsBelowProperty);
+    public static int GetLevel(Control wire) => wire.GetValue(LevelProperty);
 
-    public static void SetIsBelow(Control wire, bool value) => wire.SetValue(IsBelowProperty, value);
+    public static void SetLevel(Control wire, int value) => wire.SetValue(LevelProperty, value);
 
     private static void OnAttached(object? sender, VisualTreeAttachmentEventArgs e) => Apply((Control)sender!);
 
@@ -33,7 +33,7 @@ public static class WireLayer
     {
         if (wire.GetVisualParent() is Control container)
         {
-            container.ZIndex = GetIsBelow(wire) ? -1 : 0;
+            container.ZIndex = GetLevel(wire);
         }
     }
 }

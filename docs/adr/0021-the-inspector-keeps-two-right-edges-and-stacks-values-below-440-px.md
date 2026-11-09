@@ -1,5 +1,7 @@
 # The inspector keeps two right edges and stacks values below 440 px
 
+Superseded by [ADR 0043](0043-the-inspector-pins-a-nodes-state-and-stacks-values-below-300-px.md).
+
 Every inspector view lays its rows out on one grid, `InspectorGrid`, with two right edges. Glyph buttons and rows of buttons end 12 px from the panel's edge, and boxes and paragraphs end 64 px from it. A count is drawn to end where the glyphs' drawing ends. Below 440 px, every value moves under its label. This keeps the shape of layout A from the [D0 record](../handoffs/2026-10-06-d0-design-validation.md#layout-a-keeps-inspector-actions-visible), which the owner chose. The owner asked for it on 2026-10-09 in issue [#88](https://github.com/Mano-Liaoyan/iDevelop/issues/88).
 
 In #88 the owner found that the Overview's counts did not line up with the Library's "…" buttons and the filter button. They also found that a task's rows wrapped differently, and text crammed together, as the inspector narrowed or widened. The owner is judging the 440 px switch now. If they reject it, the code and this record change together.

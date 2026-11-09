@@ -1,3 +1,4 @@
+using IDevelop.Desktop.Inspector;
 using Avalonia.Automation;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
@@ -60,12 +61,12 @@ public sealed class SkillPickerTests : IDisposable
 
         Assert.Equal(["simplify", "verify-idevelop"], Execution(shell).Skills!);
         Assert.Equal([("find-skills", false), ("simplify", true), ("verify-idevelop", true)], Ticks(shell));
-        Assert.Equal("2 skills", Summary(shell));
+        Assert.Equal("simplify, verify-idevelop", Summary(shell));
         Assert.True(shell.Find<Button>("RevertSkills").IsEffectivelyVisible);
 
         shell.Click(Choice(shell, "simplify"));
 
-        Assert.Equal("1 skill", Summary(shell));
+        Assert.Equal("verify-idevelop", Summary(shell));
 
         shell.Click(Choice(shell, "verify-idevelop"));
 
@@ -177,7 +178,7 @@ public sealed class SkillPickerTests : IDisposable
         Skill(_personal, "probeplug-probe-alpha", "A plugin's alpha.", name: "probeplug:probe-alpha");
         var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["verify-idevelop"] })));
         Skill(Path.Combine(shell.Window.ViewModel.Canvas!.Document.ProjectFolder, ".claude", "skills"), "probe-alpha", "Alpha.");
-        shell.Click(shell.Find<Button>("RefreshAgents"));
+        shell.RefreshAgents();
 
         OpenList(shell);
         shell.WaitUntil(() => Ticks(shell).Any(tick => tick.Item1 == "probe-alpha"), "probe-alpha listed");
@@ -236,7 +237,7 @@ public sealed class SkillPickerTests : IDisposable
 
         shell.WaitUntil(() => shell.Find<TextBlock>("SkillsNote").IsEffectivelyVisible, "the note about the missing skill");
         Assert.Equal("gone is not installed, so the task runs without it.", shell.Find<TextBlock>("SkillsNote").Text);
-        Assert.Equal("2 skills", Summary(shell));
+        Assert.Equal("gone, verify-idevelop", Summary(shell));
         Assert.Equal("gone, verify-idevelop", ToolTip.GetTip(shell.Find<ToggleButton>("TaskSkills")));
 
         OpenList(shell);
@@ -251,16 +252,16 @@ public sealed class SkillPickerTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Antigravitys_picker_is_off_and_says_it_uses_all_of_its_skills()
+    public void Antigravity_shows_a_plain_value_and_says_it_uses_all_of_its_skills()
     {
         Install(_fakes, ClientId.Antigravity);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "low" })),
             _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.False(shell.Find<ToggleButton>("TaskSkills").IsEffectivelyEnabled);
-        Assert.Equal("All skills", Summary(shell));
-        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", shell.Find<TextBlock>("SkillsNote").Text);
+        Assert.False(shell.Find<ToggleButton>("TaskSkills").IsEffectivelyVisible);
+        Assert.Equal("Always all skills", shell.Find<TextBlock>("TaskSkillsValue").Text);
+        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue").FindAncestorOfType<ToggleButton>()!));
         Assert.False(shell.Find<Control>("SkillList").IsEffectivelyVisible);
     }
 
@@ -269,7 +270,7 @@ public sealed class SkillPickerTests : IDisposable
     {
         Install(_fakes, ClientId.Codex);
         var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["verify-idevelop"] })));
-        Assert.Equal("1 skill", Summary(shell));
+        Assert.Equal("verify-idevelop", Summary(shell));
 
         shell.Pick("TaskClient", "Codex");
 
@@ -289,6 +290,7 @@ public sealed class SkillPickerTests : IDisposable
         var shell = Shell.Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["verify-idevelop"] }, instructions: "Design it.")),
             _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         shell.Click(shell.Find<ToggleButton>("TaskSkills"));
         shell.WaitUntil(() => shell.Find<TextBlock>("SkillListNote").Text?.StartsWith("iDevelop could not", StringComparison.Ordinal) == true, "the listing's failure");
@@ -298,11 +300,12 @@ public sealed class SkillPickerTests : IDisposable
         Assert.Empty(Ticks(shell));
         // The task is not refused: it runs with its choice as it is, and the row says the list couldn't be checked.
         Assert.Equal("Claude Code's skill list couldn't be read, so it gets the chosen skills as they are, unchecked.", shell.Find<TextBlock>("SkillsNote").Text);
-        Assert.False(shell.ShowsAny("StartProblem"), shell.Text("StartProblem"));
-        Assert.Equal("1 skill", Summary(shell));
+        shell.Page(AgentPage.Chat);
+        Assert.False(shell.ShowsAny("StartProblem"));
+        Assert.Equal("verify-idevelop", Summary(shell));
 
         _fakes.Install("claude", ClaudeSignedIn, ClaudeSkills(_personal));
-        shell.Click(shell.Find<Button>("RefreshAgents"));
+        shell.RefreshAgents();
         shell.WaitUntil(() => Ticks(shell).Length > 0, "the skills listed once more");
 
         Assert.Equal([("find-skills", false), ("simplify", false), ("verify-idevelop", true)], Ticks(shell));

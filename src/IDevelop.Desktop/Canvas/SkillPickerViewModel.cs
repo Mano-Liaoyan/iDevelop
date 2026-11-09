@@ -18,7 +18,7 @@ public sealed class SkillPickerViewModel : ObservableObject
     private static readonly string[] Shown =
     [
         nameof(CanChoose), nameof(Summary), nameof(SummaryTip), nameof(ShowsList), nameof(Choices), nameof(ListNote),
-        nameof(ListFooter), nameof(Note), nameof(CanRevert),
+        nameof(ListFooter), nameof(Note), nameof(FixedNote), nameof(CanRevert),
     ];
 
     private readonly TaskNodeViewModel _node;
@@ -48,13 +48,15 @@ public sealed class SkillPickerViewModel : ObservableObject
 
     public bool ShowsList => IsOpen && CanChoose;
 
-    /// <summary>"All skills" without a choice, else how many the node chose.</summary>
-    public string Summary => Settings?.Skills switch
+    /// <summary>
+    /// "All skills" without a choice, else the names of the skills the node chose, which the row cuts at its end. A client that takes
+    /// no choice says so in the value, so that its dimmed field reads as fixed without a tooltip.
+    /// </summary>
+    public string Summary => Settings is not null && !CanChoose ? "Always all skills" : Settings?.Skills switch
     {
         null => "All skills",
         { Count: 0 } => "No skills",
-        { Count: 1 } => "1 skill",
-        { Count: var count } => $"{count} skills",
+        { } chosen => string.Join(", ", chosen),
     };
 
     /// <summary>The chosen skills' names, which the picker's tooltip lists.</summary>
@@ -104,8 +106,13 @@ public sealed class SkillPickerViewModel : ObservableObject
     /// The note under the picker: that Antigravity CLI uses all of its skills, the chosen skills that are not installed,
     /// which the task runs without, or that the client's skill list couldn't be read, and what the task gets instead.
     /// </summary>
+    /// <summary>Why a client takes no choice of skills, for the row's plain value, or null for a client that takes one.</summary>
+    public string? FixedNote => Settings is { } settings && !SkillChoices.CanChoose(settings.Client)
+        ? $"{ClientName} uses all of its installed skills; it can't limit them per task."
+        : null;
+
     public string? Note => Settings is not { } settings ? null
-        : !SkillChoices.CanChoose(settings.Client) ? $"{ClientName} uses all of its installed skills; it can't limit them per task."
+        : !SkillChoices.CanChoose(settings.Client) ? null
         : Listing is SkillListing.Listed listed && SkillChoices.Missing(settings.Skills, listed.Skills) is { IsEmpty: false } missing ? MissingNote(missing)
         : settings.Skills is not null && Listing is SkillListing.Unavailable ? SkillChoices.UncheckedNote(settings.Client)
         : null;

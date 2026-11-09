@@ -3,11 +3,13 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Markdig;
 using Markdig.Extensions.Tables;
+using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
@@ -31,11 +33,34 @@ public sealed class MarkdownView : StackPanel
     private const int MaxLinks = 500;
     private const int MaxBlockWeight = 1_000;
 
-    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().DisableHtml().Build();
+    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseTaskLists().DisableHtml().Build();
+
+    // A long code span breaks after these, at a soft hyphen, and not at a letter in mid-word. The shaper gives a soft hyphen no
+    // width and no ink, and a copy leaves it out. A zero-width space would not do: a mono font without its glyph moves it to a
+    // run of its own, and the line breaker looks for a break only inside a run.
+    private const char BreakHere = '\u00AD';
+    private const int LongSpan = 24;
+
+    // The prose line of 22 px, less the 16 px line that the shaper gives a run of prose beside an inline control.
+    private const double LinkLineSpacing = 6;
+
+    // A span this long takes a line or more by itself, so it leaves the paragraph.
+    private const int BlockSpan = 60;
+    private static readonly char[] SpanBreaks = ['/', '\\', '_', '.', ',', ':', '=', '-'];
 
     public MarkdownView()
     {
         Spacing = 8;
+        AddHandler(SelectableTextBlock.CopyingToClipboardEvent, OnCopying);
+    }
+
+    private static async void OnCopying(object? sender, RoutedEventArgs e)
+    {
+        if (e.Source is SelectableTextBlock { SelectedText: { } text } block && text.Contains(BreakHere) && TopLevel.GetTopLevel(block)?.Clipboard is { } clipboard)
+        {
+            e.Handled = true;
+            await clipboard.SetTextAsync(text.Replace(BreakHere.ToString(), ""));
+        }
     }
 
     public string? Markdown
@@ -60,6 +85,11 @@ public sealed class MarkdownView : StackPanel
         if (Parse(text) is { } blocks)
         {
             Children.AddRange(blocks.Select(block => Block(block, text)));
+            // A heading that opens a message has nothing above it to keep clear of.
+            if (Children.FirstOrDefault() is SelectableTextBlock { Classes: var classes } && classes.Any(name => name.Length == 2 && name[0] == 'h'))
+            {
+                classes.Add("first");
+            }
         }
         else
         {
@@ -110,7 +140,7 @@ public sealed class MarkdownView : StackPanel
     private Control Block(Block block, string text) => block switch
     {
         HeadingBlock heading => Text(heading.Inline, $"h{Math.Min(heading.Level, 4)}"),
-        ParagraphBlock paragraph => Text(paragraph.Inline, null),
+        ParagraphBlock paragraph => Paragraph(paragraph.Inline),
         FencedCodeBlock fenced => Code(fenced.Lines.ToString(), fenced.Info),
         CodeBlock code => Code(code.Lines.ToString(), null),
         ListBlock list => List(list, text),
@@ -120,6 +150,47 @@ public sealed class MarkdownView : StackPanel
         ContainerBlock container => Container(container, text),
         _ => Plain(Source(text, block)),
     };
+
+    // A code span too long for a line stands as its own block between the paragraph's text, so it stays whole and the text reads on.
+    private Control Paragraph(ContainerInline? inline)
+    {
+        var parts = inline?.Where(child => child is CodeInline { Content.Length: >= BlockSpan }).ToList() ?? [];
+        if (parts.Count == 0)
+        {
+            return Text(inline, null);
+        }
+
+        var panel = new StackPanel { Spacing = 8 };
+        List<Markdig.Syntax.Inlines.Inline> run = [];
+        void Flush()
+        {
+            // The full stop after a span would stand alone under the block, so a run with no word of its own leaves with it.
+            if (run.Any(child => child is not LiteralInline literal || literal.Content.ToString().Any(char.IsLetterOrDigit)) && !run.All(child => child is LineBreakInline))
+            {
+                var text = Text(null, null);
+                run.ForEach(child => Add(text.Inlines!, child, text));
+                panel.Children.Add(text);
+            }
+
+            run.Clear();
+        }
+
+        foreach (var child in inline!)
+        {
+            if (child is CodeInline { Content.Length: >= BlockSpan } code)
+            {
+                Flush();
+                panel.Children.Add(Code(code.Content, null));
+            }
+            else
+            {
+                run.Add(child);
+            }
+        }
+
+        Flush();
+        return panel;
+    }
 
     private StackPanel Container(ContainerBlock container, string text)
     {
@@ -140,7 +211,9 @@ public sealed class MarkdownView : StackPanel
         {
             var row = grid.RowDefinitions.Count;
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            var marker = new TextBlock { Classes = { "mdMarker" }, Text = list.IsOrdered ? $"{number++}." : "•" };
+            Control marker = item.Descendants<TaskList>().FirstOrDefault() is { } task && item.FirstOrDefault() is ParagraphBlock { Inline.FirstChild: TaskList }
+                ? TaskBox(task.Checked)
+                : new TextBlock { Classes = { "mdMarker" }, Text = list.IsOrdered ? $"{number++}." : "•" };
             var body = Container(item, text);
             Grid.SetRow(marker, row);
             Grid.SetRow(body, row);
@@ -152,7 +225,23 @@ public sealed class MarkdownView : StackPanel
         return grid;
     }
 
-    private ScrollViewer TableGrid(Table table)
+    private static Border TaskBox(bool done)
+    {
+        var box = new Border { Classes = { "mdTask" } };
+        box.Classes.Set("done", done);
+        AutomationProperties.SetName(box, done ? "Done" : "Not done");
+        if (done)
+        {
+            box.Child = new PathIcon { Theme = Glyph(), Data = Icon("IconCheckmark") };
+        }
+
+        return box;
+    }
+
+    // The columns that the corner's language and Copy take from the first code line.
+    private static int CodeToolColumns(string? language) => (string.IsNullOrWhiteSpace(language) ? 0 : language.Trim().Length + 1) + 6;
+
+    private FitTable TableGrid(Table table)
     {
         var rows = table.OfType<TableRow>().ToList();
         var columns = rows.Count == 0 ? 0 : rows.Max(row => row.Count);
@@ -177,12 +266,7 @@ public sealed class MarkdownView : StackPanel
             }
         }
 
-        return new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = new Border { Classes = { "mdTable" }, Child = grid },
-        };
+        return new FitTable(grid);
     }
 
     private static Border Code(string code, string? language)
@@ -200,20 +284,18 @@ public sealed class MarkdownView : StackPanel
             }
         };
 
-        var header = new Grid { Classes = { "mdCodeHeader" }, ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        header.Children.Add(new TextBlock { Classes = { "mdCodeLanguage" }, Text = string.IsNullOrWhiteSpace(language) ? "Code" : language.Trim() });
-        Grid.SetColumn(copy, 1);
-        header.Children.Add(copy);
-        var body = new ScrollViewer
+        // The language and Copy rest in the corner, over the code's own width. The first line wraps clear of them, so the block has no empty band and no column kept for them.
+        var tools = new StackPanel { Classes = { "mdCodeTools" }, Orientation = Orientation.Horizontal, Spacing = 4 };
+        if (!string.IsNullOrWhiteSpace(language))
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = new SelectableTextBlock { Classes = { "mdMono", "mdCodeText" }, Text = source },
-        };
-        var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto") };
-        Grid.SetRow(body, 1);
-        layout.Children.Add(header);
+            tools.Children.Add(new TextBlock { Classes = { "mdCodeLanguage" }, Text = language.Trim() });
+        }
+
+        tools.Children.Add(copy);
+        var body = new CodeText(source, language, CodeToolColumns(language)) { Classes = { "mdMono", "mdCodeText" } };
+        var layout = new Panel();
         layout.Children.Add(body);
+        layout.Children.Add(tools);
         return new Border { Classes = { "mdCode" }, Child = layout };
     }
 
@@ -226,6 +308,13 @@ public sealed class MarkdownView : StackPanel
         if (style is not null)
         {
             text.Classes.Add(style);
+        }
+
+        // The text shaper takes a line's height from its inline control and ignores a fixed line height, so a line with a link gets the same pitch from spacing.
+        if (inline?.Descendants<Markdig.Syntax.Inlines.Inline>().Any(child => child is LinkInline { IsImage: false } or AutolinkInline) == true)
+        {
+            text.LineHeight = double.NaN;
+            text.LineSpacing = LinkLineSpacing;
         }
 
         if (inline is not null)
@@ -243,13 +332,18 @@ public sealed class MarkdownView : StackPanel
     {
         switch (inline)
         {
+            case LiteralInline { PreviousSibling: TaskList } literal:
+                target.Add(new Run(literal.Content.ToString().TrimStart()));
+                break;
             case LiteralInline literal:
                 target.Add(new Run(literal.Content.ToString()));
                 break;
             case CodeInline code:
-                var run = new Run(code.Content) { FontFamily = MonoFont };
+                var run = new Run(Breakable(code.Content)) { FontFamily = MonoFont };
                 run.Bind(TextElement.BackgroundProperty, owner.GetResourceObservable("SurfaceMutedBrush"));
                 target.Add(run);
+                break;
+            case TaskList:
                 break;
             case LineBreakInline lineBreak:
                 target.Add(lineBreak.IsHard ? new LineBreak() : new Run(" "));
@@ -293,6 +387,11 @@ public sealed class MarkdownView : StackPanel
         }
     }
 
+    // A short span, or one with spaces of its own, wraps as it is.
+    private static string Breakable(string code) => code.Length < LongSpan || code.Contains(' ')
+        ? code
+        : string.Concat(code.Select((letter, at) => SpanBreaks.Contains(letter) && at + 1 < code.Length ? $"{letter}{BreakHere}" : letter.ToString()));
+
     private static string LabelOf(ContainerInline inline) => string.Concat(inline.Descendants<Markdig.Syntax.Inlines.Inline>().Select(child => child switch
     {
         LiteralInline literal => literal.Content.ToString(),
@@ -319,7 +418,7 @@ public sealed class MarkdownView : StackPanel
             }
         };
         link.ContextMenu = new ContextMenu { Items = { open, copy } };
-        return new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.TextBottom };
+        return new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Baseline };
     }
 
     private static Task Activate(Control link, string destination) =>

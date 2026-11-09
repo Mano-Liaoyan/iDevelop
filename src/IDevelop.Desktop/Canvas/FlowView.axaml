@@ -1,0 +1,136 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Canvas.FlowView"
+             x:DataType="canvas:FlowViewModel"
+             Focusable="True"
+             AutomationProperties.AutomationId="FlowView">
+
+  <UserControl.Resources>
+    <!-- Flow keeps the Map's dots, so the two views read as one surface. The dots scroll with the bands. -->
+    <DrawingBrush x:Key="FlowDots" TileMode="Tile" DestinationRect="0,0,24,24">
+      <DrawingBrush.Drawing>
+        <DrawingGroup>
+          <GeometryDrawing Geometry="M0,0 H24 V24 H0 Z">
+            <GeometryDrawing.Brush>
+              <SolidColorBrush Color="{DynamicResource CanvasGrid.BackgroundColor}" />
+            </GeometryDrawing.Brush>
+          </GeometryDrawing>
+          <GeometryDrawing>
+            <GeometryDrawing.Brush>
+              <SolidColorBrush Color="{DynamicResource CanvasGrid.DotColor}" />
+            </GeometryDrawing.Brush>
+            <GeometryDrawing.Geometry>
+              <EllipseGeometry Rect="0,0,1,1" />
+            </GeometryDrawing.Geometry>
+          </GeometryDrawing>
+        </DrawingGroup>
+      </DrawingBrush.Drawing>
+    </DrawingBrush>
+  </UserControl.Resources>
+
+  <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                AutomationProperties.AutomationId="FlowScroller">
+    <Panel x:Name="Surface" Height="{Binding SurfaceHeight}" Background="{DynamicResource FlowDots}">
+      <canvas:FlowWires Wires="{Binding Wires}" IsHitTestVisible="False" />
+      <canvas:FlowWires Classes="moving" Wires="{Binding MovingWires}" IsVisible="{Binding HasMovingWires}" IsHitTestVisible="False"
+                        AutomationProperties.AutomationId="FlowMovingWires" />
+
+      <!-- Stage bands. A header is one wide row that folds its stage. -->
+      <ItemsControl ItemsSource="{Binding Bands}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <Canvas />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemContainerTheme>
+          <ControlTheme TargetType="ContentPresenter" x:DataType="canvas:FlowBandViewModel">
+            <Setter Property="Canvas.Left" Value="{Binding X}" />
+            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+          </ControlTheme>
+        </ItemsControl.ItemContainerTheme>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="canvas:FlowBandViewModel">
+            <Button Classes="flowBand" Width="{Binding Width}" Command="{Binding Stage.ToggleFoldCommand}"
+                    Classes.folded="{Binding IsFolded}"
+                    ToolTip.Tip="{Binding Stage.FoldLabel}"
+                    AutomationProperties.AutomationId="StageBand"
+                    AutomationProperties.Name="{Binding Stage.FoldLabel}">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="flowPlate" Padding="2,0,8,0">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Theme="{StaticResource Glyph}" Classes="groupChevron" Classes.folded="{Binding IsFolded}" Width="12" Height="12" VerticalAlignment="Center" />
+                    <TextBlock Classes="small flowBandName" Text="{Binding Stage.Title}" VerticalAlignment="Center" />
+                    <TextBlock Classes="caption tabular" Text="{Binding Summary}" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="StageBandCount" />
+                  </StackPanel>
+                </Border>
+                <Rectangle Grid.Column="1" Classes="flowHairline" Height="1" VerticalAlignment="Center" />
+                <Border Grid.Column="2" Classes="flowPlate" Padding="8,0,2,0" IsVisible="{Binding HasRollup}">
+                  <theme:StateMark Width="14" Height="14" VerticalAlignment="Center" State="{Binding Rollup}" Why="{Binding RollupWhy}"
+                                   AutomationProperties.AutomationId="StageBandRollup" />
+                </Border>
+              </Grid>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <ItemsControl ItemsSource="{Binding Cards}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <Canvas />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemContainerTheme>
+          <ControlTheme TargetType="ContentPresenter" x:DataType="canvas:FlowCardViewModel">
+            <Setter Property="Canvas.Left" Value="{Binding X}" />
+            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+          </ControlTheme>
+        </ItemsControl.ItemContainerTheme>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="canvas:FlowCardViewModel">
+            <Panel Classes="flowCard" Width="{Binding Width}" Height="{Binding Height}"
+                   Classes.chip="{Binding IsChip}" Classes.dim="{Binding IsDimmed}" Classes.selected="{Binding Node.IsSelected}"
+                   ToolTip.Tip="{Binding Node.Title}"
+                   AutomationProperties.AutomationId="FlowCard"
+                   AutomationProperties.Name="{Binding Node.Title}"
+                   AutomationProperties.HelpText="{Binding Node.StatusLabel}">
+              <Border Classes="flowBody" CornerRadius="{StaticResource RadiusMd}" />
+              <Grid Classes="flowContent" RowDefinitions="Auto,*">
+                <!-- The row keeps the title's height while the rename box replaces the title. -->
+                <Panel Classes="flowTitle">
+                  <theme:EllipsisText Classes="flowName" Whole="{Binding Node.Title}" Key="{Binding Node.TitleKey}"
+                                      IsVisible="{Binding !Node.IsRenaming}"
+                                      AutomationProperties.AutomationId="FlowCardTitle" />
+                  <canvas:CardTitleBox Classes="cardTitle" DataContext="{Binding Node}" IsVisible="{Binding IsRenaming}"
+                                       AutomationProperties.AutomationId="CardTitleBox"
+                                       AutomationProperties.Name="Title" />
+                </Panel>
+                <Grid Grid.Row="1" Classes="flowMeta" IsVisible="{Binding !IsChip}" ColumnDefinitions="12,*" ColumnSpacing="4">
+                  <theme:KindTile Kind="{Binding Node.Kind}" IsLibrary="{Binding Node.IsLibrary}" TileSize="12" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Node.CardLine}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                             ToolTip.Tip="{Binding Node.AgentModel}" AutomationProperties.AutomationId="FlowCardModel" />
+                </Grid>
+              </Grid>
+              <theme:StateMark Classes="flowMark" Width="14" Height="14" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" Role="{Binding Node.Role}"
+                               ToolTip.Tip="{Binding Node.MarkTip}"
+                               AutomationProperties.AutomationId="FlowCardState" />
+              <Border Classes="stateStroke" CornerRadius="{StaticResource RadiusMd}" IsHitTestVisible="False"
+                      theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Role="{Binding Node.Role}" theme:StyleClass.Why="{Binding Node.WaitReason}" />
+              <Rectangle Classes="staleEdge" RadiusX="8" RadiusY="8" IsHitTestVisible="False"
+                         theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Role="{Binding Node.Role}" />
+              <Border Classes="flowRing" CornerRadius="9.5" IsHitTestVisible="False" />
+              <!-- One input at the top center and one output at the bottom center, on the card's edge. -->
+              <Ellipse Classes="flowSocket" VerticalAlignment="Top" Margin="{Binding SocketTop}"
+                       Classes.connected="{Binding IsInputConnected}" Classes.feeding="{Binding IsInputFeeding}" Classes.stopped="{Binding IsInputStopped}" />
+              <Ellipse Classes="flowSocket" VerticalAlignment="Bottom" Margin="{Binding SocketBottom}"
+                       Classes.connected="{Binding IsOutputConnected}" Classes.feeding="{Binding IsOutputFeeding}" Classes.stopped="{Binding IsOutputStopped}" />
+            </Panel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Panel>
+  </ScrollViewer>
+</UserControl>

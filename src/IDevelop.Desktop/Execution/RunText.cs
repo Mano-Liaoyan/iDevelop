@@ -33,6 +33,21 @@ public static class RunText
         _ => throw new UnreachableException(),
     };
 
+    /// <summary>The left area's one line on every client: "1 needs setup" while a client has a problem, "Checking…" while
+    /// nothing is known yet, and otherwise "4 ready". A client that is not installed is not a problem: it stays gray.</summary>
+    public static string AgentsSummary(IReadOnlyCollection<ClientStatus> clients)
+    {
+        var setup = clients.Count(status => status is ClientStatus.Unready);
+        var ready = clients.Count(status => status is ClientStatus.Ready);
+        return setup switch
+        {
+            1 => "1 needs setup",
+            > 1 => $"{setup} need setup",
+            _ when ready == 0 && clients.Any(status => status is ClientStatus.Checking) => "Checking…",
+            _ => ready == 1 ? "1 agent ready" : $"{ready} agents ready",
+        };
+    }
+
     /// <summary>Why a client is not ready, or why some of its models are not, such as a Pi provider that is signed out.</summary>
     public static string? Detail(ClientStatus status) => status switch
     {
@@ -63,6 +78,13 @@ public static class RunText
     /// </summary>
     public static (string Client, string? Model) AgentLines(ExecutionSettings? settings, ClientStatus status)
     {
+        var (client, model) = AgentNames(settings, status);
+        return (client, Dotted(model, settings?.Reasoning) is { Length: > 0 } line ? line : null);
+    }
+
+    /// <summary>The client's name and the model's name without its level: the one model text of the card and the inspector.</summary>
+    public static (string Client, string? Model) AgentNames(ExecutionSettings? settings, ClientStatus status)
+    {
         if (settings is null)
         {
             return ("No agent", null);
@@ -77,7 +99,7 @@ public static class RunText
             model = model[..^(provider.Length + 3)];
         }
 
-        return (client, Dotted(model, settings.Reasoning) is { Length: > 0 } line ? line : null);
+        return (client, model);
     }
 
     /// <summary>A client in the inspector's picker, with what keeps it from running.</summary>

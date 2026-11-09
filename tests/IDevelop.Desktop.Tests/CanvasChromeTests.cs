@@ -8,26 +8,26 @@ using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Theme;
 using IDevelop.TestSupport;
+using IDevelop.Workflows;
 using Nodify;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The controls that float over the canvas never cover each other or leave it, at the smallest and a large window and with
-/// the inspector at its least, default, and greatest width. The breadcrumb, Run Workflow, and Generate share the top row's
-/// centre line, and the waiting pill sits between them or under the buttons. The zoom controls, the run bar, and the
-/// minimap share the bottom edge, and the run bar never moves from it. A compact canvas shows the buttons as glyphs and
-/// hides the minimap. The canvas keeps 336 px however wide the panels beside it are.
+/// The Command Bar and the Map Footer never cover each other or a card, at the smallest and a large window and with the
+/// Agent panel at its least, default, and greatest width. The Command Bar's controls share one 44 px line. The Map keeps 336 px
+/// however wide the sheets beside it are.
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class CanvasChromeTests : IDisposable
 {
     private static readonly (double Width, double Height, double Inspector)[] Sizes =
     [
-        (900, 600, 280), (900, 600, 320), (900, 600, 520),
-        (1280, 800, 280), (1280, 800, 380), (1280, 800, 520),
-        (1600, 1000, 280), (1600, 1000, 320), (1600, 1000, 520),
+        (900, 600, 372),
+        (1280, 800, 360), (1280, 800, 400), (1280, 800, 560),
+        (1700, 1000, 360), (1700, 1000, 520), (1700, 1000, 720),
+        (2560, 1440, 880), (2560, 1440, 1008),
     ];
 
     private readonly TempFolder _temp = AppTempFolder.New();
@@ -35,259 +35,165 @@ public sealed class CanvasChromeTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [AvaloniaFact]
-    public void The_side_panels_leave_the_canvas_336_px_and_take_their_chosen_widths_back_when_the_window_widens()
+    public void The_Agent_panel_gives_up_width_first_so_the_Map_keeps_336_px_at_any_dragged_width()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
-        shell.SizeInspector(520);
-        Resize(shell, 900, 600);
-
-        Assert.Equal((240, 322, 336), Widths(shell));
+        Resize(shell, 1180, 600);
+        shell.SizeInspector(560);
+        Assert.Equal((252, 560, 352), Widths(shell));
 
         shell.SizeSidebar(400);
-        Assert.Equal((282, 280, 336), Widths(shell));
-
-        Resize(shell, 1600, 1000);
-        Assert.Equal((400, 520, 678), Widths(shell));
+        Assert.Equal((400, 428, 336), Widths(shell));
     }
 
     [AvaloniaFact]
-    public void The_inspectors_splitter_stops_where_the_canvas_would_get_narrower_than_336_px()
+    public void The_Agent_panels_splitter_stops_where_the_Map_would_get_narrower_than_336_px()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
-        Resize(shell, 900, 600);
+        Resize(shell, 1180, 600);
+        shell.SizeSidebar(400);
         var splitter = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 3);
 
-        shell.Drag(shell.Center(splitter), shell.Center(splitter) - new Vector(200, 0));
+        var grip = shell.Center(splitter);
+        shell.Drag(grip, grip - new Vector(400, 0));
 
-        Assert.Equal((240, 322, 336), Widths(shell));
+        Assert.Equal((400, 428, 336), Widths(shell));
     }
 
     [AvaloniaFact]
-    public void An_open_proposal_and_a_waiting_planner_leave_the_breadcrumb_the_pill_and_both_buttons_apart_at_every_size()
+    public void An_open_proposal_and_a_waiting_planner_leave_the_breadcrumb_and_both_buttons_apart_at_every_size()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Generate(shell);
-        Assert.Equal(("1 task waits for you", "Review Proposal"), (shell.Text("WaitingCount"), AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
+        Assert.Equal((1, "Review Proposal"), (shell.Window.ViewModel.Canvas!.WaitingCount, AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
         Assert.True(shell.ShowsUnsavedChanges);
-        // A refused connection's status sits under the breadcrumb, beside the pill when the pill moves under the buttons.
-        // The view moves left first, so "Write docs"'s output is clear of the inspector's splitter.
-        shell.Pan(shell.InEditor(260, 700), new Vector(-100, 0));
+        // A refused connection's status sits over the Map. The window is wide enough for both of the ports the drag joins.
+        Resize(shell, 1500, 800);
+        shell.AtOrigin();
+        shell.Pan(shell.InEditor(260, 600), new Vector(-100, 0));
         shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
         Assert.StartsWith("That would create a cycle", shell.Status);
 
         foreach (var (width, height, inspector) in Sizes)
         {
             Resize(shell, width, height, inspector);
-            AssertTopRow(shell, $"{width}x{height}, inspector {inspector}", "Breadcrumb", "NextWaiting", "RunWorkflow", "GenerateWorkflow", "Status");
+            AssertTopRow(shell, $"{width}x{height}, inspector {inspector}");
         }
     }
 
     [AvaloniaFact]
-    public void A_running_workflow_keeps_its_run_bar_on_the_bottom_edge_between_the_zoom_controls_and_the_minimap_at_every_size()
+    public void A_Run_Strip_that_lacks_room_for_its_pills_words_keeps_their_marks_and_counts()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
-        Assert.Equal("2 tasks wait for you", shell.Text("WaitingCount"));
+        var strip = shell.Find<Control>("RunStrip");
+
+        foreach (var (width, height, inspector) in Sizes)
+        {
+            Resize(shell, width, height, inspector);
+            AssertTopRow(shell, $"{width}x{height}");
+            Assert.True(strip.Bounds.Width <= 480.5, $"The strip at {width}x{height} is {strip.Bounds.Width} px wide.");
+        }
+    }
+
+    [AvaloniaFact]
+    public void A_workflow_of_many_states_keeps_every_run_chip_whole_at_every_window_size_and_panel_width()
+    {
+        var (failed, asks, replies, stopped, alsoStopped, running) = (TestTasks.Design, TestTasks.Build, TestTasks.Review, new TaskId(Guid.NewGuid()), new TaskId(Guid.NewGuid()), new TaskId(Guid.NewGuid()));
+        using var f = new NodeFixture(
+            NodeFixture.Task(failed, "Failed", 105), NodeFixture.Task(asks, "Asks", 405), NodeFixture.Task(replies, "Replies", 705),
+            NodeFixture.Task(stopped, "Stopped", 1005), NodeFixture.Task(alsoStopped, "Also stopped", 1305), NodeFixture.Task(running, "Runs", 1605));
+        var started = """{"entry":"turnStarted","basis":{"inputs":[],"instruction":"","model":null},"session":null,"round":false}""";
+        void Log(TaskId node, params string[] lines)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Engine.NodeLog.PathOf(f.Project, node))!);
+            File.WriteAllLines(Engine.NodeLog.PathOf(f.Project, node), [started, .. lines]);
+        }
+
+        Log(failed, """{"entry":"failed","reason":"The model is not available."}""");
+        Log(asks, """{"entry":"waiting","why":"Which window?","text":"Which window?"}""");
+        Log(replies, """{"entry":"waiting","why":"reply","text":null}""");
+        Log(stopped);
+        Log(alsoStopped);
+        f.Install(FakeRule.On().WaitForFile(f.Gate("runs")));
+        var shell = f.Open();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        Assert.Equal(NodeState.InputRequired, canvas.Rollup);
+        Assert.Equal(new Theme.StateCounts(0, 0, 4, 1, 0, 6), canvas.Counts);
+
+        foreach (var width in new[] { 900.0, 1000, 1180, 1280, 1700, 2560 })
+        {
+            Resize(shell, width, 800);
+            AssertTopRow(shell, $"{width}x800");
+            AssertBottomRow(shell, $"{width}x800");
+            var pills = new[] { "RunPillNeedsYou", "RunPillFailed" }.Select(id => shell.Bounds(shell.Find<Control>(id))).ToArray();
+            Assert.All(pills, pill => Assert.True(shell.Bounds(shell.Find<Control>("RunStrip")).Inflate(0.5).Contains(pill), $"A pill at {pill} leaves the strip at {width}."));
+            if (width >= 1180)
+            {
+                Assert.Equal(["4", "need you"], shell.Find<Control>("RunPillNeedsYou").GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text));
+            }
+        }
+
+        shell.RunNode("Runs");
+        shell.WaitForState("Runs", NodeState.Running);
+        Resize(shell, 900, 800);
+        AssertTopRow(shell, "900x800 while a node runs");
+        Assert.True(shell.Find<Control>("RunPillRunning").IsEffectivelyVisible);
+        f.Release("runs");
+        shell.WaitUntil(() => canvas.RunningCount == 0, "the node ends");
+    }
+
+    [AvaloniaFact]
+    public void A_running_workflow_keeps_the_Command_Bar_and_the_Map_Footer_apart_at_every_size()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Run(shell);
+        FanOut.Generate(shell);
+        Assert.Equal(2, shell.Window.ViewModel.Canvas!.WaitingCount);
 
         foreach (var (width, height, inspector) in Sizes)
         {
             Resize(shell, width, height, inspector);
             var at = $"{width}x{height}, inspector {inspector}";
-            AssertTopRow(shell, at, "Breadcrumb", "NextWaiting", "GenerateWorkflow");
+            AssertTopRow(shell, at);
             AssertBottomRow(shell, at);
         }
     }
 
-    [AvaloniaFact]
-    public void The_docked_conversation_keeps_a_few_lines_of_transcript_and_the_canvas_keeps_its_cards_clear_in_the_smallest_window()
-    {
-        using var f = FanOut.Fixture();
-        var shell = f.Open();
-        FanOut.Run(shell);
-        FanOut.Generate(shell);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
-        Resize(shell, 900, 600, 320);
-
-        shell.Click(shell.Find<Button>("ConversationLayout"));
-        Assert.NotNull(shell.Window.ViewModel.DockedConversation);
-
-        // The conversation keeps a few lines of its transcript, its header on two lines, and its buttons in their boxes.
-        var transcript = shell.Bounds(shell.Find<Control>("TranscriptScroller"));
-        Assert.True(transcript.Height >= ConversationView.MinTranscriptHeight - 0.5, $"The transcript is {transcript.Height} px tall.");
-        var header = Shell.Around(shell.Find<TextBlock>("ConversationTitle"), "conversationHeader");
-        Assert.All(header.GetVisualDescendants().OfType<SpillRow>(), row => Assert.True(row is { IsMeasureValid: true, IsArrangeValid: true }));
-        var lines = Lines(header.GetVisualDescendants().OfType<Control>()
-            .Where(control => AutomationProperties.GetAutomationId(control) is "ConversationTitle" or "ConversationStatus"
-                or "ConversationLayout" or "CloseConversation" or "ClientLimitationsInfo")
-            .Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 })
-            .Select(shell.Bounds));
-        Assert.True(lines <= 2, $"The docked header has {lines} lines.");
-        // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit behind a glyph.
-        Assert.False(shell.Find<Control>("ConversationBreadcrumb").IsEffectivelyVisible);
-        Assert.False(shell.Find<Control>("ClientLimitations").IsEffectivelyVisible);
-        var info = shell.Find<Control>("ClientLimitationsInfo");
-        Assert.True(info.IsEffectivelyVisible);
-        var limitations = shell.Window.ViewModel.DockedConversation!.Limitations;
-        Assert.Equal((limitations, limitations), (AutomationProperties.GetName(info), ToolTip.GetTip(info)));
-        var box = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer")).Deflate(1);
-        foreach (var id in new[] { "ConversationComposer", "ComposerHint", "ConversationApprove", "ConversationSend" })
-        {
-            Assert.True(box.Contains(shell.Bounds(shell.Find<Control>(id))), $"{id} at {shell.Bounds(shell.Find<Control>(id))} leaves the composer's box {box}.");
-        }
-
-        // The canvas above keeps its two rows apart and its cards clear of them.
-        AssertTopRow(shell, "the dock", "Breadcrumb", "NextWaiting", "GenerateWorkflow");
-        AssertBottomRow(shell, "the dock");
-        var top = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
-        var controls = new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), shell.Find<Control>("WorkflowRunBar") }.Select(shell.Bounds).ToArray();
-        Assert.True(controls.Min(control => control.Top) - top >= 12, $"The top row ends at {top} and the bottom row starts at {controls.Min(control => control.Top)}.");
-        foreach (var node in shell.Nodes())
-        {
-            var card = shell.Bounds(node).WithWidth(node.Bounds.Width * shell.Editor.ViewportZoom).WithHeight(node.Bounds.Height * shell.Editor.ViewportZoom);
-            Assert.All(controls, control => Assert.False(control.Intersects(card), $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is under {control}."));
-        }
-
-        // A taller window gives the canvas its 280 px before the dock grows to its default.
-        Resize(shell, 900, 660);
-        Assert.Equal(MainWindow.CanvasMinHeight, shell.Bounds(shell.Editor).Height, 0.5);
-        Resize(shell, 1600, 1000);
-        Assert.Equal(400, shell.Window.MainArea.RowDefinitions[2].ActualHeight, 0.5);
-        Assert.True(shell.Bounds(shell.Editor).Height >= MainWindow.CanvasMinHeight);
-    }
-
-    [AvaloniaFact]
-    public void Docking_moves_the_cards_and_the_proposals_ghosts_into_view_clear_of_the_floating_controls()
-    {
-        using var f = FanOut.Fixture();
-        var shell = f.Open();
-        FanOut.Run(shell);
-        FanOut.Generate(shell);
-        Resize(shell, 1600, 1000, 320);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
-
-        shell.Click(shell.Find<Button>("ConversationLayout"));
-
-        var controls = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "WorkflowRunBar" }.Select(id => shell.Bounds(shell.Find<Control>(id)))
-            .Concat(new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating") }
-                .Where(control => control.IsEffectivelyVisible).Select(shell.Bounds)).ToArray();
-        var cards = Cards(shell);
-        Assert.Equal(7, cards.Length);
-        Assert.All(cards, card => Assert.All(controls, control => Assert.False(control.Intersects(card), $"The card at {card} is under {control}.")));
-    }
-
-    [AvaloniaFact]
-    public void Docking_keeps_the_persons_zoom_and_pan_when_no_card_in_view_would_hide_and_resizing_never_moves_them()
-    {
-        using var f = FanOut.Fixture();
-        var shell = f.Open();
-        FanOut.Run(shell);
-        Resize(shell, 1600, 1000, 320);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
-        // Zoomed in on "Design the API" in the upper middle, with the other two cards just showing at the canvas's right edge.
-        shell.Editor.ViewportZoom = 1.5;
-        shell.Editor.ViewportLocation = new Point(-220, 90);
-        shell.Render();
-        var view = (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation);
-
-        shell.Click(shell.Find<Button>("ConversationLayout"));
-        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
-
-        // Narrowing the window by 10 px, which cuts the two cards at the edge further, and dragging the splitters move nothing.
-        Resize(shell, 1590, 1000);
-        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
-        var inspector = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 3);
-        shell.Drag(shell.Center(inspector), shell.Center(inspector) - new Vector(40, 0));
-        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
-        shell.Drag(shell.Center(shell.Window.DockSplitter), shell.Center(shell.Window.DockSplitter) - new Vector(0, 30));
-        Assert.True(shell.Window.MainArea.RowDefinitions[2].ActualHeight > 400, "The dock's splitter did not move.");
-        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
-    }
-
-    [AvaloniaFact]
-    public void Fit_to_view_uses_the_room_a_long_status_leaves_on_the_docked_canvas()
-    {
-        using var f = FanOut.Fixture();
-        var shell = f.Open();
-        FanOut.Run(shell);
-        shell.Pan(shell.InEditor(260, 700), new Vector(-100, 0));
-        shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
-        Assert.StartsWith("That would create a cycle", shell.Status);
-        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
-        shell.Click(shell.Find<Button>("ConversationLayout"));
-        Resize(shell, 900, 660, 320);
-        var (top, bottom) = Rows(shell);
-        Assert.True(bottom - top < 48 + 2 * 24, $"The status leaves {bottom - top} px, room for the margins too.");
-        shell.Editor.ViewportLocation = new Point(-2000, -2000);
-        shell.Render();
-
-        shell.Click(shell.Find<Button>("FitToScreen"));
-
-        Assert.All(Cards(shell), card => Assert.True(card.Top >= top - 0.5 && card.Bottom <= bottom + 0.5, $"The card at {card} is not between {top} and {bottom}."));
-    }
-
-    /// <summary>How many lines the boxes take: boxes whose heights overlap share a line.</summary>
-    private static int Lines(IEnumerable<Rect> boxes)
-    {
-        var (lines, bottom) = (0, double.NegativeInfinity);
-        foreach (var box in boxes.OrderBy(box => box.Top))
-        {
-            if (box.Top >= bottom)
-            {
-                lines++;
-            }
-
-            bottom = Math.Max(bottom, box.Bottom);
-        }
-
-        return lines;
-    }
-
-    /// <summary>
-    /// A fit keeps the cards and the proposal's ghost cards 24 px clear of both rows of floating controls, also below the
-    /// waiting pill under the buttons of a compact canvas, and on the docked canvas of the smallest window, which has no
-    /// room for those margins, right against them.
-    /// </summary>
     [AvaloniaTheory]
-    [InlineData(1600, 600, 280, false, 24)]
-    [InlineData(900, 700, 320, true, 24)]
-    [InlineData(900, 600, 320, true, 0)]
-    public void Fit_to_view_keeps_the_cards_clear_of_the_top_row_and_the_bottom_row(double width, double height, double inspector, bool docked, double margin)
+    [InlineData(1600, 600, 280, 8)]
+    [InlineData(900, 700, 320, 8)]
+    [InlineData(900, 600, 320, 8)]
+    public void Fit_to_view_keeps_the_cards_inside_the_editor_between_the_bands(double width, double height, double inspector, double margin)
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
         FanOut.Run(shell);
         FanOut.Generate(shell);
-        if (docked)
-        {
-            shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
-            shell.Click(shell.Find<Button>("ConversationLayout"));
-        }
-
         Resize(shell, width, height, inspector);
         shell.Editor.ViewportLocation = new Point(-2000, -2000);
         shell.Render();
         shell.Click(shell.Find<Button>("FitToScreen"));
 
         var (top, bottom) = Rows(shell);
-        Assert.All(Cards(shell), card => Assert.True(card.Top >= top + margin - 0.5 && card.Bottom <= bottom - margin + 0.5,
+        var zoom = shell.Editor.ViewportZoom;
+        Assert.All(shell.Nodes().Select(node => shell.Bounds(node).WithHeight(node.Bounds.Height * zoom)), card => Assert.True(card.Top >= top + margin - 0.5 && card.Bottom <= bottom - margin + 0.5,
             $"The card at {card} is not {margin} px inside {top} and {bottom}."));
     }
 
-    /// <summary>The lowest edge of the top row's controls and the highest edge of the bottom row's.</summary>
-    private static (double Top, double Bottom) Rows(Shell shell) =>
-        (new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "RunWorkflow", "Status" }.Where(shell.ShowsAny).Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom),
-         new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating"), shell.Find<Control>("WorkflowRunBar") }
-            .Where(control => control.IsEffectivelyVisible).Min(control => shell.Bounds(control).Top));
+    /// <summary>The editor's top and bottom edges, between the two bands.</summary>
+    private static (double Top, double Bottom) Rows(Shell shell) => (shell.Bounds(shell.Editor).Top, shell.Bounds(shell.Editor).Bottom);
 
     /// <summary>The cards and the proposal's ghost cards as they show, at the editor's zoom.</summary>
     private static Rect[] Cards(Shell shell)
     {
         var zoom = shell.Editor.ViewportZoom;
         return [.. shell.Nodes().Select(node => shell.Bounds(node).WithWidth(node.Bounds.Width * zoom).WithHeight(node.Bounds.Height * zoom))
-            .Concat(Shell.ById<Control>(shell.Window, "GhostCard").Select(ghost => shell.Bounds(ghost)
+            .Concat(Shell.ById<Control>(shell.Window, "GhostCard").Select(ghost => Box(shell, ghost)
                 .WithWidth(WorkflowCanvasViewModel.TaskCardWidth * zoom).WithHeight(WorkflowCanvasViewModel.TaskCardHeight * zoom)))];
     }
 
@@ -298,7 +204,7 @@ public sealed class CanvasChromeTests : IDisposable
         var shell = f.Open();
         FanOut.Generate(shell);
 
-        shell.Editor.ViewportZoom = 0.5;
+        shell.Editor.ZoomAtPosition(0.5 / shell.Editor.ViewportZoom, new Point(0, 0));
         shell.Render();
 
         var card = shell.CardRect("Design the API");
@@ -308,15 +214,92 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.All(ghosts, ghost => Assert.Equal((card.Width, card.Height), (ghost.Width, ghost.Height)));
         // Each ghost wire still runs from an output port's centre to an input port's centre.
         var canvas = shell.Window.ViewModel.Canvas!;
-        var ports = canvas.Workflow.Positions.Values.Select(WorkflowCanvasViewModel.ToPoint)
+        var ports = canvas.Workflow.Positions.Values.Select(canvas.Space.ToDisplay)
             .Concat(shell.Window.ViewModel.Canvas!.Ghosts.OfType<GhostCardViewModel>().Select(ghost => ghost.Location)).ToArray();
         foreach (var wire in shell.Window.GetVisualDescendants().OfType<StepConnection>().Where(wire => AutomationProperties.GetAutomationId(wire) == "GhostWire"))
         {
             var (source, target) = shell.Ends(wire);
             var (from, to) = (Shell.Rounded(shell.CanvasPointAt(source)), Shell.Rounded(shell.CanvasPointAt(target)));
-            Assert.Contains(ports, port => Shell.Rounded(port + WorkflowCanvasViewModel.OutputPortCenter) == from);
-            Assert.Contains(ports, port => Shell.Rounded(port + WorkflowCanvasViewModel.InputPortCenter) == to);
+            // An anchor sits on a whole screen pixel, which is 2 canvas units at this zoom.
+            Assert.Contains(ports, port => Point.Distance(port + WorkflowCanvasViewModel.OutputPortCenter, from) <= 2);
+            Assert.Contains(ports, port => Point.Distance(port + WorkflowCanvasViewModel.InputPortCenter, to) <= 2);
         }
+    }
+
+    /// <summary>A pan, a zoom, and a fit each move a ghost with the cards, so the ghost keeps its place among them.</summary>
+    [AvaloniaFact]
+    public void A_ghost_keeps_its_place_among_the_cards_at_each_zoom_and_location()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Generate(shell);
+        var card = shell.Nodes().First(node => ((TaskNodeViewModel)node.DataContext!).Title == "Design the API");
+        var ghost = Shell.ById<Control>(shell.Window, "GhostCard").First();
+        void Check()
+        {
+            shell.Render();
+            var zoom = shell.Editor.ViewportZoom;
+            var apart = ((GhostCardViewModel)ghost.DataContext!).Location - ((TaskNodeViewModel)card.DataContext!).DisplayLocation;
+            var (shown, at) = (Box(shell, ghost), Box(shell, card));
+            // Layout places a box on a whole pixel, so a ghost may land half a pixel away.
+            Assert.InRange(shown.X - at.X - apart.X * zoom, -1, 1);
+            Assert.InRange(shown.Y - at.Y - apart.Y * zoom, -1, 1);
+        }
+
+        Check();
+        shell.Editor.ViewportZoom = 0.5;
+        Check();
+        shell.Editor.ViewportLocation = new Point(37, -21);
+        Check();
+        shell.Editor.ZoomAtPosition(2, new Point(300, 200));
+        Check();
+        shell.Window.GetVisualDescendants().OfType<WorkflowCanvasView>().First().FitToView();
+        Check();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(0.7)]
+    [InlineData(0.3)]
+    public void A_ghost_shows_a_cards_far_form_while_the_cards_do(double zoom)
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Open();
+        FanOut.Generate(shell);
+        shell.Editor.ViewportZoom = zoom;
+        shell.Render();
+
+        var ghost = Shell.ById<Control>(shell.Window, "GhostCard").First();
+        Assert.True(ghost.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("ghostFar")).IsEffectivelyVisible);
+        Assert.False(Shell.ById<TextBlock>(ghost, "GhostTitle").Single().IsEffectivelyVisible);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(5000, 3000)]
+    [InlineData(5000, 0)]
+    [InlineData(0, 3000)]
+    public void Reveal_holds_the_found_card_inside_the_room_wherever_the_view_starts(double x, double y)
+    {
+        var room = new Rect(24, 24, 652, 452);
+        const double zoom = 0.6;
+        var keep = new Rect(2000, 1000, 260, 90);
+        Rect[] cards = [keep, new Rect(1700, 1000, 260, 90), new Rect(2300, 1000, 260, 90), new Rect(2000, 800, 260, 90), new Rect(2000, 1200, 260, 90)];
+
+        var at = CanvasChrome.ClearOfCards(new Point(x, y), new Size(700, 500), room, zoom, cards, keep);
+
+        var seen = new Rect(at + (Vector)room.Position / zoom, room.Size / zoom);
+        Assert.True(seen.Contains(keep), $"{keep} is not inside {seen}.");
+    }
+
+    [Fact]
+    public void Reveal_keeps_the_near_edge_of_a_card_wider_than_the_room()
+    {
+        var room = new Rect(24, 24, 100, 100);
+        var keep = new Rect(500, 500, 400, 400);
+
+        var at = CanvasChrome.ClearOfCards(new Point(0, 0), new Size(148, 148), room, 1, [keep], keep);
+
+        Assert.Equal(new Point(476, 476), at);
     }
 
     [AvaloniaFact]
@@ -354,98 +337,84 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.DoesNotContain(shell.Find<Control>("GenerateEmptyState").GetVisualDescendants().OfType<TextBlock>(), Trimmed);
     }
 
-    /// <summary>
-    /// The top row's controls sit inside the canvas's inset, at least 8 px apart, those of the first row on one centre
-    /// line, and none of their text is cut short. A compact canvas shows its buttons as 32 px glyphs that name themselves
-    /// in their tooltips.
-    /// </summary>
-    private static void AssertTopRow(Shell shell, string at, params string[] ids)
+    /// <summary>The Command Bar's controls share one centre line, stay inside the window, and keep 8 px apart, with no name cut short but the breadcrumb's.</summary>
+    private static void AssertTopRow(Shell shell, string at)
     {
-        var canvas = shell.Bounds(shell.Editor);
-        var compact = canvas.Width < CanvasChrome.CompactWidth;
+        var bar = shell.Bounds(shell.Find<Control>("CommandBar"));
+        var ids = new[] { "ToggleSidebar", "Breadcrumb", "Undo", "RunStrip", "AddTask", "GenerateWorkflow", "RunWorkflow", "StopAll" }.Where(shell.ShowsAny).ToArray();
         var boxes = ids.Select(id => (Id: id, Box: shell.Bounds(shell.Find<Control>(id)))).ToArray();
-        AssertInsideAndApart(canvas, boxes, at);
-        var line = boxes.Single(box => box.Id == "Breadcrumb").Box.Center.Y;
-        foreach (var (id, box) in boxes.Where(box => box.Box.Top < line))
+        foreach (var (id, box) in boxes)
         {
-            Assert.True(Math.Abs(box.Center.Y - line) < 0.6, $"At {at}, {id} centres at {box.Center.Y}, off the row's line at {line}.");
+            Assert.True(bar.Inflate(0.5).Contains(box), $"At {at}, {id} at {box} leaves the bar {bar}.");
+            Assert.True(Math.Abs(box.Center.Y - bar.Center.Y) < 1, $"At {at}, {id} centres at {box.Center.Y}, off the bar's line at {bar.Center.Y}.");
         }
 
+        foreach (var (first, second) in boxes.SelectMany((a, index) => boxes.Skip(index + 1).Select(b => (a, b))))
+        {
+            Assert.False(first.Box.Inflate(1.5).Intersects(second.Box), $"At {at}, {first.Id} at {first.Box} and {second.Id} at {second.Box} touch.");
+        }
+
+        var compact = shell.Window.ViewModel.IsCompact;
+        Assert.Equal(compact, !shell.Find<TextBlock>("BreadcrumbProject").IsEffectivelyVisible);
         foreach (var id in ids.Where(id => id is "RunWorkflow" or "GenerateWorkflow"))
         {
             var button = shell.Find<Button>(id);
-            var label = button.GetVisualDescendants().OfType<TextBlock>().Single();
-            Assert.True(compact != label.IsEffectivelyVisible, $"At {at}, {id}'s label shows: {label.IsEffectivelyVisible}.");
-            if (compact)
+            var labels = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
+            if (id == "RunWorkflow")
             {
-                Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
+                Assert.Equal(compact ? ["Run"] : ["Run Workflow"], labels);
+                Assert.Equal(compact ? 84 : 124, button.Bounds.Width);
+            }
+            else if (compact)
+            {
+                Assert.Empty(labels);
+                Assert.Equal((28.0, 28.0), (button.Bounds.Width, button.Bounds.Height));
+            }
+            else
+            {
+                Assert.Contains("Generate", labels);
+                Assert.Equal(96, button.Bounds.Width);
             }
 
             Assert.Equal(AutomationProperties.GetName(button), ((string)ToolTip.GetTip(button)!).Split('\n')[0]);
         }
 
-        Assert.Equal(compact, !shell.Find<TextBlock>("BreadcrumbProject").IsEffectivelyVisible);
-        var texts = ids.SelectMany(id => shell.Find<Control>(id).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible);
+        var texts = new[] { "RunStrip", "RunWorkflow", "GenerateWorkflow" }.Where(shell.ShowsAny).SelectMany(id => shell.Find<Control>(id).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible);
         Assert.Empty(texts.Where(Trimmed).Select(text => $"At {at}, \"{text.Text}\" is cut short."));
     }
 
-    /// <summary>
-    /// The zoom controls, the workflow's run bar, and the minimap, where it shows, end 12 px above the canvas's bottom edge,
-    /// inside its inset and at least 12 px apart. The minimap shows only on a canvas that is neither compact nor short.
-    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(300, 100, 150)]
+    [InlineData(240, 90, 150)]
+    [InlineData(200, 0, 150)]
+    [InlineData(120, 0, 120)]
+    public void The_project_s_name_gives_up_its_width_before_the_workflow_s_name(double room, double projectWidth, double workflowWidth)
+    {
+        var (project, workflow) = (new Border { Child = new Border { Width = 100, Height = 10 } }, new Border { Child = new Border { Width = 150, Height = 10 } });
+        var names = new CrumbNames { Children = { project, workflow } };
+        names.Measure(new Size(room, 30));
+        names.Arrange(new Rect(names.DesiredSize));
+        Assert.Equal((projectWidth, workflowWidth), (project.Bounds.Width, workflow.Bounds.Width));
+    }
+
+    /// <summary>The Map Footer sits under the editor, and its zoom controls keep inside the Map.</summary>
     private static void AssertBottomRow(Shell shell, string at)
     {
-        var canvas = shell.Bounds(shell.Editor);
-        var minimap = Shell.Around(shell.Find<Minimap>("Minimap"), "floating");
-        Assert.Equal(canvas is { Width: >= CanvasChrome.CompactWidth, Height: >= CanvasChrome.MinimapMinHeight }, minimap.IsEffectivelyVisible);
-        // Expand All sits with the zoom controls while the minimap shows, which is taller, so the row keeps its height (ADR 0024).
-        Assert.Equal(minimap.IsEffectivelyVisible && shell.Window.ViewModel.Canvas is { IsEmpty: false }, shell.Find<Button>("ExpandAll").IsEffectivelyVisible);
-        var boxes = new[] { ("Zoom", Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), ("Minimap", minimap), ("WorkflowRunBar", shell.Find<Control>("WorkflowRunBar")) }
-            .Where(pair => pair.Item2.IsEffectivelyVisible)
-            .Select(pair => (Id: pair.Item1, Box: shell.Bounds(pair.Item2))).ToArray();
-        Assert.Contains(boxes, box => box.Id == "WorkflowRunBar");
-        AssertInsideAndApart(canvas, boxes, at, gap: 12);
-        Assert.All(boxes, box => Assert.True(Math.Abs(box.Box.Bottom - (canvas.Bottom - CanvasChrome.Inset)) < 0.6, $"At {at}, {box.Id} ends at {box.Box.Bottom}, off {canvas.Bottom - 12}."));
-
-        // The bar holds its status, its progress, its activity, and whichever of its buttons show, its text whole.
-        var bar = shell.Find<Control>("WorkflowRunBar");
-        var inside = new[] { "RunProgress", "RunActivity", "StopWorkflow", "ResumeRun", "DismissRun" }.Where(shell.ShowsAny).Select(shell.Find<Control>)
-            .Append(Shell.Around(shell.Find<TextBlock>("RunStatus"), "pill"));
-        Assert.All(inside, control => Assert.True(shell.Bounds(bar).Contains(shell.Bounds(control)), $"At {at}, {AutomationProperties.GetAutomationId(control)} leaves the run bar."));
-        if (shell.ShowsAny("StopWorkflow"))
-        {
-            Assert.Equal(canvas.Width >= CanvasChrome.CompactWidth, shell.Find<Button>("StopWorkflow").GetVisualDescendants().OfType<TextBlock>().Single().IsEffectivelyVisible);
-        }
-
-        Assert.Empty(bar.GetVisualDescendants().OfType<TextBlock>()
-            .Where(text => text.IsEffectivelyVisible && (Trimmed(text) || text.TextLayout.Width > text.Bounds.Width + 0.5))
-            .Select(text => $"At {at}, \"{text.Text}\" is cut short."));
+        var (canvas, editor, zoom) = (shell.Bounds(shell.Window.CanvasArea), shell.Bounds(shell.Editor), shell.Bounds(shell.Find<Control>("ZoomPanel")));
+        Assert.True(canvas.Inflate(0.5).Contains(zoom), $"At {at}, the zoom panel at {zoom} leaves the Map {canvas}.");
+        Assert.True(zoom.Top >= editor.Bottom - 0.5, $"At {at}, the zoom panel at {zoom} is not under the editor {editor}.");
+        Assert.Equal(canvas.Bottom, shell.Bounds(shell.Find<Control>("MapFooter")).Bottom, 0.5);
     }
 
-    private static void AssertInsideAndApart(Rect canvas, (string Id, Rect Box)[] boxes, string at, double gap = 8)
-    {
-        var room = canvas.Deflate(CanvasChrome.Inset);
-        foreach (var (id, box) in boxes)
-        {
-            Assert.True(room.Inflate(0.5).Contains(box), $"At {at}, {id} at {box} leaves the canvas's inset {room}.");
-        }
-
-        foreach (var (first, second) in boxes.SelectMany((a, index) => boxes.Skip(index + 1).Select(b => (a, b))))
-        {
-            Assert.False(first.Box.Inflate(gap / 2 - 0.5).Intersects(second.Box.Inflate(gap / 2 - 0.5)),
-                $"At {at}, {first.Id} at {first.Box} and {second.Id} at {second.Box} are less than {gap} px apart.");
-        }
-    }
-
-    /// <summary>The control's drawn box in the window, through any transform.</summary>
+/// <summary>The control's drawn box in the window, through any transform.</summary>
     private static Rect Box(Shell shell, Visual visual) => new Rect(visual.Bounds.Size).TransformToAABB(visual.TransformToVisual(shell.Window)!.Value);
 
     private static bool Trimmed(TextBlock text) => text.TextLayout.TextLines.Any(line => line.HasCollapsed);
 
     private static (double Sidebar, double Inspector, double Canvas) Widths(Shell shell)
     {
-        var columns = (Grid)shell.Find<Control>("Inspector").Parent!;
-        return (columns.ColumnDefinitions[0].ActualWidth, shell.Find<Control>("Inspector").Bounds.Width, columns.ColumnDefinitions[2].ActualWidth);
+        var columns = (Grid)((Control)shell.Find<Control>("Inspector").Parent!).Parent!;
+        return (columns.ColumnDefinitions[0].ActualWidth, columns.ColumnDefinitions[4].ActualWidth, columns.ColumnDefinitions[2].ActualWidth);
     }
 
     private static void Resize(Shell shell, double width, double height, double? inspector = null)

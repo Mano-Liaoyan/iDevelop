@@ -47,66 +47,45 @@ public sealed class KindStyleTests
         })];
 
         Assert.Equal(
-            ["#FF564ADE #FF564ADE", "#FF007EAE #FF007EAE", "#FFB02FC2 #FFB02FC2", "#FF008575 #FF008575", "#FF956D51 #FF956D51", "#FFE7124D #FFE7124D", "#FF6C6C70 #FF6C6C70"],
+            ["#FF564ADE #FF564ADE", "#FF007EAE #FF007EAE", "#FFB02FC2 #FFB02FC2", "#FF008575 #FF008575", "#FF956D51 #FF956D51", "#FF5E6B10 #FF5E6B10", "#FF6C6C70 #FF6C6C70"],
             Paint(ThemeVariant.Light));
         Assert.Equal(
-            ["#FF6D7CFF #FF6D7CFF", "#FF1894C2 #FF3CD3FE", "#FFDB34F2 #FFDB34F2", "#FF009B89 #FF00DAC3", "#FFB78A66 #FFB78A66", "#FFFF375F #FFFF375F", "#FF8E8E93 #FF8E8E93"],
+            ["#FF6D7CFF #FF6D7CFF", "#FF1894C2 #FF3CD3FE", "#FFDB34F2 #FFDB34F2", "#FF009B89 #FF00DAC3", "#FFB78A66 #FFB78A66", "#FF7C8F22 #FFA9BC3F", "#FF8E8E93 #FF8E8E93"],
             Paint(ThemeVariant.Dark));
     }
 
     [AvaloniaFact]
-    public void A_ring_takes_its_kinds_hue_while_running_its_states_hue_after_and_the_accent_while_proposing()
+    public void A_card_ring_takes_the_state_s_stroke_and_a_quiet_state_has_none()
     {
         var ring = new Border { Classes = { "stateStroke" } };
-        var tint = new Border { Classes = { "stateTint" } };
-        var glyph = new PathIcon { Classes = { "stateIcon" } };
-        Show(new StackPanel { Children = { ring, tint, glyph } }, ThemeVariant.Light);
-        string Paint(NodeState state, NodeRole role = NodeRole.None)
+        Show(ring, ThemeVariant.Light);
+        string Paint(NodeState state, WaitReason why = WaitReason.Question)
         {
-            foreach (var element in new StyledElement[] { ring, tint, glyph })
-            {
-                StyleClass.SetKind(element, NodeKind.Implement);
-                StyleClass.SetState(element, state);
-                StyleClass.SetRole(element, role);
-            }
-
-            return $"{Hex(ring.BorderBrush)} {Hex(tint.Background)} {Hex(glyph.Foreground)} {glyph.IsVisible}";
+            StyleClass.SetState(ring, state);
+            StyleClass.SetWhy(ring, why);
+            return $"{Hex(ring.BorderBrush)} {ring.BorderThickness.Top}";
         }
 
         Assert.Equal(
+            ["#FFE5E5E5 1", "#FF0088FF 1.5", "#FFC55300 1.5", "#FFC55300 1.5", "#FFC55300 1.5", "#FFE9152D 1.5", "#FFE5E5E5 1", "#00FFFFFF 1"],
             [
-                "#CCE5E5E5 #00FFFFFF #FF564ADE False",
-                "#FF564ADE #1A6155F5 #FF564ADE True",
-                "#FFC55300 #1AFF8D28 #FFC55300 True",
-                "#FFE9152D #1AFF383C #FFE9152D True",
-                "#FF008932 #00FFFFFF #FF008932 True",
-                "#FF1E6EF4 #1A0088FF #FF1E6EF4 True",
-            ],
-            [
-                Paint(NodeState.Idle), Paint(NodeState.Running), Paint(NodeState.InputRequired), Paint(NodeState.Failed),
-                Paint(NodeState.Completed), Paint(NodeState.InputRequired, NodeRole.Proposing),
+                Paint(NodeState.Idle), Paint(NodeState.Running), Paint(NodeState.InputRequired), Paint(NodeState.InputRequired, WaitReason.Approval),
+                Paint(NodeState.InputRequired, WaitReason.Interrupted), Paint(NodeState.Failed), Paint(NodeState.Completed), Paint(NodeState.Stale),
             ]);
     }
 
     [AvaloniaFact]
-    public void A_stale_card_and_its_status_pill_share_one_warning_color_and_the_sync_glyph()
+    public void A_stale_card_has_the_one_dashed_ring_in_the_warning_stroke()
     {
-        var ring = new Border { Classes = { "stateStroke" } };
-        var tint = new Border { Classes = { "stateTint" } };
-        var glyph = new PathIcon { Classes = { "stateIcon" } };
-        var pillGlyph = new PathIcon();
-        var pill = new Border { Classes = { "pill", "warning" }, Child = pillGlyph };
-        Show(new StackPanel { Children = { ring, tint, glyph, pill } }, ThemeVariant.Light);
-        foreach (var element in new StyledElement[] { ring, tint, glyph })
-        {
-            StyleClass.SetKind(element, NodeKind.Implement);
-            StyleClass.SetState(element, NodeState.Stale);
-        }
+        var dashes = new Avalonia.Controls.Shapes.Rectangle { Classes = { "staleEdge" } };
+        Show(dashes, ThemeVariant.Light);
+        Assert.False(dashes.IsVisible);
 
-        Assert.Equal((Hex(ring.BorderBrush), Hex(tint.Background)), (Hex(pill.BorderBrush), Hex(pill.Background)));
-        Assert.Equal(Hex(glyph.Foreground), Hex(pillGlyph.Foreground));
-        Assert.Same(Application.Current!.FindResource("IconStateOutOfDate"), glyph.Data);
-        Assert.Same(glyph.Data, pillGlyph.Data);
+        StyleClass.SetState(dashes, NodeState.Stale);
+
+        Assert.True(dashes.IsVisible);
+        Assert.Equal(1.5, dashes.StrokeThickness);
+        Assert.Equal(((ISolidColorBrush)Application.Current!.FindResource(ThemeVariant.Light, "StateWarningStrokeBrush")!).Color, ((ISolidColorBrush)dashes.Stroke!).Color);
     }
 
     [AvaloniaFact]
@@ -115,25 +94,6 @@ public sealed class KindStyleTests
         var pill = new Border { Classes = { "pill", "waiting" } };
         Show(pill, ThemeVariant.Light);
 
-        Assert.Equal(["#1AFF8D28", "#66FF8D28"], [Hex(pill.Background), Hex(pill.BorderBrush)]);
-    }
-
-    [AvaloniaFact]
-    public void Each_state_after_idle_has_its_own_glyph_and_a_proposing_planner_shows_the_sparkle()
-    {
-        var glyph = new PathIcon { Classes = { "stateIcon" } };
-        Show(glyph, ThemeVariant.Light);
-        StyleClass.SetKind(glyph, NodeKind.Plan);
-        Geometry? Glyph(NodeState state, NodeRole role = NodeRole.None)
-        {
-            StyleClass.SetState(glyph, state);
-            StyleClass.SetRole(glyph, role);
-            return glyph.Data;
-        }
-
-        string[] icons = ["IconStateRunning", "IconStateWaiting", "IconStateSucceeded", "IconStateFailed", "IconStateOutOfDate", "IconSparkle"];
-        Assert.Equal(
-            icons.Select(key => Application.Current!.FindResource(key)),
-            [.. Enum.GetValues<NodeState>().Where(state => state != NodeState.Idle).Select(state => Glyph(state)), Glyph(NodeState.InputRequired, NodeRole.Proposing)]);
+        Assert.Equal(["#1AFF8D28", "#FFC55300"], [Hex(pill.Background), Hex(pill.BorderBrush)]);
     }
 }

@@ -1,3 +1,5 @@
+using IDevelop.Workflows;
+using IDevelop.Nodes;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IDevelop.TestSupport;
@@ -19,7 +21,7 @@ public sealed class ShellTests : IDisposable
     [AvaloniaFact]
     public void A_click_reaches_a_control_whose_tooltip_would_open_over_the_pointer_at_once()
     {
-        var shell = Shell.Open(_temp.Seed());
+        var shell = Shell.Open(_temp.Seed(new WorkflowEdit.PlaceNode(TestTasks.Design, BuiltInBlueprints.Implement, new CanvasPoint(105, 90))));
         var zoomIn = shell.Find<Button>("ZoomIn");
         ToolTip.SetTip(zoomIn, string.Join("\n", Enumerable.Repeat("Zoom in (+)", 6)));
         ToolTip.SetShowDelay(zoomIn, 0);

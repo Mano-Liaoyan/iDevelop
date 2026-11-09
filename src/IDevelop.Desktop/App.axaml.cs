@@ -25,6 +25,7 @@ public class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         UseAppAccent();
+        PickerFocus.Keep();
         if (PreferencesFile is { } file)
         {
             RequestedThemeVariant = ThemePreference.Read(file);

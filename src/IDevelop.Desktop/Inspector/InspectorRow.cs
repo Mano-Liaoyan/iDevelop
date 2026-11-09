@@ -1,7 +1,8 @@
 using System.Windows.Input;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.LogicalTree;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 
 namespace IDevelop.Desktop.Inspector;
@@ -10,8 +11,7 @@ namespace IDevelop.Desktop.Inspector;
 public enum RowLayout
 {
     /// <summary>
-    /// The label in the label column and the value beside it in the value column, or, in an inspector narrower than
-    /// <see cref="InspectorGrid.NarrowPanelWidth"/>, the value under its label from the glyph column to the value edge.
+    /// The label in the label column and the value beside it in the value column.
     /// </summary>
     Columns,
 
@@ -21,11 +21,11 @@ public enum RowLayout
     /// </summary>
     Stacked,
 
-    /// <summary>
-    /// No label shown. Content, such as a paragraph or a message composer, from the glyph column to the value edge, and the
-    /// label, if any, only matches the filter.
-    /// </summary>
+    /// <summary>No label shown. Content, such as a paragraph or a list, from the content edge to the action edge.</summary>
     Full,
+
+    /// <summary>No label shown. A value from the content edge to the value edge, with the decorator column beside it.</summary>
+    Value,
 
     /// <summary>No label shown. A row of buttons from the glyph column to the panel's inset, where the other actions end.</summary>
     Buttons,
@@ -35,9 +35,9 @@ public enum RowLayout
 }
 
 /// <summary>
-/// One property in an inspector section: a glyph or a kind tile, its label, its editor, a revert arrow while the value differs from the
-/// blueprint's default, and an info glyph whose tooltip holds the property's note. While the filter has text, a row shows
-/// when its label or its section's title matches. A row without a label shows only with its section's title.
+/// One property on a page: its label, a glyph or a kind tile where the row names a thing, its editor, and in the decorator column the
+/// override dot while the value differs from its blueprint or the saved value. The dot becomes a reset glyph on hover or focus. The
+/// label's tooltip and help text hold the property's note.
 /// </summary>
 public sealed class InspectorRow : InspectorPart
 {
@@ -65,7 +65,9 @@ public sealed class InspectorRow : InspectorPart
 
     public static readonly StyledProperty<string?> RevertIdProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(RevertId));
 
-    private InspectorSection? _section;
+    public static readonly StyledProperty<string> RevertTipProperty = AvaloniaProperty.Register<InspectorRow, string>(nameof(RevertTip), "Reset to blueprint default");
+
+    private Panel? _labelLine;
 
     public InspectorRow() => UpdateShape();
 
@@ -83,7 +85,7 @@ public sealed class InspectorRow : InspectorPart
         set => SetValue(LeadProperty, value);
     }
 
-    /// <summary>Buttons in the trailing column after the revert arrow and the info glyph, such as a blueprint's Place and More.</summary>
+    /// <summary>What stands in the decorator column beside the reset, such as a blueprint's More.</summary>
     public object? Actions
     {
         get => GetValue(ActionsProperty);
@@ -109,21 +111,21 @@ public sealed class InspectorRow : InspectorPart
         set => SetValue(LayoutProperty, value);
     }
 
-    /// <summary>The tooltip of the info glyph after the editor. No glyph shows without it.</summary>
+    /// <summary>The note on the property, which the label's tooltip and help text hold.</summary>
     public string? Info
     {
         get => GetValue(InfoProperty);
         set => SetValue(InfoProperty, value);
     }
 
-    /// <summary>The info glyph's name for UI Automation: the note in one short line, whose whole text is <see cref="Info"/>.</summary>
+    /// <summary>The label's name for UI Automation: the note in one short line, whose whole text is <see cref="Info"/>.</summary>
     public string? InfoName
     {
         get => GetValue(InfoNameProperty);
         set => SetValue(InfoNameProperty, value);
     }
 
-    /// <summary>The info glyph's automation id, such as PermissionNote.</summary>
+    /// <summary>The label's automation id while it holds a note, such as PermissionNote.</summary>
     public string? InfoId
     {
         get => GetValue(InfoIdProperty);
@@ -136,64 +138,71 @@ public sealed class InspectorRow : InspectorPart
         set => SetValue(RevertCommandProperty, value);
     }
 
-    /// <summary>The value differs from a default it can go back to, so the revert arrow shows.</summary>
+    /// <summary>The value differs from a default it can go back to, so the override dot shows.</summary>
     public bool CanRevert
     {
         get => GetValue(CanRevertProperty);
         set => SetValue(CanRevertProperty, value);
     }
 
-    /// <summary>The revert arrow's automation id, such as RevertInstructions.</summary>
+    /// <summary>The decorator's automation id, such as RevertInstructions.</summary>
     public string? RevertId
     {
         get => GetValue(RevertIdProperty);
         set => SetValue(RevertIdProperty, value);
     }
 
-    /// <summary>While the filter has text, whether it matches the label.</summary>
-    internal bool LabelMatches => !IsFiltering || Label is { } label && InspectorFilter.Matches(State!.Query, label);
-
-    internal override void Refresh() => IsVisible = IsShown && (!IsFiltering || _section?.TitleMatches == true || LabelMatches);
-
-    protected override void OnAttachedToLogicalTree(LogicalTreeAttachmentEventArgs e)
+    /// <summary>The decorator's tooltip, which names the value it restores.</summary>
+    public string RevertTip
     {
-        _section = this.FindLogicalAncestorOfType<InspectorSection>();
-        base.OnAttachedToLogicalTree(e);
-        _section?.Track(this);
+        get => GetValue(RevertTipProperty);
+        set => SetValue(RevertTipProperty, value);
     }
 
-    protected override void OnDetachedFromLogicalTree(LogicalTreeAttachmentEventArgs e)
+    internal override void Refresh() => IsVisible = IsShown;
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
-        _section?.Untrack(this);
-        _section = null;
-        base.OnDetachedFromLogicalTree(e);
+        base.OnApplyTemplate(e);
+        _labelLine = e.NameScope.Find<Panel>("PART_LabelLine");
+        ShowNote();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == LayoutProperty || change.Property == InspectorGrid.IsNarrowProperty
-            || change.Property == IconProperty || change.Property == LeadProperty)
+        if (change.Property == LayoutProperty || change.Property == IconProperty || change.Property == LeadProperty)
         {
             UpdateShape();
         }
-        else if (change.Property == LabelProperty)
+        else if (change.Property == InfoProperty || change.Property == InfoNameProperty || change.Property == InfoIdProperty || change.Property == LabelTipProperty)
         {
-            Refresh();
-            _section?.Refresh();
+            ShowNote();
         }
-        else if (change.Property == IsShownProperty)
+        else if (change.Property == CanRevertProperty)
         {
-            _section?.Refresh();
+            PseudoClasses.Set(":changed", CanRevert);
         }
     }
 
-    // A narrow panel stacks every labelled value, so a row beside its label takes a stacked row's shape there.
+    private void ShowNote()
+    {
+        // A text block names itself by its text, so the note's automation name goes on the line around it.
+        if (_labelLine is not null)
+        {
+            ToolTip.SetTip(_labelLine, Info ?? LabelTip);
+            AutomationProperties.SetAutomationId(_labelLine, InfoId);
+            AutomationProperties.SetName(_labelLine, InfoName);
+            AutomationProperties.SetHelpText(_labelLine, Info);
+            AutomationProperties.SetAccessibilityView(_labelLine, Info is null ? AccessibilityView.Default : AccessibilityView.Control);
+        }
+    }
+
     private void UpdateShape()
     {
-        var narrow = InspectorGrid.GetIsNarrow(this);
-        PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked || Layout == RowLayout.Columns && narrow);
+        PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked);
         PseudoClasses.Set(":full", Layout == RowLayout.Full);
+        PseudoClasses.Set(":value", Layout == RowLayout.Value);
         PseudoClasses.Set(":buttons", Layout == RowLayout.Buttons);
         PseudoClasses.Set(":title", Layout == RowLayout.Title);
         PseudoClasses.Set(":bare", Icon is null && Lead is null);

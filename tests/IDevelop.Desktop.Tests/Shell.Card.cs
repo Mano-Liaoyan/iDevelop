@@ -8,13 +8,13 @@ namespace IDevelop.Desktop.Tests;
 
 internal sealed partial class Shell
 {
-    /// <summary>The card's layer that has the style class, such as its ring, stateStroke, or its tint, stateTint.</summary>
+    /// <summary>The card's layer that has the style class, such as its ring, stateStroke.</summary>
     public Border CardLayer(string title, string cssClass) =>
         Node(title).GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains(cssClass));
 
     public KindTile CardKind(string title) => InCard<KindTile>(title, "CardKind");
 
-    public PathIcon CardGlyph(string title) => InCard<PathIcon>(title, "CardStateGlyph");
+    public Theme.StateMark CardMark(string title) => InCard<Theme.StateMark>(title, "CardStateGlyph");
 
     /// <summary>
     /// The texts of a collapsed card's peek, its tooltip, which this opens as resting the pointer on the card does and then

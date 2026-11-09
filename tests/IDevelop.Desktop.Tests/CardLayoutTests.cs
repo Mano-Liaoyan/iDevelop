@@ -23,7 +23,7 @@ public sealed class CardLayoutTests
         Vector[] offsets = CardLayout.Offsets([Card(360, 90), Card(360, 210, 300, wide: true), Card(360, 330), Card(360, 500)]);
 
         Assert.Equal(
-            [new Vector(0, 0), new Vector(0, 0), new Vector(0, 300 - 64), new Vector(0, 300 - 64)],
+            [new Vector(0, 0), new Vector(0, 0), new Vector(0, 300 - WorkflowCanvasViewModel.TaskCardHeight), new Vector(0, 300 - WorkflowCanvasViewModel.TaskCardHeight)],
             offsets);
     }
 
@@ -34,7 +34,7 @@ public sealed class CardLayoutTests
 
         // The card at 400 joins the wider card's column, so it moves down, not right.
         var extra = WorkflowCanvasViewModel.ExpandedCardWidth - WorkflowCanvasViewModel.TaskCardWidth;
-        Assert.Equal([new Vector(0, 0), new Vector(0, 0), new Vector(extra, 0), new Vector(extra, 0), new Vector(0, 300 - 64)], offsets);
+        Assert.Equal([new Vector(0, 0), new Vector(0, 0), new Vector(extra, 0), new Vector(extra, 0), new Vector(0, 300 - WorkflowCanvasViewModel.TaskCardHeight)], offsets);
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class CardLayoutTests
     {
         Vector[] offsets = CardLayout.Offsets([Card(360, 90, 250, wide: true), Card(360, 210, 300, wide: true), Card(360, 330)]);
 
-        Assert.Equal([new Vector(0, 0), new Vector(0, 250 - 64), new Vector(0, 250 - 64 + 300 - 64)], offsets);
+        Assert.Equal([new Vector(0, 0), new Vector(0, 250 - WorkflowCanvasViewModel.TaskCardHeight), new Vector(0, 250 - WorkflowCanvasViewModel.TaskCardHeight + 300 - WorkflowCanvasViewModel.TaskCardHeight)], offsets);
     }
 
     [Fact]
@@ -51,10 +51,10 @@ public sealed class CardLayoutTests
         var half = WorkflowCanvasViewModel.TaskCardWidth / 2;
         Vector[] offsets = CardLayout.Offsets([Card(360, 90, 200, wide: true), Card(360 + half - 1, 400), Card(360 + half, 400)]);
 
-        Assert.Equal(new Vector(0, 200 - 64), offsets[1]);
+        Assert.Equal(new Vector(0, 200 - WorkflowCanvasViewModel.TaskCardHeight), offsets[1]);
         // The card just outside the column moves right with its own column. It still lies under the wider card, so it also
         // moves down by what that card grew, as a card of the column does.
-        Assert.Equal(new Vector(WorkflowCanvasViewModel.ExpandedCardWidth - WorkflowCanvasViewModel.TaskCardWidth, 200 - 64), offsets[2]);
+        Assert.Equal(new Vector(WorkflowCanvasViewModel.ExpandedCardWidth - WorkflowCanvasViewModel.TaskCardWidth, 200 - WorkflowCanvasViewModel.TaskCardHeight), offsets[2]);
     }
 
     [Fact]

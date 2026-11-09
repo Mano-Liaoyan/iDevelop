@@ -57,7 +57,7 @@ public sealed class UnsavedChangesTests : IDisposable
     {
         var shell = OpenWithUnsavedChanges();
 
-        shell.Click(shell.Find<Button>("CloseProject"));
+        shell.CloseOnlyProject();
 
         Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
         shell.Choose("CancelChanges");
@@ -71,7 +71,7 @@ public sealed class UnsavedChangesTests : IDisposable
     public void Close_project_then_dont_save_closes_it_and_saves_nothing()
     {
         var shell = OpenWithUnsavedChanges();
-        shell.Click(shell.Find<Button>("CloseProject"));
+        shell.CloseOnlyProject();
 
         shell.Choose("DiscardChanges");
 
@@ -85,7 +85,7 @@ public sealed class UnsavedChangesTests : IDisposable
     public void Close_project_then_save_saves_and_closes_it()
     {
         var shell = OpenWithUnsavedChanges();
-        shell.Click(shell.Find<Button>("CloseProject"));
+        shell.CloseOnlyProject();
 
         shell.Choose("SaveChanges");
 
@@ -99,7 +99,7 @@ public sealed class UnsavedChangesTests : IDisposable
     {
         var shell = OpenWithUnsavedChanges();
 
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.OpenFolderFromIndex();
 
         Assert.Null(shell.Dialog);
         Assert.Equal(1, _picks);
@@ -115,7 +115,7 @@ public sealed class UnsavedChangesTests : IDisposable
     public void Closing_the_prompt_with_its_title_bar_keeps_the_project_open()
     {
         var shell = OpenWithUnsavedChanges();
-        shell.Click(shell.Find<Button>("CloseProject"));
+        shell.CloseOnlyProject();
 
         shell.Dialog!.Close();
         shell.Render();
@@ -130,7 +130,7 @@ public sealed class UnsavedChangesTests : IDisposable
     {
         var shell = OpenWithUnsavedChanges();
         BlockSave(shell);
-        shell.Click(shell.Find<Button>("CloseProject"));
+        shell.CloseOnlyProject();
 
         shell.Choose("SaveChanges");
 
@@ -265,7 +265,7 @@ public sealed class UnsavedChangesTests : IDisposable
         var shell = OpenWithUnsavedChanges();
         var picker = new TaskCompletionSource<string?>();
         shell.Window.PickFolder = () => picker.Task;
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.OpenFolderFromIndex();
 
         shell.Window.Close();
         shell.Render();
@@ -288,7 +288,7 @@ public sealed class UnsavedChangesTests : IDisposable
     {
         var shell = OpenWithCountingPicker();
 
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.OpenFolderFromIndex();
 
         Assert.Null(shell.Dialog);
         Assert.Equal(1, _picks);

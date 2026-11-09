@@ -1,6 +1,5 @@
 <!-- Paints an element in a node kind's hue, or in its state's or role's, by the classes that StyleClass sets: kind-plan,
-     state-failed, role-proposing, and so on. An element that shows a state also takes its node's kind, because a running
-     node's ring, tint, and glyph are in the kind's hue. Later rules win, so the state and role rules follow the kind
+     state-failed, role-proposing, and so on. Later rules win, so the state and role rules follow the kind
      rules. No rule colors text. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -8,218 +7,264 @@
   <Style Selector="Border.kindTile.kind-implement">
     <Setter Property="Background" Value="{DynamicResource KindImplementTileBrush}" />
   </Style>
-  <Style Selector="Border.kindStroke.kind-implement, Border.stateStroke.kind-implement">
+  <Style Selector="Border.kindStroke.kind-implement">
     <Setter Property="BorderBrush" Value="{DynamicResource KindImplementStrokeBrush}" />
   </Style>
   <Style Selector=":is(Shape).kindStroke.kind-implement">
     <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.kind-implement">
+  <Style Selector=":is(Shape).kindFill.kind-implement">
+    <Setter Property="Fill" Value="{DynamicResource KindImplementStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.kindTint.kind-implement">
     <Setter Property="Background" Value="{DynamicResource KindImplement10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-implement">
     <Setter Property="Data" Value="{StaticResource IconKindImplement}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-implement, PathIcon.kindStrong.kind-implement">
+  <Style Selector="PathIcon.kindStrong.kind-implement">
     <Setter Property="Foreground" Value="{DynamicResource KindImplementStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-plan">
     <Setter Property="Background" Value="{DynamicResource KindPlanTileBrush}" />
   </Style>
-  <Style Selector="Border.kindStroke.kind-plan, Border.stateStroke.kind-plan">
+  <Style Selector="Border.kindStroke.kind-plan">
     <Setter Property="BorderBrush" Value="{DynamicResource KindPlanStrokeBrush}" />
   </Style>
   <Style Selector=":is(Shape).kindStroke.kind-plan">
     <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.kind-plan">
+  <Style Selector=":is(Shape).kindFill.kind-plan">
+    <Setter Property="Fill" Value="{DynamicResource KindPlanStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.kindTint.kind-plan">
     <Setter Property="Background" Value="{DynamicResource KindPlan10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-plan">
     <Setter Property="Data" Value="{StaticResource IconKindPlan}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-plan, PathIcon.kindStrong.kind-plan">
+  <Style Selector="PathIcon.kindStrong.kind-plan">
     <Setter Property="Foreground" Value="{DynamicResource KindPlanStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-architect">
     <Setter Property="Background" Value="{DynamicResource KindArchitectTileBrush}" />
   </Style>
-  <Style Selector="Border.kindStroke.kind-architect, Border.stateStroke.kind-architect">
+  <Style Selector="Border.kindStroke.kind-architect">
     <Setter Property="BorderBrush" Value="{DynamicResource KindArchitectStrokeBrush}" />
   </Style>
   <Style Selector=":is(Shape).kindStroke.kind-architect">
     <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.kind-architect">
+  <Style Selector=":is(Shape).kindFill.kind-architect">
+    <Setter Property="Fill" Value="{DynamicResource KindArchitectStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.kindTint.kind-architect">
     <Setter Property="Background" Value="{DynamicResource KindArchitect10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-architect">
     <Setter Property="Data" Value="{StaticResource IconKindArchitect}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-architect, PathIcon.kindStrong.kind-architect">
+  <Style Selector="PathIcon.kindStrong.kind-architect">
     <Setter Property="Foreground" Value="{DynamicResource KindArchitectStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-review">
     <Setter Property="Background" Value="{DynamicResource KindReviewTileBrush}" />
   </Style>
-  <Style Selector="Border.kindStroke.kind-review, Border.stateStroke.kind-review">
+  <Style Selector="Border.kindStroke.kind-review">
     <Setter Property="BorderBrush" Value="{DynamicResource KindReviewStrokeBrush}" />
   </Style>
   <Style Selector=":is(Shape).kindStroke.kind-review">
     <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.kind-review">
+  <Style Selector=":is(Shape).kindFill.kind-review">
+    <Setter Property="Fill" Value="{DynamicResource KindReviewStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.kindTint.kind-review">
     <Setter Property="Background" Value="{DynamicResource KindReview10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-review">
     <Setter Property="Data" Value="{StaticResource IconKindReview}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-review, PathIcon.kindStrong.kind-review">
+  <Style Selector="PathIcon.kindStrong.kind-review">
     <Setter Property="Foreground" Value="{DynamicResource KindReviewStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-approval">
     <Setter Property="Background" Value="{DynamicResource KindApprovalTileBrush}" />
   </Style>
-  <Style Selector="Border.kindStroke.kind-approval, Border.stateStroke.kind-approval">
+  <Style Selector="Border.kindStroke.kind-approval">
     <Setter Property="BorderBrush" Value="{DynamicResource KindApprovalStrokeBrush}" />
   </Style>
   <Style Selector=":is(Shape).kindStroke.kind-approval">
     <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.kind-approval">
+  <Style Selector=":is(Shape).kindFill.kind-approval">
+    <Setter Property="Fill" Value="{DynamicResource KindApprovalStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.kindTint.kind-approval">
     <Setter Property="Background" Value="{DynamicResource KindApproval10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-approval">
     <Setter Property="Data" Value="{StaticResource IconKindApproval}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-approval, PathIcon.kindStrong.kind-approval">
+  <Style Selector="PathIcon.kindStrong.kind-approval">
     <Setter Property="Foreground" Value="{DynamicResource KindApprovalStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-merge">
     <Setter Property="Background" Value="{DynamicResource KindMergeTileBrush}" />
   </Style>
-  <Style Selector="Border.kindStroke.kind-merge, Border.stateStroke.kind-merge">
+  <Style Selector="Border.kindStroke.kind-merge">
     <Setter Property="BorderBrush" Value="{DynamicResource KindMergeStrokeBrush}" />
   </Style>
   <Style Selector=":is(Shape).kindStroke.kind-merge">
     <Setter Property="Stroke" Value="{DynamicResource KindMergeStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.kind-merge">
+  <Style Selector=":is(Shape).kindFill.kind-merge">
+    <Setter Property="Fill" Value="{DynamicResource KindMergeStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.kindTint.kind-merge">
     <Setter Property="Background" Value="{DynamicResource KindMerge10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-merge">
     <Setter Property="Data" Value="{StaticResource IconKindMerge}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-merge, PathIcon.kindStrong.kind-merge">
+  <Style Selector="PathIcon.kindStrong.kind-merge">
     <Setter Property="Foreground" Value="{DynamicResource KindMergeStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-readonlyagent">
     <Setter Property="Background" Value="{DynamicResource KindReadOnlyAgentTileBrush}" />
   </Style>
-  <Style Selector="Border.kindStroke.kind-readonlyagent, Border.stateStroke.kind-readonlyagent">
+  <Style Selector="Border.kindStroke.kind-readonlyagent">
     <Setter Property="BorderBrush" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
   </Style>
   <Style Selector=":is(Shape).kindStroke.kind-readonlyagent">
     <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.kind-readonlyagent">
+  <Style Selector=":is(Shape).kindFill.kind-readonlyagent">
+    <Setter Property="Fill" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
+  </Style>
+  <Style Selector="Border.kindTint.kind-readonlyagent">
     <Setter Property="Background" Value="{DynamicResource KindReadOnlyAgent10Brush}" />
   </Style>
   <Style Selector="PathIcon.kindIcon.kind-readonlyagent">
     <Setter Property="Data" Value="{StaticResource IconKindReadOnlyAgent}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-readonlyagent, PathIcon.kindStrong.kind-readonlyagent">
+  <Style Selector="PathIcon.kindStrong.kind-readonlyagent">
     <Setter Property="Foreground" Value="{DynamicResource KindReadOnlyAgentStrongBrush}" />
   </Style>
 
-  <!-- A running node keeps its kind's hue. Every other state has its own. -->
-  <Style Selector="Border.stateStroke.state-idle">
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  <!-- A card shows a state with its ring and its State Mark, and the kind only with its glyph and tile. Not started and Done have no ring. -->
+  <Style Selector="Border.stateStroke">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+  </Style>
+  <Style Selector="Border.stateStroke.state-running">
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateRunningBrush}" />
   </Style>
   <Style Selector="Border.stateStroke.state-inputrequired">
+    <Setter Property="BorderThickness" Value="1.5" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateStroke.state-completed">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSuccessStrokeBrush}" />
-  </Style>
   <Style Selector="Border.stateStroke.state-failed">
+    <Setter Property="BorderThickness" Value="1.5" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
+  <!-- Stale is the one dashed edge, drawn over this one. -->
   <Style Selector="Border.stateStroke.state-stale">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateWarningStrokeBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Rectangle.staleEdge">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Stroke" Value="{DynamicResource StateWarningStrokeBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeDashArray" Value="4,3" />
+  </Style>
+  <Style Selector="Rectangle.staleEdge.state-stale">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
 
-  <Style Selector="Border.stateTint.state-idle, Border.stateTint.state-completed">
-    <Setter Property="Background" Value="Transparent" />
+  <!-- A state as one fill: a card at the Block tier and a minimap item. -->
+  <Style Selector="Border.stateBlock">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.state-inputrequired">
-    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+  <Style Selector="Border.stateBlock.state-completed">
+    <Setter Property="Background" Value="{DynamicResource StateSuccess45Brush}" />
   </Style>
-  <Style Selector="Border.stateTint.state-failed">
-    <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
+  <Style Selector="Border.stateBlock.state-running">
+    <Setter Property="Background" Value="{DynamicResource StateRunningBrush}" />
   </Style>
-  <Style Selector="Border.stateTint.state-stale">
-    <Setter Property="Background" Value="{DynamicResource StateWarning10Brush}" />
+  <Style Selector="Border.stateBlock.state-inputrequired">
+    <Setter Property="Background" Value="{DynamicResource StateWaitingBrush}" />
+  </Style>
+  <Style Selector="Border.stateBlock.state-failed">
+    <Setter Property="Background" Value="{DynamicResource StateFailedBrush}" />
+  </Style>
+  <Style Selector="Border.stateBlock.state-stale">
+    <Setter Property="Background" Value="{DynamicResource StateWarningStrokeBrush}" />
   </Style>
 
-  <Style Selector="PathIcon.stateIcon.state-idle">
+  <!-- The State Mark. Six states, one word each, and one shape each (NodeStates.Word). Every reason a node waits for the person
+       keeps the orange disc, and the disc's glyph tells the reason. The glyph stays the theme's contrast color on the disc. -->
+  <Style Selector="Ellipse.markDisc">
+    <Setter Property="Fill" Value="Transparent" />
+  </Style>
+  <Style Selector="Ellipse.markDisc.state-idle">
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+  </Style>
+  <Style Selector="Ellipse.markDisc.state-inputrequired">
+    <Setter Property="Fill" Value="{DynamicResource StateWaitingStrongBrush}" />
+  </Style>
+  <Style Selector="Ellipse.markDisc.state-completed">
+    <Setter Property="Fill" Value="{DynamicResource StateSuccessStrongBrush}" />
+  </Style>
+  <Style Selector="Ellipse.markDisc.state-failed">
+    <Setter Property="Fill" Value="{DynamicResource StateFailedStrongBrush}" />
+  </Style>
+  <Style Selector="Ellipse.markDisc.state-stale">
+    <Setter Property="Fill" Value="{DynamicResource StateWarningStrongBrush}" />
+  </Style>
+  <Style Selector="PathIcon.markGlyph">
+    <Setter Property="Foreground" Value="{DynamicResource OnStateBrush}" />
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-running">
-    <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-inputrequired">
-    <Setter Property="Data" Value="{StaticResource IconStateWaiting}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-completed">
-    <Setter Property="Data" Value="{StaticResource IconStateSucceeded}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-failed">
-    <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-stale">
-    <Setter Property="Data" Value="{StaticResource IconStateOutOfDate}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-stale">
-    <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-inputrequired">
-    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-completed">
-    <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-failed">
-    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
-  </Style>
-
-  <!-- A planner with an open proposal takes the accent instead of its state, and does not pulse. -->
-  <Style Selector="Border.stateStroke.role-proposing">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.stateTint.role-proposing">
-    <Setter Property="Background" Value="{DynamicResource Accent10Brush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.role-proposing">
+  <Style Selector="PathIcon.markGlyph.state-completed">
     <Setter Property="IsVisible" Value="True" />
-    <Setter Property="Data" Value="{StaticResource IconSparkle}" />
-    <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
+    <Setter Property="Data" Value="{StaticResource IconBadgeDone}" />
   </Style>
-
-  <!-- A running or waiting node's ring pulses. Tests read its class, because its pixels depend on the time. -->
-  <Style Selector="Border.stateStroke.state-running:not(.role-proposing), Border.stateStroke.state-inputrequired:not(.role-proposing)">
-    <Style.Animations>
-      <Animation Duration="0:0:1.6" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
-        <KeyFrame Cue="0%">
-          <Setter Property="Opacity" Value="1" />
-        </KeyFrame>
-        <KeyFrame Cue="100%">
-          <Setter Property="Opacity" Value="0.35" />
-        </KeyFrame>
-      </Animation>
-    </Style.Animations>
+  <Style Selector="PathIcon.markGlyph.state-failed">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Data" Value="{StaticResource IconBadgeFailed}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-running:not(.role-proposing)">
+  <Style Selector="PathIcon.markGlyph.state-stale">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Data" Value="{StaticResource IconBadgeStale}" />
+  </Style>
+  <Style Selector="PathIcon.markGlyph.state-inputrequired">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Data" Value="{StaticResource IconBadgeQuestion}" />
+  </Style>
+  <Style Selector="PathIcon.markGlyph.state-inputrequired.why-approval">
+    <Setter Property="Data" Value="{StaticResource IconBadgeApproval}" />
+  </Style>
+  <Style Selector="PathIcon.markGlyph.state-inputrequired.why-conflict">
+    <Setter Property="Data" Value="{StaticResource IconBadgeConflict}" />
+  </Style>
+  <Style Selector="PathIcon.markGlyph.state-inputrequired.why-interrupted">
+    <Setter Property="Data" Value="{StaticResource IconBadgePause}" />
+  </Style>
+  <Style Selector="PathIcon.markGlyph.state-inputrequired.why-roundlimit">
+    <Setter Property="Data" Value="{StaticResource IconBadgeRoundLimit}" />
+  </Style>
+  <Style Selector="Arc.markArc">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Stroke" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+  </Style>
+  <!-- A running node's arc turns, and nothing else on a card moves. Tests read its classes, because its pixels depend on the time. -->
+  <Style Selector="Arc.markArc.state-running">
+    <Setter Property="IsVisible" Value="True" />
     <Style.Animations>
       <Animation Duration="0:0:1" IterationCount="Infinite">
         <KeyFrame Cue="0%">
@@ -230,6 +275,14 @@
         </KeyFrame>
       </Animation>
     </Style.Animations>
+  </Style>
+  <!-- A role is one accent dot on the mark. It adds no state word. -->
+  <Style Selector="Ellipse.markRole">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Ellipse.markRole.role-underreview, Ellipse.markRole.role-proposing">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
 
   <!-- The tile is drawn in a 32 unit frame: a quarter-size corner radius, the glyph at 0.625 of the tile, and the badge

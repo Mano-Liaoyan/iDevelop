@@ -3,8 +3,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data.Converters;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
+using IDevelop.Desktop.Canvas;
+using Avalonia.VisualTree;
 
 namespace IDevelop.Desktop.Conversation;
 
@@ -14,25 +18,69 @@ namespace IDevelop.Desktop.Conversation;
 /// </summary>
 public partial class ConversationView : UserControl
 {
-    /// <summary>The column of a message: a person's message is in the second column, next to its copy button.</summary>
+    /// <summary>The column of a message: a person's message is in the second column.</summary>
     public static readonly IValueConverter MessageColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 0);
 
     /// <summary>The columns a message spans: a person's message spans one, and other messages span both.</summary>
     public static readonly IValueConverter MessageColumnSpan = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 2);
 
+    /// <summary>The margin of a transcript row: the side gutter and the row's gap above.</summary>
+    public static readonly IValueConverter RowMargin = new FuncValueConverter<double, Thickness>(gap => new Thickness(16, gap, 16, 0));
+
+    // Text softens at the view's top edge, so a block under the header reads as scrolled, and a whole line resting there stays whole. A mask reads only
+    // each stop's alpha, so these stops are opacities and no part of the palette.
+    private static readonly LinearGradientBrush TopFade = new()
+    {
+        StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute),
+        EndPoint = new RelativePoint(0, 4, RelativeUnit.Absolute),
+        GradientStops = { new GradientStop(default, 0), new GradientStop(new Color(255, 0, 0, 0), 1) },
+    };
+
     // Within this many pixels of the end, the view counts as at the end and follows new output.
     private const double EndSlack = 24;
+
+    // The space under the last row, the transcript's bottom margin.
+    private const double TranscriptEndGap = 12;
+
+    // How far past the furthest realized row the view moves so that the next row comes in.
+    private const double NextRowStep = 16;
+
+    // The composer's hint needs this much room for the composer's tool row.
+    private const double HintWidth = 340;
+
+    /// <summary>The least transcript the Chat page keeps in a short window.</summary>
+    internal const double MinTranscriptHeight = 180;
+
+    // The dock's share of a page with a composer, and the least it keeps for its heading and a line while the page is short.
+    private const double DockShare = 0.4;
+    private const double MinDockHeight = 72;
+
+    // With no composer the dock is the page's task, so it keeps only this much room for what the inputs show above it.
+    private const double MinInputsHeight = 96;
 
     private ConversationViewModel? _model;
     private bool _follow = true;
     private bool _restoring;
     private bool _userInput;
+    private bool _settleQueued;
     private double? _scrolledTo;
     private (int Entry, double Offset)? _anchor;
+    private bool _pressed;
+    private bool _restQueued;
+    private bool _movedDown;
+
+    // The extent where the view last moved above the end to rest on a whole line, and the extent where such a move changed the end.
+    private double? _restedAt;
+    private double? _restMovedEnd;
+
+    // Whether a jump to the extent's end has been tried since the last row was last realized.
+    private bool _jumpedToEnd;
+    private bool _stepQueued;
 
     public ConversationView()
     {
         InitializeComponent();
+        Scroller.OpacityMask = TopFade;
         Scroller.ScrollChanged += OnScrollChanged;
         // A wheel, a drag, the scroll bar, or a key scrolls on the person's behalf, even when rows coming into view change the
         // extent in the same scroll. Layout alone, such as an item measured for the first time, never decides whether the
@@ -48,39 +96,32 @@ public partial class ConversationView : UserControl
         Scroller.AddHandler(PointerMovedEvent, (_, e) => _userInput |= e.GetCurrentPoint(Scroller).Properties.IsLeftButtonPressed,
             RoutingStrategies.Tunnel, handledEventsToo: true);
         Scroller.AddHandler(KeyDownEvent, (_, _) => _userInput = true, RoutingStrategies.Tunnel, handledEventsToo: true);
-        Transcript.LayoutUpdated += OnTranscriptLaidOut;
-    }
-
-    // The row of Rows that holds the transcript.
-    private const int TranscriptRow = 3;
-
-    /// <summary>The least transcript a docked conversation keeps: a few lines of messages.</summary>
-    internal const double MinTranscriptHeight = 96;
-
-    /// <summary>Raised, after a layout, when <see cref="RequiredHeight"/> changed.</summary>
-    public static readonly RoutedEvent<RoutedEventArgs> RequiredHeightChangedEvent =
-        RoutedEvent.Register<ConversationView, RoutedEventArgs>("RequiredHeightChanged", RoutingStrategies.Bubble);
-
-    /// <summary>
-    /// The height the view needs: its header, the bar's strip, the limitations, and the composer as tall as they lay out
-    /// at its width, and <see cref="MinTranscriptHeight"/> of transcript.
-    /// </summary>
-    internal double RequiredHeight { get; private set; }
-
-    // The grid gives each row but the transcript's the height it asks for, however short the view, so their sum is what the
-    // view needs. The window learns of a change after the layout, where it may resize the dock.
-    protected override Size ArrangeOverride(Size finalSize)
-    {
-        var size = base.ArrangeOverride(finalSize);
-        var required = Rows.RowDefinitions.Where((_, index) => index != TranscriptRow).Sum(row => row.ActualHeight) + MinTranscriptHeight;
-        if (Math.Abs(required - RequiredHeight) >= 0.5)
+        Scroller.AddHandler(PointerPressedEvent, (_, _) => _pressed = true, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Scroller.AddHandler(PointerReleasedEvent, (_, _) =>
         {
-            RequiredHeight = required;
-            Dispatcher.UIThread.Post(() => RaiseEvent(new RoutedEventArgs(RequiredHeightChangedEvent)));
-        }
-
-        return size;
+            _pressed = false;
+            QueueRest();
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Transcript.LayoutUpdated += OnTranscriptLaidOut;
+        Transcript.AddHandler(KeyDownEvent, OnStepKey, RoutingStrategies.Bubble);
+        Composer.AddHandler(KeyDownEvent, OnComposerKey, RoutingStrategies.Tunnel);
+        ComposerBar.SizeChanged += (_, e) => KeyHint.IsVisible = e.NewSize.Width >= HintWidth;
+        ComposerFrame.SizeChanged += (_, _) => LimitDock();
+        SizeChanged += (_, _) => LimitDock();
     }
+
+    // With a composer the dock takes at most 40% of the page, and the transcript keeps its least height after the dock and the composer. The dock's own content
+    // scrolls. A person's Approval node has no composer and no transcript, so its dock shows everything that it can before it scrolls.
+    private void LimitDock()
+    {
+        var margins = DockView.Margin.Top + DockView.Margin.Bottom;
+        DockView.MaxHeight = ComposerFrame.IsVisible
+            ? Math.Max(MinDockHeight, Math.Min(Bounds.Height * DockShare, Bounds.Height - ComposerFrame.Bounds.Height - ComposerFrame.Margin.Top - ComposerFrame.Margin.Bottom - margins - MinTranscriptHeight))
+            : Math.Max(MinDockHeight, Bounds.Height - margins - MinInputsHeight);
+    }
+
+    /// <summary>Opens the composer's picker for the node's client, model, and level.</summary>
+    internal void OpenModelPicker() => ModelChip.Flyout?.ShowAt(ModelChip);
 
     /// <summary>The entry at the top of the view and how far it scrolled into it, or null at the end.</summary>
     internal (int Entry, double Offset)? Anchor => _follow ? null : _anchor;
@@ -103,16 +144,37 @@ public partial class ConversationView : UserControl
             _model.FollowRequested += Follow;
             _anchor = _model.State.Anchor;
             _follow = _anchor is null;
+            (_restedAt, _restMovedEnd, _jumpedToEnd) = (null, null, false);
         }
     }
 
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    /// <summary>Puts the keys in the composer, or in the transcript while no message can go.</summary>
+    internal void FocusComposer()
     {
-        base.OnAttachedToVisualTree(e);
-        Dispatcher.UIThread.Post(() => Composer.Focus(), DispatcherPriority.Background);
+        if (Composer.IsEffectivelyVisible && Composer.IsEffectivelyEnabled)
+        {
+            Composer.Focus(NavigationMethod.Tab);
+        }
+        else
+        {
+            Scroller.Focus(NavigationMethod.Tab);
+        }
     }
 
-    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e) => Settle();
+    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        Settle();
+        // A page of rows of many heights can move the anchored row in the last layout pass, after the pass's own settling.
+        if (!_settleQueued)
+        {
+            _settleQueued = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _settleQueued = false;
+                Settle();
+            }, DispatcherPriority.Background);
+        }
+    }
 
     private void OnTranscriptLaidOut(object? sender, EventArgs e) => Settle();
 
@@ -130,14 +192,14 @@ public partial class ConversationView : UserControl
         {
             if (_follow)
             {
-                ScrollTo(Scroller.Extent.Height - Scroller.Viewport.Height);
+                RestAtEnd();
             }
             else if (_anchor is { } anchor)
             {
                 if (Top(anchor.Entry) is { } top)
                 {
-                    var wanted = top + anchor.Offset;
-                    ScrollTo(wanted);
+                    // A scroll in progress rests on its own, in the way it went.
+                    ScrollTo(_pressed || _restQueued ? top + anchor.Offset : OnWholeLine(top + anchor.Offset));
                 }
                 else if (_model?.Items.Select(item => item.Id).ToList().IndexOf(anchor.Entry) is var index and >= 0)
                 {
@@ -147,13 +209,117 @@ public partial class ConversationView : UserControl
                 {
                     _follow = true;
                     _anchor = null;
-                    ScrollTo(Scroller.Extent.Height - Scroller.Viewport.Height);
+                    RestAtEnd();
                 }
             }
         }
         finally
         {
             _restoring = false;
+        }
+    }
+
+    private double End => Scroller.Extent.Height - Scroller.Viewport.Height;
+
+    // The list estimates rows it has not realized from those it has, so the extent can flip between two values as the last rows
+    // come and go, and a move to the extent's end would then repeat forever. With the last row realized its own place is the true end.
+    private double RealEnd => LastRowBottom is { } bottom ? bottom + TranscriptEndGap - Scroller.Viewport.Height : End;
+
+    private double? LastRowHeight => _model is { Items.Count: > 0 } model ? Transcript.ContainerFromIndex(model.Items.Count - 1)?.Bounds.Height : null;
+
+    private double? LastRowBottom => _model is { Items.Count: > 0 } model && Transcript.ContainerFromIndex(model.Items.Count - 1) is { } last && Top(last) is { } top
+        ? top + last.Bounds.Height
+        : null;
+
+    // The list estimates a row that left the view, and a row the dock holds has no height, so a small move up can change the
+    // extent and the end with it. A move to that new end brings the old extent back, and the two would repeat until the layout
+    // aborts. An extent where this happened keeps the end itself.
+    private void RestAtEnd()
+    {
+        // A jump to the extent's end usually realizes the last row. If the estimate moved under the jump, the view walks down from
+        // the furthest row the list has real, and each step brings the next row in.
+        if (LastRowBottom is null && _model is { Items.Count: > 0 })
+        {
+            if (!_jumpedToEnd)
+            {
+                _jumpedToEnd = true;
+                ScrollTo(End);
+            }
+            else if (!_stepQueued)
+            {
+                _stepQueued = true;
+                Dispatcher.UIThread.Post(StepTowardEnd, DispatcherPriority.Background);
+            }
+
+            return;
+        }
+
+        _jumpedToEnd = false;
+        var extent = Scroller.Extent.Height;
+        if (_restedAt is { } before && Math.Abs(before - extent) >= 0.5)
+        {
+            _restMovedEnd = before;
+            _restedAt = null;
+        }
+
+        var end = RealEnd;
+        // A move up to a whole line that leaves the last row out of view would lose the row, and with it the real end.
+        var line = OnWholeLine(end);
+        var keepsLast = LastRowHeight is { } height && end - line < height;
+        var wanted = _restMovedEnd is { } moved && Math.Abs(moved - extent) < 0.5 || !keepsLast ? end : line;
+        if (wanted < end && Math.Abs(Scroller.Offset.Y - wanted) > 0.5)
+        {
+            _restedAt = extent;
+        }
+
+        ScrollTo(wanted);
+    }
+
+    // Each step is its own turn of the dispatcher, because a layout pass that repeats too often aborts the frame.
+    private void StepTowardEnd()
+    {
+        _stepQueued = false;
+        if (_follow && LastRowBottom is null && Transcript.GetRealizedContainers().MaxBy(Transcript.IndexFromContainer) is { } furthest && Top(furthest) is { } top)
+        {
+            _restoring = true;
+            try
+            {
+                ScrollTo(Math.Max(Scroller.Offset.Y + NextRowStep, top + furthest.Bounds.Height - Scroller.Viewport.Height + NextRowStep));
+            }
+            finally
+            {
+                _restoring = false;
+            }
+        }
+    }
+
+    // The height at or above y where the view's top edge cuts no line. The space under the last row takes up the difference at the end.
+    private double OnWholeLine(double y) => Scroller.Content is Control content ? WholeLine.Rest(content, y, down: false) : y;
+
+    private void QueueRest()
+    {
+        if (!_restQueued)
+        {
+            _restQueued = true;
+            Dispatcher.UIThread.Post(Rest, DispatcherPriority.Background);
+        }
+    }
+
+    // A scroll that stops in a line moves on past it, in the way it went, so a small step still gets somewhere. A drag rests when it ends.
+    private void Rest()
+    {
+        _restQueued = false;
+        if (_pressed || _follow || Scroller.Content is not Control content)
+        {
+            return;
+        }
+
+        var wanted = Math.Min(WholeLine.Rest(content, Scroller.Offset.Y, _movedDown), End);
+        ScrollTo(OnWholeLine(wanted));
+        _anchor = TopEntry();
+        if (_model is not null)
+        {
+            _model.State.Anchor = _anchor;
         }
     }
 
@@ -169,12 +335,14 @@ public partial class ConversationView : UserControl
 
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        var atEnd = Scroller.Offset.Y >= Scroller.Extent.Height - Scroller.Viewport.Height - EndSlack;
+        var atEnd = Scroller.Offset.Y >= RealEnd - EndSlack;
         JumpToLatest.IsVisible = !atEnd && _model is { Items.Count: > 0 };
         var ours = _scrolledTo is { } target && Math.Abs(Scroller.Offset.Y - target) < 1;
-        var layoutOnly = (e.ExtentDelta.Y != 0 || e.ViewportDelta.Y != 0) && !_userInput;
+        // Only a person's scroll moves the place. The list can stop a jump of ours partway while it realizes rows, and the
+        // jump then looks like a scroll with no change of extent. Taken for a person's, it would save a place above the end.
+        var byPerson = _userInput;
         _userInput = false;
-        if (_restoring || ours || layoutOnly)
+        if (_restoring || ours || !byPerson)
         {
             return;
         }
@@ -186,6 +354,12 @@ public partial class ConversationView : UserControl
         if (_model is not null)
         {
             _model.State.Anchor = _anchor;
+        }
+
+        if (e.OffsetDelta.Y != 0)
+        {
+            _movedDown = e.OffsetDelta.Y > 0;
+            QueueRest();
         }
     }
 
@@ -225,4 +399,87 @@ public partial class ConversationView : UserControl
     }
 
     private void OnJumpToLatest(object? sender, RoutedEventArgs e) => Follow();
+
+    // Enter sends and Ctrl+Enter also sends. Shift+Enter is the box's new line. A digit picks a choice while the composer is empty. The tunnel comes before the box, which would take the key.
+    private void OnComposerKey(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Control or KeyModifiers.Meta)
+        {
+            if (_model?.Node.SendCommand is { } send && send.CanExecute(null))
+            {
+                send.Execute(null);
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && e.KeyModifiers is (KeyModifiers.Control | KeyModifiers.Shift) or (KeyModifiers.Meta | KeyModifiers.Shift))
+        {
+            if (_model?.Node.StopAndSendCommand is { } stopAndSend && stopAndSend.CanExecute(null))
+            {
+                stopAndSend.Execute(null);
+            }
+
+            e.Handled = true;
+        }
+        else if (e.KeyModifiers == KeyModifiers.None && e.Key is >= Key.D1 and <= Key.D9 or >= Key.NumPad1 and <= Key.NumPad9
+            && _model?.PickChoice(e.Key >= Key.NumPad1 ? e.Key - Key.NumPad0 : e.Key - Key.D0) == true)
+        {
+            e.Handled = true;
+            Composer.CaretIndex = Composer.Text?.Length ?? 0;
+        }
+    }
+
+    // Left and Right fold and open a group of steps, as they do a tree's row.
+    private static void OnStepKey(object? sender, KeyEventArgs e)
+    {
+        if (e is { Key: Key.Left or Key.Right, KeyModifiers: KeyModifiers.None, Source: ToggleButton { DataContext: StepGroupItemViewModel group } })
+        {
+            group.IsOpen = e.Key == Key.Right;
+            e.Handled = true;
+        }
+    }
+
+    private void OnCloseModel(object? sender, RoutedEventArgs e) => ModelChip.Flyout?.Hide();
+
+    private void OnAgentChosen(object? sender, SelectionChangedEventArgs e) => AgentPicker.OnChosen(sender);
+
+    private void OnShowResult(object? sender, RoutedEventArgs e) =>
+        (TopLevel.GetTopLevel(this) as MainWindow)?.ViewModel.AgentPanel.Show(Inspector.AgentPage.Output);
+
+    private void OnRowEntered(object? sender, PointerEventArgs e) => PlaceCopy(sender as Panel);
+
+    private void OnCopyFocused(object? sender, GotFocusEventArgs e) => PlaceCopy((sender as Control)?.Parent as Panel);
+
+    // Copy sits at the end of an agent's last line, next to the text, or beside a person's bubble. A line with no room left puts it under the line.
+    private static void PlaceCopy(Panel? row)
+    {
+        var copy = row?.Children.OfType<Button>().FirstOrDefault(button => button.Classes.Contains("copy"));
+        var message = row?.GetVisualDescendants().OfType<Border>().FirstOrDefault(border => border.Classes.Contains("message"));
+        if (row is null || copy is null || message is null)
+        {
+            return;
+        }
+
+        var size = copy.Width + 4;
+        Point at;
+        if (copy.Classes.Contains("person"))
+        {
+            at = message.TranslatePoint(new Point(-size, message.Bounds.Height - copy.Height), row) ?? default;
+        }
+        else if (message.GetVisualDescendants().OfType<TextBlock>().LastOrDefault(text => text.IsEffectivelyVisible && text.TextLayout.TextLines.Count > 0) is { } text)
+        {
+            var last = text.TextLayout.TextLines[^1];
+            var top = text.TextLayout.TextLines.SkipLast(1).Sum(line => line.Height);
+            var end = text.TranslatePoint(new Point(last.Start + last.WidthIncludingTrailingWhitespace + text.Padding.Left, top + text.Padding.Top), row) ?? default;
+            at = end.X + size > row.Bounds.Width
+                ? new Point(row.Bounds.Width - copy.Width, end.Y + last.Height)
+                : new Point(end.X + 4, end.Y + (last.Height - copy.Height) / 2);
+        }
+        else
+        {
+            return;
+        }
+
+        copy.Margin = new Thickness(Math.Max(0, at.X), Math.Max(0, at.Y), 0, 0);
+    }
 }

@@ -9,7 +9,7 @@ using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>The inspector's composer, used through the real main window, with the fake agent behind on-disk shims.</summary>
+/// <summary>The conversation's composer, opened from the inspector and used through the real main window, with the fake agent behind on-disk shims.</summary>
 [Collection(ProcessCollection.Name)]
 public sealed class ConversationTests
 {
@@ -36,9 +36,11 @@ public sealed class ConversationTests
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.Running);
 
-        shell.InView<TextBox>("Composer").Text = "Also write hi.";
-        Shell.Invoke(shell.InView<Button>("SendMessage"));
-        Assert.Equal("", shell.Find<TextBox>("Composer").Text);
+        shell.Talk();
+        shell.InView<TextBox>("ConversationComposer").Text = "Also write hi.";
+        shell.Find<TextBox>("ConversationComposer").Focus();
+        shell.Press(Key.Enter);
+        Assert.Equal("", shell.Find<TextBox>("ConversationComposer").Text);
         f.Release("go");
 
         var resumed = Path.Combine(f.Evidence, "resumed.txt");
@@ -54,10 +56,17 @@ public sealed class ConversationTests
         f.Install(Resumed(f, "Wrote hi."), Reply("s-1", "Hello.", On().Print(FakeAgents.SessionLine(ClientId.Antigravity, "s-1")).WaitForFile(f.Gate("never"))));
         var shell = OpenSayHi(f);
         Shell.Invoke(shell.InView<Button>("RunTask"));
-        shell.WaitUntil(() => shell.NodeModel("Say hi").State == NodeState.Running && shell.InView<Button>("StopAndSend").IsEffectivelyVisible, "the turn runs");
+        shell.WaitForState("Say hi", NodeState.Running);
+        shell.Talk();
+        shell.WaitUntil(() => shell.InView<Button>("ConversationStop").IsEffectivelyVisible, "the turn runs");
+        Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyVisible);
 
-        shell.InView<TextBox>("Composer").Text = "Stop and write hi.";
-        Shell.Invoke(shell.InView<Button>("StopAndSend"));
+        shell.InView<TextBox>("ConversationComposer").Text = "Stop and write hi.";
+        shell.Render();
+        Assert.False(shell.InView<Button>("ConversationStop").IsEffectivelyVisible);
+        Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyVisible);
+        Assert.True(shell.InView<Button>("ConversationStopAndSend").IsEffectivelyVisible);
+        shell.Click(shell.InView<Button>("ConversationStopAndSend"));
 
         var resumed = Path.Combine(f.Evidence, "resumed.txt");
         shell.WaitUntil(() => File.Exists(resumed) && shell.NodeModel("Say hi").State == NodeState.Completed, "the next turn ends");
@@ -65,21 +74,22 @@ public sealed class ConversationTests
     }
 
     [AvaloniaFact]
-    public void Ctrl_Enter_in_the_composer_continues_a_finished_session_and_Enter_starts_a_new_line()
+    public void Enter_in_the_composer_continues_a_finished_session_and_Shift_Enter_starts_a_new_line()
     {
         using var f = new NodeFixture(NodeFixture.Task(SayHi, "Say hi", 105));
         f.Install(Resumed(f, "Wrote both."), Reply("s-1", "Hello."));
         var shell = OpenSayHi(f);
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.Completed);
-        var composer = shell.InView<TextBox>("Composer");
+        shell.Talk();
+        var composer = shell.InView<TextBox>("ConversationComposer");
         composer.Focus();
         shell.Type("one");
-        shell.Press(Key.Enter);
+        shell.Press(Key.Enter, RawInputModifiers.Shift);
         shell.Type("two");
         Assert.Equal("one\ntwo", composer.Text);
 
-        shell.Press(Key.Enter, RawInputModifiers.Control);
+        shell.Press(Key.Enter);
 
         // The reply comes in through the log before the engine records the turn's result.
         shell.WaitUntil(() => shell.NodeModel("Say hi") is { LastReply: "Wrote both.", Results.Count: 2 }, "the continued turn ends");
@@ -93,11 +103,13 @@ public sealed class ConversationTests
         using var f = new NodeFixture(NodeFixture.Task(SayHi, "Say hi", 105));
         f.Install();
         var shell = OpenSayHi(f);
-        shell.InView<TextBox>("Composer").Text = "Hello?";
+        shell.Talk();
 
-        Assert.Equal("Run the node first. A message continues its session.", shell.InView<TextBlock>("SendProblem").Text);
-        Assert.False(shell.InView<Button>("SendMessage").IsEffectivelyEnabled);
-        Assert.False(shell.InView<Button>("OpenInTerminal").IsEffectivelyEnabled);
+        Assert.Equal("Run the node first. A message continues its session.", shell.InView<TextBox>("ConversationComposer").Watermark);
+        Assert.False(shell.InView<TextBox>("ConversationComposer").IsEffectivelyEnabled);
+        Assert.True(shell.Find<Button>("ConversationRunNode").IsEffectivelyVisible);
+        Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyVisible);
+        Assert.False(shell.NodeModel("Say hi").OpenInTerminalCommand.CanExecute(null));
     }
 
     [AvaloniaFact]
@@ -109,7 +121,9 @@ public sealed class ConversationTests
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.Completed);
 
-        Shell.Invoke(shell.InView<Button>("OpenInTerminal"));
+        shell.Talk();
+        Assert.NotNull(ToolTip.GetTip(shell.Find<Control>("ClientLimitationsInfo")));
+        shell.NodeModel("Say hi").OpenInTerminalCommand.Execute(null);
 
         shell.WaitUntil(() => shell.Status.StartsWith("Copied the command", StringComparison.Ordinal), "the command is copied");
         Assert.EndsWith("agy --conversation s-1", shell.Status);
@@ -124,7 +138,7 @@ public sealed class ConversationTests
         var shell = OpenSayHi(f);
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.InputRequired);
-        Assert.Equal("Input required · reply", shell.NodeModel("Say hi").StatusLabel);
+        Assert.Equal("Needs you · Reply", shell.NodeModel("Say hi").StatusLabel);
 
         Shell.Invoke(shell.InView<Button>("Approve"));
 

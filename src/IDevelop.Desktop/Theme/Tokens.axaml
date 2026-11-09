@@ -9,6 +9,7 @@
       <SolidColorBrush x:Key="AppPanelBrush" Color="#FCFCFA" />
       <SolidColorBrush x:Key="SurfaceMutedBrush" Color="#EDEFF2" />
       <SolidColorBrush x:Key="SurfaceMuted60Brush" Color="#99EDEFF2" />
+      <SolidColorBrush x:Key="SurfaceShownBrush" Color="#E5E5E5" />
       <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="SurfaceOverlayBrush" Color="#F8FAFD" />
       <SolidColorBrush x:Key="SurfaceOverlay95Brush" Color="#F2F8FAFD" />
@@ -16,13 +17,14 @@
       <SolidColorBrush x:Key="TextBrush" Color="#25292E" />
       <SolidColorBrush x:Key="TextMutedBrush" Color="#5A6168" />
       <SolidColorBrush x:Key="TextFaintBrush" Color="#90969C" />
+      <SolidColorBrush x:Key="OnStateBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="Border100Brush" Color="#E5E5E5" />
       <SolidColorBrush x:Key="Border80Brush" Color="#CCE5E5E5" />
       <SolidColorBrush x:Key="Border60Brush" Color="#99E5E5E5" />
       <SolidColorBrush x:Key="StateSelectedBrush" Color="#0088FF" />
       <SolidColorBrush x:Key="StateSelected25Brush" Color="#400088FF" />
       <SolidColorBrush x:Key="StateSelected40Brush" Color="#660088FF" />
-      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#1A0088FF" />
+      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#290088FF" />
       <SolidColorBrush x:Key="StateRunningBrush" Color="#0088FF" />
       <SolidColorBrush x:Key="StateRunning45Brush" Color="#730088FF" />
       <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#1A0088FF" />
@@ -59,11 +61,11 @@
       <SolidColorBrush x:Key="KindApprovalStrongBrush" Color="#956D51" />
       <SolidColorBrush x:Key="KindApprovalTileBrush" Color="#956D51" />
       <SolidColorBrush x:Key="KindApprovalStrokeBrush" Color="#956D51" />
-      <SolidColorBrush x:Key="KindMergeBrush" Color="#FF2D55" />
-      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1AFF2D55" />
-      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#E7124D" />
-      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#E7124D" />
-      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#E7124D" />
+      <SolidColorBrush x:Key="KindMergeBrush" Color="#7C8A1E" />
+      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1A7C8A1E" />
+      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#5E6B10" />
+      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#5E6B10" />
+      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#5E6B10" />
       <SolidColorBrush x:Key="KindReadOnlyAgentBrush" Color="#8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgent10Brush" Color="#1A8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgentStrongBrush" Color="#6C6C70" />
@@ -72,6 +74,9 @@
       <SolidColorBrush x:Key="StateWaiting10Brush" Color="#1AFF8D28" />
       <SolidColorBrush x:Key="StateWaitingStrongBrush" Color="#C55300" />
       <SolidColorBrush x:Key="StateWaitingStrokeBrush" Color="#C55300" />
+      <SolidColorBrush x:Key="StateApproval10Brush" Color="#1ACB30E0" />
+      <SolidColorBrush x:Key="StateApprovalStrongBrush" Color="#B02FC2" />
+      <SolidColorBrush x:Key="StateApprovalStrokeBrush" Color="#B02FC2" />
       <SolidColorBrush x:Key="StateWarning10Brush" Color="#1AFFCC00" />
       <SolidColorBrush x:Key="StateWarningStrongBrush" Color="#A16A00" />
       <SolidColorBrush x:Key="StateWarningStrokeBrush" Color="#A16A00" />
@@ -90,11 +95,13 @@
       <SolidColorBrush x:Key="AccentStrokeBrush" Color="#1E6EF4" />
       <SolidColorBrush x:Key="AccentTextBrush" Color="#0040DD" />
       <SolidColorBrush x:Key="AccentFillBrush" Color="#1E6EF4" />
+      <SolidColorBrush x:Key="AccentFillHoverBrush" Color="#0040DD" />
       <SolidColorBrush x:Key="DestructiveTextBrush" Color="#D70015" />
       <SolidColorBrush x:Key="DestructiveFillBrush" Color="#E9152D" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="OnTileBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="ScrimBrush" Color="#4D000000" />
+      <SolidColorBrush x:Key="WireDimBrush" Color="#7390969C" />
       <Color x:Key="CanvasGrid.BackgroundColor">#FBFBF9</Color>
       <Color x:Key="CanvasGrid.DotColor">#E5E5E5</Color>
       <Color x:Key="NodifyEditor.SelectionRectangleColor">#0088FF</Color>
@@ -109,6 +116,8 @@
       <BoxShadows x:Key="NodeShadow">0 1 2 0 #14000000, 0 2 6 0 #0F000000</BoxShadows>
       <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #1A000000, 0 8 20 0 #1A000000</BoxShadows>
       <BoxShadows x:Key="PopoverShadow">0 10 30 0 #29000000, 0 2 6 0 #14000000</BoxShadows>
+      <BoxShadows x:Key="FocusRing">0 0 0 2 #0088FF</BoxShadows>
+      <BoxShadows x:Key="SelectionHalo">0 0 0 3 #400088FF</BoxShadows>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="AppShellBrush" Color="#13110F" />
@@ -117,6 +126,7 @@
       <SolidColorBrush x:Key="AppPanelBrush" Color="#1D1B19" />
       <SolidColorBrush x:Key="SurfaceMutedBrush" Color="#222629" />
       <SolidColorBrush x:Key="SurfaceMuted60Brush" Color="#99222629" />
+      <SolidColorBrush x:Key="SurfaceShownBrush" Color="#1AFFFFFF" />
       <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#22201D" />
       <SolidColorBrush x:Key="SurfaceOverlayBrush" Color="#26292D" />
       <SolidColorBrush x:Key="SurfaceOverlay95Brush" Color="#F226292D" />
@@ -124,13 +134,14 @@
       <SolidColorBrush x:Key="TextBrush" Color="#D2D1CD" />
       <SolidColorBrush x:Key="TextMutedBrush" Color="#999893" />
       <SolidColorBrush x:Key="TextFaintBrush" Color="#64635D" />
+      <SolidColorBrush x:Key="OnStateBrush" Color="#0B0E10" />
       <SolidColorBrush x:Key="Border100Brush" Color="#1AFFFFFF" />
       <SolidColorBrush x:Key="Border80Brush" Color="#14FFFFFF" />
       <SolidColorBrush x:Key="Border60Brush" Color="#0FFFFFFF" />
       <SolidColorBrush x:Key="StateSelectedBrush" Color="#0091FF" />
       <SolidColorBrush x:Key="StateSelected25Brush" Color="#400091FF" />
       <SolidColorBrush x:Key="StateSelected40Brush" Color="#660091FF" />
-      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#1A0091FF" />
+      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#290091FF" />
       <SolidColorBrush x:Key="StateRunningBrush" Color="#0091FF" />
       <SolidColorBrush x:Key="StateRunning45Brush" Color="#730091FF" />
       <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#1A0091FF" />
@@ -167,11 +178,11 @@
       <SolidColorBrush x:Key="KindApprovalStrongBrush" Color="#DBA679" />
       <SolidColorBrush x:Key="KindApprovalTileBrush" Color="#B78A66" />
       <SolidColorBrush x:Key="KindApprovalStrokeBrush" Color="#B78A66" />
-      <SolidColorBrush x:Key="KindMergeBrush" Color="#FF375F" />
-      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1AFF375F" />
-      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#FF8AC4" />
-      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#FF375F" />
-      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#FF375F" />
+      <SolidColorBrush x:Key="KindMergeBrush" Color="#A9BC3F" />
+      <SolidColorBrush x:Key="KindMerge10Brush" Color="#1AA9BC3F" />
+      <SolidColorBrush x:Key="KindMergeStrongBrush" Color="#C6D66B" />
+      <SolidColorBrush x:Key="KindMergeTileBrush" Color="#7C8F22" />
+      <SolidColorBrush x:Key="KindMergeStrokeBrush" Color="#A9BC3F" />
       <SolidColorBrush x:Key="KindReadOnlyAgentBrush" Color="#8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgent10Brush" Color="#1A8E8E93" />
       <SolidColorBrush x:Key="KindReadOnlyAgentStrongBrush" Color="#AEAEB2" />
@@ -180,6 +191,9 @@
       <SolidColorBrush x:Key="StateWaiting10Brush" Color="#1AFF9230" />
       <SolidColorBrush x:Key="StateWaitingStrongBrush" Color="#FFA056" />
       <SolidColorBrush x:Key="StateWaitingStrokeBrush" Color="#FF9230" />
+      <SolidColorBrush x:Key="StateApproval10Brush" Color="#1ADB34F2" />
+      <SolidColorBrush x:Key="StateApprovalStrongBrush" Color="#EA8DFF" />
+      <SolidColorBrush x:Key="StateApprovalStrokeBrush" Color="#DB34F2" />
       <SolidColorBrush x:Key="StateWarning10Brush" Color="#1AFFD600" />
       <SolidColorBrush x:Key="StateWarningStrongBrush" Color="#FEDF43" />
       <SolidColorBrush x:Key="StateWarningStrokeBrush" Color="#FFD600" />
@@ -198,11 +212,13 @@
       <SolidColorBrush x:Key="AccentStrokeBrush" Color="#0091FF" />
       <SolidColorBrush x:Key="AccentTextBrush" Color="#5CB8FF" />
       <SolidColorBrush x:Key="AccentFillBrush" Color="#1E6EF4" />
+      <SolidColorBrush x:Key="AccentFillHoverBrush" Color="#1E6EF4" />
       <SolidColorBrush x:Key="DestructiveTextBrush" Color="#FF6165" />
       <SolidColorBrush x:Key="DestructiveFillBrush" Color="#E9152D" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="OnTileBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="ScrimBrush" Color="#4D000000" />
+      <SolidColorBrush x:Key="WireDimBrush" Color="#7364635D" />
       <Color x:Key="CanvasGrid.BackgroundColor">#0D0E0A</Color>
       <Color x:Key="CanvasGrid.DotColor">#1AFFFFFF</Color>
       <Color x:Key="NodifyEditor.SelectionRectangleColor">#0091FF</Color>
@@ -217,6 +233,8 @@
       <BoxShadows x:Key="NodeShadow">0 1 2 0 #66000000, 0 2 8 0 #52000000</BoxShadows>
       <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #73000000, 0 10 24 0 #66000000</BoxShadows>
       <BoxShadows x:Key="PopoverShadow">0 12 32 0 #73000000, 0 2 6 0 #4D000000</BoxShadows>
+      <BoxShadows x:Key="FocusRing">0 0 0 2 #0091FF</BoxShadows>
+      <BoxShadows x:Key="SelectionHalo">0 0 0 3 #400091FF</BoxShadows>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
   <BoxShadows x:Key="SmallShadow">0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
@@ -224,4 +242,14 @@
   <CornerRadius x:Key="RadiusMd">8</CornerRadius>
   <CornerRadius x:Key="RadiusLg">10</CornerRadius>
   <CornerRadius x:Key="RadiusXl">14</CornerRadius>
+  <x:Double x:Key="TypeCaptionSize">11.5</x:Double>
+  <x:Double x:Key="TypeCaptionLine">14</x:Double>
+  <x:Double x:Key="TypeSmallSize">12.5</x:Double>
+  <x:Double x:Key="TypeSmallLine">16</x:Double>
+  <x:Double x:Key="TypeBodySize">13</x:Double>
+  <x:Double x:Key="TypeBodyLine">18</x:Double>
+  <x:Double x:Key="TypeProseSize">14</x:Double>
+  <x:Double x:Key="TypeProseLine">22</x:Double>
+  <x:Double x:Key="TypeTitleSize">15</x:Double>
+  <x:Double x:Key="TypeTitleLine">20</x:Double>
 </ResourceDictionary>

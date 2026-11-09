@@ -4,7 +4,7 @@ A user runs the shown workflow from `Run Workflow` beside `Generate`, without se
 
 ## Sub-features
 
-- `run-start` starts every ready node, and `WorkflowRunBar` shows `RunStatus` such as `1 running` and `RunActivity` with their titles.
+- `run-start` starts every ready node, and `WorkflowRunBar` shows `RunStatus` such as `1 running`, and its help text names the running nodes.
 - `run-cards` shows each node's state on its card: `Idle`, `Running`, `Input required · <why>`, `Completed`, `Failed`, or `Stale`.
 - `run-refused` keeps a node's `RunTask` off while a predecessor is not completed, and `StartProblem` reads `It waits for <title>.`.
 - `run-stop` stops every running node with `StopAll`. Finished results stay.
@@ -32,7 +32,7 @@ Preconditions:
 
 - **Start.** Run `Invoke-Element (Find-ById $s.Window 'RunWorkflow')`. `Wait-Until { (Find-ById $s.Window 'RunStatus').Current.Name -like '* running' } 30` returns `$true`. The first card's `CardStatus` reads `Running`. Choose the second node; `StartProblem` reads `It waits for Design the workflow file format.`. Run `Save-Evidence $s 'run-started'`.
 - **Stop All.** Run `Invoke-Element (Find-ById $s.Window 'StopAll')`. `Wait-Until { -not (Find-ById $s.Window 'WorkflowRunBar' 1) } 30` returns `$true`, and the first card reads `Idle`. Run `Save-Evidence $s 'run-stopped'`.
-- **Finish.** Run `New-Item -ItemType File $s.Gate` and `Invoke-Element (Find-ById $s.Window 'RunWorkflow')`. `Wait-Until { (Find-ById $s.Window 'RunStatus').Current.Name -eq 'Every node is complete' } 120` returns `$true`, every card reads `Completed`, and `MergeIntoBranch` shows. Run `Save-Evidence $s 'run-completed'`.
+- **Finish.** Run `New-Item -ItemType File $s.Gate` and `Invoke-Element (Find-ById $s.Window 'RunWorkflow')`. `Wait-Until { (Find-ById $s.Window 'RunStatus').Current.Name -like '* of * complete' -and -not ((Find-ById $s.Window 'RunStatus').Current.Name -like '*·*') } 120` returns `$true`, every card reads `Completed`, and `MergeIntoBranch` shows. Run `Save-Evidence $s 'run-completed'`.
 - **Stale.** Choose the first node and run `Set-Text (Find-ById $s.Window 'TaskInstructions') 'Draft it again.'`. Its card reads `Stale`, and `Find-ById $s.Window 'MergeIntoBranch' 1` returns `$null`. Run `Invoke-Element (Find-ById $s.Window 'RetryTask')`; once every card reads `Completed` again, `MergeIntoBranch` shows.
 - **Merge.** Run `Invoke-Element (Find-ById $s.Window 'MergeIntoBranch')`. `Status` reads `Merged the workflow's work into your branch.`, and `git -C $s.Project log --oneline` shows the merge.
 

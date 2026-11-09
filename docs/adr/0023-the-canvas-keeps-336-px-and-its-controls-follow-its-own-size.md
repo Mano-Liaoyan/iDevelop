@@ -25,7 +25,7 @@ In #97 the owner found that, at a narrow canvas, Generate sat on the breadcrumb 
 
 ## Consequences
 
-- At the 900 px window, the inspector widens to 322 px instead of 520 px. Its values stack under their labels there, as [ADR 0021](0021-the-inspector-keeps-two-right-edges-and-stacks-values-below-440-px.md) describes.
+- At the 900 px window, the inspector widens to 322 px instead of 520 px. Its values sit beside their labels there, as [ADR 0043](0043-the-inspector-pins-a-nodes-state-and-stacks-values-below-300-px.md) describes.
 - A compact canvas's breadcrumb leaves out the project's name.
 - At the 900×600 window, the docked canvas is 200 to 250 px tall, the less on Windows, whose title band takes 44 px of the window, so its fitted cards are small.
 - A fit zooms out further, because it keeps the cards clear of the bottom row.

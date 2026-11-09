@@ -1,22 +1,45 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             xmlns:conversation="using:IDevelop.Desktop.Conversation"
              xmlns:inspector="using:IDevelop.Desktop.Inspector"
              x:Class="IDevelop.Desktop.Blueprints.BlueprintEditorView"
              x:DataType="blueprints:BlueprintEditorViewModel">
   <UserControl.Styles>
     <StyleInclude Source="/Inspector/InspectorStyles.axaml" />
   </UserControl.Styles>
-  <StackPanel AutomationProperties.AutomationId="BlueprintEditor">
-    <!-- The heading, its caption, and the problem end at the value edge, before the trailing column, as paragraphs do. -->
-    <TextBlock Classes="headerName" Margin="0,0,52,0" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
-    <TextBlock Classes="kindLine" Text="{Binding Caption}" Margin="0,2,52,10"
-               AutomationProperties.AutomationId="BlueprintCaption" />
-
+  <!-- The form scrolls under its actions, so Save stays in view however long the form is. -->
+  <DockPanel>
+    <!-- The same pinned header as a node's: a neutral tile, the title, and what saving does. -->
+    <Border DockPanel.Dock="Top" Classes="panelHeader" Height="56">
+      <inspector:AgentPanelHeader>
+        <Border Grid.RowSpan="2" Classes="neutralTile"><PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" /></Border>
+        <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="headerName" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
+        <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding Caption}" ToolTip.Tip="{Binding CaptionTip}"
+                   AutomationProperties.AutomationId="BlueprintCaption" />
+      </inspector:AgentPanelHeader>
+    </Border>
+    <Border DockPanel.Dock="Bottom" Padding="12,8" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
+      <StackPanel Spacing="8">
+        <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="{StaticResource TypeSmallSize}"
+                   Foreground="{DynamicResource DestructiveTextBrush}"
+                   IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   AutomationProperties.AutomationId="BlueprintProblem" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="primary" Content="Save Blueprint" Command="{Binding SaveCommand}" Height="28" Padding="10,0" FontSize="{StaticResource TypeBodySize}"
+                  AutomationProperties.AutomationId="SaveBlueprint" AutomationProperties.Name="Save blueprint" />
+          <Button Classes="action" Content="Cancel" Command="{Binding CancelCommand}" Height="28" Padding="10,0" FontSize="{StaticResource TypeBodySize}"
+                  AutomationProperties.AutomationId="CancelBlueprint" AutomationProperties.Name="Cancel" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+    <Panel>
+    <ScrollViewer>
+  <StackPanel Margin="12,8,12,16" AutomationProperties.AutomationId="BlueprintEditor">
     <inspector:InspectorSection Key="BlueprintAbout" Title="Blueprint">
       <StackPanel>
-        <!-- A segmented control takes its own line, as a connection's kind does, so neither choice is cut short. -->
-        <inspector:InspectorRow Label="Library" Layout="Stacked" IsShown="{Binding IsNew}">
+        <inspector:InspectorRow Label="Library" IsShown="{Binding IsNew}">
           <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
             <UniformGrid Columns="2">
               <RadioButton Classes="segment" GroupName="BlueprintLibrary" Content="Project"
@@ -35,13 +58,13 @@
                    AutomationProperties.AutomationId="BlueprintName"
                    AutomationProperties.Name="Name" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Label="Description" Layout="Stacked">
+        <inspector:InspectorRow Label="Description">
           <TextBox Classes="multiline" Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
                    AutomationProperties.AutomationId="BlueprintDescription"
                    AutomationProperties.Name="Description" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Layout="Full" IsShown="{Binding IsAgent}">
-          <CheckBox Content="Read-only: the agent may not edit the project" IsChecked="{Binding ReadOnly}"
+        <inspector:InspectorRow Label="Read-only" IsShown="{Binding IsAgent}">
+          <CheckBox Content="No edits to the project" IsChecked="{Binding ReadOnly}" ToolTip.Tip="Read-only: the agent may not edit the project"
                     AutomationProperties.AutomationId="BlueprintReadOnly" />
         </inspector:InspectorRow>
       </StackPanel>
@@ -56,34 +79,51 @@
             <DataTemplate DataType="blueprints:FieldRowViewModel">
               <Border Classes="fieldGroup">
                 <StackPanel>
-                  <inspector:InspectorRow Label="Key">
-                    <inspector:InspectorRow.Actions>
-                      <Button Classes="glyph" Command="{Binding RemoveCommand}"
-                              ToolTip.Tip="Remove field"
-                              AutomationProperties.AutomationId="RemoveField" AutomationProperties.Name="Remove field">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDelete}" Width="14" Height="14" />
-                      </Button>
-                    </inspector:InspectorRow.Actions>
-                    <TextBox Text="{Binding Key}"
-                             AutomationProperties.AutomationId="FieldKey" AutomationProperties.Name="Key" />
-                  </inspector:InspectorRow>
-                  <inspector:InspectorRow Label="Label">
-                    <TextBox Text="{Binding Label}"
-                             AutomationProperties.AutomationId="FieldLabel" AutomationProperties.Name="Label" />
-                  </inspector:InspectorRow>
-                  <inspector:InspectorRow Layout="Full">
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="16">
-                      <CheckBox Content="Several lines" IsChecked="{Binding Multiline}"
-                                AutomationProperties.AutomationId="FieldMultiline" />
-                      <CheckBox Content="Required" IsChecked="{Binding Required}"
-                                AutomationProperties.AutomationId="FieldRequired" />
-                    </WrapPanel>
-                  </inspector:InspectorRow>
-                  <inspector:InspectorRow Label="Default" Layout="Stacked">
-                    <TextBox Text="{Binding Default}" AcceptsReturn="{Binding Multiline}" TextWrapping="Wrap" NewLine="&#10;"
-                             Classes.multiline="{Binding Multiline}"
-                             AutomationProperties.AutomationId="FieldDefault" AutomationProperties.Name="Default" />
-                  </inspector:InspectorRow>
+                  <!-- One fold row: the field's label and what it asks. Its key and the rest sit inside it. -->
+                  <Grid Classes="fieldFold" ColumnDefinitions="*,Auto">
+                    <ToggleButton Classes="fieldFold" IsChecked="{Binding IsOpen}"
+                                  ToolTip.Tip="{Binding FoldLabel}"
+                                  AutomationProperties.AutomationId="FieldFold"
+                                  AutomationProperties.Name="{Binding FoldLabel}">
+                      <Grid ColumnDefinitions="16,*" ColumnSpacing="6">
+                        <PathIcon Classes="fieldChevron" Theme="{StaticResource Glyph}" Width="12" Height="12" />
+                        <StackPanel Grid.Column="1">
+                          <TextBlock Classes="fieldTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                                     AutomationProperties.AutomationId="FieldTitle" />
+                          <TextBlock Classes="fieldSummary" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                                     AutomationProperties.AutomationId="FieldSummary" />
+                        </StackPanel>
+                      </Grid>
+                    </ToggleButton>
+                    <Button Grid.Column="1" Classes="glyph" VerticalAlignment="Center" Command="{Binding RemoveCommand}"
+                            ToolTip.Tip="Remove field"
+                            AutomationProperties.AutomationId="RemoveField" AutomationProperties.Name="Remove field">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDelete}" Width="14" Height="14" />
+                    </Button>
+                  </Grid>
+                  <StackPanel IsVisible="{Binding IsOpen}">
+                    <inspector:InspectorRow Label="Label">
+                      <TextBox Text="{Binding Label}"
+                               AutomationProperties.AutomationId="FieldLabel" AutomationProperties.Name="Label" />
+                    </inspector:InspectorRow>
+                    <inspector:InspectorRow Label="Key">
+                      <TextBox Text="{Binding Key}"
+                               AutomationProperties.AutomationId="FieldKey" AutomationProperties.Name="Key" />
+                    </inspector:InspectorRow>
+                    <inspector:InspectorRow Layout="Full">
+                      <WrapPanel Orientation="Horizontal" ItemSpacing="16">
+                        <CheckBox Content="Several lines" IsChecked="{Binding Multiline}"
+                                  AutomationProperties.AutomationId="FieldMultiline" />
+                        <CheckBox Content="Required" IsChecked="{Binding Required}"
+                                  AutomationProperties.AutomationId="FieldRequired" />
+                      </WrapPanel>
+                    </inspector:InspectorRow>
+                    <inspector:InspectorRow Label="Default" Layout="Stacked">
+                      <TextBox Text="{Binding Default}" AcceptsReturn="{Binding Multiline}" TextWrapping="Wrap" NewLine="&#10;"
+                               Classes.multiline="{Binding Multiline}"
+                               AutomationProperties.AutomationId="FieldDefault" AutomationProperties.Name="Default" />
+                    </inspector:InspectorRow>
+                  </StackPanel>
                 </StackPanel>
               </Border>
             </DataTemplate>
@@ -104,18 +144,74 @@
     <inspector:InspectorSection Key="BlueprintTemplate" Title="{Binding TemplateHeading, Converter={x:Static inspector:InspectorConverters.TitleCase}}"
                                 IsShown="{Binding HasTemplate}">
       <StackPanel>
-        <inspector:InspectorRow Layout="Full">
-          <TextBox Classes="multiline" Text="{Binding Template}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="120"
+        <!-- True while the source shows: on Edit, or while there is no preview to show. -->
+        <Panel x:Name="Source" IsHitTestVisible="False" Height="0">
+          <Panel.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.Or}">
+              <Binding Path="#EditOpen.IsChecked" />
+              <Binding Path="TemplatePreview" Converter="{x:Static StringConverters.IsNullOrEmpty}" />
+            </MultiBinding>
+          </Panel.IsVisible>
+        </Panel>
+        <!-- The template and what the agent reads share one place, one click apart. -->
+        <inspector:InspectorRow Layout="Full" IsShown="{Binding TemplatePreview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
+            <UniformGrid Columns="2">
+              <RadioButton x:Name="EditOpen" Classes="segment" GroupName="TemplateView" Content="Edit"
+                           AutomationProperties.AutomationId="BlueprintEditOpen" AutomationProperties.Name="Edit the template" />
+              <RadioButton x:Name="PreviewOpen" Classes="segment" GroupName="TemplateView" Content="Preview" IsChecked="True"
+                           AutomationProperties.AutomationId="BlueprintPreviewOpen" AutomationProperties.Name="Show the preview" />
+            </UniformGrid>
+          </Border>
+        </inspector:InspectorRow>
+        <!-- A template opens as what the agent reads, with each field as a mark, and Edit shows its source. A template that does not parse has no preview. -->
+        <!-- Each chip puts one value at the caret, so a person need not know the delimiters. -->
+        <inspector:InspectorRow Layout="Full" IsShown="{Binding #Source.IsVisible}">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="note" Text="Insert a field" />
+            <ItemsControl ItemsSource="{Binding TemplateTokens}" AutomationProperties.AutomationId="TemplateTokens">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel ItemSpacing="4" LineSpacing="4" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="blueprints:TemplateToken">
+                  <Button Classes="action tokenChip" Content="{Binding Label}" Click="OnInsertToken"
+                          ToolTip.Tip="{Binding Insert, StringFormat='Insert {0}'}"
+                          AutomationProperties.AutomationId="TemplateToken"
+                          AutomationProperties.Name="{Binding Label, StringFormat='Insert {0}'}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </inspector:InspectorRow>
+        <inspector:InspectorRow Layout="Full" IsShown="{Binding #Source.IsVisible}">
+          <TextBox x:Name="TemplateBox" Classes="multiline code" Text="{Binding Template}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="120"
                    AutomationProperties.AutomationId="BlueprintTemplate"
                    AutomationProperties.Name="Template" />
         </inspector:InspectorRow>
         <inspector:InspectorRow Label="Fix template" Layout="Stacked" IsShown="{Binding IsReview}">
-          <TextBox Classes="multiline" Text="{Binding FixTemplate}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="80"
+          <TextBox Classes="multiline code" Text="{Binding FixTemplate}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="80"
                    AutomationProperties.AutomationId="BlueprintFixTemplate"
                    AutomationProperties.Name="Fix template" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Layout="Full">
-          <TextBlock Classes="caption" Text="{Binding TemplateHelp}" TextWrapping="Wrap" />
+        <!-- What the agent would read, from the fields' defaults. -->
+        <inspector:InspectorRow Layout="Full" Label="Preview" IsShown="{Binding !#Source.IsVisible}">
+          <Border Classes="templatePreview">
+            <conversation:MarkdownView Classes="promptView" Markdown="{Binding TemplatePreview}"
+                                       AutomationProperties.AutomationId="BlueprintPreview" />
+          </Border>
+        </inspector:InspectorRow>
+        <inspector:InspectorRow Layout="Buttons">
+          <Button Classes="textLink" Content="Template help" ToolTip.Tip="What a template can insert"
+                  AutomationProperties.AutomationId="TemplateHelp" AutomationProperties.Name="Template help">
+            <Button.Flyout>
+              <Flyout Placement="LeftEdgeAlignedTop">
+                <SelectableTextBlock Classes="wholeText" Text="{Binding TemplateHelp}" />
+              </Flyout>
+            </Button.Flyout>
+          </Button>
         </inspector:InspectorRow>
       </StackPanel>
     </inspector:InspectorSection>
@@ -135,23 +231,17 @@
           <TextBox Text="{Binding Reasoning}" Watermark="The model's default"
                    AutomationProperties.AutomationId="BlueprintReasoning" AutomationProperties.Name="Reasoning" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Label="Conversation" IsShown="{Binding IsAgent}">
+        <inspector:InspectorRow Label="Mode" IsShown="{Binding IsAgent}">
           <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding Conversation}"
                     AutomationProperties.AutomationId="BlueprintConversation"
-                    AutomationProperties.Name="Conversation" />
+                    AutomationProperties.Name="Mode" />
         </inspector:InspectorRow>
       </StackPanel>
     </inspector:InspectorSection>
 
-    <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" Margin="0,4,52,0" FontSize="12"
-               Foreground="{DynamicResource DestructiveTextBrush}"
-               IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-               AutomationProperties.AutomationId="BlueprintProblem" />
-    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
-      <Button Classes="primary" Content="Save Blueprint" Command="{Binding SaveCommand}"
-              AutomationProperties.AutomationId="SaveBlueprint" AutomationProperties.Name="Save blueprint" />
-      <Button Classes="action" Content="Cancel" Command="{Binding CancelCommand}" FontSize="13"
-              AutomationProperties.AutomationId="CancelBlueprint" AutomationProperties.Name="Cancel" />
-    </StackPanel>
   </StackPanel>
+    </ScrollViewer>
+    <Border Classes="scrollFade" />
+    </Panel>
+  </DockPanel>
 </UserControl>

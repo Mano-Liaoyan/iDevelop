@@ -5,26 +5,11 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// One field of a task's blueprint in the inspector. A node's blueprint never changes, so each task keeps the same
+/// One field of a task's blueprint on the Task page. A node's blueprint never changes, so each task keeps the same
 /// instances, and a box keeps its focus while each keystroke round-trips through the workflow.
 /// </summary>
 public sealed class FieldViewModel : ObservableObject
 {
-    /// <summary>
-    /// The icon of each built-in field key, which a derived blueprint keeps with its meaning. Any other key is a field a
-    /// person defined, whose meaning the app cannot know, so it shows the neutral field icon.
-    /// </summary>
-    private static readonly IReadOnlyDictionary<string, string> Icons = new Dictionary<string, string>
-    {
-        ["instructions"] = "IconEdit",
-        ["acceptanceCriteria"] = "IconCheckmark",
-        ["goal"] = "IconGoal",
-        ["constraints"] = "IconConstraints",
-        ["brief"] = "IconBrief",
-        ["focus"] = "IconChecklist",
-        ["checklist"] = "IconChecklist",
-    };
-
     private readonly TaskNodeViewModel _node;
 
     internal FieldViewModel(TaskNodeViewModel node, FieldSpec spec)
@@ -36,10 +21,11 @@ public sealed class FieldViewModel : ObservableObject
 
     public string Label => Spec.Label;
 
+    /// <summary>What an empty box says, such as "Add acceptance criteria".</summary>
+    public string Placeholder => $"Add {Spec.Label.ToLowerInvariant()}";
+
     /// <summary>The label's tooltip, which says when the field is required.</summary>
     public string LabelTip => Spec.Required ? $"{Spec.Label} · Required" : Spec.Label;
-
-    public string IconKey => Icons.GetValueOrDefault(Spec.Key, "IconField");
 
     public bool IsMultiline => Spec.Shape == FieldShape.Text;
 
@@ -58,6 +44,25 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>The text differs from the blueprint's default for the field.</summary>
     public bool CanRevert => Text != Spec.Default;
 
+    /// <summary>The reset glyph's tooltip, which names the default.</summary>
+    public string ResetTip => $"Reset to blueprint default: {(Spec.Default.Length == 0 ? "empty" : CardText.Line(Spec.Default, 80))}";
+
+    /// <summary>The box shows in place of the rendered text: the person chose Edit.</summary>
+    public bool IsEditing
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowsRendered));
+            }
+        }
+    }
+
+    /// <summary>Long text with something in it reads as Markdown until the person edits it.</summary>
+    public bool ShowsRendered => IsMultiline && !IsEditing && Text.Length > 0;
+
     /// <summary>Puts the blueprint's default back in one edit.</summary>
     public ICommand RevertCommand { get; }
 
@@ -69,5 +74,6 @@ public sealed class FieldViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Text));
         OnPropertyChanged(nameof(CanRevert));
+        OnPropertyChanged(nameof(ShowsRendered));
     }
 }

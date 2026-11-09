@@ -23,3 +23,9 @@ public sealed class UnopenedProject
     /// <summary>The few words the sidebar row has room for.</summary>
     public string Summary { get; }
 }
+
+/// <summary>A folder the person closed, which the empty left area offers again.</summary>
+public sealed record RecentProject(string Folder)
+{
+    public string Name => Path.GetFileName(Path.TrimEndingDirectorySeparator(Folder));
+}

@@ -18,19 +18,19 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     // each list in this order.
     private static readonly Dictionary<string, string[]> Dependents = new()
     {
-        [nameof(State)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsNextRunNote)],
-        [nameof(Role)] = [nameof(ShowsAgent), nameof(Subtitle), nameof(SubtitleChoices), nameof(IsUnderReview)],
-        [nameof(StatusLabel)] = [nameof(Subtitle), nameof(SubtitleChoices)],
-        [nameof(Proposal)] = [nameof(Subtitle), nameof(SubtitleChoices), nameof(ShowsAcceptAndFinish)],
+        [nameof(State)] = [nameof(CardStatus), nameof(ShowsNextRunNote)],
+        [nameof(Role)] = [nameof(CardStatus), nameof(IsUnderReview)],
+        [nameof(StatusLabel)] = [nameof(CardStatus), nameof(MarkTip)],
+        [nameof(Proposal)] = [nameof(CardStatus), nameof(ShowsAcceptAndFinish)],
         [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
-        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(AgentModel), nameof(AgentChanges), nameof(CanRevertAgent), nameof(PeekAgent)],
-        [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
-        [nameof(Preview)] = [nameof(TaskChanges)],
+        [nameof(AgentLabel)] = [nameof(PanelAgentLine), nameof(ComposerAgentLabel), nameof(AgentClient), nameof(CardClient), nameof(AgentModel), nameof(CardModel), nameof(HasModel), nameof(CardLine), nameof(AgentChanges), nameof(AgentHasChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
+        [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(AgentHasChanges), nameof(ConversationResetTip), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
+        [nameof(Preview)] = [nameof(TaskChanges), nameof(TaskHasChanges), nameof(SystemPrompt), nameof(HasSystemPrompt)],
+        [nameof(Title)] = [nameof(SystemPrompt), nameof(ExpandName)],
         [nameof(PermissionNote)] = [nameof(PermissionSummary)],
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
         [nameof(Location)] = [nameof(DisplayLocation)],
         [nameof(IsRenaming)] = [nameof(ShowsPeek)],
-        [nameof(Title)] = [nameof(ExpandName)],
     };
 
     private readonly WorkflowCanvasViewModel _canvas;
@@ -44,7 +44,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     {
         _canvas = canvas;
         _task = task;
-        _location = WorkflowCanvasViewModel.ToPoint(position);
+        _location = canvas.Space.ToDisplay(position);
         Fields = [.. task.Blueprint.Fields.Select(field => new FieldViewModel(this, field))];
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
@@ -63,7 +63,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     public TaskId Id => _task.Id;
 
     /// <summary>The canvas the node is on, whose clients and project the node's pickers read.</summary>
-    internal WorkflowCanvasViewModel Canvas => _canvas;
+    public WorkflowCanvasViewModel Canvas => _canvas;
 
     /// <summary>The task as the workflow document holds it now.</summary>
     internal TaskDefinition Definition => _task;
@@ -101,6 +101,13 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     {
         get => _location;
         set => SetProperty(ref _location, value);
+    }
+
+    /// <summary>The node is in the canvas's selection, so its Index row shows the blue fill.</summary>
+    public bool IsSelected
+    {
+        get;
+        internal set => SetProperty(ref field, value);
     }
 
     public string Title
@@ -141,10 +148,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     /// <summary>Only an agent work waits for the person as its conversation mode says.</summary>
     public bool HasConversation => _task.Blueprint.Work is WorkSpec.Agent;
 
-    public string ComposerHint => IsReview
-        ? "The reviewer reads your guidance in its next turn. Ctrl+Enter sends."
-        : "Write to the agent. Ctrl+Enter sends.";
-
     public IReadOnlyList<ConversationChoice> ConversationChoices =>
         [.. Enum.GetValues<ConversationMode>().Select(mode => new ConversationChoice(Id, mode, RunText.ConversationChoice(mode)))];
 
@@ -181,6 +184,11 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
             if (SetProperty(ref _proposal, value))
             {
                 ShowState();
+                OnPropertyChanged(nameof(HeaderActions));
+                OnPropertyChanged(nameof(HasExtraPage));
+                OnPropertyChanged(nameof(ExtraTitle));
+                OnPropertyChanged(nameof(ExtraGlyph));
+                OnPropertyChanged(nameof(ExtraBadge));
                 // The planner's reply can come in through its log before the engine says the node changed, so the canvas
                 // draws the proposal's ghosts now and not only at the engine's next change.
                 _canvas.ShowGhosts();
@@ -236,7 +244,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
             }
         }
 
-        Location = WorkflowCanvasViewModel.ToPoint(position);
+        Location = _canvas.Space.ToDisplay(position);
     }
 
     /// <summary>The task's agent changed, or what the clients offer did.</summary>

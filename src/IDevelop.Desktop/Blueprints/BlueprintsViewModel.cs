@@ -34,7 +34,14 @@ public sealed class BlueprintsViewModel : ObservableObject
     public IReadOnlyList<PaletteGroup> Groups
     {
         get;
-        private set => SetProperty(ref field, value);
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasEmptyLibrary));
+                OnPropertyChanged(nameof(EmptyNote));
+            }
+        }
     } = [];
 
     /// <summary>A message for each library file that did not read.</summary>
@@ -50,6 +57,12 @@ public sealed class BlueprintsViewModel : ObservableObject
     } = [];
 
     public bool HasProblems => !Problems.IsEmpty;
+
+    /// <summary>A library the person can add to has no blueprint yet, which one line says.</summary>
+    public bool HasEmptyLibrary => Groups.Any(group => group.IsEmpty);
+
+    /// <summary>"No project blueprints yet. Derive one from a blueprint's More menu.", naming each empty library.</summary>
+    public string EmptyNote => $"No {string.Join(" or ", Groups.Where(group => group.IsEmpty).Select(group => group.Heading.ToLowerInvariant()))} blueprints yet.";
 
     /// <summary>The blueprint being derived or edited, which the right panel shows in place of the inspector.</summary>
     public BlueprintEditorViewModel? Editor

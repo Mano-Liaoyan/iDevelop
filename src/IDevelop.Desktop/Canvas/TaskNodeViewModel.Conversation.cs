@@ -13,15 +13,21 @@ public sealed partial class TaskNodeViewModel
     /// <summary>A wait for the person, or a failure. Opening the conversation leaves it.</summary>
     public Attention? Attention => Attention.Of(_engineState);
 
+    /// <summary>The name of the node's agent client, or null while it has none.</summary>
+    public string? AgentClientName => Definition.Execution?.Client is { } client ? IDevelop.Clients.ClientCatalog.Name(client) : null;
+
     public bool HasAttention => Attention is not null;
 
     public string? AttentionLabel => Attention?.Label;
 
-    /// <summary>Opens the node's conversation.</summary>
+    /// <summary>Opens the node's Chat page.</summary>
     public ICommand OpenConversationCommand => _openConversation;
 
-    /// <summary>What the card's attention glyph does: it opens an agent's conversation, or selects an approval, whose request the inspector shows.</summary>
-    public ICommand AttendCommand => HasAgent ? _openConversation : SelectCommand;
+    /// <summary>Opens the node's Room, Shift+Enter on its card or its row.</summary>
+    public void OpenRoom() => _canvas.Project.OpenRoom(new ConversationTarget(_canvas, Id));
+
+    /// <summary>What the card's attention glyph does: it opens the node's Chat page.</summary>
+    public ICommand AttendCommand => _openConversation;
 
     public string AttendHelp => HasAgent ? "Opens the conversation" : "Shows the approval request";
 
@@ -41,7 +47,7 @@ public sealed partial class TaskNodeViewModel
 
     partial void InitializeConversation()
     {
-        _openConversation = new RelayCommand(() => _canvas.Project.OpenConversation(new ConversationTarget(_canvas, Id)), () => HasAgent);
+        _openConversation = new RelayCommand(() => _canvas.Project.OpenConversation(new ConversationTarget(_canvas, Id)));
     }
 
     private void OnConversationStateChanged(object? sender, PropertyChangedEventArgs e)

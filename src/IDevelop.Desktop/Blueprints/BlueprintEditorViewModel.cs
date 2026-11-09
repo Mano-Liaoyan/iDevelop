@@ -63,7 +63,11 @@ public sealed class BlueprintEditorViewModel : ObservableObject
             Fields.Add(new FieldRowViewModel(this, field, values?.GetValueOrDefault(field.Key) ?? field.Default));
         }
 
-        Fields.CollectionChanged += (_, _) => Validate();
+        Fields.CollectionChanged += (_, _) =>
+        {
+            Validate();
+            OnPropertyChanged(nameof(TemplateTokens));
+        };
         _save = new RelayCommand(Save, () => Problem is null);
         AddFieldCommand = new RelayCommand(AddField);
         CancelCommand = new RelayCommand(owner.Close);
@@ -73,8 +77,13 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     public string Heading => IsNew ? "NEW BLUEPRINT" : "EDIT BLUEPRINT";
 
     public string Caption => _editing is { } library
-        ? $"Version {_source.Key.Version} in the {LibraryName(library.Kind)} library. Saving makes version {_source.Key.Version + 1}, and nodes placed before keep their version."
-        : $"Derived from {_source.Name}, version {_source.Key.Version}. Saving makes version 1.";
+        ? $"Version {_source.Key.Version} in the {LibraryName(library.Kind)} library."
+        : $"A new blueprint from {_source.Name}, version {_source.Key.Version}.";
+
+    /// <summary>What saving does to versions, which the caption's tooltip holds.</summary>
+    public string CaptionTip => _editing is not null
+        ? $"Saving makes version {_source.Key.Version + 1}, and nodes placed before keep their version."
+        : "Its own versions start at 1.";
 
     public bool IsNew => _editing is null;
 
@@ -149,6 +158,31 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         set => Set(ref _fixTemplate, value);
     }
 
+    /// <summary>The template with each field's default, or its label as a code mark where it has none, or null while the template does not parse.</summary>
+    public string? TemplatePreview
+    {
+        get
+        {
+            try
+            {
+                var values = Fields.GroupBy(row => row.Key).ToDictionary(group => group.Key, group => group.First());
+                return PromptTemplate.Parse(_template).Render(name => values.TryGetValue(name, out var row)
+                    ? string.IsNullOrEmpty(row.Default) ? $"`{row.Label}`" : row.Default
+                    : $"`{Title(name)}`").Trim();
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+        }
+    }
+
+    private static string Title(string name) => name.Length == 0 ? name : $"{char.ToUpperInvariant(name[0])}{name[1..]}";
+
+    /// <summary>What a template can insert: the node's title and each field.</summary>
+    public IReadOnlyList<TemplateToken> TemplateTokens =>
+        [new TemplateToken("Title", "{{title}}"), .. Fields.Select(row => new TemplateToken(row.Label, $"{{{{{row.Key}}}}}"))];
+
     public string TemplateHelp =>
         "{{title}} inserts the node's title, {{inputs}} what earlier nodes handed on, and {{key}} a field's value. " +
         (IsReview ? "{{ticket}}, {{report}}, and {{change}} insert the reviewed task's ticket, its report, and its change, and {{findings}} the findings that stand. " : "") +
@@ -219,6 +253,8 @@ public sealed class BlueprintEditorViewModel : ObservableObject
 
     internal void Validate()
     {
+        OnPropertyChanged(nameof(TemplatePreview));
+        OnPropertyChanged(nameof(TemplateTokens));
         Problem = Build(out var problem) is null ? problem : null;
         _save.NotifyCanExecuteChanged();
     }
@@ -323,7 +359,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     private void AddField()
     {
         var number = Enumerable.Range(1, Fields.Count + 1).First(n => Fields.All(field => field.Key != $"field{n}"));
-        Fields.Add(new FieldRowViewModel(this, new FieldSpec($"field{number}", $"Field {number}", FieldShape.Line, Required: false, ""), ""));
+        Fields.Add(new FieldRowViewModel(this, new FieldSpec($"field{number}", $"Field {number}", FieldShape.Line, Required: false, ""), "", isNew: true));
     }
 }
 
@@ -337,9 +373,10 @@ public sealed class FieldRowViewModel : ObservableObject
     private bool _required;
     private string _default;
 
-    internal FieldRowViewModel(BlueprintEditorViewModel editor, FieldSpec field, string defaultText)
+    internal FieldRowViewModel(BlueprintEditorViewModel editor, FieldSpec field, string defaultText, bool isNew = false)
     {
         _editor = editor;
+        IsOpen = isNew;
         _key = field.Key;
         _label = field.Label;
         _multiline = field.Shape == FieldShape.Text;
@@ -348,29 +385,68 @@ public sealed class FieldRowViewModel : ObservableObject
         RemoveCommand = new RelayCommand(() => editor.Remove(this));
     }
 
+    /// <summary>The field's fold shows its key and its other settings. A new field starts open, because it needs them.</summary>
+    public bool IsOpen
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(FoldLabel));
+            }
+        }
+    }
+
+    /// <summary>What the fold's row calls the field: its label, or its key until it has one.</summary>
+    public string Title => string.IsNullOrWhiteSpace(_label) ? string.IsNullOrWhiteSpace(_key) ? "New field" : _key : _label;
+
+    /// <summary>"Required · Several lines", or "Optional · One line".</summary>
+    public string Summary => $"{(_required ? "Required" : "Optional")} · {(_multiline ? "Several lines" : "One line")}";
+
+    public string FoldLabel => $"{(IsOpen ? "Hide" : "Show")} the settings of {Title}";
+
     /// <summary>The template variable that inserts the field's value.</summary>
     public string Key
     {
         get => _key;
-        set => Set(ref _key, value);
+        set
+        {
+            Set(ref _key, value);
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(FoldLabel));
+        }
     }
 
     public string Label
     {
         get => _label;
-        set => Set(ref _label, value);
+        set
+        {
+            Set(ref _label, value);
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(FoldLabel));
+        }
     }
 
     public bool Multiline
     {
         get => _multiline;
-        set => Set(ref _multiline, value);
+        set
+        {
+            Set(ref _multiline, value);
+            OnPropertyChanged(nameof(Summary));
+        }
     }
 
     public bool Required
     {
         get => _required;
-        set => Set(ref _required, value);
+        set
+        {
+            Set(ref _required, value);
+            OnPropertyChanged(nameof(Summary));
+        }
     }
 
     /// <summary>The value a placed node starts with.</summary>
@@ -392,3 +468,6 @@ public sealed class FieldRowViewModel : ObservableObject
         }
     }
 }
+
+/// <summary>One value a template can insert: its name and the text that inserts it.</summary>
+public sealed record TemplateToken(string Label, string Insert);

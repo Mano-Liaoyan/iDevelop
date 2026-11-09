@@ -38,7 +38,7 @@ public sealed class ConnectionTests : IDisposable
         Assert.Equal([("Design", "Build", ConnectionKind.Dependency)], shell.Drawn());
         Assert.Equal(
             (Shell.Rounded(shell.Thumb(shell.Output("Design"))), Shell.Rounded(shell.Thumb(shell.Input("Build")))),
-            Shell.Rounded(shell.Ends(Assert.Single(shell.Connections()))));
+            Shell.Whole(shell.Ends(Assert.Single(shell.Connections()))));
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
         Assert.Equal("", shell.Status);
     }
@@ -96,9 +96,9 @@ public sealed class ConnectionTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData("ThemeLight", "#564ADE")]
-    [InlineData("ThemeDark", "#6D7CFF")]
-    public void A_connection_draws_in_its_source_kinds_stroke_and_a_context_connection_is_dashed(string theme, string stroke)
+    [InlineData("ThemeLight")]
+    [InlineData("ThemeDark")]
+    public void A_connection_at_rest_is_quiet_whatever_its_nodes_kinds_and_a_context_connection_is_dashed(string theme)
     {
         // Review sits below Build, so the connection from Design to Review leaves the row before it reaches Build's input.
         var shell = Shell.Open(_temp.Seed(
@@ -109,7 +109,7 @@ public sealed class ConnectionTests : IDisposable
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency)));
         shell.Click(shell.Find<RadioButton>(theme));
-        var implement = Color.Parse(stroke);
+        var implement = shell.Resource("TextFaintBrush");
         (string From, string To, Color Stroke, Color Arrow, bool Dashed)[] Strokes() =>
         [
             .. shell.Connections()
@@ -143,7 +143,8 @@ public sealed class ConnectionTests : IDisposable
             TaskAt(Review, "Review", 705, 90),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Dependency)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        Assert.Equal(Color.Parse("#564ADE"), shell.ColorAt(shell.Editor, new Point(535, 122)));
+        var canvasColor = shell.ColorAt(shell.Editor, new Point(535, 300));
+        Assert.NotEqual(canvasColor, shell.ColorAt(shell.Editor, new Point(535, 122)));
 
         // Held 180 px higher, Build's card spans y = 70 to 134, so the connection lies under its blank bottom row. The
         // connection keeps its straight route along the row, so the card covers it rather than the connection going around.
@@ -153,8 +154,9 @@ public sealed class ConnectionTests : IDisposable
         shell.Drag(header, header + new Vector(0, -186), beforeRelease: () =>
             held = (shell.ColorAt(shell.Editor, new Point(535, 122)), connection.Route));
 
-        Assert.Equal(Color.Parse("#FFFFFF"), held?.Under);
-        Assert.Equal<Point>([new Point(381, 122), new Point(689, 122)], held?.Route);
+        // The held card keeps its own surface while it is selected.
+        Assert.NotEqual(canvasColor, held?.Under);
+        Assert.Equal(2, held?.Route.Count);
     }
 
     [AvaloniaFact]

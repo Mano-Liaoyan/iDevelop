@@ -17,10 +17,11 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(EngineState), nameof(StatusLabel), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
-        nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
-        nameof(CanStopAndSend), nameof(HasResults), nameof(LastReply), nameof(ReviewSummary),
-        nameof(Preview), nameof(SendProblem), nameof(Latest), nameof(Questions), nameof(IsAsking),
+        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StatusTip), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
+        nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
+        nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(CardResult), nameof(CardResultDetail), nameof(CardResultIsCommit), nameof(LastReply), nameof(ReviewSummary),
+        nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
+        nameof(ShowsGoesTo), nameof(HeaderActions), nameof(ComposerHoldsAction), nameof(IsStale), nameof(RetryIsInMenu), nameof(StopIsInMenu), nameof(RetryLabel), nameof(HasExtraPage), nameof(ExtraTitle), nameof(ExtraGlyph), nameof(ExtraBadge),
     ];
 
     private EngineState _engineState = new EngineState.Idle();
@@ -52,16 +53,29 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The node's state as the engine gives it, with why it waits for the person.</summary>
     public EngineState EngineState => _engineState;
 
-    /// <summary>"Running", "Completed", or what the node needs, such as "Input required · approval".</summary>
+    /// <summary>What the node needs from the person now, which its glyph tells apart.</summary>
+    public WaitReason WaitReason => NodeStates.Why(_engineState);
+
+    /// <summary>"Running", "Done", or what the node needs, such as "Needs you · Approval".</summary>
     public string StatusLabel => NodeStates.Label(_engineState, _background);
+
+    /// <summary>The status's tooltip: its label and, where the state has one, its sentence, which a short inspector shows only here.</summary>
+    public string StatusTip => StateDetail is { Length: > 0 } detail ? $"{StatusLabel}\n{detail}" : StatusLabel;
 
     /// <summary>What the node needs from the person, or why it failed or went stale, or null when its status says enough.</summary>
     public string? StateDetail => NodeStates.Detail(_engineState);
 
+    /// <summary>The state's sentence in one short line, which a short inspector shows in place of <see cref="StateDetail"/>.</summary>
     public StatusTone Tone => NodeStates.Tone(State);
 
     /// <summary>The node waits for the person.</summary>
     public bool IsWaiting => State == NodeState.InputRequired;
+
+    /// <summary>The node has not run, so its status pill shows no glyph, as Idle has none on any surface.</summary>
+    public bool IsIdle => State == NodeState.Idle;
+
+    /// <summary>The node runs now, so a list's state glyph spins.</summary>
+    public bool IsRunningNow => State == NodeState.Running;
 
     /// <summary>Why the engine would not start the node now, which keeps Run and Retry off and is their tooltip, or null.</summary>
     public string? RunRefusal => State == NodeState.Running || IsAsking ? null : _runRefusal;
@@ -74,6 +88,9 @@ public sealed partial class TaskNodeViewModel
 
     public bool ShowsStop => State == NodeState.Running || IsAsking;
 
+    /// <summary>What Retry says: a node that has not failed runs again from here.</summary>
+    public string RetryLabel => State == NodeState.Completed ? "Run from here" : "Retry";
+
     /// <summary>The running turn waits for the person's answer to the agent's question, which Send gives.</summary>
     public bool IsAsking => _asked is not null;
 
@@ -84,7 +101,10 @@ public sealed partial class TaskNodeViewModel
     /// Approve accepts what an Approval node or a reviewer at its round limit offers, or a Chat node's last reply. While a
     /// planner's proposal is open, Accept and Finish approves it instead.
     /// </summary>
-    public bool ShowsApprove => Waits(EngineState.Approval, EngineState.RoundLimit, EngineState.Reply) && Role != NodeRole.Proposing;
+    public bool ShowsApprove => (Waits(EngineState.Approval, EngineState.RoundLimit) || Waits(EngineState.Reply)) && Role != NodeRole.Proposing;
+
+    /// <summary>What Approve does in words: on a wait for a reply it makes the agent's message the node's result.</summary>
+    public string ApproveLabel => Waits(EngineState.Reply) ? "Accept as result" : "Approve";
 
     /// <summary>Send back returns the person's note to the nodes before an Approval node or a reviewer at its round limit.</summary>
     public bool ShowsSendBack => Waits(EngineState.Approval, EngineState.RoundLimit);
@@ -112,7 +132,22 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The node's results, newest first, each with whether it is the current one.</summary>
     public IReadOnlyList<ResultViewModel> Results => _results;
 
+    /// <summary>What this node hands on now, in plain words, or null before a first result.</summary>
+    public string? HandsOn => _results.Count > 0 ? _results[0].PlainSummary : null;
+
+    /// <summary>
+    /// The folded Output section's line: the first line of the latest result's own summary, such as "Added POST /usage with
+    /// idempotency keys", or, for a result without a report, its heading and commit, such as "Result 1 · Current · Commit
+    /// acc31d9", or "No result yet" (ADR 0065).
+    /// </summary>
+    public string OutputSummary => _results.Count == 0 ? "No result yet"
+        : _results[0].HasReport ? CardText.Line(_results[0].PlainSummary, 200)
+        : string.Join(" · ", new[] { _results[0].Heading, _results[0].Commit }.OfType<string>());
+
     public bool HasResults => _history.Count > 0;
+
+    /// <summary>The node's latest result, or null.</summary>
+    internal NodeResult? LatestResult => _history.Count > 0 ? _history[^1] : null;
 
     /// <summary>What the agent did last: its latest message, or the tool it started after it, or null.</summary>
     public string? Latest => _latest;
@@ -159,9 +194,6 @@ public sealed partial class TaskNodeViewModel
 
     public bool CanStopAndSend => HasAgent && State == NodeState.Running;
 
-    /// <summary>Why a message cannot go to the agent now, or null.</summary>
-    public string? SendProblem => !HasAgent ? null : State == NodeState.Idle ? "Run the node first. A message continues its session." : null;
-
     partial void InitializeRun()
     {
         _logChanged = new UiBatch(() =>
@@ -194,7 +226,7 @@ public sealed partial class TaskNodeViewModel
         if (asked?.Key != _asked?.Key)
         {
             _asked = asked;
-            _questions = asked is null ? [] : [.. asked.Questions.Select(question => new QuestionViewModel(question, _send.NotifyCanExecuteChanged))];
+            _questions = asked is null ? [] : Asked(asked);
         }
 
         _runRefusal = engine.CanRun(Id);
@@ -229,6 +261,12 @@ public sealed partial class TaskNodeViewModel
             current: index == _history.Count - 1 && State == NodeState.Completed)).Reverse()];
         _findings = Verdict is { } verdict ? [.. verdict.Findings.Select(finding => new FindingViewModel(finding))] : [];
         OnPropertyChanged(nameof(Results));
+        OnPropertyChanged(nameof(CurrentResult));
+        OnPropertyChanged(nameof(EarlierResults));
+        OnPropertyChanged(nameof(HasEarlierResults));
+        OnPropertyChanged(nameof(ExtraBadge));
+        OnPropertyChanged(nameof(OutputSummary));
+        OnPropertyChanged(nameof(HandsOn));
         OnPropertyChanged(nameof(Findings));
     }
 
@@ -240,6 +278,7 @@ public sealed partial class TaskNodeViewModel
             _reviewer = reviewer;
             ShowState();
             OnPropertyChanged(nameof(ReviewerTip));
+            OnPropertyChanged(nameof(MarkTip));
         }
     }
 
@@ -345,6 +384,20 @@ public sealed partial class TaskNodeViewModel
         {
             SendBackNote = "";
         }
+    }
+
+    // The digits run on across the questions, so one key picks one choice.
+    private List<QuestionViewModel> Asked(AgentQuestion asked)
+    {
+        var digit = 1;
+        List<QuestionViewModel> questions = [];
+        foreach (var question in asked.Questions)
+        {
+            questions.Add(new QuestionViewModel(question, _send.NotifyCanExecuteChanged, digit, asked.Questions.Length > 1));
+            digit += question.Options.Length;
+        }
+
+        return questions;
     }
 
     private void Send(bool interrupt)

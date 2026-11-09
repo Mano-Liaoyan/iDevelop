@@ -9,13 +9,13 @@ namespace IDevelop.Desktop.Canvas;
 /// </summary>
 public static class CardBehaviors
 {
-    /// <summary>The state glyph sits on the title's line: centred 16 px down, where the 18 px title line, 7 px down, centres.</summary>
-    public static readonly Thickness GlyphMargin = new(0, 8, 0, 0);
+    /// <summary>The attention button's 20 px target overhangs the 14 px glyph by 3 px each side.</summary>
+    public static readonly Thickness GlyphMargin = new(-3);
 
-    /// <summary>The disclosure's 28 px target centres on the last line, 49 px down, and overhangs its 16 px column by 6 px each side.</summary>
-    public static readonly Thickness ChevronMargin = new(-6, 35, -6, 0);
+    /// <summary>The disclosure's 24 px target overhangs its 12 px column and 18 px line.</summary>
+    public static readonly Thickness ChevronMargin = new(-6, -3);
 
-    /// <summary>A port's 20 px square centres on the header's middle line, 32 px down.</summary>
+    /// <summary>A socket's 20 px square centres on the card's socket row.</summary>
     public static readonly Thickness PortMargin = new(0, WorkflowCanvasViewModel.InputPortCenter.Y - 10, 0, 0);
 
     public static readonly AttachedProperty<bool> ReportsSizeProperty =
@@ -56,6 +56,9 @@ public static class CardBehaviors
             }
 
             ToolTip.SetTip(control, peek);
+            // The peek stands over the card, clear of it, so it hides neither the card's text nor its selection ring.
+            ToolTip.SetPlacement(control, PlacementMode.Top);
+            ToolTip.SetVerticalOffset(control, -8);
         });
     }
 

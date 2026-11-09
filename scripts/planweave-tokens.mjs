@@ -58,9 +58,11 @@ const apple = {
   'apple-purple': ['#CB30E0', '#DB34F2'],
   'apple-purple-strong': ['#B02FC2', '#EA8DFF'],
   'apple-purple-tile': ['#B02FC2', '#DB34F2'],
-  'apple-pink': ['#FF2D55', '#FF375F'],
-  'apple-pink-strong': ['#E7124D', '#FF8AC4'],
-  'apple-pink-tile': ['#E7124D', '#FF375F'],
+  // No Apple color sits clear of every state's hue, so Merge takes an olive of its own (ADR 0045).
+  'olive': ['#7C8A1E', '#A9BC3F'],
+  'olive-strong': ['#5E6B10', '#C6D66B'],
+  'olive-tile': ['#5E6B10', '#7C8F22'],
+  'on-state': ['#FFFFFF', '#0B0E10'],
   'apple-brown': ['#AC7F5E', '#B78A66'],
   'apple-brown-strong': ['#956D51', '#DBA679'],
   'apple-brown-tile': ['#956D51', '#B78A66'],
@@ -74,16 +76,17 @@ const tokens = { ...planweave, ...apple };
 
 // Each node kind and each state has its own hue. Blue is the accent.
 const kinds = [
-  ['Implement', 'indigo'],
-  ['Plan', 'cyan'],
-  ['Architect', 'purple'],
-  ['Review', 'mint'],
-  ['Approval', 'brown'],
-  ['Merge', 'pink'],
-  ['ReadOnlyAgent', 'gray'],
+  ['Implement', 'apple-indigo'],
+  ['Plan', 'apple-cyan'],
+  ['Architect', 'apple-purple'],
+  ['Review', 'apple-mint'],
+  ['Approval', 'apple-brown'],
+  ['Merge', 'olive'],
+  ['ReadOnlyAgent', 'apple-gray'],
 ];
 const states = [
   ['Waiting', 'orange'],
+  ['Approval', 'purple'],
   ['Warning', 'yellow'],
   ['Success', 'green'],
   ['Failed', 'red'],
@@ -99,6 +102,7 @@ const brushes = [
   ['AppPanel', 'app-panel'],
   ['SurfaceMuted', 'surface-muted'],
   ['SurfaceMuted60', 'surface-muted', 60],
+  ['SurfaceShown', 'border'],
   ['SurfaceRaised', 'surface-raised'],
   ['SurfaceOverlay', 'surface-overlay'],
   ['SurfaceOverlay95', 'surface-overlay', 95],
@@ -106,13 +110,14 @@ const brushes = [
   ['Text', 'text'],
   ['TextMuted', 'text-muted'],
   ['TextFaint', 'text-faint'],
+  ['OnState', 'on-state'],
   ['Border100', 'border'],
   ['Border80', 'border', 80],
   ['Border60', 'border', 60],
   ['StateSelected', 'apple-blue'],
   ['StateSelected25', 'apple-blue', 25],
   ['StateSelected40', 'apple-blue', 40],
-  ['StateSelectedSurface', 'apple-blue', 10],
+  ['StateSelectedSurface', 'apple-blue', 16],
   ['StateRunning', 'apple-blue'],
   ['StateRunning45', 'apple-blue', 45],
   ['StateRunningSurface', 'apple-blue', 10],
@@ -125,11 +130,11 @@ const brushes = [
   ['StateWaiting', 'apple-orange'],
   ['StateWaiting40', 'apple-orange', 40],
   ...kinds.flatMap(([kind, hue]) => [
-    [`Kind${kind}`, `apple-${hue}`],
-    [`Kind${kind}10`, `apple-${hue}`, 10],
-    [`Kind${kind}Strong`, `apple-${hue}-strong`],
-    [`Kind${kind}Tile`, `apple-${hue}-tile`],
-    [`Kind${kind}Stroke`, [`apple-${hue}-strong`, `apple-${hue}`]],
+    [`Kind${kind}`, hue],
+    [`Kind${kind}10`, hue, 10],
+    [`Kind${kind}Strong`, `${hue}-strong`],
+    [`Kind${kind}Tile`, `${hue}-tile`],
+    [`Kind${kind}Stroke`, [`${hue}-strong`, hue]],
   ]),
   ...states.flatMap(([state, hue]) => [
     [`State${state}10`, `apple-${hue}`, 10],
@@ -142,11 +147,16 @@ const brushes = [
   ['AccentStroke', ['apple-blue-strong', 'apple-blue']],
   ['AccentText', 'apple-blue-text'],
   ['AccentFill', 'apple-blue-fill'],
+  // The primary fill under the pointer: darker than the fill in the light theme. The dark theme keeps the fill, and the
+  // button's opacity darkens it against the dark panel, so hover darkens the fill in both themes.
+  ['AccentFillHover', ['apple-blue-text', 'apple-blue-fill']],
   ['DestructiveText', 'apple-red-text'],
   ['DestructiveFill', 'apple-red-fill'],
   ['OnAccent', 'white'],
   ['OnTile', 'white'],
   ['Scrim', 'black', 30],
+  // A wire that the selection leaves out: under every other wire, still traceable on the canvas.
+  ['WireDim', 'text-faint', 45],
 ];
 
 // Color keys for brushes that must stay the same objects while their color follows the theme. Nodify's control
@@ -176,6 +186,10 @@ const themedShadows = [
   ['NodeShadow', [[0, 1, 2, 0, 'black', 8], [0, 2, 6, 0, 'black', 6]], [[0, 1, 2, 0, 'black', 40], [0, 2, 8, 0, 'black', 32]]],
   ['NodeHoverShadow', [[0, 2, 6, 0, 'black', 10], [0, 8, 20, 0, 'black', 10]], [[0, 2, 6, 0, 'black', 45], [0, 10, 24, 0, 'black', 40]]],
   ['PopoverShadow', [[0, 10, 30, 0, 'black', 16], [0, 2, 6, 0, 'black', 8]], [[0, 12, 32, 0, 'black', 45], [0, 2, 6, 0, 'black', 30]]],
+  // A box's keyboard ring: 2 px of the accent outside its 1 px border.
+  ['FocusRing', [[0, 0, 0, 2, 'apple-blue', 100]], [[0, 0, 0, 2, 'apple-blue', 100]]],
+  // A selected card's halo, 3 px outside its selection ring.
+  ['SelectionHalo', [[0, 0, 0, 3, 'apple-blue', 25]], [[0, 0, 0, 3, 'apple-blue', 25]]],
 ];
 
 // --radius is 0.625rem, and Tailwind derives each step from it.
@@ -185,6 +199,15 @@ const radii = [
   ['RadiusMd', 0.8],
   ['RadiusLg', 1],
   ['RadiusXl', 1.4],
+];
+
+// The type ramp: name, font size, and line height. Body strong is Body at weight 600. No other size is allowed.
+const typeRamp = [
+  ['Caption', 11.5, 14],
+  ['Small', 12.5, 16],
+  ['Body', 13, 18],
+  ['Prose', 14, 22],
+  ['Title', 15, 20],
 ];
 
 function parse(value) {
@@ -255,6 +278,10 @@ function generate() {
     '  </ResourceDictionary.ThemeDictionaries>',
     `  <BoxShadows x:Key="SmallShadow">${shadow(shadowSm, 0)}</BoxShadows>`,
     ...radii.map(([key, scale]) => `  <CornerRadius x:Key="${key}">${radius * scale}</CornerRadius>`),
+    ...typeRamp.flatMap(([name, size, line]) => [
+      `  <x:Double x:Key="Type${name}Size">${size}</x:Double>`,
+      `  <x:Double x:Key="Type${name}Line">${line}</x:Double>`,
+    ]),
     '</ResourceDictionary>',
     '',
   ].join('\n');
@@ -271,8 +298,9 @@ const contrast = [
   ...pairs(['TextBrush', 'TextMutedBrush'], ['SurfaceRaisedBrush', 'SurfaceOverlayBrush', 'AppPanelBrush'], 4.5),
   ...pairs(['TextBrush'], tints.map((tint) => [tint, 'SurfaceRaisedBrush']), 4.5),
   ['TextBrush', 'SurfaceMutedBrush', 4.5],
+  ...pairs(['TextBrush', 'TextMutedBrush'], [['SurfaceShownBrush', 'AppTopbarBrush']], 4.5),
   ...pairs(['AccentTextBrush', 'DestructiveTextBrush'], ['SurfaceOverlayBrush', 'AppPanelBrush', 'SurfaceRaisedBrush'], 4.5),
-  ...pairs(['OnAccentBrush'], ['AccentFillBrush', 'DestructiveFillBrush'], 4.5),
+  ...pairs(['OnAccentBrush'], ['AccentFillBrush', 'AccentFillHoverBrush', 'DestructiveFillBrush'], 4.5),
   ...pairs(['OnTileBrush'], kinds.map(([kind]) => `Kind${kind}TileBrush`), 3),
   ...pairs(strokes.map((stroke) => `${stroke}StrokeBrush`), [canvas, 'SurfaceRaisedBrush'], 3),
   ...strokes.flatMap((hue) => pairs([`${hue}StrongBrush`], ['SurfaceRaisedBrush', [`${hue}10Brush`, 'SurfaceRaisedBrush']], 3)),

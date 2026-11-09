@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using IDevelop.Desktop.Theme;
 using IDevelop.Clients;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -13,11 +15,8 @@ using static IDevelop.TestSupport.FakeRule;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The sidebar's project tree from its 240 px default, which is also its narrowest, to its widest: project and workflow
-/// names wrap in full instead of ending in an ellipsis, and each row keeps its glyph, its dots, its count, and its buttons on
-/// its first line, at the right edges the inspector keeps (ADR 0021). Glyph buttons end at the tree's content edge, and a
-/// count ends where their glyphs' drawing ends. Dots end just before a row's count or buttons, so rows of one kind line
-/// them up.
+/// The left area's project tree from its 240 px minimum to its widest: project, workflow, and node names wrap in full
+/// instead of ending in an ellipsis, and rows keep one height while their names fit, so the list has one rhythm.
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class SidebarLayoutTests : IDisposable
@@ -29,7 +28,7 @@ public sealed class SidebarLayoutTests : IDisposable
     private const string Reports = "reports-service";
     private const string ReleaseNotes = "Release notes";
     private const string Quarterly = "Quarterly customer billing reconciliation, audit trail, and the release checklist";
-    private const string Onboarding = "CustomerOnboardingAnalyticsPipelineForTheBillingTeam";
+    private const string Onboarding = "CustomerOnboardingAnalyticsPipelineForTheBillingAndOperationsTeams";
 
     private readonly TempFolder _temp = AppTempFolder.New();
     private readonly FakeClients _fakes;
@@ -79,35 +78,32 @@ public sealed class SidebarLayoutTests : IDisposable
 
     [AvaloniaTheory]
     [InlineData(240)]
+    [InlineData(252)]
     [InlineData(320)]
     [InlineData(400)]
-    public void Project_and_workflow_names_show_in_full_at_every_sidebar_width(double width)
+    public void A_project_s_and_a_workflow_s_name_show_in_full_at_every_sidebar_width(double width)
     {
         var shell = OpenBoth();
         shell.SizeSidebar(width);
 
-        var names = new[]
-        {
-            shell.ProjectName(Reports), shell.WorkflowName(Reports, ReleaseNotes), shell.WorkflowName(Reports, Quarterly),
-            shell.ProjectName(Onboarding), shell.WorkflowName(Onboarding, "Workflow"),
-        };
-
-        Assert.All(names, name => AssertWhole(shell, name));
-        Assert.All([shell.WorkflowName(Reports, Quarterly), shell.ProjectName(Onboarding)],
-            name => Assert.True(name.TextLayout.TextLines.Count > 1, $"\"{name.Text}\" fits on one line at {width} px, so nothing here wraps."));
+        Assert.All([shell.ProjectName(Reports), shell.ProjectName(Onboarding)], name => AssertWhole(shell, name));
+        Assert.True(shell.ProjectName(Onboarding).TextLayout.TextLines.Count > 1, $"The project's name fits on one line at {width} px, so nothing here wraps.");
+        AssertWhole(shell, shell.WorkflowName(Reports, Quarterly));
     }
 
     [AvaloniaFact]
-    public void The_sidebar_s_splitter_widens_it_and_stops_at_its_240_px_default()
+    public void The_sidebar_s_splitter_widens_it_and_stops_at_its_240_px_minimum()
     {
         var shell = OpenBoth();
         var splitter = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 1);
         var sidebar = shell.Window.FindControl<Grid>("Columns")!.ColumnDefinitions[0];
 
-        shell.Drag(shell.Center(splitter), shell.Center(splitter) + new Vector(100, 0));
-        Assert.InRange(sidebar.ActualWidth, 339, 341);
+        // The panel's tab sits on the splitter's centre.
+        var grip = new Vector(0, 200);
+        shell.Drag(shell.Center(splitter) + grip, shell.Center(splitter) + grip + new Vector(100, 0));
+        Assert.InRange(sidebar.ActualWidth, 351, 353);
 
-        shell.Drag(shell.Center(splitter), shell.Center(splitter) - new Vector(200, 0));
+        shell.Drag(shell.Center(splitter) + grip, shell.Center(splitter) + grip - new Vector(200, 0));
         Assert.Equal(240, sidebar.ActualWidth);
     }
 
@@ -132,56 +128,54 @@ public sealed class SidebarLayoutTests : IDisposable
         AssertWhole(shell, name);
         Assert.True(name.TextLayout.TextLines.Count > 1, $"\"{name.Text}\" fits on one line at {width} px, so nothing here wraps.");
         Assert.Equal("Forget ends at 0, centred 0 from the name's first line",
-            $"Forget ends at {FromEdge(shell, forget):0.#}, centred {Centre(forget) - FirstLine(name):0.#} from the name's first line");
+            $"Forget ends at {FromEdge(shell, forget):0.#}, centred {Math.Abs(Math.Round(Centre(forget) - FirstLine(name))):0.#} from the name's first line");
     }
 
     private const string LongTask = "Draft the release notes from every pull request merged since the last tag, grouped by area";
 
     [AvaloniaTheory]
     [InlineData(240)]
+    [InlineData(252)]
     [InlineData(400)]
     public void Task_titles_show_in_full_with_their_tile_on_the_first_line(double width)
     {
         var reports = _temp.Create(Reports);
         Save(reports, ReleaseNotes, LongTask, "Ship");
         var shell = Shell.Open(reports);
-        shell.Click(shell.WorkflowExpand(Reports, ReleaseNotes));
+        shell.OpenNodes(Reports, ReleaseNotes);
         shell.SizeSidebar(width);
         var rows = new[] { LongTask, "Ship" }.Select(title => shell.TaskRow(Reports, ReleaseNotes, title)).ToArray();
-        var titles = rows.Select(row => row.GetVisualDescendants().OfType<TextBlock>().Single()).ToArray();
+        var titles = rows.Select(row => row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"))).ToArray();
 
-        Assert.All(titles, title => AssertWhole(shell, title));
+        Assert.Equal(LongTask, titles[0].Text);
         Assert.True(titles[0].TextLayout.TextLines.Count > 1, $"The long title fits on one line at {width} px, so nothing here wraps.");
-        // Each row centres its tile on its title's first line, 16 px into the row, the middle of a one-line row's 32 px.
-        Assert.Equal(["first line 16, tile 0", "first line 16, tile 0, row 32"],
-            rows.Select((row, index) => TaskCentres(row) + (index == 1 ? $", row {row.Bounds.Height:0.#}" : "")));
+        Assert.Single(titles[1].TextLayout.TextLines);
+        // Each row centres its glyph on its title's first line, 14 px into the row.
+        Assert.All(rows, row => Assert.StartsWith("first line 14, glyph 0", TaskCentres(row)));
+        Assert.Equal(28, rows[1].Bounds.Height);
     }
 
-    private static string TaskCentres(ListBoxItem row)
+    private static string TaskCentres(Button row)
     {
-        var title = row.GetVisualDescendants().OfType<TextBlock>().Single();
+        var title = row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"));
         var line = FirstLine(title);
-        return $"first line {line - Top(row):0.#}, tile {Centre(row.GetVisualDescendants().OfType<Theme.KindTile>().Single()) - line:0.#}";
+        return $"first line {line - Top(row):0.#}, glyph {Centre(row.GetVisualDescendants().OfType<KindTile>().First()) - line:0.#}";
     }
 
     [AvaloniaFact]
-    public void An_agent_s_name_and_summary_wrap_in_full_with_its_dot_on_the_name_s_first_line()
+    public void A_client_that_needs_setup_shows_its_name_and_summary_in_full_with_its_dot_on_the_name_s_first_line()
     {
-        FakeAgents.Install(_fakes, ClientId.Codex);
+        _fakes.Install("claude", On("auth", "status").Print("""{"loggedIn":false}""").Exit(1));
         var shell = Shell.Show(_fakes.DiscoverAsync().Result);
-        var agents = shell.Find<ItemsControl>("Agents");
-        // Every row fits the sidebar's 240 px today, so the list narrows to 90 px, where "Antigravity CLI" and "Ready · 3
-        // models" need two lines, as a larger system font would leave them.
-        Assert.Equal(4, AgentRows(agents).Length);
-        Assert.All(AgentRows(agents), row => Assert.Equal("first line 10, dot 0", AgentCentres(row)));
+        var agents = shell.Find<ItemsControl>("AgentsNeedingSetup");
+        Assert.Single(AgentRows(agents));
 
-        agents.Width = 90;
-        shell.Render();
+        agents.Width = 72;
+        agents.UpdateLayout();
 
         Assert.All(AgentRows(agents), row => Assert.All(row.GetVisualDescendants().OfType<TextBlock>(), AssertWhole));
-        Assert.All(AgentRows(agents), row => Assert.Equal("first line 10, dot 0", AgentCentres(row)));
-        Assert.True(AgentTexts(agents, "Antigravity CLI").Name.TextLayout.TextLines.Count > 1, "\"Antigravity CLI\" does not wrap.");
-        Assert.True(AgentTexts(agents, "Codex").Summary.TextLayout.TextLines.Count > 1, "Codex's \"Ready · 3 models\" does not wrap.");
+        Assert.All(AgentRows(agents), row => Assert.Equal("first line 9, dot 0", AgentCentres(row)));
+        Assert.True(AgentTexts(agents, "Claude Code").Summary.TextLayout.TextLines.Count > 1, "\"Not signed in\" does not wrap.");
     }
 
     // Each agent's row: its dot, its name, and under the name its summary.
@@ -207,41 +201,122 @@ public sealed class SidebarLayoutTests : IDisposable
 
     [AvaloniaTheory]
     [InlineData(240)]
+    [InlineData(252)]
     [InlineData(400)]
-    public void Each_row_keeps_its_dots_count_and_buttons_on_its_first_line_at_shared_right_edges(double width)
+    public void Index_rows_keep_their_heights_and_right_edges_while_their_names_fit(double width)
     {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var shell = OpenBoth(_fakes.DiscoverAsync().Result);
-        // Release notes runs a task, so it and reports-service show the running dot, and Quarterly gets a 12th task and
-        // shows the unsaved dot. Release notes counts 2.
-        shell.Click(shell.WorkflowRow(Reports, ReleaseNotes));
-        shell.RunNode("Task 1");
-        shell.Click(shell.WorkflowRow(Reports, Quarterly));
-        shell.AddNode();
+        var shell = OpenBoth();
         shell.SizeSidebar(width);
-        Assert.True(shell.WorkflowName(Reports, Quarterly).TextLayout.TextLines.Count > 1, "Quarterly's name does not wrap.");
-        Assert.True(shell.ProjectName(Onboarding).TextLayout.TextLines.Count > 1, "Onboarding's name does not wrap.");
+        var row = shell.WorkflowRow(Reports, ReleaseNotes);
+        var project = shell.ProjectName(Reports).FindAncestorOfType<ToggleButton>()!;
+        Assert.Equal((40.0, 30.0), (project.Bounds.Height, row.Bounds.Height));
+        Assert.Equal("0/2", shell.WorkflowText(Reports, ReleaseNotes, "WorkflowSummary"));
+        var (count, tile) = (Of<TextBlock>(row, "WorkflowSummary"), shell.ProjectItem(Reports).GetVisualDescendants().OfType<Border>().First(border => border.Classes.Contains("projectTile")));
+        Assert.Equal(20, tile.Bounds.Width);
 
-        // Glyph buttons end at the content edge and a count where their glyphs' drawing ends. Dots end 8 px before the
-        // row's buttons, and in a workflow row, 8 px before its count's slot, which is as wide as the widest count, so
-        // "2" and "12" leave their dots at one edge. A name ends 8 px before whatever the row shows after it.
-        Assert.Equal("× 0, + 36, running 72, name 88", ProjectEdges(shell, Reports));
-        Assert.Equal("× 0, + 36, name 72", ProjectEdges(shell, Onboarding));
-        var slot = Slot(shell, Reports, Quarterly);
-        Assert.Equal(slot, Slot(shell, Reports, ReleaseNotes));
-        Assert.Equal($"count 8, running {slot + 8:0.#}, name {slot + 24:0.#}", WorkflowEdges(shell, Reports, ReleaseNotes));
-        Assert.Equal($"count 8, unsaved {slot + 8:0.#}, name {slot + 24:0.#}", WorkflowEdges(shell, Reports, Quarterly));
-        Assert.Equal($"count 8, name {slot + 8:0.#}", WorkflowEdges(shell, Onboarding, "Workflow"));
-        // A count keeps the width of its own digits at the slot's right end, so "2" stays narrower than "12".
-        var (two, twelve) = (Count(shell, Reports, ReleaseNotes).Bounds.Width, Count(shell, Reports, Quarterly).Bounds.Width);
-        Assert.True(two < twelve, $"\"2\" is {two:0.#} px wide and \"12\" {twelve:0.#} px.");
+        shell.Click(row);
+        shell.Render();
+        var stage = shell.Window.GetVisualDescendants().OfType<Button>().First(button => button.Classes.Contains("stage"));
+        var agent = shell.TaskRow(Reports, ReleaseNotes, "Task 1");
+        Assert.Equal((22.0, 28.0), (stage.Bounds.Height, agent.Bounds.Height));
 
-        // Every item of a row centres on the first line of the row's name: 14 px into a project's row and 16 px into a
-        // workflow's, the middle of a one-line row.
-        Assert.Equal("first line 14, folder 0, running 0, + 0, × 0", ProjectCentres(shell, Reports));
-        Assert.Equal("first line 14, folder 0, + 0, × 0", ProjectCentres(shell, Onboarding));
-        Assert.Equal("first line 16, chevron 0, flowchart 0, running 0, count 0", WorkflowCentres(shell, Reports, ReleaseNotes));
-        Assert.Equal("first line 16, chevron 0, flowchart 0, unsaved 0, count 0", WorkflowCentres(shell, Reports, Quarterly));
+        // A workflow's count, a stage's chevron, and an agent's mark share one right edge with the project's mark.
+        var mark = Of<Control>(agent, "NodeRowState");
+        Assert.Equal(FromEdge(shell, count), FromEdge(shell, mark), 0.5);
+    }
+
+    [Theory]
+    [InlineData("Backfill 2023-Q4", "Backfill 2023-\u2060Q4")]
+    [InlineData("Plain name", "Plain name")]
+    public void A_hyphenated_token_stays_on_one_line(string name, string shown) => Assert.Equal(shown, Theme.NameBreaks.Keep(name));
+
+    [AvaloniaFact]
+    public void The_shown_workflow_lists_every_node_however_long_the_list_is()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 50).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        var canvas = shell.Window.ViewModel.Canvas!;
+
+        Assert.True(shell.ListsNodesOf(Reports, ReleaseNotes));
+        Assert.Equal(50, shell.AgentRowTitles().Length);
+        Assert.Equal(1, canvas.Stages.Count(stage => stage.Agents.Count == 50));
+    }
+
+    [AvaloniaFact]
+    public void Showing_a_node_brings_its_row_into_the_Index_s_view()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, [.. Enumerable.Range(1, 40).Select(index => $"Node {index}")]);
+        var shell = Shell.Open(reports);
+        shell.Window.Height = 600;
+        var view = shell.Window.ViewModel;
+        shell.Render();
+
+        view.ShowNode(view.Canvas!.Outline[^1]);
+        shell.Render();
+
+        var tree = shell.Window.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Tree");
+        shell.WaitUntil(() =>
+        {
+            var row = shell.TaskRow(Reports, ReleaseNotes, "Node 40");
+            var top = row.TranslatePoint(default, tree)!.Value.Y;
+            return top >= 0 && top <= tree.Viewport.Height - row.Bounds.Height;
+        }, "the agent's row comes into the Index's view");
+    }
+
+    [AvaloniaFact]
+    public void A_node_s_name_shows_in_full_also_while_it_is_selected()
+    {
+        const string Long = "Backfill the ledger partition for every tenant that opened an account before the migration began and keep it online";
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, Long, "Short");
+        var shell = Shell.Open(reports);
+        shell.Render();
+        var row = shell.TaskRow(Reports, ReleaseNotes, Long);
+        var name = row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"));
+        var view = shell.Window.ViewModel;
+        var node = view.Canvas!.Outline.Single(item => item.Title == Long);
+
+        // Issue #108: every name in the left tree shows in full and wraps.
+        Assert.Equal(Long, name.Text);
+        Assert.True(name.TextLayout.TextLines.Count > 2, "The long name does not wrap past two lines.");
+        Assert.DoesNotContain(name.TextLayout.TextLines, line => line.HasCollapsed);
+
+        view.Canvas.Inspect(node);
+        shell.Render();
+
+        Assert.Equal(Long, name.Text);
+        Assert.True(name.TextLayout.TextLines.Count > 2, "The selected name does not wrap past two lines.");
+    }
+
+    [AvaloniaFact]
+    public void A_node_s_name_has_its_workflow_s_size()
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, "Ship");
+        var shell = Shell.Open(reports);
+        shell.OpenNodes(Reports, ReleaseNotes);
+        shell.Render();
+
+        var workflow = shell.WorkflowRow(Reports, ReleaseNotes).GetVisualDescendants().OfType<TextBlock>().First();
+        var node = shell.TaskRow(Reports, ReleaseNotes, "Ship").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("nodeName"));
+        Assert.Equal(workflow.FontSize, node.FontSize);
+    }
+
+    [AvaloniaFact]
+    public void A_project_s_buttons_show_on_hover_in_place_of_its_mark()
+    {
+        var shell = OpenBoth();
+        var item = shell.ProjectItem(Reports);
+        var (menu, add) = (Of<Button>(item, "ProjectMenu"), Of<Button>(item, "NewWorkflow"));
+        var actions = menu.GetVisualParent<StackPanel>()!;
+        Assert.Equal(0, actions.Opacity);
+
+        shell.Hover(shell.Center(shell.ProjectName(Reports)));
+
+        Assert.Equal(1, actions.Opacity);
+        Assert.Equal("menu 4, + 30", $"menu {FromEdge(shell, menu):0.#}, + {FromEdge(shell, add):0.#}");
     }
 
     /// <summary>The name shows whole and ends before the tree's content edge.</summary>
@@ -261,13 +336,10 @@ public sealed class SidebarLayoutTests : IDisposable
             $"\"{text.Text}\" needs {layout.Width:0.#}×{layout.Height:0.#} px and shows in {content.Width:0.#}×{content.Height:0.#}.");
     }
 
-    /// <summary>
-    /// How far before the tree's content edge the visual's right edge is. The edge is where Open Folder ends, or, while the
-    /// tree overflows, where its scroll bar starts.
-    /// </summary>
+    /// <summary>How far before the tree's content edge the visual's right edge is.</summary>
     private static double FromEdge(Shell shell, Visual visual)
     {
-        var rows = shell.Window.FindControl<StackPanel>("TreeRows")!;
+        var rows = shell.Window.GetVisualDescendants().OfType<StackPanel>().Single(panel => panel.Name == "TreeRows");
         return Left(rows, shell.Window) + rows.Bounds.Width - Left(visual, shell.Window) - visual.Bounds.Width;
     }
 
@@ -281,69 +353,4 @@ public sealed class SidebarLayoutTests : IDisposable
     private static double FirstLine(TextBlock text) => Top(text) + text.Padding.Top + text.TextLayout.TextLines[0].Height / 2;
 
     private static T Of<T>(Visual within, string automationId) where T : Control => Shell.ById<T>(within, automationId).Single();
-
-    private static PathIcon Glyph(Visual within, string resource) =>
-        within.GetVisualDescendants().OfType<PathIcon>().First(icon => icon.Data == (Geometry)Application.Current!.FindResource(resource)!);
-
-    private static string Shown(params (string Name, Control Item, double Value)[] items) =>
-        string.Join(", ", items.Where(item => item.Item.IsEffectivelyVisible).Select(item => $"{item.Name} {item.Value:0.#}"));
-
-    private static string ProjectEdges(Shell shell, string project)
-    {
-        var item = shell.ProjectItem(project);
-        var (close, add) = (Of<Button>(item, "CloseProject"), Of<Button>(item, "NewWorkflow"));
-        var (waiting, running) = (Of<Control>(item, "ProjectWaiting"), Of<Control>(item, "ProjectRunning"));
-        return Shown(("×", close, FromEdge(shell, close)), ("+", add, FromEdge(shell, add)), ("waiting", waiting, FromEdge(shell, waiting)),
-            ("running", running, FromEdge(shell, running)), ("name", shell.ProjectName(project), FromEdge(shell, shell.ProjectName(project))));
-    }
-
-    private static string ProjectCentres(Shell shell, string project)
-    {
-        var item = shell.ProjectItem(project);
-        var line = FirstLine(shell.ProjectName(project));
-        var items = new[]
-        {
-            ("folder", Glyph(item, "IconFolder")), ("waiting", Of<Control>(item, "ProjectWaiting")), ("running", Of<Control>(item, "ProjectRunning")),
-            ("+", Of<Button>(item, "NewWorkflow")), ("×", Of<Button>(item, "CloseProject")),
-        };
-        return $"first line {line - Top(item):0.#}, " + Shown([.. items.Select(entry => (entry.Item1, entry.Item2, Centre(entry.Item2) - line))]);
-    }
-
-    private static Control Dot(Shell shell, string project, string workflow, string automationId) =>
-        Of<Control>(shell.WorkflowRow(project, workflow), automationId);
-
-    private static Control Count(Shell shell, string project, string workflow) =>
-        Of<TextBlock>(shell.WorkflowRow(project, workflow), "TaskCount").FindAncestorOfType<Border>()!;
-
-    /// <summary>How far before the content edge the slot that holds the workflow's count starts.</summary>
-    private static double Slot(Shell shell, string project, string workflow)
-    {
-        var slot = Count(shell, project, workflow).GetVisualParent<Control>()!;
-        return Math.Round(FromEdge(shell, slot) + slot.Bounds.Width, 1);
-    }
-
-    private static string WorkflowEdges(Shell shell, string project, string workflow)
-    {
-        var name = shell.WorkflowName(project, workflow);
-        var count = Count(shell, project, workflow);
-        return Shown(("count", count, FromEdge(shell, count)),
-            ("unsaved", Dot(shell, project, workflow, "WorkflowUnsaved"), FromEdge(shell, Dot(shell, project, workflow, "WorkflowUnsaved"))),
-            ("waiting", Dot(shell, project, workflow, "WorkflowWaiting"), FromEdge(shell, Dot(shell, project, workflow, "WorkflowWaiting"))),
-            ("running", Dot(shell, project, workflow, "WorkflowRunning"), FromEdge(shell, Dot(shell, project, workflow, "WorkflowRunning"))),
-            ("name", name, FromEdge(shell, name)));
-    }
-
-    private static string WorkflowCentres(Shell shell, string project, string workflow)
-    {
-        var row = shell.WorkflowRow(project, workflow);
-        var chevron = Shell.ById<Control>(row.FindAncestorOfType<Grid>()!, "WorkflowExpand").Single();
-        var line = FirstLine(shell.WorkflowName(project, workflow));
-        var items = new[]
-        {
-            ("chevron", chevron), ("flowchart", Glyph(row, "IconFlowchart")), ("unsaved", Dot(shell, project, workflow, "WorkflowUnsaved")),
-            ("waiting", Dot(shell, project, workflow, "WorkflowWaiting")), ("running", Dot(shell, project, workflow, "WorkflowRunning")),
-            ("count", Count(shell, project, workflow)),
-        };
-        return $"first line {line - Top(row):0.#}, " + Shown([.. items.Select(entry => (entry.Item1, entry.Item2, Centre(entry.Item2) - line))]);
-    }
 }

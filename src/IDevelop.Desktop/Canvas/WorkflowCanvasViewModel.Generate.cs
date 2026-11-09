@@ -40,6 +40,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>The workflow has no task, so the canvas offers to start from a description.</summary>
     public bool IsEmpty => Nodes.Count == 0;
 
+    /// <summary>What the inspector says with nothing selected: a workflow with no node has nothing to select.</summary>
     public GenerateProgress GenerateProgress
     {
         get;
@@ -51,6 +52,7 @@ public sealed partial class WorkflowCanvasViewModel
                 OnPropertyChanged(nameof(IsGenerateIdle));
                 OnPropertyChanged(nameof(IsPlanning));
                 OnPropertyChanged(nameof(IsReviewing));
+                OnPropertyChanged(nameof(ShowsGenerate));
             }
         }
     }
@@ -112,8 +114,8 @@ public sealed partial class WorkflowCanvasViewModel
     internal void Generate(string prompt, ExecutionSettings planner)
     {
         CloseSheet();
-        var start = new CanvasPoint(ViewportLocation.X + 60, ViewportLocation.Y + ViewportSize.Height / 2 - TaskCardHeight / 2);
-        var edit = new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, FreeSpot(start))
+        var start = new Avalonia.Point(ViewportLocation.X + 60, ViewportLocation.Y + ViewportSize.Height / 2 - TaskCardHeight / 2);
+        var edit = new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, Space.ToSaved(FreeSpot(start)))
         {
             Title = PlannerTitle(prompt),
             Fields = ImmutableDictionary<string, string>.Empty.Add("goal", prompt.Trim()),
@@ -142,6 +144,9 @@ public sealed partial class WorkflowCanvasViewModel
         Nodes.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(CanStartRun));
+            OnPropertyChanged(nameof(ShowsGenerate));
+            OnPropertyChanged(nameof(RunWorkflowTip));
             ShowGenerateProgress();
         };
     }

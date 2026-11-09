@@ -6,6 +6,7 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Avalonia;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Inspector;
 using IDevelop.Desktop.Theme;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -103,7 +104,7 @@ public sealed class NodeMenuTests : IDisposable
 
         shell.RightClick(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["Retry", "Rename", "Duplicate", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"], shell.MenuHeaders());
+        Assert.Equal(["Run from here", "Rename", "Duplicate", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"], shell.MenuHeaders());
     }
 
     [AvaloniaFact]
@@ -123,7 +124,7 @@ public sealed class NodeMenuTests : IDisposable
         var buildCopy = workflow.Tasks.Values.Single(task => task.Title == "Build copy");
         Assert.Equal(5, workflow.Tasks.Count);
         Assert.Equal(("Write the parser.", Codex), (designCopy.Field("instructions"), designCopy.Execution));
-        Assert.Equal((new CanvasPoint(105, 184), new CanvasPoint(505, 184)), (workflow.Positions[designCopy.Id], workflow.Positions[buildCopy.Id]));
+        Assert.Equal((new CanvasPoint(105, 210), new CanvasPoint(505, 210)), (workflow.Positions[designCopy.Id], workflow.Positions[buildCopy.Id]));
         Assert.Equal(ConnectionKind.Dependency, workflow.Connections[new ConnectionKey(designCopy.Id, buildCopy.Id)]);
         Assert.Equal(3, workflow.Connections.Count);
         Assert.Equal(["Build copy", "Design copy"], shell.Window.ViewModel.Canvas!.SelectedNodes.Select(node => node.Title).Order());
@@ -141,7 +142,7 @@ public sealed class NodeMenuTests : IDisposable
         shell.Click(shell.MenuItem("NodeMenuDuplicate"));
 
         var copy = Workflow(shell).Tasks.Values.Single(task => task.Title == "Design copy");
-        Assert.Equal(new CanvasPoint(105, 372), Workflow(shell).Positions[copy.Id]);
+        Assert.Equal(new CanvasPoint(105, 450), Workflow(shell).Positions[copy.Id]);
         Assert.All(
             ["Design", "Build", "Check"],
             title => Assert.False(shell.CardRect("Design copy").Intersects(shell.CardRect(title)), $"The copy covers {title}."));
@@ -180,21 +181,18 @@ public sealed class NodeMenuTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Choose_agent_unfolds_the_agent_section_and_clears_a_filter_that_hides_the_picker()
+    public void Choose_agent_shows_the_Agent_page_and_opens_the_client_picker()
     {
         var shell = Shell.Open(DesignThenBuild());
         shell.Click(shell.Header(shell.Node("Build")));
-        shell.Fold("Agent");
-        shell.FilterInspector("acc");
-        Assert.False(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
+        shell.Page(AgentPage.Task);
+        shell.WaitUntil(() => shell.Window.ViewModel.AgentPanel.IsTask, "the Task page shows");
 
         shell.RightClick(shell.Header(shell.Node("Build")));
         shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
 
         var picker = shell.Find<ComboBox>("TaskClient");
-        Assert.Equal(
-            (true, true, false, ""),
-            (picker.IsEffectivelyVisible, picker.IsDropDownOpen, shell.Section("Agent").IsFolded, shell.Find<TextBox>("InspectorFilter").Text));
+        Assert.Equal((true, true, true), (shell.Window.ViewModel.AgentPanel.IsAgent, picker.IsEffectivelyVisible, picker.IsDropDownOpen));
     }
 
     [AvaloniaFact]
@@ -239,12 +237,15 @@ public sealed class NodeMenuTests : IDisposable
     public void Choose_agent_opens_the_client_list_against_the_picker_once_it_is_scrolled_into_view()
     {
         var shell = Shell.Open(DesignThenBuild());
-        shell.Window.Height = shell.Window.MinHeight;
+        shell.Window.MinHeight = 320;
+        shell.Window.Height = 320;
         shell.Click(shell.Header(shell.Node("Build")));
+        shell.Fold("SystemPrompt");
         var viewport = shell.Find<ComboBox>("TaskClient").FindAncestorOfType<ScrollViewer>()!;
-        viewport.ScrollToEnd();
+        // The view scrolls to its end, as a person leaves it.
         shell.Render();
-        Assert.False(shell.Bounds(viewport).Contains(shell.Bounds(shell.Find<ComboBox>("TaskClient"))), "The picker is already in view.");
+        viewport.Offset = new Vector(0, viewport.Extent.Height);
+        shell.Render();
         Rect? placedAgainst = null;
 
         // A window places the list against where the picker was last laid out. A headless list is an overlay that lays the

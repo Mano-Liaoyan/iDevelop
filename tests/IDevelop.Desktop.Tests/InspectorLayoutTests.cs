@@ -17,10 +17,9 @@ using static IDevelop.TestSupport.FakeAgents;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The inspector's shared columns: every view ends its glyph buttons and counts at the panel's 12 px inset and its boxes
-/// 64 px from the panel's edge, keeps one label column at every width, centres each row on a 28 px first line, and in an
-/// inspector narrower than 440 px, where the longest model names would not fit beside their labels, puts every value under
-/// its label. No text is cut short.
+/// The Agent panel's shared columns: every page ends its decorators and counts at the action edge, 12 px from the page's edge,
+/// and its values at the value edge, 36 px from it, keeps one 96 px label column, and centres each row on a 26 px first line.
+/// Text is cut short only where a tooltip holds it whole.
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class InspectorLayoutTests : IDisposable
@@ -37,35 +36,10 @@ public sealed class InspectorLayoutTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void The_composer_s_buttons_end_where_its_box_ends_and_wrap_before_it(double width)
-    {
-        using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105, ConversationMode.Chat));
-        f.Install(AgyTurn.Reply("s-1", "Which fruit?"));
-        var shell = f.Open();
-        shell.SizeInspector(width);
-        shell.Click(shell.Header(shell.Node("Design")));
-        shell.RunNode("Design");
-        shell.WaitForState("Design", Canvas.NodeState.InputRequired);
-        var inspector = shell.Find<Control>("Inspector");
-        var box = shell.InView<TextBox>("Composer");
-        shell.Render();
-        double Right(Control control) => control.TranslatePoint(new Point(control.Bounds.Width, 0), inspector)!.Value.X;
-
-        var buttons = new[] { "SendMessage", "OpenInTerminal" }.Select(shell.Find<Button>).ToArray();
-
-        Assert.All(buttons, button => Assert.True(button.IsEffectivelyVisible, AutomationProperties.GetAutomationId(button)));
-        Assert.All(buttons, button => Assert.True(Right(button) <= Right(box) + 0.5,
-            $"{AutomationProperties.GetAutomationId(button)} ends at {Right(button):F1}, past the box's {Right(box):F1}, at {width} px."));
-    }
-
-    [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void The_workflow_the_task_and_the_connection_views_share_two_right_edges(double width)
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
+    public void The_workflow_the_task_and_the_connection_views_share_one_right_edge(double width)
     {
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(
@@ -74,48 +48,46 @@ public sealed class InspectorLayoutTests : IDisposable
                 new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)),
             _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
-        Assert.Equal(width, shell.Find<Control>("Inspector").Bounds.Width);
+        Assert.Equal(width - 2, shell.Find<Control>("Inspector").Bounds.Width);
 
-        Assert.Equal("actions at 12, values at 64", Edges(shell));
+        Assert.Equal("actions at 12, values at ", Edges(shell));
 
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Write it.");
         Assert.True(shell.Find<Button>("RevertInstructions").IsEffectivelyVisible);
-        Assert.True(shell.Find<Control>("PermissionNote").IsEffectivelyVisible);
 
-        Assert.Equal("actions at 12, values at 64", Edges(shell));
+        Assert.Equal("actions at 12, values at 36", Edges(shell));
 
         shell.Click(shell.ConnectionInto("Build"));
 
-        Assert.Equal("actions at 12, values at 64", Edges(shell));
+        Assert.Equal("actions at , values at 36", Edges(shell));
     }
 
     [AvaloniaTheory]
-    [InlineData(280, true)]
-    [InlineData(320, true)]
-    [InlineData(440, false)]
-    [InlineData(520, false)]
-    public void A_picker_sits_under_its_label_only_in_an_inspector_narrower_than_440(double width, bool under)
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
+    public void A_picker_sits_beside_its_label_at_every_panel_width(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        AssertUnder(shell, under, "TaskClient", "TaskModel", "TaskReasoning", "TaskConversation");
+        AssertBeside(shell, "TaskClient", "TaskModel", "TaskReasoning", "TaskConversation");
 
         shell.Window.ViewModel.Canvas!.Blueprints.Derive(BuiltInBlueprints.Implement);
         shell.Render();
 
-        AssertUnder(shell, under, "BlueprintName", "BlueprintClient", "BlueprintConversation", "FieldKey", "FieldLabel");
-        // A field's boxes and its Remove button keep to the panel's two edges.
-        Assert.Equal("actions at 12, values at 64", Edges(shell));
+        OpenFields(shell);
+        AssertBeside(shell, "BlueprintName", "BlueprintClient", "BlueprintConversation", "FieldKey", "FieldLabel");
+        Assert.Equal("actions at 12, values at 36", Edges(shell));
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void The_skill_picker_and_its_open_list_keep_the_panels_edges_and_cut_nothing_short(double width)
     {
         const string longName = "write-the-release-notes-for-every-storage-adapter";
@@ -137,15 +109,16 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.WaitUntil(() => Shell.ById<CheckBox>(shell.Window, "SkillChoice").Count() == 4, "the listed skills");
         shell.Render();
 
-        Assert.Equal("actions at 12, values at 64", Edges(shell));
-        AssertUnder(shell, width < InspectorGrid.NarrowPanelWidth, "TaskModel", "TaskSkills");
+        Assert.Equal("actions at 12, values at 36", Edges(shell));
+        AssertBeside(shell, "TaskModel", "TaskSkills");
         AssertNothingCutShort(shell);
-        // The box is as tall as the pickers above it, and its list and its note start and end where it does.
-        Assert.Equal(shell.Find<ComboBox>("TaskModel").Bounds.Height, picker.Bounds.Height, 0.5);
+        // The box is at least as tall as the pickers above it, because its value wraps, and its list and its note take the section's width under it.
+        Assert.True(picker.Bounds.Height >= shell.Find<ComboBox>("TaskModel").Bounds.Height - 0.5);
         var box = shell.Bounds(picker);
+        var inspector = shell.Bounds(shell.Find<Control>("Inspector"));
         foreach (var under in new[] { shell.Find<Control>("SkillList"), shell.Find<Control>("SkillsNote") })
         {
-            Assert.Equal((box.Left, box.Right), (Math.Round(shell.Bounds(under).Left, 1), Math.Round(shell.Bounds(under).Right, 1)));
+            Assert.Equal((inspector.Left + Inset, PageRight(shell) - ValueInset), (Math.Round(shell.Bounds(under).Left, 1), Math.Round(shell.Bounds(under).Right, 1)));
             Assert.True(shell.Bounds(under).Top >= box.Bottom, $"{AutomationProperties.GetAutomationId(under)} starts above the box's end.");
         }
 
@@ -157,10 +130,10 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void Antigravitys_note_wraps_in_full_under_its_picker(double width)
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
+    public void Antigravitys_skills_are_a_plain_value_whose_tooltip_says_why(double width)
     {
         Install(_fakes, ClientId.Antigravity);
         var shell = Shell.Open(
@@ -168,11 +141,11 @@ public sealed class InspectorLayoutTests : IDisposable
             _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
-        Assert.Equal("actions at 12, values at 64", Edges(shell));
+        Assert.Equal("actions at 12, values at 36", Edges(shell));
         AssertNothingCutShort(shell);
-        var (box, note) = (shell.Bounds(shell.Find<ToggleButton>("TaskSkills")), shell.Bounds(shell.Find<Control>("SkillsNote")));
-        Assert.Equal((box.Left, box.Right), (Math.Round(note.Left, 1), Math.Round(note.Right, 1)));
+        Assert.Equal("Antigravity CLI uses all of its installed skills; it can't limit them per task.", ToolTip.GetTip(shell.Find<TextBlock>("TaskSkillsValue").FindAncestorOfType<ToggleButton>()!));
     }
 
     [AvaloniaFact]
@@ -181,46 +154,44 @@ public sealed class InspectorLayoutTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.SizeInspector(280);
 
-        var notes = shell.Find<Control>("Palette").GetVisualDescendants().OfType<TextBlock>()
-            .Where(text => text is { IsEffectivelyVisible: true, Text: "None yet. Derive a blueprint to add one." }).ToArray();
+        var note = shell.Find<TextBlock>("EmptyLibrary");
 
-        Assert.Equal([0, 0], notes.Select(note => note.TextLayout.TextLines.Count(line => line.HasCollapsed)));
+        Assert.Equal("No project or personal blueprints yet.", note.Text);
+        Assert.DoesNotContain(note.TextLayout.TextLines, line => line.HasCollapsed);
     }
 
     /// <summary>
     /// Each editor sits 4 px under its label from the panel's content edge, where the glyphs and tiles start, or sits
     /// beside it in the value column.
     /// </summary>
-    private static void AssertUnder(Shell shell, bool under, params string[] ids)
+    private static void AssertBeside(Shell shell, params string[] ids)
     {
         foreach (var editor in ids.SelectMany(id => Shell.ById<Control>(shell.Window, id)))
         {
             var id = AutomationProperties.GetAutomationId(editor);
             var label = Label(editor.FindAncestorOfType<InspectorRow>()!);
             var (top, bottom) = (shell.Bounds(editor).Top, shell.Bounds(label).Bottom);
-            Assert.True(under ? Math.Abs(top - bottom - 4) < 1 : top < bottom, $"{id} starts at {top}, and its label ends at {bottom}.");
+            Assert.True(top < bottom, $"{id} starts at {top}, and its label ends at {bottom}.");
             var content = shell.Bounds(shell.Find<Control>("Inspector")).Left + Inset;
             // Beside its label, a value starts at the value column, after the glyph column, its gap, and the label column.
-            Assert.Equal(under ? content : content + 24 + InspectorGrid.LabelWidth, shell.Bounds(editor).Left, 0.5);
+            Assert.Equal(content + LabelColumn, shell.Bounds(editor).Left, 0.5);
         }
     }
 
     [AvaloniaFact]
-    public void Every_labelled_row_of_a_task_leads_with_a_glyph_or_a_tile()
+    public void A_labelled_row_of_a_task_leads_with_its_label_and_no_glyph()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
             .Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons) }).ToArray();
 
         Assert.Equal(
-            ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Status", "Type", "Version", "Description"],
+            ["Client", "Model", "Reasoning", "Skills", "Mode", "Permissions"],
             rows.Select(row => row.Label));
-        Assert.All(rows, row => Assert.True(row.Icon is not null || row.Lead is not null, $"{row.Label} has no glyph."));
-        Assert.Equal(
-            ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", null, null, "IconVersion", "IconDescription"],
-            rows.Select(row => IconKey(row.Icon)));
+        Assert.All(rows, row => Assert.True(row.Icon is null && row.Lead is null, $"{row.Label} leads with a glyph."));
     }
 
     [AvaloniaFact]
@@ -236,7 +207,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var strong = ((ISolidColorBrush)Application.Current!.FindResource(ThemeVariant.Light, "TextStrongBrush")!).Color;
         Assert.Equal(
-            [("Implement", strong), ("Implement", strong), ("Plan", strong), ("Architect", strong), ("Review", strong), ("Approval", strong), ("Merge", strong)],
+            [("Implement", strong), ("Plan", strong), ("Architect", strong), ("Review", strong), ("Approval", strong), ("Merge", strong)],
             labels);
     }
 
@@ -245,80 +216,16 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(320)]
     [InlineData(400)]
     [InlineData(520)]
-    public void The_overview_counts_end_where_the_library_buttons_and_the_filter_button_end(double width)
+    public void The_library_buttons_end_at_the_inspector_s_edge(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)));
         shell.SizeInspector(width);
         var edge = shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset;
 
-        var counts = Shell.ById<TextBlock>(shell.Window, "KindCount").Where(count => count.IsEffectivelyVisible).ToArray();
         var more = Shell.ById<Button>(shell.Window, "BlueprintMore").Where(button => button.IsEffectivelyVisible).ToArray();
 
-        Assert.NotEmpty(counts);
         Assert.Equal(6, more.Length);
-        Assert.All(more.Append(shell.Find<Button>("InspectorTools")), control => Assert.Equal(edge, shell.Bounds(control).Right, 1));
-        // A glyph's drawing ends inside its button, so a count's digits end there too, which the next test sees in pixels.
-        Assert.All(counts, count => Assert.Equal(edge - InspectorGrid.GlyphInkInset, shell.Bounds(count).Right, 1));
-    }
-
-    [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void The_counts_digits_end_where_the_drawn_more_and_filter_glyphs_end(double width)
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
-            new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, new CanvasPoint(105, 290)) { Title = "Plan" }));
-        shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        shell.SizeInspector(width);
-
-        var counts = Shell.ById<TextBlock>(shell.Window, "KindCount").Where(text => text.IsEffectivelyVisible).ToArray();
-        Assert.Equal(["2", "1"], counts.Select(count => count.Text));
-        var more = InkRight(shell, Shell.ById<Button>(shell.Window, "BlueprintMore").First(button => button.IsEffectivelyVisible));
-        var filter = InkRight(shell, shell.Find<Button>("InspectorTools"));
-        Assert.True(Math.Abs(more - filter) <= 1, $"The ink ends at {more} for More and {filter} for the filter button.");
-
-        // A "1" keeps more of its advance clear than a "2", so each count ends by its own drawing.
-        foreach (var count in counts)
-        {
-            var ink = InkRight(shell, count);
-            Assert.True(Math.Abs(ink - more) <= 1 && Math.Abs(ink - filter) <= 1,
-                $"The ink ends at {ink} for the count \"{count.Text}\", {more} for More, and {filter} for the filter button.");
-        }
-    }
-
-    [AvaloniaFact]
-    public void A_folded_sections_count_ends_where_the_drawn_filter_glyph_ends()
-    {
-        Install(_fakes, ClientId.Codex);
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)), _fakes.DiscoverAsync().Result);
-        shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        shell.Click(shell.Header(shell.Node("Design")));
-        shell.Pick("TaskClient", "Codex");
-        shell.Fold("Agent");
-
-        var badge = shell.Section("Agent").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("sectionBadge"));
-        Assert.Equal("(1)", badge.Text);
-        var (ink, filter) = (InkRight(shell, badge), InkRight(shell, shell.Find<Button>("InspectorTools")));
-        Assert.True(Math.Abs(ink - filter) <= 1, $"The count's ink ends at {ink}, and the filter glyph's at {filter}.");
-    }
-
-    [AvaloniaTheory]
-    [InlineData(400, false)]
-    [InlineData(160, true)]
-    public void A_kind_line_that_does_not_fit_puts_the_version_under_the_type_without_the_dot(double width, bool broken)
-    {
-        var (type, dot, version) = (new TextBlock { Text = "Implement with the team's checklist" }, new TextBlock { Text = " · ", ClipToBounds = true },
-            new TextBlock { Text = "Project, version 2" });
-        var line = new SeparatedLine { Children = { type, dot, version } };
-        var window = new Window { Width = width, Height = 200, Content = new Border { Width = width, Child = line, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left } };
-        window.Show();
-        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-
-        Assert.Equal(broken, version.Bounds.Top >= type.Bounds.Bottom);
-        Assert.Equal(broken ? 0 : dot.DesiredSize.Width, dot.Bounds.Width);
-        Assert.Equal(broken ? 0 : type.Bounds.Width + dot.Bounds.Width, version.Bounds.Left, 0.5);
-        window.Close();
+        Assert.All(more, control => Assert.Equal(edge, shell.Bounds(control).Right, 1));
     }
 
     [AvaloniaFact]
@@ -329,42 +236,44 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var entries = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
             .Where(row => row.IsEffectivelyVisible && row.Classes.Contains("entry")).ToArray();
-        Assert.Equal(7, entries.Length);
+        Assert.Equal(6, entries.Length);
         Assert.All(entries, row => Assert.Equal(InspectorGrid.LineHeight, row.Bounds.Height, 0.5));
         var margins = entries.Select(row => row.Margin).ToList();
 
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
-        var lines = BesideRows(shell).Where(row => row.Label is "Client" or "Model" or "Type" or "Version").ToArray();
+        var lines = BesideRows(shell).Where(row => row.Label is "Client" or "Model" or "Reasoning" or "Skills").ToArray();
         Assert.Equal(4, lines.Length);
         Assert.All(lines, row => Assert.Equal(InspectorGrid.LineHeight, row.Bounds.Height, 0.5));
         Assert.Single(margins.Concat(lines.Select(row => row.Margin)).Distinct());
     }
 
     [AvaloniaTheory]
-    [InlineData(440)]
-    [InlineData(480)]
-    [InlineData(520)]
-    public void Labels_and_values_keep_one_column_each_at_every_width_from_440(double width)
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
+    public void Labels_and_values_keep_one_column_each_at_every_width_from_300(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
-        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Conversation", "Type", "Version"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal("labels at 36, values at 124", Columns(shell));
+        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Permissions"], BesideRows(shell).Select(row => row.Label));
+        Assert.Equal("labels at 12, values at 108", Columns(shell));
 
         shell.Click(shell.ConnectionInto("Build"));
 
-        Assert.Equal(["From", "To"], BesideRows(shell).Select(row => row.Label));
-        Assert.Equal("labels at 36, values at 124", Columns(shell));
+        Assert.Equal(["From", "To", "Kind"], BesideRows(shell).Select(row => row.Label));
+        Assert.Equal("labels at 12 and 32, values at 108", Columns(shell));
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
     public void A_row_without_a_glyph_starts_its_label_where_its_value_starts_under_it(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
@@ -372,6 +281,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Window.ViewModel.Canvas!.Blueprints.Derive(BuiltInBlueprints.Implement);
         shell.Render();
 
+        OpenFields(shell);
         var content = shell.Bounds(shell.Find<Control>("Inspector")).Left + Inset;
         var rows = shell.Find<Control>("BlueprintEditor").GetVisualDescendants().OfType<InspectorRow>()
             .Where(row => row is { IsEffectivelyVisible: true, Layout: RowLayout.Columns or RowLayout.Stacked }).ToArray();
@@ -380,50 +290,19 @@ public sealed class InspectorLayoutTests : IDisposable
         Assert.All(rows.Where(row => Shown(row, ":stacked")), row => Assert.Equal((row.Label, content), (row.Label, Math.Round(shell.Bounds(Presenter(row)).Left, 1))));
     }
 
-    [AvaloniaFact]
-    public void A_panel_widened_again_puts_its_values_back_beside_their_labels()
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
-        shell.Click(shell.Header(shell.Node("Design")));
-
-        shell.SizeInspector(280);
-        AssertUnder(shell, true, "TaskClient", "TaskModel");
-
-        shell.SizeInspector(520);
-        AssertUnder(shell, false, "TaskClient", "TaskModel");
-        Assert.Equal("labels at 36, values at 124", Columns(shell));
-    }
-
     [AvaloniaTheory]
-    [InlineData(280)]
     [InlineData(320)]
-    public void Under_440_every_labelled_value_sits_under_its_label_from_the_content_edge_to_the_value_edge(double width)
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
-            new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.SizeInspector(width);
-        shell.Click(shell.Header(shell.Node("Design")));
-
-        AssertAllUnder(shell, ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Status", "Type", "Version", "Description"]);
-
-        shell.Click(shell.ConnectionInto("Build"));
-
-        AssertAllUnder(shell, ["From", "To", "Kind"]);
-    }
-
-    [AvaloniaTheory]
-    [InlineData(440)]
     [InlineData(520)]
     public void A_row_centres_its_glyph_label_value_and_buttons_on_its_first_line(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         var rows = BesideRows(shell);
-        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Conversation", "Type", "Version"], rows.Select(row => row.Label));
-        Assert.True(shell.Find<Control>("PermissionNote").IsEffectivelyVisible);
-        foreach (var row in rows)
+        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Permissions"], rows.Select(row => row.Label));
+        foreach (var row in rows.Where(row => row.Bounds.Height <= InspectorGrid.LineHeight))
         {
             var line = shell.Bounds(Label(row)).Center.Y;
             var parts = row.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible && Part(control) is not null).ToArray();
@@ -434,98 +313,46 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void The_run_puts_its_status_and_results_under_their_labels(double width)
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
+    public void A_nodes_status_starts_at_the_inset_and_its_results_reach_the_action_edge(double width)
     {
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Replay(Fixture.Path("codex-success.jsonl")));
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Say hi", 105, 90, Codex, "Reply with DONE.")), _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.RunNode();
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Completed", "the run completes");
+        shell.WaitUntil(() => shell.CardStatus("Say hi") == "Done", "the run completes");
         shell.Render();
 
         var inspector = shell.Bounds(shell.Find<Control>("Inspector"));
-        foreach (var id in new[] { "RunTaskStatus", "Results" })
-        {
-            var row = shell.Find<Control>(id).FindAncestorOfType<InspectorRow>()!;
-            var (label, value) = (shell.Bounds(Label(row)), shell.Bounds(Presenter(row)));
-            Assert.True(value.Top >= label.Bottom, $"{row.Label}'s value starts at {value.Top}, above its label's end at {label.Bottom}.");
-            Assert.Equal(inspector.Left + Inset, value.Left, 0.5);
-            var tops = row.GetVisualDescendants().OfType<Border>().Where(border => border.IsEffectivelyVisible && border.Classes.Contains("chip"))
-                .Select(chip => shell.Bounds(chip).Top).Distinct().ToArray();
-            Assert.True(tops.Length <= 1, $"{row.Label}'s chips take {tops.Length} lines.");
-        }
+        // The status starts the line under the name, after the tile, its gap, and the mark.
+        Assert.Equal(inspector.Left + Inset + AgentPanelHeader.TileSize + 8 + 14 + 4, shell.Bounds(shell.Find<Control>("RunTaskStatus")).Left, 0.5);
+        shell.Page(AgentPage.Output);
+        var results = shell.Bounds(shell.Find<Control>("Results"));
+        Assert.Equal((inspector.Left + Inset, PageRight(shell) - Inset), (Math.Round(results.Left, 1), Math.Round(results.Right, 1)));
     }
 
-    /// <summary>What a control is to its row's first line: a glyph, the info glyph, or the value.</summary>
+    /// <summary>What a control is to its row's first line: a glyph or the value.</summary>
     private static string? Part(Control control) => control switch
     {
         KindTile => "glyph",
         PathIcon icon when icon.FindAncestorOfType<KindTile>() is null && icon.FindAncestorOfType<ComboBox>() is null
             && icon.FindAncestorOfType<ToggleButton>() is null => "glyph",
-        Border border when border.Classes.Contains("infoGlyph") => "info",
         ComboBox => "value",
-        ToggleButton picker when picker.Classes.Contains("picker") => "value",
+        ToggleButton picker when picker.Classes.Contains("picker") || picker.Classes.Contains("rowDisclosure") => "value",
         TextBlock text when text.Classes.Contains("value") => "value",
         _ => null,
     };
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void The_filter_stays_put_whether_a_task_a_connection_or_nothing_is_selected(double width)
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
+    public void A_long_title_keeps_one_line_and_its_tooltip_holds_all_of_it(double width)
     {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
-            new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.SizeInspector(width);
-        var filter = shell.Find<TextBox>("InspectorFilter");
-        var empty = shell.Bounds(filter).Top;
-
-        shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Equal(empty, shell.Bounds(filter).Top, 0.5);
-
-        shell.Click(shell.ConnectionInto("Build"));
-        Assert.Equal(empty, shell.Bounds(filter).Top, 0.5);
-    }
-
-    [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void Text_and_boxes_without_a_label_end_at_the_value_edge_and_only_rows_of_buttons_reach_the_action_edge(double width)
-    {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
-        shell.SizeInspector(width);
-        shell.Click(shell.Header(shell.Node("Design")));
-        var right = shell.Bounds(shell.Find<Control>("Inspector")).Right;
-
-        var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>().Where(row => row.IsEffectivelyVisible).ToArray();
-        var full = rows.Where(row => row.Layout == RowLayout.Full).ToArray();
-        var buttons = rows.Where(row => row.Layout == RowLayout.Buttons).ToArray();
-        Assert.Contains(shell.Find<TextBlock>("SendProblem").FindAncestorOfType<InspectorRow>(), full);
-        Assert.Contains(shell.Find<TextBox>("Composer").FindAncestorOfType<InspectorRow>(), full);
-        Assert.Contains(shell.Find<Button>("DeriveTaskType").FindAncestorOfType<InspectorRow>(), buttons);
-        Assert.All(full, row => Assert.Equal(right - Inset - InspectorGrid.TrailWidth, shell.Bounds(Presenter(row)).Right, 0.5));
-        Assert.All(buttons, row => Assert.Equal(right - Inset, shell.Bounds(Presenter(row)).Right, 0.5));
-        Assert.All(full.SelectMany(row => row.GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible),
-            text => Assert.True(shell.Bounds(text).Right <= right - Inset - InspectorGrid.TrailWidth + 0.5, $"\"{text.Text}\" ends at {shell.Bounds(text).Right}."));
-
-        // The two blueprint buttons share a line even in the narrowest panel.
-        var (derive, save) = (shell.Find<Button>("DeriveTaskType"), shell.Find<Button>("SaveAsBlueprint"));
-        Assert.Equal(shell.Bounds(derive).Top, shell.Bounds(save).Top);
-    }
-
-    [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void A_long_title_wraps_in_the_header_and_nothing_in_the_task_or_its_connection_is_cut_short(double width)
-    {
-        const string title = "Draft the release notes for the storage adapter and its migration";
+        const string title = "Draft the release notes for the storage adapter and its migration and its rollback plan for every region";
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
         shell.SizeInspector(width);
@@ -533,13 +360,14 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var header = shell.Find<Control>("InspectorHeader");
         var shown = header.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("headerTitle"));
-        Assert.Equal(title, shown.Text);
-        Assert.True(shown.TextLayout.TextLines.Count > 1, "The title wraps.");
+        Assert.Equal((title, title), (((EllipsisText)shown).Whole, ToolTip.GetTip((Control)shown.Parent!)));
+        Assert.EndsWith("…", shown.Text);
+        Assert.Single(shown.TextLayout.TextLines);
         AssertNothingCutShort(shell);
-        // More stays on the title's first line, at the panel's action edge.
-        var more = shell.Bounds(shell.Find<Button>("InspectorMore"));
-        Assert.Equal(shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset, more.Right, 0.5);
-        Assert.True(more.Top < shell.Bounds(shown).Top + 14, $"More starts at {more.Top}, under the title's first line at {shell.Bounds(shown).Top}.");
+        // Close ends the header at its 8 px inset, with More beside it.
+        var close = shell.Bounds(shell.Find<Button>("ClosePanel"));
+        Assert.Equal(shell.Bounds(shell.Find<Control>("Inspector")).Right - 8, close.Right, 0.5);
+        Assert.True(shell.Bounds(shell.Find<Button>("InspectorMore")).Right <= close.Left + 0.5);
 
         shell.Click(shell.ConnectionInto("Build"));
 
@@ -547,11 +375,10 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(440)]
-    [InlineData(520)]
-    public void The_longest_model_names_of_every_client_show_whole_in_their_pickers(double width)
+    [InlineData(360)]
+    [InlineData(400)]
+    [InlineData(560)]
+    public void The_longest_model_names_of_every_client_read_whole_in_their_tooltips_and_their_lists(double width)
     {
         TaskId claude = TaskId.New(), codex = TaskId.New(), pi = TaskId.New(), agy = TaskId.New();
         Install(_fakes, ClientId.ClaudeCode);
@@ -568,33 +395,48 @@ public sealed class InspectorLayoutTests : IDisposable
         foreach (var (title, model) in new[] { ("Claude", "Claude Sonnet 5.5"), ("Codex", "GPT-6.1-Sol"), ("Pi", "DeepSeek V4.1 Flash (deepseek)"), ("Antigravity", "Claude Opus 4.6 (Thinking)") })
         {
             shell.Click(shell.Header(shell.Node(title)));
-            Assert.Equal((title, model), (title, shell.Picked("TaskModel")));
+            Assert.Equal((title, model, $"{model} (Alt+M)"), (title, shell.Picked("TaskModel"), ToolTip.GetTip(shell.Find<ComboBox>("TaskModel"))));
             AssertNothingCutShort(shell);
         }
     }
 
     [AvaloniaTheory]
     [InlineData(280)]
-    [InlineData(520)]
+    [InlineData(320)]
     public void The_scroll_bar_keeps_to_the_right_inset_so_nothing_sits_under_it(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        shell.Window.MinHeight = 420;
+        shell.Window.Height = 420;
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.Find<TextBox>("TaskInstructions"));
-        shell.Type("Write it.");
-        var right = shell.Bounds(shell.Find<Control>("Inspector")).Right;
+        shell.Page(AgentPage.Task);
+        var node = shell.NodeModel("Design");
+        node.SetField("instructions", string.Join("\n", Enumerable.Range(1, 40).Select(index => $"Line {index}.")));
+        node.SetField("acceptanceCriteria", string.Join("\n", Enumerable.Range(1, 40).Select(index => $"Line {index}.")));
+        shell.Render();
+        var right = PageRight(shell);
 
         // A scroll bar lays out at its expanded width and only draws thinner while collapsed, so its bounds are where it
         // expands to, and it overlays the content, which never moves for it.
-        var bar = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<ScrollBar>()
-            .Single(scroll => scroll is { IsEffectivelyVisible: true, Orientation: Avalonia.Layout.Orientation.Vertical });
+        var scroller = shell.Find<Control>("TaskPage").GetVisualAncestors().OfType<ScrollViewer>().First();
+        var bar = scroller.GetVisualDescendants().OfType<ScrollBar>()
+            .First(scroll => scroll is { IsEffectivelyVisible: true, Orientation: Avalonia.Layout.Orientation.Vertical } && scroll.FindAncestorOfType<ScrollViewer>() == scroller);
         Assert.Equal(right, shell.Bounds(bar).Right, 0.5);
         Assert.True(shell.Bounds(bar).Left >= right - Inset + 2, $"The bar starts {right - shell.Bounds(bar).Left} px from the edge.");
         Assert.True(shell.Bounds(shell.Find<Button>("RevertInstructions")).Right <= shell.Bounds(bar).Left - 2);
     }
 
     private const double Inset = 12;
+
+    private const double ValueInset = 36;
+
+    private const double LabelColumn = InspectorGrid.GlyphWidth + InspectorGrid.GlyphGap + InspectorGrid.LabelWidth;
+
+    /// <summary>The right edge of the page in view, from which the page's two edges measure.</summary>
+    private static double PageRight(Shell shell) =>
+        shell.Find<Control>("Inspector").GetVisualDescendants().OfType<StackPanel>().Where(panel => panel.Classes.Contains("page") && panel.IsEffectivelyVisible)
+            .Select(panel => shell.Bounds(panel).Right + Inset).Single();
 
     /// <summary>
     /// At the narrowest, the default, and the widest inspector: the panel's two right edges, nothing cut short, nothing
@@ -608,17 +450,17 @@ public sealed class InspectorLayoutTests : IDisposable
         foreach (var size in new double[] { 280, 320, 520 })
         {
             shell.SizeInspector(size);
-            var right = shell.Bounds(inspector).Right;
-            Assert.Equal((size, "actions at 12, values at 64"), (size, Edges(shell)));
+            var right = PageRight(shell);
+            Assert.Equal((size, 12, 36), (size, Insets(shell).Actions.DefaultIfEmpty(12).Max(), Insets(shell).Values.DefaultIfEmpty(36).Max()));
             AssertNothingCutShort(shell);
             var shown = inspector.GetVisualDescendants().OfType<Control>()
-                .Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 } && control.FindAncestorOfType<InspectorRow>() is not null
+                .Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0, Name: not "PART_Row" } && control.FindAncestorOfType<InspectorRow>() is not null
                     && control.FindAncestorOfType<TextBox>() is null && control.FindAncestorOfType<ComboBox>() is null).ToArray();
             Assert.All(shown, control => Assert.True(shell.Bounds(control).Right <= right - Inset + 0.5,
                 $"At {size} px, a {control.GetType().Name} ends {right - shell.Bounds(control).Right} px from the edge."));
             // A card grows with what it holds, so the panel's own scroll is the only one.
             Assert.DoesNotContain(shown, control => control is ScrollViewer);
-            Assert.All(shown.Where(Paragraph), text => Assert.True(shell.Bounds(text).Right <= right - Inset - InspectorGrid.TrailWidth + 0.5,
+            Assert.All(shown.Where(Paragraph), text => Assert.True(shell.Bounds(text).Right <= right - Inset + 0.5,
                     $"At {size} px, \"{((TextBlock)text).Text}\" ends {right - shell.Bounds(text).Right} px from the edge."));
         }
 
@@ -650,11 +492,12 @@ public sealed class InspectorLayoutTests : IDisposable
 
     private static TextBlock Label(InspectorRow row) => row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Label");
 
-    /// <summary>No text the inspector shows ends in an ellipsis or runs past its box, a picker's choice and a chip included.</summary>
+    /// <summary>No text the inspector shows ends in an ellipsis or runs past its box, unless a tooltip on it or around it holds it whole.</summary>
     private static void AssertNothingCutShort(Shell shell)
     {
         var cut = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<TextBlock>()
             .Where(text => text.IsEffectivelyVisible && text.FindAncestorOfType<TextBox>() is null
+                && !text.GetVisualAncestors().OfType<Control>().Prepend(text).Any(control => ToolTip.GetTip(control) is not null)
                 && (text.TextLayout.TextLines.Any(line => line.HasCollapsed) || text.TextLayout.Width > text.Bounds.Width + 0.5))
             .Select(text => text.Text).ToArray();
         Assert.Empty(cut);
@@ -679,45 +522,46 @@ public sealed class InspectorLayoutTests : IDisposable
         return $"labels at {Lefts(rows.Select(Label))}, values at {Lefts(rows.Select(Presenter))}";
     }
 
-    /// <summary>Each labelled row puts its label on a line of its own, and its value under it, from the content edge to the value edge.</summary>
-    private static void AssertAllUnder(Shell shell, string[] labels)
-    {
-        var inspector = shell.Bounds(shell.Find<Control>("Inspector"));
-        var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
-            .Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons or RowLayout.Title) }).ToArray();
-        Assert.Equal(labels, rows.Select(row => row.Label));
-        foreach (var row in rows)
-        {
-            var (label, value) = (shell.Bounds(Label(row)), shell.Bounds(Presenter(row)));
-            Assert.True(value.Top >= label.Bottom, $"{row.Label}'s value starts at {value.Top}, above its label's end at {label.Bottom}.");
-            Assert.Equal((inspector.Left + Inset, inspector.Right - Inset - InspectorGrid.TrailWidth), (Math.Round(value.Left, 1), Math.Round(value.Right, 1)));
-        }
-    }
-
     /// <summary>
     /// The distinct right insets, in px from the inspector's edge, of the actions and of the values it shows now. A row's
-    /// actions are its trailing glyphs, such as a revert arrow and an info glyph, Place and More, or a kind's count, whose
-    /// trailing column ends with them.
+    /// actions are its trailing glyphs, such as a revert arrow, Place and More, or a kind's count, whose
+    /// trailing column ends with them. A value never moves for its arrow, which ends the label's column.
     /// </summary>
     private static string Edges(Shell shell)
     {
+        var (actions, values) = Insets(shell);
+        return $"actions at {string.Join(" and ", actions)}, values at {string.Join(" and ", values)}";
+    }
+
+    private static (double[] Actions, double[] Values) Insets(Shell shell)
+    {
         var inspector = shell.Find<Control>("Inspector");
-        var right = shell.Bounds(inspector).Right;
+        var right = inspector.GetVisualDescendants().OfType<StackPanel>().Where(panel => panel.Classes.Contains("page") && panel.IsEffectivelyVisible)
+            .Select(panel => shell.Bounds(panel).Right + Inset).DefaultIfEmpty(shell.Bounds(inspector).Right).First();
         var shown = inspector.GetVisualDescendants().OfType<Control>().Where(control => control is { IsEffectivelyVisible: true, Bounds.Width: > 0 }).ToArray();
         bool InRow(Control control) => control.FindAncestorOfType<InspectorRow>() is not null;
         string? Id(Control control) => AutomationProperties.GetAutomationId(control);
 
-        var actions = shown.Where(control => Id(control) is "InspectorMore" or "InspectorTools" || control.Name == "PART_Trail");
+        var actions = shown.Where(control => Id(control) is "RemoveField" || control.Name == "PART_Trail");
         var values = shown.Where(control =>
             control is ComboBox
-            || control is TextBox && (Id(control) == "InspectorFilter" || InRow(control))
+            || control is TextBox && InRow(control)
             || control is Button { Classes: var classes } && classes.Contains("rowLink")
             || control is ToggleButton { Classes: var pickers } && pickers.Contains("picker")
             || control is Border { Classes: var lists } && lists.Contains("skillList"));
 
-        string Insets(IEnumerable<Control> controls) =>
-            string.Join(" and ", controls.Select(control => Math.Round(right - shell.Bounds(control).Right, 1)).Distinct().Order());
-        return $"actions at {Insets(actions)}, values at {Insets(values)}";
+        double[] Edges(IEnumerable<Control> controls) => [.. controls.Select(control => Math.Round(right - shell.Bounds(control).Right, 1)).Distinct().Order()];
+        return (Edges(actions), Edges(values));
+    }
+
+    private static void OpenFields(Shell shell)
+    {
+        foreach (var fold in Shell.ById<ToggleButton>(shell.Window, "FieldFold"))
+        {
+            fold.IsChecked = true;
+        }
+
+        shell.Render();
     }
 
     private static string? IconKey(Geometry? icon) =>

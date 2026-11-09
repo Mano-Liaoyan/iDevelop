@@ -53,6 +53,22 @@ public sealed class MarkdownViewTests
     }
 
     [AvaloniaFact]
+    public void A_table_wider_than_its_column_wraps_and_a_link_paragraph_spaces_its_lines()
+    {
+        var (window, view) = Show("| Path | What |\n| --- | --- |\n| db/migrations/0147_ledger_entries_for_account.sql | New function and index over the ledger entries partitioned table |\n\nSee the [partitioning design](https://example.com) for the month boundaries and some more words that wrap onto one more line here and there too and more");
+        window.Width = 420;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var scroller = view.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var linked = view.GetVisualDescendants().OfType<SelectableTextBlock>().First(text => text.Inlines?.OfType<Avalonia.Controls.Documents.InlineUIContainer>().Any() == true);
+
+        Assert.True(scroller.Extent.Width <= scroller.Viewport.Width + 1, $"{scroller.Extent.Width} > {scroller.Viewport.Width}");
+        Assert.Equal(6, linked.LineSpacing);
+    }
+
+    [AvaloniaFact]
     public void Headings_lists_quotes_code_and_tables_render_as_their_text()
     {
         var (window, view) = Show("# Plan\n\nSome *emphasis* and **strong** and `code`.\n\n1. First\n2. Second\n\n> Quoted\n\n```csharp\nvar x = 1;\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n");
@@ -126,6 +142,35 @@ public sealed class MarkdownViewTests
     }
 
     [AvaloniaFact]
+    public void A_task_list_shows_a_box_for_each_item_with_no_bullet_and_no_brackets()
+    {
+        var (window, view) = Show("- [ ] Open\n- [x] Done");
+
+        var boxes = view.GetVisualDescendants().OfType<Border>().Where(border => border.Classes.Contains("mdTask")).ToArray();
+        Assert.Equal([false, true], boxes.Select(box => box.Classes.Contains("done")));
+        Assert.Equal(["Open", "Done"], Blocks(view));
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<TextBlock>(), text => text.Classes.Contains("mdMarker"));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void A_long_code_span_stands_as_its_own_block_and_the_text_reads_on()
+    {
+        const string Span = "entry_id,account_id,tenant_id,posted_at,effective_at,currency,amount_minor,direction,source_system";
+        var (window, view) = Show($"The header is `{Span}`, and it stays.");
+        var blocks = view.GetVisualDescendants().OfType<SelectableTextBlock>().Select(Shown).ToList();
+        Assert.Equal(["The header is ", Span, ", and it stays."], blocks.Select(block => block is ", and it stays." or "The header is " ? block : block?.Replace("\u00AD", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal).Replace("↪", "", StringComparison.Ordinal)));
+        window.Close();
+    }
+
+    [Theory]
+    [InlineData("short", 20, "short")]
+    [InlineData("    call(first, second, third)", 20, "    call(first,\n      ↪ second,\n      ↪ third)")]
+    [InlineData("abcdefghijkl", 8, "abcdefgh\n  ↪ ijkl")]
+    public void A_long_code_line_continues_with_a_mark_past_its_own_indent(string source, int columns, string shown) =>
+        Assert.Equal(shown, Conversation.CodeText.Wrapped(source, columns));
+
+    [AvaloniaFact]
     public void A_message_past_the_cell_link_or_length_limit_shows_as_its_source()
     {
         static string Table(int rows) => "| a | b | c | d | e | f | g | h | i | j |\n|-|-|-|-|-|-|-|-|-|-|\n"
@@ -147,7 +192,7 @@ public sealed class MarkdownViewTests
         Assert.Equal((0, 0, 2), Shown("Short.\n\n" + new string('w', 19_992)));
         var longer = "Short.\n\n" + new string('w', 19_993);
         Assert.Equal((0, 0, 1), Shown(longer));
-        Assert.Equal((longer, 57.0), (Blocks(view).Single(), view.Children[0].Bounds.Height));
+        Assert.Equal((longer, 48.0), (Blocks(view).Single(), view.Children[0].Bounds.Height));
         window.Close();
     }
 

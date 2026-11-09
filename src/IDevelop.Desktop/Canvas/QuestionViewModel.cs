@@ -11,14 +11,24 @@ public sealed class QuestionViewModel
 {
     private readonly AskedQuestion _question;
 
-    internal QuestionViewModel(AskedQuestion question, Action changed)
+    /// <param name="question">The question.</param>
+    /// <param name="changed">Runs when the person's choice changes.</param>
+    /// <param name="firstDigit">The digit that picks the question's first choice in the conversation.</param>
+    /// <param name="showsHeader">Other questions share the attention card, so this one names itself.</param>
+    internal QuestionViewModel(AskedQuestion question, Action changed, int firstDigit = 1, bool showsHeader = false)
     {
         _question = question;
-        Choices = [.. question.Options.Select(option => new ChoiceViewModel(option, this, changed))];
+        ShowsHeader = showsHeader;
+        Choices = [.. question.Options.Select((option, index) => new ChoiceViewModel(option, this, changed, firstDigit + index))];
     }
 
     /// <summary>The question's short label, such as "Color", or its text when it has none.</summary>
     public string Header => _question.Header.Length > 0 ? _question.Header : _question.Text;
+
+    /// <summary>The question's text under its header, or null when the header is the text.</summary>
+    public string? Prompt => _question.Header.Length > 0 && _question.Text != _question.Header ? _question.Text : null;
+
+    public bool ShowsHeader { get; }
 
     public IReadOnlyList<ChoiceViewModel> Choices { get; }
 
@@ -37,8 +47,9 @@ public sealed class ChoiceViewModel : ObservableObject
     private readonly QuestionViewModel _question;
     private readonly Action _changed;
 
-    internal ChoiceViewModel(QuestionOption option, QuestionViewModel question, Action changed)
+    internal ChoiceViewModel(QuestionOption option, QuestionViewModel question, Action changed, int digit)
     {
+        Number = digit;
         Id = option.Id;
         Label = option.Label;
         Detail = option.Detail;
@@ -47,6 +58,12 @@ public sealed class ChoiceViewModel : ObservableObject
     }
 
     internal string Id { get; }
+
+    /// <summary>The choice's place in the attention card, which the digit key picks.</summary>
+    public int Number { get; }
+
+    /// <summary>The digit the row shows, or nothing past 9, which has no key.</summary>
+    public string Digit => Number is >= 1 and <= 9 ? $"{Number}" : "";
 
     public string Label { get; }
 

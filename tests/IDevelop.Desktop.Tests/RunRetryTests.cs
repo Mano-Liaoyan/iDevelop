@@ -30,13 +30,30 @@ public sealed class RunRetryTests
         shell.WaitForState("A", NodeState.Failed);
         shell.Click(shell.Header(shell.Node("A")));
         Assert.Contains("The model is busy.", shell.InView<TextBlock>("RunTaskDetail").Text);
-        Assert.False(shell.InView<Button>("RunTask").IsEffectivelyVisible);
+        Assert.False(shell.ShowsAny("RunTask"));
 
         shell.Click(shell.InView<Button>("RetryTask"));
 
         shell.WaitForState("B", NodeState.Completed);
         Assert.Equal(NodeState.Completed, shell.NodeModel("A").State);
         Assert.Equal("A ready.", Assert.Single(shell.NodeModel("A").Results).Summary);
+    }
+
+    [AvaloniaFact]
+    public void A_failed_node_offers_Retry_in_its_Action_Dock_and_not_in_the_header()
+    {
+        using var f = new NodeFixture(Plan(A, "A", 105));
+        f.Install(On().Choose((Fresh("A"), On().Stderr("The model is busy.").Exit(2))));
+        var shell = f.Open();
+        shell.RunNode("A");
+        shell.WaitForState("A", NodeState.Failed);
+
+        shell.NodeModel("A").OpenConversationCommand.Execute(null);
+        shell.Render();
+
+        Assert.Empty(shell.NodeModel("A").HeaderActions);
+        Assert.True(shell.Find<Avalonia.Controls.Button>("RetryTask").IsEffectivelyVisible);
+        Assert.Contains("primary", shell.Find<Avalonia.Controls.Button>("RetryTask").Classes);
     }
 
     [AvaloniaFact]

@@ -5,8 +5,8 @@ using Avalonia.LogicalTree;
 namespace IDevelop.Desktop.Inspector;
 
 /// <summary>
-/// A section or a row of the inspector. It shows only when its data says so through <see cref="IsShown"/>, and when the
-/// window's filter lets it, so it sets its own <see cref="Visual.IsVisible"/>, and XAML binds IsShown instead.
+/// A fold panel or a row of the Agent panel. It shows only when its data says so through <see cref="IsShown"/>, so it sets its
+/// own <see cref="Visual.IsVisible"/>, and XAML binds IsShown instead.
 /// </summary>
 public abstract class InspectorPart : ContentControl
 {
@@ -20,10 +20,8 @@ public abstract class InspectorPart : ContentControl
         set => SetValue(IsShownProperty, value);
     }
 
-    /// <summary>The window's inspector state while the part is in the inspector, or null.</summary>
+    /// <summary>The window's fold state while the part is in the Agent panel, or null.</summary>
     protected InspectorState? State => _state;
-
-    protected bool IsFiltering => _state is { IsFiltering: true };
 
     internal abstract void Refresh();
 

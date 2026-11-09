@@ -156,7 +156,7 @@ try {
             $bar = Find-ById $window 'WorkflowRunBar'
             Check ($null -ne $bar) 'UI Automation finds the bar'
             Check ((Wait-Until { (Find-ById $window 'RunStatus').Current.Name -eq '1 running' } 30) -eq $true) "the bar counts the running node (found '$((Find-ById $window 'RunStatus').Current.Name)')"
-            Check ((Find-ById $window 'RunActivity').Current.Name -eq '"Implement atomic save"') "the bar names the running node (found '$((Find-ById $window 'RunActivity').Current.Name)')"
+            Check ($bar.Current.HelpText -like '*"Implement atomic save"*') "the bar names the running node (found '$($bar.Current.HelpText)')"
             Check ((Find-ById $window 'RunTaskStatus').Current.Name -eq 'Running') 'the inspector says the node runs'
             $sleeper = Wait-Until { if ([IO.File]::Exists($sleeperPid)) { [int]([IO.File]::ReadAllText($sleeperPid)) } } 30
             Check ($null -ne $sleeper) 'the fake Codex started a process whose parent exits'

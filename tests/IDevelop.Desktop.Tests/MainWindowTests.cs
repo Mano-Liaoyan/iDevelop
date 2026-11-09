@@ -51,9 +51,9 @@ public sealed class MainWindowTests : IDisposable
             picks++;
             return picker.Task;
         };
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.OpenFolderFromIndex();
 
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.OpenFolderFromIndex();
 
         Assert.Equal(1, picks);
         picker.SetResult(other);
@@ -68,6 +68,8 @@ public sealed class MainWindowTests : IDisposable
             TaskAt(Design, design, 105, 90),
             TaskAt(Build, build, 405, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        shell.Window.Width = 1500;
+        shell.AtOrigin();
         shell.Drag(shell.Center(shell.Output(build)), shell.Center(shell.Input(design)));
         Assert.Equal($"That would create a cycle: {build} → {design} → {build}.", shell.Status);
 
@@ -75,10 +77,10 @@ public sealed class MainWindowTests : IDisposable
         shell.Window.Height = shell.Window.MinHeight;
         shell.Render();
 
-        var status = shell.Bounds(Shell.Around(shell.Find<TextBlock>("Status"), "breadcrumb"));
+        var status = shell.Bounds(Shell.Around(shell.Find<TextBlock>("Status"), "mapNotice"));
         Assert.Equal(new Size(900, 600), shell.Window.ClientSize);
         Assert.All(
-            [shell.Bounds(shell.Find<Border>("Breadcrumb")), shell.Bounds(Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), shell.Bounds(Shell.Around(shell.Find<Minimap>("Minimap"), "floating"))],
+            [shell.Bounds(shell.Find<Border>("Breadcrumb")), shell.Bounds(shell.Find<Control>("ZoomPanel"))],
             other => Assert.False(status.Intersects(other), $"The status at {status} covers {other}"));
     }
 
@@ -88,19 +90,20 @@ public sealed class MainWindowTests : IDisposable
         var shell = Shell.Show();
 
         Assert.Equal("iDevelop", shell.Window.Title);
-        Assert.Equal([false, false, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
-        Assert.Equal(["Inspector"], Shell.Texts(shell.Find<Control>("Inspector")));
+        Assert.False(shell.ShowsAny("AddTask"));
+        Assert.Equal([false, true], new[] { "Save", "CanvasOpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
+        Assert.False(shell.Find<Control>("Inspector").IsEffectivelyVisible);
 
         shell.Window.ViewModel.Open(_temp.Create("plan"));
         shell.Render();
 
-        Assert.Equal([true, true, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
+        Assert.Equal([true, true, true], new[] { "AddTask", "Save", "IndexAdd" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.Equal(
             [
-                "Inspector", "Workflow", "0 tasks", "Filter properties", "Library",
+                "Workflow", "No nodes yet", "Library",
                 "Built-in", "Implement", "Plan", "Architect", "Review", "Approval", "Merge",
-                "Project", "None yet. Derive a blueprint to add one.", "Personal", "None yet. Derive a blueprint to add one.",
-                "Reload Libraries", "Select a task or connection to edit it.",
+                "No project or personal blueprints yet.",
+                "Reload Libraries",
             ],
             Shell.Texts(shell.Find<Control>("Inspector")));
         Assert.Equal("plan", shell.Find<TextBlock>("ProjectName").Text);

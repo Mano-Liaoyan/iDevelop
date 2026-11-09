@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
@@ -105,7 +106,7 @@ public sealed class ShortcutTests : IDisposable
 
         shell.Press(Key.F2);
         shell.Type("Parser");
-        shell.Click(shell.InEditor(700, 500));
+        shell.Click(shell.InEditor(660, 500));
 
         Assert.Equal(["Build", "Parser"], Titles(shell));
     }
@@ -149,7 +150,7 @@ public sealed class ShortcutTests : IDisposable
     {
         var shell = OpenTwo();
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.Find<TextBox>("TaskTitle"));
+        shell.EditTitle();
         shell.Press(Key.End);
 
         shell.PressWithText(Key.N, "n");

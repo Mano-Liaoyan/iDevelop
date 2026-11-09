@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using IDevelop.Desktop.Canvas;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -15,18 +16,33 @@ internal readonly record struct WorkflowRef(string Folder, WorkflowId Workflow)
 /// <summary>A workflow's expanded cards, by their tasks' ids.</summary>
 internal readonly record struct WorkflowCards(WorkflowRef Workflow, ImmutableArray<TaskId> Tasks);
 
+/// <summary>The Map view that the person chose for a workflow (brief S2).</summary>
+internal sealed record WorkflowViewChoice(WorkflowRef Workflow, MapMode Mode);
+
 /// <summary>
 /// The projects a window had open, which it opens again at the next start, in the per-user session file beside the theme
-/// preference: <c>{"projects":[folder...],"selected":{"folder":...,"workflow":...},"expanded":[{"folder":...,"workflow":...}],
-/// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}]}</c>. Expanded cards live here, on this machine, and never in
+/// preference: <c>{"projects":[folder...],"selected":{"folder":...,"workflow":...},
+/// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}],"folded":[folder...],"recent":[folder...],"expandedWorkflows":[{"folder":...,"workflow":...}],"views":[{"folder":...,"workflow":...,"view":"Flow"}]}</c>. Expanded cards live here, on this machine, and never in
 /// the workflow's file (ADR 0024).
 /// </summary>
-internal sealed record WorkspaceSession(ImmutableArray<string> Projects, WorkflowRef? Selected, ImmutableArray<WorkflowRef> Expanded)
+internal sealed record WorkspaceSession(ImmutableArray<string> Projects, WorkflowRef? Selected)
 {
     /// <summary>Each open workflow's expanded cards, for the workflows that have any.</summary>
     public ImmutableArray<WorkflowCards> Cards { get; init; } = [];
 
-    public static readonly WorkspaceSession Empty = new([], null, []);
+    /// <summary>The view each workflow shows, for the workflows where the person chose one.</summary>
+    public ImmutableArray<WorkflowViewChoice> Views { get; init; } = [];
+
+    /// <summary>The folders of the projects whose rows the left area folds.</summary>
+    public ImmutableArray<string> Folded { get; init; } = [];
+
+    /// <summary>The folders the person closed, newest first, which the empty left area offers again.</summary>
+    public ImmutableArray<string> Recent { get; init; } = [];
+
+    /// <summary>The workflows whose rows the Index expands.</summary>
+    public ImmutableArray<WorkflowRef> ExpandedWorkflows { get; init; } = [];
+
+    public static readonly WorkspaceSession Empty = new([], null);
 
     /// <summary>A missing or unreadable file, or one that is not this shape, reads as no session. An entry that is not
     /// this shape is skipped.</summary>
@@ -49,10 +65,13 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
 
         return new(
             [.. Items(session["projects"]).Select(Text).OfType<string>()],
-            Ref(session["selected"]),
-            [.. Items(session["expanded"]).Select(Ref).OfType<WorkflowRef>()])
+            Ref(session["selected"]))
         {
             Cards = [.. Items(session["cards"]).Select(CardsOf).OfType<WorkflowCards>()],
+            Folded = [.. Items(session["folded"]).Select(Text).OfType<string>()],
+            Recent = [.. Items(session["recent"]).Select(Text).OfType<string>()],
+            ExpandedWorkflows = [.. Items(session["expandedWorkflows"]).Select(Ref).OfType<WorkflowRef>()],
+            Views = [.. Items(session["views"]).Select(ViewOf).OfType<WorkflowViewChoice>()],
         };
     }
 
@@ -62,11 +81,19 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
         {
             ["projects"] = new JsonArray([.. Projects.Select(folder => JsonValue.Create(folder))]),
             ["selected"] = Selected is { } selected ? Node(selected) : null,
-            ["expanded"] = new JsonArray([.. Expanded.Select(Node)]),
             ["cards"] = new JsonArray([.. Cards.Select(cards =>
             {
                 var node = Node(cards.Workflow);
                 node["tasks"] = new JsonArray([.. cards.Tasks.Select(task => JsonValue.Create(task.Value.ToString()))]);
+                return (JsonNode)node;
+            })]),
+            ["folded"] = new JsonArray([.. Folded.Select(folder => JsonValue.Create(folder))]),
+            ["recent"] = new JsonArray([.. Recent.Select(folder => JsonValue.Create(folder))]),
+            ["expandedWorkflows"] = new JsonArray([.. ExpandedWorkflows.Select(workflow => (JsonNode)Node(workflow))]),
+            ["views"] = new JsonArray([.. Views.Select(view =>
+            {
+                var node = Node(view.Workflow);
+                node["view"] = view.Mode.ToString();
                 return (JsonNode)node;
             })]),
         };
@@ -87,6 +114,9 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
     private static WorkflowCards? CardsOf(JsonNode? node) => Ref(node) is { } workflow
         ? new WorkflowCards(workflow, [.. Items(node!["tasks"]).Select(Text).Where(id => Guid.TryParse(id, out _)).Select(id => new TaskId(Guid.Parse(id!)))])
         : null;
+
+    private static WorkflowViewChoice? ViewOf(JsonNode? node) =>
+        Ref(node) is { } workflow && Text(node!["view"]) is { } view && Enum.TryParse<MapMode>(view, out var mode) ? new WorkflowViewChoice(workflow, mode) : null;
 
     private static JsonObject Node(WorkflowRef workflow) => new()
     {

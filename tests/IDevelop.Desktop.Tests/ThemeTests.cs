@@ -19,7 +19,7 @@ public sealed class ThemeTests : IDisposable
     private static string PreferencesFile => ((App)Application.Current!).PreferencesFile!;
 
     // The grid's dots sit on the corners of 24 px tiles, so this point is the middle of a tile.
-    private static Color CanvasColor(Shell shell) => shell.ColorAt(shell.Editor, new Point(252, 252));
+    private static Color CanvasColor(Shell shell) => shell.ColorAt(shell.Editor, new Point(36, 36));
 
     [AvaloniaFact]
     public void Choosing_dark_then_light_recolors_the_canvas_and_remembers_each_choice()

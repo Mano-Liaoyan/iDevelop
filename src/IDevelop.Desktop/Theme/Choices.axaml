@@ -6,6 +6,10 @@
   <DataTemplate x:Key="WrappedChoice" DataType="canvas:Choice">
     <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
   </DataTemplate>
+  <!-- An inspector picker's closed box ends a long name in an ellipsis, and its wider list wraps the name in full. -->
+  <DataTemplate x:Key="InspectorChoice" DataType="canvas:Choice">
+    <TextBlock Classes="choice" Text="{Binding Label}" />
+  </DataTemplate>
   <DataTemplate x:Key="TrimmedChoice" DataType="canvas:Choice">
     <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
   </DataTemplate>

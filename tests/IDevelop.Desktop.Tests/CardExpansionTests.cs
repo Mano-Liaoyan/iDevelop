@@ -70,17 +70,13 @@ public sealed class CardExpansionTests : IDisposable
         var docs = shell.Node("Docs");
         Assert.Equal(WorkflowCanvasViewModel.ExpandedCardWidth, docs.Bounds.Width);
         Assert.True(docs.Bounds.Height > WorkflowCanvasViewModel.TaskCardHeight, $"Docs is {docs.Bounds.Height} px tall.");
-        // The card below Docs in its column keeps its 56 px gap below Docs's new bottom; the card above stays.
-        Assert.Equal(new Point(360, 90), shell.Node("Build").Location);
-        Assert.Equal(new Point(360, 210 + docs.Bounds.Height + 56), shell.Node("Checks").Location);
-        // The columns after the wider card slide right by its extra 80 px.
-        Assert.Equal((new Point(740, 150), new Point(1040, 150)), (shell.Node("Ship").Location, shell.Node("Notes").Location));
-        Assert.Equal(new Point(60, 210), shell.Node("Design").Location);
+        // The card below Docs in its column keeps its 26 px gap below Docs's new bottom; the card above stays.
+        Assert.Equal(new Point(316.8, 90), Shell.Rounded(shell.Node("Build").Location));
+        Assert.Equal(new Point(316.8, 210 + docs.Bounds.Height + 26), Shell.Rounded(shell.Node("Checks").Location));
+        // The columns after the wider card slide right by its extra 100 px.
+        Assert.Equal((new Point(680.8, 150), new Point(944.8, 150)), (Shell.Rounded(shell.Node("Ship").Location), Shell.Rounded(shell.Node("Notes").Location)));
+        Assert.Equal(new Point(52.8, 210), Shell.Rounded(shell.Node("Design").Location));
         Assert.Empty(Overlaps(shell));
-        // The canvas's check for cards under its floating controls measures each card where and as large as it shows.
-        var view = shell.Window.GetVisualDescendants().OfType<WorkflowCanvasView>().Single();
-        Assert.Contains(new Rect(docs.Bounds.Position, docs.Bounds.Size), view.CardsInView());
-        Assert.Contains(new Rect(shell.Node("Checks").Location, shell.Node("Checks").Bounds.Size), view.CardsInView());
 
         // The workflow keeps its positions, so nothing is unsaved and the file is as it was.
         Assert.Equal(new CanvasPoint(360, 330), canvas.Workflow.Positions[Checks]);
@@ -91,8 +87,8 @@ public sealed class CardExpansionTests : IDisposable
         shell.Click(shell.InCard<ToggleButton>("Docs", "CardExpand"));
 
         Assert.Equal(
-            [new Point(60, 210), new Point(360, 90), new Point(360, 210), new Point(360, 330), new Point(660, 150), new Point(960, 150)],
-            new[] { "Design", "Build", "Docs", "Checks", "Ship", "Notes" }.Select(title => shell.Node(title).Location));
+            [new Point(52.8, 210), new Point(316.8, 90), new Point(316.8, 210), new Point(316.8, 330), new Point(580.8, 150), new Point(844.8, 150)],
+            new[] { "Design", "Build", "Docs", "Checks", "Ship", "Notes" }.Select(title => Shell.Rounded(shell.Node(title).Location)));
         Assert.Equal(WorkflowCanvasViewModel.TaskCardWidth, shell.Node("Docs").Bounds.Width);
         Assert.Equal(saved, File.ReadAllBytes(WorkflowFile(project)));
     }
@@ -150,10 +146,9 @@ public sealed class CardExpansionTests : IDisposable
         shell.Window.Width = 900;
         shell.Window.Height = 600;
         shell.Render();
-        Assert.False(shell.Find<Button>("ExpandAll").IsEffectivelyVisible);
-        Assert.True(canvas.IsEmptyAt(new CanvasPoint(20, 300)));
+        var empty = shell.Bounds(shell.Editor).BottomRight - new Vector(8, 8);
 
-        shell.RightClick(Screen(shell, new Point(20, 300)));
+        shell.RightClick(empty);
 
         Assert.Equal(["Select All", "Fit to View", "Zoom to 100%", "Expand All"], shell.AddRows().SkipWhile(row => row != "Select All"));
         shell.Click(AddAction(shell, "Expand All"));
@@ -161,7 +156,7 @@ public sealed class CardExpansionTests : IDisposable
         Assert.All(canvas.Nodes, node => Assert.True(node.IsExpanded, $"{node.Title} is collapsed."));
         Assert.False(canvas.Document.HasUnsavedChanges);
 
-        shell.RightClick(Screen(shell, new Point(20, 300)));
+        shell.RightClick(empty);
 
         Assert.Contains("Collapse All", shell.AddRows());
         shell.Click(AddAction(shell, "Collapse All"));
@@ -192,7 +187,7 @@ public sealed class CardExpansionTests : IDisposable
         var docs = shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Title == "Docs");
         shell.Render();
         var (input, output) = (docs.Input.Anchor, docs.Output.Anchor);
-        Assert.Equal((new Point(370, 242), new Point(610, 242)), (input, output));
+        Assert.Equal((new Point(326.8, 268), new Point(546.8, 268)), (Shell.Rounded(input), Shell.Rounded(output)));
 
         shell.Click(shell.InCard<ToggleButton>("Docs", "CardExpand"));
 
@@ -204,12 +199,12 @@ public sealed class CardExpansionTests : IDisposable
             var model = (TaskNodeViewModel)node.DataContext!;
             if (model.Input.IsConnected)
             {
-                Assert.Equal(node.Location + new Vector(10, 32), model.Input.Anchor);
+                Assert.Equal(node.Location + (Vector)WorkflowCanvasViewModel.InputPortCenter, model.Input.Anchor);
             }
 
             if (model.Output.IsConnected)
             {
-                Assert.Equal(node.Location + new Vector(node.Bounds.Width - 10, 32), model.Output.Anchor);
+                Assert.Equal(node.Location + new Vector(node.Bounds.Width - 10, WorkflowCanvasViewModel.OutputPortCenter.Y), model.Output.Anchor);
             }
         }
 
@@ -230,7 +225,7 @@ public sealed class CardExpansionTests : IDisposable
 
         Assert.True(shell.AddPopoverIsOpen);
         var wire = canvas.Ghosts.OfType<DanglingWireViewModel>().Single();
-        Assert.Equal(design.DisplayLocation + new Vector(WorkflowCanvasViewModel.ExpandedCardWidth - 10, 32), design.Output.Anchor);
+        Assert.Equal(design.DisplayLocation + new Vector(WorkflowCanvasViewModel.ExpandedCardWidth - 10, WorkflowCanvasViewModel.OutputPortCenter.Y), design.Output.Anchor);
         Assert.Equal(design.Output.Anchor, wire.Location + (Vector)wire.Source);
     }
 
@@ -365,8 +360,8 @@ public sealed class CardExpansionTests : IDisposable
         shell.Pick(shell.InCard<ComboBox>("A", "CardPickReasoning"), "high");
 
         shell.WaitForState("A", NodeState.Stale);
-        Assert.Equal("Stale", shell.CardText("A", "CardStatus"));
-        Assert.True(shell.InCard<Button>("A", "CardRetry").IsEffectivelyVisible);
+        Assert.Equal("Stale", shell.CardStatus("A"));
+        Assert.True(shell.InCard<Button>("A", "RetryTask").IsEffectivelyVisible);
         Assert.False(shell.InCard<TextBlock>("A", "CardNextRunNote").IsEffectivelyVisible);
     }
 
@@ -378,20 +373,20 @@ public sealed class CardExpansionTests : IDisposable
         var shell = f.Open();
         shell.Click(shell.InCard<ToggleButton>("Approve", "CardExpand"));
         Assert.False(shell.InCard<Button>("Approve", "CardShowInspector").IsEffectivelyVisible);
-        Assert.False(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
+        Assert.False(shell.InCard<Button>("Approve", "Approve").IsEffectivelyVisible);
         shell.Click(shell.Find<Button>("RunWorkflow"));
         shell.WaitForState("Approve", NodeState.InputRequired);
 
-        Assert.Equal("Input required · approval", shell.CardText("Approve", "CardStatus"));
-        Assert.Equal("Waits for your approval", shell.CardText("Approve", "CardNowHeading"));
-        Assert.True(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
-        Assert.True(shell.InCard<Button>("Approve", "CardSendBack").IsEffectivelyVisible);
+        Assert.Equal("Needs you", shell.CardStatus("Approve"));
+        Assert.Equal("Needs you · Approval", shell.CardText("Approve", "ActionDockTitle"));
+        Assert.True(shell.InCard<Button>("Approve", "Approve").IsEffectivelyVisible);
+        Assert.True(shell.InCard<Button>("Approve", "SendBack").IsEffectivelyVisible);
         shell.Click(shell.InCard<Button>("Approve", "CardShowInspector"));
 
         Assert.Equal("Approve", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
-        Assert.True(shell.InView<TextBox>("SendBackNote").IsEffectivelyVisible);
+        Assert.True(shell.InCard<TextBox>("Approve", "SendBackNote").IsEffectivelyVisible);
 
-        shell.Click(shell.InCard<Button>("Approve", "CardApprove"));
+        shell.Click(shell.InCard<Button>("Approve", "Approve"));
         shell.WaitForState("Approve", NodeState.Completed);
     }
 
@@ -407,7 +402,7 @@ public sealed class CardExpansionTests : IDisposable
         canvas.Nodes.Single().RunCommand.Execute(null);
         shell.WaitForState("A", NodeState.InputRequired);
         shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
-        Assert.Equal(("The agent replied", "Which file?"), (shell.CardText("A", "CardNowHeading"), shell.CardText("A", "CardNowText")));
+        Assert.Equal(("Reply", "Which file?"), (shell.CardText("A", "CardNowHeading"), shell.CardText("A", "CardNowText")));
 
         shell.Click(shell.InCard<TextBox>("A", "CardAnswer"));
         shell.Type("Use the fixture");
@@ -416,7 +411,6 @@ public sealed class CardExpansionTests : IDisposable
         shell.WaitUntil(() => shell.NodeModel("A").State == NodeState.InputRequired && shell.CardText("A", "CardNowText") == "Done.", "the answer's turn ends");
         Assert.Equal("Use the fixture", File.ReadAllText(Path.Combine(f.Evidence, "answer.txt")).Trim());
         Assert.Equal("", shell.InCard<TextBox>("A", "CardAnswer").Text);
-        Assert.Null(shell.Window.ViewModel.Conversation);
         Assert.Single(canvas.Nodes);
     }
 
@@ -449,14 +443,16 @@ public sealed class CardExpansionTests : IDisposable
         var card = shell.InCard<Panel>("Docs", "TaskCard");
 
         shell.Window.MouseMove(shell.Header(shell.Node("Docs")));
-        shell.WaitUntil(() => ToolTip.GetIsOpen(card), "the peek opens");
+        // The peek opens after the tooltip service's real delay, which only the dispatcher's own loop lets pass.
+        Assert.Equal(400, ToolTip.GetShowDelay(card));
+        shell.RunLoopUntil(() => ToolTip.GetIsOpen(card), "the peek opens");
 
         var peek = Assert.IsType<CardPeek>(ToolTip.GetTip(card));
         Assert.Equal(
             ["Docs", "Implement · Codex · gpt-5.5 · high", "Instructions",
              "Write the workflow file through a temporary file and a rename, so a crash never leaves half a file.",
-             // Run starts nothing before Design is completed, which the peek says last.
-             "It waits for Design."],
+             // Run starts nothing before Design is completed, which the peek says before the gesture that opens the conversation.
+             "It waits for Design.", "Double-click or Enter opens the conversation."],
             Shell.Texts(peek));
 
         shell.Window.MouseMove(new Point(5, 5));

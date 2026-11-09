@@ -1,6 +1,6 @@
 # The Agents section and the agent pickers
 
-The sidebar's Agents section shows whether Claude Code, Codex, Pi, and Antigravity CLI are ready on this machine, and why a client is not. The inspector's Agent pickers show the selected task's client, model, and reasoning level, offer only what each client offers here, and save the user's choice into the task.
+The left area's footer shows whether Claude Code, Codex, Pi, and Antigravity CLI are ready on this machine, and why a client is not. The inspector's Agent pickers show the selected task's client, model, and reasoning level, offer only what each client offers here, and save the user's choice into the task.
 
 ## Sub-features
 
@@ -16,7 +16,7 @@ The sidebar's Agents section shows whether Claude Code, Codex, Pi, and Antigravi
 
 ## How to get to it (user POV)
 
-- Read the Agents section at the bottom of the sidebar.
+- Read the agents' status at the bottom of the left area, and choose it for the flyout with every client's row. UI Automation reads each `Agent*` id in the footer with the flyout closed.
 - Choose the refresh button beside `Agents`.
 - Choose a task in the sidebar or on the canvas, then use the `Client`, `Model`, and `Reasoning` pickers in the `Agent` section of the inspector.
 
@@ -28,7 +28,7 @@ Preconditions:
 - `Wait-Until { (Find-ById $s.Window 'AgentCodex').Current.Name -like 'Ready*' } 60` has returned `$true`.
 
 - **Rows.** Read each row. Run `foreach ($id in 'AgentClaudeCode', 'AgentCodex', 'AgentPi', 'AgentAntigravity') { $row = Find-ById $s.Window $id; "$id $($row.Current.Name) $($row.Current.HelpText)" }`. Codex reads `Ready · 3 models`. The other three read `Not ready`, and each `HelpText` names the probe that failed, such as `claude auth status exited with code 99`. No row shows that reason as text.
-- **Refresh.** Run `Invoke-Element (Find-ById $s.Window 'RefreshAgents')` and `Wait-Until { (Find-ById $s.Window 'AgentCodex').Current.Name -like 'Ready*' } 60`. Codex reads `Ready · 3 models` again.
+- **Refresh.** Open the flyout with `Invoke-Element (Find-ById $s.Window 'AgentsStatus')`, then run `Invoke-Element (Find-ById $s.Window 'RefreshAgents')` and `Wait-Until { (Find-ById $s.Window 'AgentCodex').Current.Name -like 'Ready*' } 60`. Codex reads `Ready · 3 models` again.
 - **Saved agent.** Choose the second task. Run `Select-Element (Get-SidebarTasks $s.Window)[1]`. `Get-Value` on `TaskClient`, `TaskModel`, and `TaskReasoning` gives `Codex`, `GPT-6-Sol`, and `medium`. `(Find-ById $s.Window 'PermissionNote').Current.Name` is `Edits files. Runs commands in a sandbox.`, and its `Current.HelpText` is `Codex may edit files in the project folder. Its commands run in its workspace sandbox.`. The window title stays `project - iDevelop`.
 - **Model not offered.** Choose the first task. Run `Select-Element (Get-SidebarTasks $s.Window)[0]`. The pickers give `Claude Code · not ready`, `claude-opus-5-5 (not offered on this machine)`, and `high`. The window title stays `project - iDevelop`.
 - **No agent.** Choose the third task. Run `Select-Element (Get-SidebarTasks $s.Window)[2]`. `TaskClient` gives `None`, and `Find-ById $s.Window 'TaskModel' 1` returns `$null`.

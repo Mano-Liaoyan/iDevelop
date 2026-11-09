@@ -21,7 +21,7 @@
     <MenuItem Header="Stop"
               Command="{Binding Node.StopCommand, FallbackValue={x:Null}}" IsVisible="{Binding ShowStop}"
               AutomationProperties.AutomationId="NodeMenuStop" theme:MenuGlyph.Data="{StaticResource IconStop}" />
-    <MenuItem Header="Retry"
+    <MenuItem Header="{Binding Node.RetryLabel, FallbackValue=Retry}"
               Command="{Binding Node.RetryCommand, FallbackValue={x:Null}}" IsVisible="{Binding ShowRetry}"
               AutomationProperties.AutomationId="NodeMenuRetry" theme:MenuGlyph.Data="{StaticResource IconRefresh}" />
     <Separator IsVisible="{Binding ShowRunGroup}" />

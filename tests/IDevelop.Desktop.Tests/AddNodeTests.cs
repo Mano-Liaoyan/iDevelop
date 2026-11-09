@@ -172,7 +172,7 @@ public sealed class AddNodeTests : IDisposable
         shell.Click(shell.Shown<Button>("AddNodeDerive"));
 
         Assert.False(shell.AddPopoverIsOpen);
-        Assert.Equal("Derived from Plan, version 1. Saving makes version 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
+        Assert.Equal("A new blueprint from Plan, version 1.", shell.Find<TextBlock>("BlueprintCaption").Text);
         Assert.Empty(shell.Nodes());
     }
 
@@ -196,7 +196,7 @@ public sealed class AddNodeTests : IDisposable
         var shell = Shell.Open(_temp.Create("plan"));
         shell.RightClick(shell.InEditor(400, 300));
 
-        shell.Click(shell.InEditor(100, 600));
+        shell.Click(shell.InEditor(40, 100));
 
         Assert.False(shell.AddPopoverIsOpen);
         Assert.Empty(shell.Nodes());
@@ -244,7 +244,7 @@ public sealed class AddNodeTests : IDisposable
         shell.Click(shell.Find<Button>("AddTask"));
 
         var popover = shell.Bounds(shell.AddPopover);
-        Assert.True(Math.Abs(popover.X - button.X) <= 2 && popover.Y >= button.Bottom && popover.Y - button.Bottom <= 8, $"{popover} is not under {button}");
+        Assert.True(popover.Y >= button.Bottom && popover.Y - button.Bottom <= 8 && popover.Right <= shell.Window.Width, $"{popover} is not under {button}");
         Assert.Equal(BuiltInRows, shell.AddRows());
         shell.Click(shell.AddRow("Plan"));
 
@@ -330,7 +330,7 @@ public sealed class AddNodeTests : IDisposable
         var list = shell.Find<ItemsControl>("AddNodeList").FindAncestorOfType<ScrollViewer>()!;
         Assert.True(list.Extent.Height > list.Viewport.Height, $"The list shows all of its {list.Extent.Height} px in {list.Viewport.Height} px.");
         var popover = shell.Bounds(shell.AddPopover);
-        Assert.True(shell.Bounds(shell.Editor).Contains(popover), $"{popover} is not inside the canvas");
+        Assert.True(shell.Bounds(shell.Window.CanvasHost).Contains(popover), $"{popover} is not inside the canvas");
         foreach (var action in actions)
         {
             var row = shell.Bounds(Action(shell, action));

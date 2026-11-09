@@ -28,9 +28,16 @@ internal sealed partial class Shell
 
     public MainWindow Window { get; }
 
-    public string Status => Find<TextBlock>("Status").Text ?? "";
+    public string Status => Find<Theme.EllipsisText>("Status").Whole ?? "";
 
     public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
+
+    /// <summary>Opens the Generate sheet from the canvas's card on an empty workflow, or from the toolbar otherwise.</summary>
+    public void OpenGenerate()
+    {
+        Window.UpdateLayout();
+        Click(Find<Avalonia.Controls.Button>(Window.ViewModel.Canvas!.IsEmpty ? "GenerateStart" : "GenerateWorkflow"));
+    }
 
     /// <summary>Without <paramref name="clients"/> nothing refreshes the window's directory, so every client stays Checking
     /// and no test probes this machine's clients.</summary>
@@ -42,6 +49,9 @@ internal sealed partial class Shell
         // control (#86). A test that rests the pointer on a control turns the service back on.
         ToolTip.SetServiceEnabled(window, false);
         window.ViewModel.GitEnvironment = AppTempFolder.Git;
+        // A wide window, so a test's cards and ports fit beside the sheets. A test about a size sets its own.
+        window.Width = 1500;
+        window.Height = 900;
         window.Show();
         var shell = new Shell(window);
         shell.Render();
@@ -58,7 +68,15 @@ internal sealed partial class Shell
     /// Opens the folder in a new window. A project is open in one window at a time, so each earlier window of this test
     /// that has it open closes its projects first, as quitting does, and the new window reopens what it saved.
     /// </summary>
-    public static Shell Open(string folder, ClientDirectory? clients = null)
+    public static Shell Open(string folder, ClientDirectory? clients = null) => Open(folder, clients, fitted: false);
+
+    /// <summary>
+    /// Opens the folder as <see cref="Open(string, ClientDirectory?)"/> does, at the view that opening a workflow gives. The
+    /// tests that do not ask for it start at the canvas's origin and 100%, so a test's canvas points are its window's points.
+    /// </summary>
+    public static Shell OpenFitted(string folder, ClientDirectory? clients = null) => Open(folder, clients, fitted: true);
+
+    private static Shell Open(string folder, ClientDirectory? clients, bool fitted)
     {
         foreach (var earlier in Opened.Where(shell => shell.Window.ViewModel.Projects.Any(project =>
             Projects.ProjectFolders.Comparer.Equals(project.Folder, Projects.ProjectFolders.Identity(folder)))).ToList())
@@ -72,10 +90,38 @@ internal sealed partial class Shell
         Opened.Add(shell);
         shell.Window.ViewModel.Open(folder);
         shell.Render();
+        if (!fitted && shell.Window.ViewModel.Canvas is not null)
+        {
+            shell.AtOrigin();
+        }
+
         return shell;
     }
 
-    public T Find<T>(string automationId) where T : Control => ById<T>(Window, automationId).Single();
+    /// <summary>Moves the view to the canvas's origin at 100%, as a person's pan and zoom would.</summary>
+    public void AtOrigin()
+    {
+        Editor.ViewportZoom = 1;
+        Editor.ViewportLocation = default;
+        Render();
+    }
+
+    /// <summary>Shows the minimap, which the person opens where the Map has room for it.</summary>
+    public void ShowMinimap()
+    {
+        Window.Width = Math.Max(Window.Width, 1500);
+        Render();
+        if (!Find<Nodify.Minimap>("Minimap").IsEffectivelyVisible)
+        {
+            Click(Find<Avalonia.Controls.Primitives.ToggleButton>("ShowMinimap"));
+        }
+    }
+
+    public T Find<T>(string automationId) where T : Control
+    {
+        ShowPageOf<T>(automationId);
+        return ById<T>(Window, automationId).Single();
+    }
 
     /// <summary>Scrolls the control into view first, for a control low in the inspector.</summary>
     public T InView<T>(string automationId) where T : Control
@@ -86,7 +132,11 @@ internal sealed partial class Shell
         return control;
     }
 
-    public bool Has<T>(string automationId) where T : Control => ById<T>(Window, automationId).Any();
+    public bool Has<T>(string automationId) where T : Control
+    {
+        ShowPageOf<T>(automationId);
+        return ById<T>(Window, automationId).Any();
+    }
 
     public NodifyEditor Editor => Window.GetVisualDescendants().OfType<NodifyEditor>().Single();
 
@@ -121,15 +171,18 @@ internal sealed partial class Shell
     public T InCard<T>(string title, string automationId) where T : Control => ById<T>(Node(title), automationId).Single();
 
     /// <summary>A text block's text even while it is hidden, as a card shows one of two subtitles at a time.</summary>
+    /// <summary>The state word the card's node shows, which the card itself shows as its State Mark.</summary>
+    public string CardStatus(string title) => NodeModel(title).CardStatus;
+
     public string CardText(string title, string automationId) =>
         InCard<Control>(title, automationId) is TextBlock text ? text.Text ?? "" : TextOf(InCard<Control>(title, automationId));
 
-    /// <summary>The agent a card shows on its two lines, the client and then the model and level, joined as one label.</summary>
+    /// <summary>The agent of a node's card, the client and then the model and level, joined as one label. A card's line may shorten them.</summary>
     public string CardAgent(string title) =>
-        string.Join(" · ", new[] { CardText(title, "CardAgent"), CardText(title, "CardModel") }.Where(line => line.Length > 0));
+        string.Join(" · ", new[] { NodeModel(title).AgentClient, NodeModel(title).AgentModel }.Where(line => line.Length > 0));
 
-    public ListBoxItem SidebarRow(string title) =>
-        Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);
+    public Button SidebarRow(string title) =>
+        Window.GetVisualDescendants().OfType<Button>().Single(row => row.Classes.Contains("agent") && row.DataContext is TaskNodeViewModel node && node.Title == title);
 
     // The pending connection draws its own LineConnection, so only connections that show a ConnectionViewModel count.
     public IEnumerable<BaseConnection> Connections() =>
@@ -171,12 +224,18 @@ internal sealed partial class Shell
 
     public static (Point, Point) Rounded((Point Source, Point Target) ends) => (Rounded(ends.Source), Rounded(ends.Target));
 
-    // Step connections from one output share their first runs. Only the run that enters the target is unique to one
-    // connection, and 19 px before the handle is the middle of its straight part, between its corner and its arrowhead.
+    /// <summary>A wire's ends on whole pixels, which is where a compacted card's sockets draw.</summary>
+    public static (Point, Point) Whole((Point Source, Point Target) ends) =>
+        (new Point(Math.Round(ends.Source.X), Math.Round(ends.Source.Y)), new Point(Math.Round(ends.Target.X), Math.Round(ends.Target.Y)));
+
+    /// <summary>A window point on the last piece of the wire into the node, the part of a wire no other wire shares.</summary>
     public Point ConnectionInto(string to)
     {
-        var target = Thumb(Input(to));
-        return new Point(target.X - 19, target.Y);
+        var wire = Window.ViewModel.Canvas!.Connections.First(connection => connection.To.Title == to);
+        var on = wire.Curve[^1].At(0.5);
+        var editor = Editor;
+        var local = new Point((on.X - editor.ViewportLocation.X) * editor.ViewportZoom, (on.Y - editor.ViewportLocation.Y) * editor.ViewportZoom);
+        return editor.TranslatePoint(local, Window) ?? throw new InvalidOperationException("The editor is not in the window.");
     }
 
     public void Click(Point point, RawInputModifiers modifiers = RawInputModifiers.None)
@@ -217,7 +276,7 @@ internal sealed partial class Shell
 
     /// <summary>The visible, non-empty texts of the visual and everything in it, in visual order.</summary>
     public static string[] Texts(Visual visual) =>
-        [.. visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text!)];
+        [.. visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text) && !text.Classes.Contains("rowStep") && !text.Classes.Contains("portLabel")).Select(text => text.Text!)];
 
     public static string TextOf(Visual visual) => string.Join(" ", Texts(visual));
 
@@ -320,6 +379,22 @@ internal sealed partial class Shell
         {
             Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.{(seen is null ? "" : $" Saw: {seen()}")}");
             Thread.Sleep(20);
+            Render();
+        }
+    }
+
+    /// <summary>
+    /// Runs the dispatcher's own loop until the condition holds, for work that waits on a <see cref="DispatcherTimer"/>. RunJobs
+    /// never starts a timer, so <see cref="WaitUntil"/> sees one fire only when other timer work happens to move the dispatcher.
+    /// </summary>
+    public void RunLoopUntil(Func<bool> condition, string what, int seconds = 10)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(seconds);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.");
+            using var slice = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
+            Dispatcher.UIThread.MainLoop(slice.Token);
             Render();
         }
     }

@@ -49,11 +49,11 @@ public sealed record CardNow(CardNowKind Kind, string Heading, string? Text, str
         return facts.State switch
         {
             EngineState.Running => new(CardNowKind.Message, "Latest message", facts.LastReply is { } reply ? LastParagraph(ResultBlock.Prose(reply)) : "No message yet."),
-            EngineState.InputRequired { Why: EngineState.Approval or EngineState.RoundLimit } => new(CardNowKind.Approval, "Waits for your approval", facts.Detail),
-            EngineState.InputRequired { Why: EngineState.Reply } => new(CardNowKind.Reply, "The agent replied",
+            EngineState.InputRequired { Why: EngineState.Approval or EngineState.RoundLimit } => new(CardNowKind.Approval, "Approval", facts.Detail),
+            EngineState.InputRequired { Why: EngineState.Reply } => new(CardNowKind.Reply, "Reply",
                 LastParagraph(ResultBlock.Prose(facts.LastReply)) ?? facts.Detail),
             EngineState.InputRequired { Why: EngineState.Interrupted or EngineState.Conflict } => new(CardNowKind.Stopped, facts.Status, facts.Detail),
-            EngineState.InputRequired waiting => new(CardNowKind.Question, "The agent asks", waiting.Why),
+            EngineState.InputRequired waiting => new(CardNowKind.Question, "Question", waiting.Why),
             EngineState.Completed => new(CardNowKind.Result, "Result", facts.Review ?? FirstParagraph(ResultBlock.Prose(facts.Report)) ?? "No report."),
             EngineState.Stale => new(CardNowKind.Stale, "Stale", facts.Detail),
             EngineState.Failed => new(CardNowKind.Stopped, facts.Status, facts.Detail),
