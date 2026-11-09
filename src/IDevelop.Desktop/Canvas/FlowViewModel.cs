@@ -398,8 +398,7 @@ public sealed class FlowViewModel : ObservableObject
             active.Add(hovered.Id);
         }
 
-        // The surface's edges are walls too, so a detour never leaves the Map.
-        List<Rect> rects = [.. Cards.Select(card => card.Bounds), new Rect(-2000, -2000, 2004, 100000), new Rect(_width - 4, -2000, 2000, 100000)];
+        var rects = Cards.Select(card => card.Bounds).ToList();
         var inputs = new Dictionary<FlowCardViewModel, WireFlow>();
         var outputs = new Dictionary<FlowCardViewModel, WireFlow>();
         var wires = new List<FlowWire>();

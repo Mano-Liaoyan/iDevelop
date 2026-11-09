@@ -49,9 +49,9 @@ internal static class WireRouting
     /// holds every card's bounds, the wire's own two included. <paramref name="reach"/> is how far those bounds run past a
     /// card's 64 px box at this zoom, which the gaps between its rows lose. <paramref name="closed"/> holds the channels that
     /// have no free lane for this wire (<see cref="WireRouter"/>). <paramref name="sourceStub"/> and <paramref name="targetStub"/> are
-    /// the wire's straight runs out of its ports: Flow's short gaps between rows take shorter runs than the canvas's.
+    /// the wire's straight runs out of its ports: Flow's short gaps between rows take shorter runs than the canvas's. <paramref name="only"/>, when set, is the one clearance every detour keeps.
     /// </summary>
-    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards, double reach = 0, IReadOnlyList<Rect>? closed = null, double sourceStub = Stub, double targetStub = Stub)
+    public static ImmutableArray<Point> Route(Point source, Point target, IReadOnlyList<Rect> cards, double reach = 0, IReadOnlyList<Rect>? closed = null, double sourceStub = Stub, double targetStub = Stub, Thickness? only = null)
     {
         var start = new Point(source.X + sourceStub, source.Y);
         var end = new Point(target.X - targetStub, target.Y);
@@ -61,6 +61,12 @@ internal static class WireRouting
         if (!cards.Any(card => Crosses(step, card.Inflate(PassClearance))) && !shut.Any(channel => Crosses(step, channel)))
         {
             return step;
+        }
+
+        // Flow's cards stand 10 px apart, so its detours take the gaps at one small clearance and never run around a whole row.
+        if (only is { } clearance)
+        {
+            return Detour(start, end, cards, clearance, shut) ?? step;
         }
 
         var wideRows = new Thickness(WideColumns, Math.Max(Math.Max(Clearance, (RowGap - reach) / 2 - 1), PassRoom(reach)));
