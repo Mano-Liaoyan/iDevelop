@@ -103,7 +103,7 @@ public sealed class CardTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
 
         Assert.Equal(["Design", "Codex", "GPT-5.5", "Not started"], Shell.Texts(shell.Node("Design")));
-        Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
+        Assert.Equal(NodeState.Idle, shell.CardMark("Design").State);
         Assert.Equal(["Design", "Implement · Codex · GPT-5.5 · high", "Instructions", "Draft it.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Design")!);
     }
 
@@ -192,13 +192,13 @@ public sealed class CardTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
 
         Assert.Equal(["Build", "No agent", "Not started"], Shell.Texts(shell.Node("Build")));
-        Assert.False(shell.CardGlyph("Build").IsEffectivelyVisible);
+        Assert.Equal(NodeState.Idle, shell.CardMark("Build").State);
         var node = shell.NodeModel("Build");
         Assert.Equal(("Instructions is empty.", false), (node.RunRefusal, node.RunCommand.CanExecute(null)));
     }
 
     [AvaloniaFact]
-    public void A_running_card_keeps_a_plain_edge_and_says_so()
+    public void A_running_card_has_a_running_ring_and_says_so()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Design", 105));
         f.Install(AgyTurn.Reply("s-1", "Drafted.", On().WaitForFile(f.Gate("go"))));
@@ -212,8 +212,8 @@ public sealed class CardTests : IDisposable
         // The status takes the client's line, and the model and level stay on the line under it.
         Assert.Equal(["Design", "Antigravity", "3.8 Flash", "Running"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-running", ring.Classes);
-        Assert.Equal(Color.Parse("#E5E5E5"), ((ISolidColorBrush)ring.BorderBrush!).Color);
-        Assert.Same(Application.Current!.FindResource("IconStateRunning"), shell.CardGlyph("Design").Data);
+        Assert.Equal(Color.Parse("#0088FF"), ((ISolidColorBrush)ring.BorderBrush!).Color);
+        Assert.Equal(NodeState.Running, shell.CardMark("Design").State);
         f.Release("go");
         shell.WaitForCard("Design", "Done");
     }
@@ -227,10 +227,10 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
         shell.RunNode("Design");
-        shell.WaitForCard("Design", "Reply");
+        shell.WaitForCard("Design", "Needs you");
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Antigravity", "3.8 Flash", "Reply"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Antigravity", "3.8 Flash", "Needs you"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-inputrequired", ring.Classes);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
     }
@@ -269,12 +269,12 @@ public sealed class CardTests : IDisposable
 
         shell.WaitForCard("Design", "Stale");
         Assert.Contains("state-stale", shell.CardLayer("Design", "stateStroke").Classes);
-        Assert.Same(Application.Current!.FindResource("IconBadgeStale"), shell.CardGlyph("Design").Data);
+        Assert.Equal(NodeState.Stale, shell.CardMark("Design").State);
         Assert.True(shell.NodeModel("Design").RetryCommand.CanExecute(null));
     }
 
     [AvaloniaFact]
-    public void A_planner_with_an_open_proposal_shows_it_in_the_accent_without_a_pulse_and_draws_its_tasks_as_ghosts()
+    public void A_planner_with_an_open_proposal_adds_the_role_dot_and_keeps_its_state_and_draws_its_tasks_as_ghosts()
     {
         using var f = new NodeFixture(new PlaceNode(Design, BuiltInBlueprints.Plan, new CanvasPoint(105, 90))
         {
@@ -297,10 +297,9 @@ public sealed class CardTests : IDisposable
         shell.WaitForProposal();
 
         var ring = shell.CardLayer("Plan export", "stateStroke");
-        Assert.Equal(["Plan export", "Antigravity", "3.8 Flash", "Proposal · 2 tasks"], Shell.Texts(shell.Node("Plan export")));
-        Assert.Same(Application.Current!.FindResource("IconSparkle"), shell.CardGlyph("Plan export").Data);
-        Assert.Contains("role-proposing", ring.Classes);
-        Assert.Equal(Color.Parse("#1E6EF4"), ((ISolidColorBrush)ring.BorderBrush!).Color);
+        Assert.Equal(["Plan export", "Antigravity", "3.8 Flash", "Needs you"], Shell.Texts(shell.Node("Plan export")));
+        Assert.Equal(NodeRole.Proposing, shell.CardMark("Plan export").Role);
+        Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         shell.Render();
         Assert.Equal(1, ring.Opacity);
 
@@ -321,13 +320,13 @@ public sealed class CardTests : IDisposable
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency)));
         BaseConnection Wire(string to) => shell.Connections().Single(connection => ((ConnectionViewModel)connection.DataContext!).To.Title == to);
-        (double, double) Opacities() => (Wire("Build").Opacity, Wire("Review").Opacity);
-        Assert.Equal((1, 1), Opacities());
+        Color? Stroke(string to) => (Wire(to).Stroke as ISolidColorBrush)?.Color;
 
         shell.Click(shell.Header(shell.Node("Design")));
         shell.WaitUntil(() => Wire("Build").StrokeThickness == 2.5, "the connection from Design stands out");
         Assert.Equal((2.5, 2), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
-        shell.WaitUntil(() => Opacities() == (1, 0.8), "the other connection recedes");
+        shell.WaitUntil(() => Stroke("Review") == shell.Resource("WireDimBrush"), "the other connection recedes");
+        Assert.NotEqual(shell.Resource("WireDimBrush"), Stroke("Build"));
 
         shell.Click(shell.Editor.TranslatePoint(new Point(400, 500), shell.Window)!.Value);
         shell.WaitUntil(() => Wire("Build").StrokeThickness == 2, "nothing stands out without a selection");

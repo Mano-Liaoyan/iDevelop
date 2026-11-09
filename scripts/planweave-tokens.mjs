@@ -155,6 +155,8 @@ const brushes = [
   ['OnAccent', 'white'],
   ['OnTile', 'white'],
   ['Scrim', 'black', 30],
+  // A wire that the selection leaves out: under every other wire, still traceable on the canvas.
+  ['WireDim', 'text-faint', 45],
 ];
 
 // Color keys for brushes that must stay the same objects while their color follows the theme. Nodify's control
@@ -186,6 +188,8 @@ const themedShadows = [
   ['PopoverShadow', [[0, 10, 30, 0, 'black', 16], [0, 2, 6, 0, 'black', 8]], [[0, 12, 32, 0, 'black', 45], [0, 2, 6, 0, 'black', 30]]],
   // A box's keyboard ring: 2 px of the accent outside its 1 px border.
   ['FocusRing', [[0, 0, 0, 2, 'apple-blue', 100]], [[0, 0, 0, 2, 'apple-blue', 100]]],
+  // A selected card's halo, 3 px outside its selection ring.
+  ['SelectionHalo', [[0, 0, 0, 3, 'apple-blue', 25]], [[0, 0, 0, 3, 'apple-blue', 25]]],
 ];
 
 // --radius is 0.625rem, and Tailwind derives each step from it.
@@ -194,6 +198,15 @@ const radii = [
   ['RadiusSm', 0.6],
   ['RadiusMd', 0.8],
   ['RadiusLg', 1],
+];
+
+// The type ramp: name, font size, and line height. Body strong is Body at weight 600. No other size is allowed.
+const typeRamp = [
+  ['Caption', 11.5, 14],
+  ['Small', 12.5, 16],
+  ['Body', 13, 18],
+  ['Prose', 14, 22],
+  ['Title', 15, 20],
 ];
 
 function parse(value) {
@@ -264,6 +277,10 @@ function generate() {
     '  </ResourceDictionary.ThemeDictionaries>',
     `  <BoxShadows x:Key="SmallShadow">${shadow(shadowSm, 0)}</BoxShadows>`,
     ...radii.map(([key, scale]) => `  <CornerRadius x:Key="${key}">${radius * scale}</CornerRadius>`),
+    ...typeRamp.flatMap(([name, size, line]) => [
+      `  <x:Double x:Key="Type${name}Size">${size}</x:Double>`,
+      `  <x:Double x:Key="Type${name}Line">${line}</x:Double>`,
+    ]),
     '</ResourceDictionary>',
     '',
   ].join('\n');

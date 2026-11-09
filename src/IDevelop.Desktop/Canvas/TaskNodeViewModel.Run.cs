@@ -17,7 +17,7 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StatusTip), nameof(StateWord), nameof(StateDetail), nameof(InspectorDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
+        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StatusTip), nameof(StateDetail), nameof(InspectorDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(LastReplyAsks), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
@@ -56,20 +56,17 @@ public sealed partial class TaskNodeViewModel
     /// <summary>What the node needs from the person now, which its glyph tells apart.</summary>
     public WaitReason WaitReason => NodeStates.Why(_engineState);
 
-    /// <summary>"Running", "Completed", or what the node needs, such as "Input required · Approval".</summary>
+    /// <summary>"Running", "Done", or what the node needs, such as "Needs you · Approval".</summary>
     public string StatusLabel => NodeStates.Label(_engineState, _background);
 
     /// <summary>The status's tooltip: its label and, where the state has one, its sentence, which a short inspector shows only here.</summary>
     public string StatusTip => StateDetail is { Length: > 0 } detail ? $"{StatusLabel}\n{detail}" : StatusLabel;
 
-    /// <summary>The one word for the state: while the node waits, what it waits for, as Activity and the run bar say it.</summary>
-    public string StateWord => State != NodeState.InputRequired ? StatusLabel : WaitReason == WaitReason.Interrupted ? "Interrupted" : "Waiting";
-
     /// <summary>What the node needs from the person, or why it failed or went stale, or null when its status says enough.</summary>
     public string? StateDetail => NodeStates.Detail(_engineState);
 
     /// <summary>The state's sentence in one short line, which a short inspector shows in place of <see cref="StateDetail"/>.</summary>
-    public StatusTone Tone => NodeStates.Tone(State, WaitReason);
+    public StatusTone Tone => NodeStates.Tone(State);
 
     /// <summary>The node waits for the person.</summary>
     public bool IsWaiting => State == NodeState.InputRequired;
@@ -277,6 +274,7 @@ public sealed partial class TaskNodeViewModel
             _reviewer = reviewer;
             ShowState();
             OnPropertyChanged(nameof(ReviewerTip));
+            OnPropertyChanged(nameof(MarkTip));
         }
     }
 

@@ -58,7 +58,7 @@ public sealed class PlanningTests : IDisposable
             ```
             """);
 
-        Assert.Equal("Proposal · 3 tasks", shell.CardText("Design export", "CardStatus"));
+        Assert.Equal("Needs you", shell.CardText("Design export", "CardStatus"));
         Assert.Equal(["Fills Backend API", "Fills Frontend", "New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Fill \"Backend\" as \"Backend API\"", "Fill \"Frontend\"", "Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
         Assert.Equal(["Backend API Fills Backend", "Frontend Fills Frontend", "Wire export"], Items(shell).Select(Shell.TextOf));

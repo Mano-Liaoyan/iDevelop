@@ -60,17 +60,13 @@
            AutomationProperties.Name="{Binding Title}">
       <Panel Classes="cardBody">
         <Border Classes="card" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" />
-        <Border Classes="stateTint" Margin="10,0" VerticalAlignment="Top"
-                IsHitTestVisible="False"
-                theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
-        <Border Classes="cardBand runBand" Margin="10,0" VerticalAlignment="Top" IsVisible="{Binding IsRunningNow}" IsHitTestVisible="False" />
         <Border Classes="cardEdgeClip" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" ClipToBounds="True" IsHitTestVisible="False">
           <Border Classes="cardEdge kindTile" theme:StyleClass.Kind="{Binding Kind}" />
         </Border>
         <StackPanel Margin="10,0">
           <Panel Classes="cardHead">
             <Grid Classes="cardFull" RowDefinitions="42,22,*">
-              <Grid Margin="8,0" ColumnDefinitions="16,*,Auto,16" ColumnSpacing="6">
+              <Grid Margin="8,0" ColumnDefinitions="16,*,16" ColumnSpacing="6">
                 <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" KeepsBadge="True" TileSize="16" VerticalAlignment="Center"
                                 AutomationProperties.AutomationId="CardKind"
                                 AutomationProperties.HelpText="{Binding KindHelp}" />
@@ -83,32 +79,20 @@
                                        AutomationProperties.AutomationId="CardTitleBox"
                                        AutomationProperties.Name="Title" />
                 </Panel>
-                <!-- A review that goes on with this node marks the band with the Review tile. -->
-                <Panel Grid.Column="2" IsVisible="{Binding IsUnderReview}" ToolTip.Tip="{Binding ReviewerTip}"
-                       AutomationProperties.AutomationId="CardUnderReview">
-                  <theme:KindTile Kind="Review" TileSize="14" VerticalAlignment="Center" />
-                </Panel>
-                <!-- While the task needs the person, its state badge is a button that opens the conversation at what it needs,
+                <!-- While the task needs the person, its State Mark is a button that opens the conversation at what it needs,
                      or, for an approval, selects it so the inspector shows its request. The state styles hide the badge of
                      some states, so the attention switch sits on a panel around it. -->
-                <Panel Grid.Column="3" Height="16" VerticalAlignment="Center">
-                  <Panel IsVisible="{Binding !HasAttention}">
-                    <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
-                    <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
-                              theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}"
-                              AutomationProperties.AutomationId="CardStateGlyph" />
-                  </Panel>
+                <Panel Grid.Column="2" Height="16" VerticalAlignment="Center">
+                  <theme:StateMark IsVisible="{Binding !HasAttention}" State="{Binding State}" Why="{Binding WaitReason}" Role="{Binding Role}"
+                                   ToolTip.Tip="{Binding MarkTip}"
+                                   AutomationProperties.AutomationId="CardStateGlyph" />
                   <Button Classes="attention" Margin="{x:Static canvas:CardBehaviors.GlyphMargin}" IsVisible="{Binding HasAttention}"
                           Command="{Binding AttendCommand}"
                           ToolTip.Tip="{Binding AttentionLabel}"
                           AutomationProperties.AutomationId="CardAttention"
                           AutomationProperties.Name="{Binding AttentionLabel}"
                           AutomationProperties.HelpText="{Binding AttendHelp}">
-                    <Panel Width="16" Height="16">
-                      <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
-                      <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
-                                theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
-                    </Panel>
+                    <theme:StateMark State="{Binding State}" Why="{Binding WaitReason}" Role="{Binding Role}" />
                   </Button>
                 </Panel>
               </Grid>
@@ -146,8 +130,8 @@
                 theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
         <Rectangle Classes="staleEdge" Margin="10,0" RadiusX="10" RadiusY="10" IsHitTestVisible="False"
                    theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-        <!-- The selection line sits a gap outside the card's edge, and the keyboard's ring outside it. -->
-        <Border Classes="ring" CornerRadius="14" IsHitTestVisible="False" />
+        <!-- The selection ring sits just outside the card's edge, and its halo outside it. -->
+        <Border Classes="ring" CornerRadius="11.5" IsHitTestVisible="False" />
         <!-- The zoomed out card's last line, under its title, which leaves the state's badge its place at the end. -->
         <DockPanel Classes="cardFar farLine" IsHitTestVisible="False">
           <theme:KindTile Classes="farTile" DockPanel.Dock="Left" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}"
@@ -162,14 +146,8 @@
         </DockPanel>
         <!-- While the node needs the person, the zoomed out badge acts as the full card's does, because Fit rests at this form. -->
         <Panel Classes="stateBadge" HorizontalAlignment="Right" IsHitTestVisible="{Binding HasAttention}">
-          <Viewbox>
-            <Canvas Width="16" Height="16">
-              <Ellipse Classes="badgeDisc" Width="16" Height="16" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}" />
-              <PathIcon Canvas.Left="3" Canvas.Top="3" Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
-                        theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" theme:StyleClass.Why="{Binding WaitReason}"
-                        AutomationProperties.AutomationId="CardFarGlyph" />
-            </Canvas>
-          </Viewbox>
+          <theme:StateMark Classes="farMark" State="{Binding State}" Why="{Binding WaitReason}" Role="{Binding Role}"
+                           AutomationProperties.AutomationId="CardFarGlyph" />
           <Button Classes="attention farAttention" IsVisible="{Binding HasAttention}"
                   Command="{Binding AttendCommand}"
                   ToolTip.Tip="{Binding AttentionLabel}"
@@ -202,15 +180,11 @@
     </Panel>
   </DataTemplate>
 
-  <!-- A group of the run bar: its state's badge, its number, and its word. -->
+  <!-- A group of the run bar: its State Mark, its number, and its word. -->
   <DataTemplate x:Key="BarChipTemplate" DataType="canvas:StateChip">
     <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip.Tip="{Binding Tip}"
                 AutomationProperties.AutomationId="RunChip" AutomationProperties.Name="{Binding Label}">
-      <Panel Width="16" Height="16" VerticalAlignment="Center">
-        <Ellipse Classes="badgeDisc" theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-        <PathIcon Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
-                  theme:StyleClass.State="{Binding State}" theme:StyleClass.Why="{Binding Why}" />
-      </Panel>
+      <theme:StateMark VerticalAlignment="Center" State="{Binding State}" Why="{Binding Why}" />
       <TextBlock Classes="barText barWords" Text="{Binding Label}" />
     </StackPanel>
   </DataTemplate>

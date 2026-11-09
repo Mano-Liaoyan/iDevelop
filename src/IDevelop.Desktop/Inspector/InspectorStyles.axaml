@@ -14,8 +14,8 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
   <Style Selector="TextBox.headerTitle">
-    <Setter Property="FontSize" Value="14" />
-    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="FontSize" Value="{StaticResource TypeTitleSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeTitleLine}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="Background" Value="Transparent" />
@@ -31,8 +31,8 @@
        before the column, so the text starts where a connection's or a workflow's name starts. The text's first line sits beside
        the tile, and the whole title shows and wraps, so the header always names the node in full (ADR 0071). -->
   <Style Selector="TextBlock.headerTitle">
-    <Setter Property="FontSize" Value="14" />
-    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="FontSize" Value="{StaticResource TypeTitleSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeTitleLine}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="TextWrapping" Value="WrapWithOverflow" />
@@ -47,15 +47,15 @@
     <Setter Property="Opacity" Value="0" />
   </Style>
   <Style Selector="TextBlock.kindLine">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <Style Selector="TextBlock.headerName">
-    <Setter Property="FontSize" Value="14" />
-    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="FontSize" Value="{StaticResource TypeTitleSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeTitleLine}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -94,17 +94,13 @@
   <!-- The action's view is open now: it stops being the next step and says so. -->
   <Style Selector="Border.headerPill TextBlock">
     <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
-  </Style>
-  <Style Selector="Border.headerPill PathIcon:not(.badgeGlyph)">
-    <Setter Property="Width" Value="14" />
-    <Setter Property="Height" Value="14" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
   </Style>
   <Style Selector="ItemsControl.headerActions Button">
     <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
     <Setter Property="Padding" Value="10,0" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
   </Style>
   <!-- What the node needs or why it cannot start: a short paragraph on a rule in the state's color. -->
   <Style Selector="Border.detailRule">
@@ -126,8 +122,8 @@
     <Setter Property="BorderBrush" Value="{DynamicResource StateWarningStrokeBrush}" />
   </Style>
   <Style Selector="TextBlock.detail">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
@@ -136,16 +132,16 @@
     <Setter Property="Spacing" Value="4" />
   </Style>
   <Style Selector="conversation|MarkdownView.promptView SelectableTextBlock.md">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="Margin" Value="0" />
   </Style>
   <Style Selector="conversation|MarkdownView.promptView SelectableTextBlock.md.h1, conversation|MarkdownView.promptView SelectableTextBlock.md.h2, conversation|MarkdownView.promptView SelectableTextBlock.md.h3, conversation|MarkdownView.promptView SelectableTextBlock.md.h4">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeTitleSize}" />
   </Style>
   <Style Selector="TextBox.code">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
   </Style>
   <Style Selector="Border.templatePreview">
     <Setter Property="Padding" Value="8,6" />
@@ -154,7 +150,7 @@
   </Style>
   <Style Selector="SelectableTextBlock.promptWhole">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, Liberation Mono, monospace" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
   </Style>
   <!-- A short inspector keeps its header to three lines: the title, the state, and the actions. -->
   <Style Selector="inspector|InspectorView.short Panel.stateDetail">
@@ -166,15 +162,15 @@
   </Style>
   <!-- The word in a row that the whole row opens, as a text link reads. -->
   <Style Selector="TextBlock.linkWord">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
   </Style>
   <Style Selector="Button.textLink, ToggleButton.textLink">
     <Setter Property="Padding" Value="0" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Height" Value="16" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -192,8 +188,8 @@
   </Style>
   <Style Selector="SelectableTextBlock.wholeText">
     <Setter Property="MaxWidth" Value="360" />
-    <Setter Property="FontSize" Value="13" />
-    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeBodyLine}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
@@ -201,7 +197,7 @@
     <Setter Property="Margin" Value="0,8,0,0" />
     <Setter Property="MinHeight" Value="70" />
     <Setter Property="MaxHeight" Value="70" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
   </Style>
   <!-- The box has 8 px over it, to the header's rule, and 8 px under it, to the first section's rule, with the sections' own 4 px inset below. -->
   <Style Selector="Border.filterBar">
@@ -210,13 +206,12 @@
   <!-- The filter is a field of the panel: the same quiet fill, hover tint, and focus edge as the rows' fields. -->
   <Style Selector="Border.filterBar TextBox">
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="Border.filterBar TextBox:pointerover /template/ Border#PART_BorderElement">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
   <Style Selector="Border.filterBar TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
@@ -236,7 +231,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
   <Style Selector="Button.glyph:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.glyph:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="Button.glyph:disabled /template/ ContentPresenter#PART_ContentPresenter">
@@ -325,14 +320,14 @@
     <Setter Property="BorderThickness" Value="0" />
   </Style>
   <Style Selector="Button.sectionHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.sectionHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
   <Style Selector="Button.sectionHeader:pointerover PathIcon">
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.sectionTitle">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
@@ -341,13 +336,13 @@
     <Setter Property="IsVisible" Value="{Binding $parent[inspector:InspectorSection].Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
   </Style>
   <Style Selector="TextBlock.sectionSummary">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
   </Style>
   <Style Selector="TextBlock.sectionBadge">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
@@ -355,7 +350,7 @@
   <!-- The label's look comes before the row styles that move it, which a later style of the same weight would undo. -->
   <!-- A label too long for its column wraps rather than losing its end. -->
   <Style Selector="TextBlock.rowLabel">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -482,33 +477,33 @@
   </Style>
   <!-- An entry, such as a kind in the overview or a blueprint in the library, names a thing rather than a property. -->
   <Style Selector="inspector|InspectorRow.entry /template/ TextBlock#PART_Label">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- How many nodes of a kind the workflow holds, at the end of its row. It draws through InkAlignedText, so its digits
        end where the drawing of a blueprint's More glyph and of the filter glyph ends, a "1" as a "4". -->
   <Style Selector="TextBlock.count">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="Margin" Value="{x:Static inspector:InspectorGrid.GlyphInkMargin}" />
   </Style>
   <Style Selector="TextBlock.value">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <!-- A short note, whose tooltip holds the full text. It wraps rather than losing its end. -->
   <Style Selector="TextBlock.note">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="inspector|InspectorRow CheckBox">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
   </Style>
   <!-- A picker whose list opens in place, under it: a box like the pickers above it, with an accent edge while the list
        is open, as a ComboBox has while its list is. -->
@@ -516,7 +511,7 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
     <!-- Its text starts 8 px in and its chevron ends 10 px in, where a ComboBox draws them. With its 1 px border, its text
          starts 4 px down and ends 4 px up, as in a ComboBox of a row. -->
@@ -558,9 +553,9 @@
     <Setter Property="RenderTransform" Value="none" />
   </Style>
   <Style Selector="ToggleButton.picker:pointerover /template/ Border#Box">
-    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
-  <Style Selector="ToggleButton.picker:checked /template/ Border#Box, ToggleButton.picker:focus-visible /template/ Border#Box">
+  <Style Selector="ToggleButton.picker:checked /template/ Border#Box">
     <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
   </Style>
   <Style Selector="ToggleButton.picker:disabled">
@@ -591,7 +586,7 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
   </Style>
   <Style Selector="CheckBox.skill TextBlock">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Margin" Value="0,5" />
@@ -601,12 +596,12 @@
   </Style>
   <!-- What a chosen name lets in beside it, in a line under the name. -->
   <Style Selector="CheckBox.skill TextBlock.letsIn">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="Margin" Value="0,-3,0,5" />
   </Style>
   <Style Selector="inspector|InspectorRow ComboBox, inspector|InspectorRow TextBox">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
   </Style>
   <!-- At rest a field is a quiet fill with no outline, so a section reads as properties and not as a form. The hover and the
@@ -617,12 +612,10 @@
   </Style>
   <!-- Hover brings a neutral 1 px edge and a stronger fill, as the skill picker has. Focus draws the accent edge. -->
   <Style Selector="inspector|InspectorRow ComboBox:pointerover /template/ Border#Background, inspector|InspectorRow ComboBox:pressed /template/ Border#Background">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:pointerover /template/ Border#PART_BorderElement">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
@@ -680,8 +673,8 @@
   <Style Selector="TextBlock.fieldReading">
     <Setter Property="MaxLines" Value="4" />
     <Setter Property="Margin" Value="9,6" />
-    <Setter Property="FontSize" Value="13" />
-    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeBodyLine}" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
@@ -697,7 +690,7 @@
   <Style Selector="inspector|InspectorRow Button.action, inspector|InspectorRow Button.primary, inspector|InspectorRow Button.destructive">
     <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
     <Setter Property="Padding" Value="10,0" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
   </Style>
 
   <Style Selector="Line.wireSwatch">
@@ -718,8 +711,8 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
   <Style Selector="TextBlock.linkTitle">
-    <Setter Property="FontSize" Value="13" />
-    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeBodyLine}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Margin" Value="0,0,4,0" />
@@ -738,12 +731,11 @@
     <Setter Property="MaxLines" Value="3" />
   </Style>
   <Style Selector="Button.resultRow:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.resultRow:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
   <Style Selector="TextBlock.resultHeading">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
@@ -759,7 +751,7 @@
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
   </Style>
   <Style Selector="Button.rowLink:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.rowLink:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
 
   <!-- A group of rows, such as a blueprint's field, parted from the one before it by a hairline. The first needs none,
@@ -790,7 +782,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="ToggleButton.fieldFold:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
   <Style Selector="ToggleButton.fieldFold PathIcon.fieldChevron">
     <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
@@ -801,14 +793,14 @@
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
   </Style>
   <Style Selector="TextBlock.fieldTitle">
-    <Setter Property="FontSize" Value="13" />
-    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeBodyLine}" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.fieldSummary">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <!-- A chip grows to a second line rather than losing the end of a long name. -->
@@ -819,7 +811,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
   <Style Selector="Border.chip > TextBlock">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -828,8 +820,8 @@
   <!-- A finding's file and line, in the conversation's code font, so a path reads as one. -->
   <Style Selector="TextBlock.location">
     <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
@@ -852,7 +844,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="ToggleButton.disclosure TextBlock">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
   <Style Selector="ToggleButton.disclosure PathIcon">
@@ -867,19 +859,19 @@
 
   <!-- A proposed task's agent under its title: plain secondary text that wraps rather than cuts a name off. -->
   <Style Selector="TextBlock.agentLine">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <Style Selector="TextBlock.itemTitle">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
   <Style Selector="TextBlock.groupHeading">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="Margin" Value="0,6,0,2" />
@@ -919,7 +911,7 @@
     <Setter Property="HorizontalContentAlignment" Value="Left" />
   </Style>
   <Style Selector="ToggleButton.disclosure.rowDisclosure TextBlock">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
   </Style>
   <Style Selector="PathIcon.linkChevron">
     <Setter Property="Width" Value="10" />
@@ -934,8 +926,8 @@
     <Setter Property="Opacity" Value="1" />
   </Style>
   <Style Selector="TextBlock.inputResult">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
@@ -943,7 +935,7 @@
     <Setter Property="Height" Value="22" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Padding" Value="8,0" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
   </Style>
 </Styles>

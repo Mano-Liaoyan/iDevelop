@@ -36,8 +36,8 @@
           <TextBlock Classes="location" Text="{Binding Location}"
                      IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                      AutomationProperties.AutomationId="FindingLocation" />
-          <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
-          <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+          <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource TextBrush}" />
+          <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource TextMutedBrush}"
                      IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
       </Border>
@@ -123,8 +123,8 @@
                         Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
                         Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
                   <Grid ColumnDefinitions="Auto,*" ToolTip.Tip="{Binding StatusTip}">
-                    <theme:StateBadge Width="14" Height="14" Margin="0,0,5,0" VerticalAlignment="Center" State="{Binding State}" Why="{Binding WaitReason}" />
-                    <TextBlock Grid.Column="1" Text="{Binding StateWord}"
+                    <theme:StateMark Width="14" Height="14" Margin="0,0,5,0" VerticalAlignment="Center" State="{Binding State}" Why="{Binding WaitReason}" />
+                    <TextBlock Grid.Column="1" Text="{Binding StatusLabel}"
                                AutomationProperties.AutomationId="RunTaskStatus" />
                   </Grid>
                 </Border>
@@ -448,7 +448,7 @@
                                                   IsVisible="{Binding Agent.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
                                               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
                                                         VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
-                                              <TextBlock Grid.Column="1" Text="{Binding Agent.Note, FallbackValue={x:Null}}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                              <TextBlock Grid.Column="1" Text="{Binding Agent.Note, FallbackValue={x:Null}}" TextWrapping="Wrap" FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource TextBrush}"
                                                          AutomationProperties.AutomationId="ProposalAgentNote" />
                                             </Grid>
                                           </StackPanel>
@@ -511,11 +511,11 @@
                                           ToolTip.Tip="A new or filled task without an agent of its own, and without a choice of the planner's that this machine runs, takes the planner's client, model, and reasoning."
                                           AutomationProperties.AutomationId="ProposalUsePlannerAgent"
                                           AutomationProperties.Name="Fall back to the planner's agent">
-                                  <TextBlock Text="Fall back to the planner's agent" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextStrongBrush}" />
+                                  <TextBlock Text="Fall back to the planner's agent" TextWrapping="Wrap" FontSize="{StaticResource TypeBodySize}" Foreground="{DynamicResource TextStrongBrush}" />
                                 </CheckBox>
                               </inspector:InspectorRow>
                               <inspector:InspectorRow Layout="Full" IsShown="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource DestructiveTextBrush}"
+                                <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource DestructiveTextBrush}"
                                            AutomationProperties.AutomationId="ProposalProblem" />
                               </inspector:InspectorRow>
 
@@ -603,7 +603,7 @@
                       </inspector:InspectorRow>
                     <inspector:InspectorRow Layout="Full" Label="Findings" IsShown="{Binding ReviewSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                       <StackPanel Spacing="6" AutomationProperties.AutomationId="Review">
-                        <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                        <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="{StaticResource TypeBodySize}" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                    AutomationProperties.AutomationId="ReviewSummary" />
                         <ItemsControl ItemsSource="{Binding Findings}" ItemTemplate="{StaticResource FindingTemplate}"
                                       AutomationProperties.AutomationId="Findings"
@@ -636,7 +636,7 @@
                                       AutomationProperties.AutomationId="ContextLink" />
                                 <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="linkTitle" Text="{Binding Node.Title}" />
                                 <PathIcon Grid.Column="3" Classes="linkChevron" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" />
-                                <theme:StateBadge Grid.Column="4" Width="14" Height="14"
+                                <theme:StateMark Grid.Column="4" Width="14" Height="14"
                                           HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0"
                                           State="{Binding Node.State}" Why="{Binding Node.WaitReason}"
                                           AutomationProperties.Name="{Binding Node.StatusLabel}" />
@@ -671,7 +671,7 @@
                                         AutomationProperties.AutomationId="ContextLink" />
                                   <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="linkTitle" Text="{Binding Node.Title}" />
                                   <PathIcon Grid.Column="3" Classes="linkChevron" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" />
-                                  <theme:StateBadge Grid.Column="4" Width="14" Height="14"
+                                  <theme:StateMark Grid.Column="4" Width="14" Height="14"
                                             HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0"
                                             State="{Binding Node.State}" Why="{Binding Node.WaitReason}"
                                             AutomationProperties.Name="{Binding Node.StatusLabel}" />

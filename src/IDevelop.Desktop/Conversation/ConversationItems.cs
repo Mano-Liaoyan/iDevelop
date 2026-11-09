@@ -75,7 +75,7 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     }
 
     /// <summary>The line over the message.</summary>
-    public string AuthorLine => IsAsking ? $"{AuthorLabel} · Waiting for your reply" : AuthorLabel;
+    public string AuthorLine => IsAsking ? $"{AuthorLabel} · Needs you" : AuthorLabel;
 
     /// <summary>The node's result that this message reported, which shows as a card under it, or null.</summary>
     public ResultViewModel? Result
@@ -179,8 +179,8 @@ public sealed class MarkerItemViewModel(int id, ConversationLine.Marker marker, 
     public string Title => marker.Kind switch
     {
         MarkerKind.Fresh => "New session",
-        MarkerKind.Completed => "Completed",
-        MarkerKind.Waiting => "Waiting for you",
+        MarkerKind.Completed => "Done",
+        MarkerKind.Waiting => "Needs you",
         MarkerKind.Failed => "Failed",
         MarkerKind.Stopped => "Stopped",
         MarkerKind.Dropped => "Message not delivered",
@@ -205,9 +205,19 @@ public sealed class MarkerItemViewModel(int id, ConversationLine.Marker marker, 
 
     public bool IsProblem => marker.Kind is MarkerKind.Failed or MarkerKind.Dropped;
 
-    public bool IsCompleted => marker.Kind == MarkerKind.Completed;
+    /// <summary>The State Mark of a marker that names a state, or null for a boundary or an event.</summary>
+    public Canvas.NodeState? MarkState => marker.Kind switch
+    {
+        MarkerKind.Completed => Canvas.NodeState.Completed,
+        MarkerKind.Waiting or MarkerKind.Conflict => Canvas.NodeState.InputRequired,
+        MarkerKind.Failed or MarkerKind.Dropped => Canvas.NodeState.Failed,
+        _ => null,
+    };
 
-    public bool IsWaiting => marker.Kind is MarkerKind.Waiting or MarkerKind.Conflict;
+    /// <summary>The marker's reason glyph, for a conflict.</summary>
+    public Canvas.WaitReason MarkWhy => marker.Kind == MarkerKind.Conflict ? Canvas.WaitReason.Conflict : Canvas.WaitReason.Question;
+
+    public bool HasMark => MarkState is not null;
 
     /// <summary>The last line of a node that waits, failed, or completed: the attention card or the header's status says the same, so the row hides.</summary>
     public bool IsHeldByCard

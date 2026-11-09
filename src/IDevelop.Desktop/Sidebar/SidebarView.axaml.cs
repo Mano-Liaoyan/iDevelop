@@ -24,12 +24,12 @@ public partial class SidebarView : UserControl
     // While a workflow is open, Projects takes at most this share of the panel's height, its heading included (ADR 0071).
     private const double ProjectsShare = 0.35;
 
-    // The Nodes list keeps at least five one-line rows: 26 px each, 2 px between them, and its 8 px end room.
-    private const double NodesLeastHeight = 146;
+    // The Nodes list keeps at least five one-line rows: 28 px each, 2 px between them, and its 8 px end room.
+    private const double NodesLeastHeight = 156;
 
     // The room Projects leaves Nodes for its three workflow rows: a group's heading and five rows, two of them on two lines,
     // because a long node name wraps (issue 108).
-    private const double NodesRoomyHeight = 202;
+    private const double NodesRoomyHeight = 212;
 
     // While a workflow is open, Projects keeps room for this many workflow rows, under the pinned project (ADR 0071).
     private const int LeastWorkflowRows = 3;
@@ -427,7 +427,7 @@ public partial class SidebarView : UserControl
         TreeHead.IsVisible = project is not null;
     }
 
-    private const double PinnedRowHeight = 26;
+    private const double PinnedRowHeight = 28;
 
     // The height of the pinned row that shows now.
     private double PinnedHeight => StickyProject.IsVisible ? PinnedRowHeight : 0;

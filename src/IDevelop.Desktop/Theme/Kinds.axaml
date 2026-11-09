@@ -1,6 +1,5 @@
 <!-- Paints an element in a node kind's hue, or in its state's or role's, by the classes that StyleClass sets: kind-plan,
-     state-failed, role-proposing, and so on. An element that shows a state also takes its node's kind, because a running
-     node's ring, tint, and glyph are in the kind's hue. Later rules win, so the state and role rules follow the kind
+     state-failed, role-proposing, and so on. Later rules win, so the state and role rules follow the kind
      rules. No rule colors text. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -23,7 +22,7 @@
   <Style Selector="PathIcon.kindIcon.kind-implement">
     <Setter Property="Data" Value="{StaticResource IconKindImplement}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-implement, PathIcon.kindStrong.kind-implement">
+  <Style Selector="PathIcon.kindStrong.kind-implement">
     <Setter Property="Foreground" Value="{DynamicResource KindImplementStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-plan">
@@ -44,7 +43,7 @@
   <Style Selector="PathIcon.kindIcon.kind-plan">
     <Setter Property="Data" Value="{StaticResource IconKindPlan}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-plan, PathIcon.kindStrong.kind-plan">
+  <Style Selector="PathIcon.kindStrong.kind-plan">
     <Setter Property="Foreground" Value="{DynamicResource KindPlanStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-architect">
@@ -65,7 +64,7 @@
   <Style Selector="PathIcon.kindIcon.kind-architect">
     <Setter Property="Data" Value="{StaticResource IconKindArchitect}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-architect, PathIcon.kindStrong.kind-architect">
+  <Style Selector="PathIcon.kindStrong.kind-architect">
     <Setter Property="Foreground" Value="{DynamicResource KindArchitectStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-review">
@@ -86,7 +85,7 @@
   <Style Selector="PathIcon.kindIcon.kind-review">
     <Setter Property="Data" Value="{StaticResource IconKindReview}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-review, PathIcon.kindStrong.kind-review">
+  <Style Selector="PathIcon.kindStrong.kind-review">
     <Setter Property="Foreground" Value="{DynamicResource KindReviewStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-approval">
@@ -107,7 +106,7 @@
   <Style Selector="PathIcon.kindIcon.kind-approval">
     <Setter Property="Data" Value="{StaticResource IconKindApproval}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-approval, PathIcon.kindStrong.kind-approval">
+  <Style Selector="PathIcon.kindStrong.kind-approval">
     <Setter Property="Foreground" Value="{DynamicResource KindApprovalStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-merge">
@@ -128,7 +127,7 @@
   <Style Selector="PathIcon.kindIcon.kind-merge">
     <Setter Property="Data" Value="{StaticResource IconKindMerge}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-merge, PathIcon.kindStrong.kind-merge">
+  <Style Selector="PathIcon.kindStrong.kind-merge">
     <Setter Property="Foreground" Value="{DynamicResource KindMergeStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-readonlyagent">
@@ -149,33 +148,28 @@
   <Style Selector="PathIcon.kindIcon.kind-readonlyagent">
     <Setter Property="Data" Value="{StaticResource IconKindReadOnlyAgent}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-readonlyagent, PathIcon.kindStrong.kind-readonlyagent">
+  <Style Selector="PathIcon.kindStrong.kind-readonlyagent">
     <Setter Property="Foreground" Value="{DynamicResource KindReadOnlyAgentStrongBrush}" />
   </Style>
 
-  <!-- The order of loudness: Running, then Failed and what waits for the person, then Stale, then Completed, then Idle
-       (ADR 0045). Only Running moves. A card shows a state with its edge and its badge, and the kind only with its stripe. What waits for the person differs by hue, so a question, an approval, and an interruption
-       read apart without the badge. Red is only for failure. The ring takes the state's color for every state, and the kind's
-       hue stays in the band. -->
+  <!-- A card shows a state with its ring and its State Mark, and the kind only with its glyph and tile. Not started and Done have no ring. -->
   <Style Selector="Border.stateStroke">
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
   </Style>
+  <Style Selector="Border.stateStroke.state-running">
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateRunningBrush}" />
+  </Style>
   <Style Selector="Border.stateStroke.state-inputrequired">
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderThickness" Value="1.5" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateStroke.state-inputrequired.why-approval">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.stateStroke.state-inputrequired.why-interrupted">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateNeutralStrokeBrush}" />
-  </Style>
   <Style Selector="Border.stateStroke.state-failed">
-    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderThickness" Value="1.5" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
-  <!-- Stale is the one dashed edge, drawn over this one, because its hue sits close to Input required's at a card's scale. -->
+  <!-- Stale is the one dashed edge, drawn over this one. -->
   <Style Selector="Border.stateStroke.state-stale">
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
@@ -184,9 +178,8 @@
     <Setter Property="Stroke" Value="{DynamicResource StateWarningStrokeBrush}" />
     <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeDashArray" Value="4,3" />
-    <Setter Property="Opacity" Value="0.6" />
   </Style>
-  <Style Selector="Rectangle.staleEdge.state-stale:not(.role-proposing)">
+  <Style Selector="Rectangle.staleEdge.state-stale">
     <Setter Property="IsVisible" Value="True" />
   </Style>
 
@@ -203,12 +196,6 @@
   <Style Selector="Border.stateBlock.state-inputrequired">
     <Setter Property="Background" Value="{DynamicResource StateWaitingBrush}" />
   </Style>
-  <Style Selector="Border.stateBlock.state-inputrequired.why-approval">
-    <Setter Property="Background" Value="{DynamicResource StateApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.stateBlock.state-inputrequired.why-interrupted">
-    <Setter Property="Background" Value="{DynamicResource StateNeutralStrokeBrush}" />
-  </Style>
   <Style Selector="Border.stateBlock.state-failed">
     <Setter Property="Background" Value="{DynamicResource StateFailedBrush}" />
   </Style>
@@ -216,157 +203,68 @@
     <Setter Property="Background" Value="{DynamicResource StateWarningStrokeBrush}" />
   </Style>
 
-  <Style Selector="Border.stateBlock.role-proposing">
-    <Setter Property="Background" Value="{DynamicResource AccentStrokeBrush}" />
-  </Style>
-
-  <Style Selector="PathIcon.stateIcon.state-idle">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- Every node's row has a state glyph, also while the node waits its turn, so an empty slot never reads as a gap. -->
-  <Style Selector="ListBox.tasks PathIcon.stateIcon.state-idle">
-    <Setter Property="IsVisible" Value="True" />
-    <Setter Property="Data" Value="{StaticResource IconIdle}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-running">
-    <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-inputrequired">
-    <Setter Property="Data" Value="{StaticResource IconStateWaiting}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-completed">
-    <Setter Property="Data" Value="{StaticResource IconStateSucceeded}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-failed">
-    <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-stale">
-    <Setter Property="Data" Value="{StaticResource IconStateOutOfDate}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-running">
-    <Setter Property="Foreground" Value="{DynamicResource StateRunningBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-stale">
-    <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-inputrequired">
-    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-completed">
-    <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-failed">
-    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
-  </Style>
-
-  <!-- What a waiting node needs, told apart by its glyph, because each asks a different action of the person. -->
-  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-reply">
-    <Setter Property="Data" Value="{StaticResource IconChat}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-approval">
-    <Setter Property="Data" Value="{StaticResource IconBadgeApproval}" />
-    <Setter Property="Foreground" Value="{DynamicResource StateApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-conflict">
-    <Setter Property="Data" Value="{StaticResource IconDisconnect}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-interrupted">
-    <Setter Property="Data" Value="{StaticResource IconBadgePause}" />
-    <Setter Property="Foreground" Value="{DynamicResource StateNeutralStrokeBrush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.state-inputrequired.why-roundlimit">
-    <Setter Property="Data" Value="{StaticResource IconStateNeedsSetup}" />
-  </Style>
-
-  <!-- A card's badge: one disc and one bold glyph for every state, so the states that need a person read as easily as the others.
-       The disc takes the state's color and the glyph stays the theme's contrast color on it. -->
-  <Style Selector="Ellipse.badgeDisc">
+  <!-- The State Mark. Six states, one word each, and one shape each (NodeStates.Word). Every reason a node waits for the person
+       keeps the orange disc, and the disc's glyph tells the reason. The glyph stays the theme's contrast color on the disc. -->
+  <Style Selector="Ellipse.markDisc">
     <Setter Property="Fill" Value="Transparent" />
   </Style>
-  <Style Selector="PathIcon.badgeGlyph">
-    <Setter Property="Foreground" Value="{DynamicResource OnStateBrush}" />
-  </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-idle:not(.role-proposing)">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- Idle's mark is the empty ring in every list and on every card, so a node with no run still says its state. -->
-  <Style Selector="Ellipse.badgeDisc.state-idle:not(.role-proposing)">
+  <Style Selector="Ellipse.markDisc.state-idle">
     <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
     <Setter Property="StrokeThickness" Value="1.5" />
   </Style>
-  <Style Selector="Ellipse.badgeDisc.state-running">
-    <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
+  <Style Selector="Ellipse.markDisc.state-inputrequired">
+    <Setter Property="Fill" Value="{DynamicResource StateWaitingStrongBrush}" />
   </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-running">
-    <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
+  <Style Selector="Ellipse.markDisc.state-completed">
+    <Setter Property="Fill" Value="{DynamicResource StateSuccessStrongBrush}" />
   </Style>
-  <Style Selector="Ellipse.badgeDisc.state-completed">
-    <Setter Property="Fill" Value="{DynamicResource StateSuccessStrokeBrush}" />
+  <Style Selector="Ellipse.markDisc.state-failed">
+    <Setter Property="Fill" Value="{DynamicResource StateFailedStrongBrush}" />
   </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-completed">
+  <Style Selector="Ellipse.markDisc.state-stale">
+    <Setter Property="Fill" Value="{DynamicResource StateWarningStrongBrush}" />
+  </Style>
+  <Style Selector="PathIcon.markGlyph">
+    <Setter Property="Foreground" Value="{DynamicResource OnStateBrush}" />
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="PathIcon.markGlyph.state-completed">
+    <Setter Property="IsVisible" Value="True" />
     <Setter Property="Data" Value="{StaticResource IconBadgeDone}" />
   </Style>
-  <Style Selector="Ellipse.badgeDisc.state-failed">
-    <Setter Property="Fill" Value="{DynamicResource StateFailedStrokeBrush}" />
-  </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-failed">
+  <Style Selector="PathIcon.markGlyph.state-failed">
+    <Setter Property="IsVisible" Value="True" />
     <Setter Property="Data" Value="{StaticResource IconBadgeFailed}" />
   </Style>
-  <!-- Stale asks least of the person, so its disc is the quietest color. -->
-  <Style Selector="Ellipse.badgeDisc.state-stale">
-    <Setter Property="Fill" Value="{DynamicResource StateWarningStrokeBrush}" />
-    <Setter Property="Opacity" Value="0.8" />
-  </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-stale">
+  <Style Selector="PathIcon.markGlyph.state-stale">
+    <Setter Property="IsVisible" Value="True" />
     <Setter Property="Data" Value="{StaticResource IconBadgeStale}" />
   </Style>
-  <Style Selector="Ellipse.badgeDisc.state-inputrequired">
-    <Setter Property="Fill" Value="{DynamicResource StateWaitingStrokeBrush}" />
-  </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-inputrequired">
+  <Style Selector="PathIcon.markGlyph.state-inputrequired">
+    <Setter Property="IsVisible" Value="True" />
     <Setter Property="Data" Value="{StaticResource IconBadgeQuestion}" />
   </Style>
-  <Style Selector="Ellipse.badgeDisc.state-inputrequired.why-approval">
-    <Setter Property="Fill" Value="{DynamicResource StateApprovalStrokeBrush}" />
-  </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-approval">
+  <Style Selector="PathIcon.markGlyph.state-inputrequired.why-approval">
     <Setter Property="Data" Value="{StaticResource IconBadgeApproval}" />
   </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-conflict">
+  <Style Selector="PathIcon.markGlyph.state-inputrequired.why-conflict">
     <Setter Property="Data" Value="{StaticResource IconBadgeConflict}" />
   </Style>
-  <Style Selector="Ellipse.badgeDisc.state-inputrequired.why-interrupted">
-    <Setter Property="Fill" Value="{DynamicResource StateNeutralStrokeBrush}" />
-  </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-interrupted">
+  <Style Selector="PathIcon.markGlyph.state-inputrequired.why-interrupted">
     <Setter Property="Data" Value="{StaticResource IconBadgePause}" />
   </Style>
-  <Style Selector="PathIcon.badgeGlyph.state-inputrequired.why-roundlimit">
-    <Setter Property="Data" Value="{StaticResource IconStateNeedsSetup}" />
+  <Style Selector="PathIcon.markGlyph.state-inputrequired.why-roundlimit">
+    <Setter Property="Data" Value="{StaticResource IconBadgeRoundLimit}" />
   </Style>
-  <Style Selector="Ellipse.badgeDisc.role-proposing">
-    <Setter Property="Fill" Value="{DynamicResource AccentStrokeBrush}" />
+  <Style Selector="Arc.markArc">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Stroke" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeLineCap" Value="Round" />
   </Style>
-  <Style Selector="PathIcon.badgeGlyph.role-proposing">
-    <Setter Property="Data" Value="{StaticResource IconSparkle}" />
-  </Style>
-
-  <!-- A planner with an open proposal takes the accent instead of its state, and does not pulse. -->
-  <Style Selector="Border.stateStroke.role-proposing">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
-  </Style>
-  <Style Selector="Border.stateTint.role-proposing">
-    <Setter Property="Background" Value="{DynamicResource Accent10Brush}" />
-  </Style>
-  <Style Selector="PathIcon.stateIcon.role-proposing">
+  <!-- A running node's arc turns, and nothing else on a card moves. Tests read its classes, because its pixels depend on the time. -->
+  <Style Selector="Arc.markArc.state-running">
     <Setter Property="IsVisible" Value="True" />
-    <Setter Property="Data" Value="{StaticResource IconSparkle}" />
-    <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
-  </Style>
-
-  <!-- A running node's glyph spins, and nothing else on a card moves. Tests read its classes, because its pixels depend on the time. -->
-  <Style Selector="PathIcon.stateIcon.state-running:not(.role-proposing), PathIcon.badgeGlyph.state-running:not(.role-proposing)">
     <Style.Animations>
       <Animation Duration="0:0:1" IterationCount="Infinite">
         <KeyFrame Cue="0%">
@@ -377,6 +275,14 @@
         </KeyFrame>
       </Animation>
     </Style.Animations>
+  </Style>
+  <!-- A role is one accent dot on the mark. It adds no state word. -->
+  <Style Selector="Ellipse.markRole">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Ellipse.markRole.role-underreview, Ellipse.markRole.role-proposing">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
 
   <!-- The tile is drawn in a 32 unit frame: a quarter-size corner radius, the glyph at 0.625 of the tile, and the badge

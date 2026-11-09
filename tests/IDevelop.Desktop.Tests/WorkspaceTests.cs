@@ -268,13 +268,13 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal("iDevelop", shell.Window.Title);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
-        Assert.Equal("Interrupted", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Needs you", shell.CardText("Design", "CardStatus"));
         var reopened = shell.Window.ViewModel.Canvas!;
         Assert.Equal(NodeStates.InterruptedDetailInMenu, shell.NodeModel("Design").InspectorDetail);
-        Assert.Equal((0, 1), (reopened.Counts.Waiting, reopened.Counts.Interrupted));
-        Assert.Equal("1\u00a0interrupted", Assert.Single(reopened.RowChips).Label);
-        Assert.Equal("Next interrupted", reopened.NextLabel);
-        Assert.Equal((0, 1), (shell.Window.ViewModel.Activity.WaitingCount, shell.Window.ViewModel.Activity.InterruptedCount));
+        Assert.Equal(1, reopened.Counts.Waiting);
+        Assert.Equal("1\u00a0needs\u00a0you", Assert.Single(reopened.RowChips).Label);
+        Assert.Equal("Next that needs you", reopened.NextLabel);
+        Assert.Equal(1, shell.Window.ViewModel.Activity.WaitingCount);
     }
 
     [AvaloniaFact]
@@ -522,7 +522,7 @@ public sealed class WorkspaceTests : IDisposable
         WaitUntilLetGo(shell, alpha);
         shell.Window.ViewModel.Open(alpha);
         shell.Render();
-        Assert.Equal("Interrupted", shell.CardText("Design", "CardStatus"));
+        Assert.Equal("Needs you", shell.CardText("Design", "CardStatus"));
     }
 
     [AvaloniaFact]

@@ -148,9 +148,9 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.Equal(LongTask, titles[0].Text);
         Assert.True(titles[0].TextLayout.TextLines.Count > 1, $"The long title fits on one line at {width} px, so nothing here wraps.");
         Assert.Single(titles[1].TextLayout.TextLines);
-        // Each row centres its glyph on its title's first line, 13 px into the row.
-        Assert.All(rows, row => Assert.StartsWith("first line 13, glyph 0", TaskCentres(row)));
-        Assert.Equal(26, rows[1].Bounds.Height);
+        // Each row centres its glyph on its title's first line, 14 px into the row.
+        Assert.All(rows, row => Assert.StartsWith("first line 14, glyph 0", TaskCentres(row)));
+        Assert.Equal(28, rows[1].Bounds.Height);
     }
 
     private static string TaskCentres(ListBoxItem row)
@@ -210,7 +210,7 @@ public sealed class SidebarLayoutTests : IDisposable
         var shell = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.SizeSidebar(width);
         var row = shell.WorkflowRow(Reports, ReleaseNotes);
-        Assert.Equal((26.0, 26.0), (shell.ProjectName(Reports).FindAncestorOfType<ToggleButton>()!.Bounds.Height, row.Bounds.Height));
+        Assert.Equal((28.0, 28.0), (shell.ProjectName(Reports).FindAncestorOfType<ToggleButton>()!.Bounds.Height, row.Bounds.Height));
         Assert.Equal("0/2", shell.WorkflowText(Reports, ReleaseNotes, "WorkflowSummary"));
 
         shell.Click(row);
@@ -606,7 +606,7 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.True(head.IsVisible);
         Assert.Equal("Not started", ((Canvas.NodeGroup)sticky.DataContext!).Name);
         var tops = list.GetVisualDescendants().OfType<ListBoxItem>().Select(row => row.TranslatePoint(default, list)!.Value.Y);
-        Assert.Contains(tops, top => Math.Abs(top - 26) < 1);
+        Assert.Contains(tops, top => Math.Abs(top - 28) < 1);
     }
 
     // The states of the review fixture's scenes, in the order that the nodes are saved.

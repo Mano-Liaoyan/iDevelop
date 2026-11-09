@@ -140,7 +140,7 @@ public sealed class ConversationTests
         var shell = OpenSayHi(f);
         Shell.Invoke(shell.InView<Button>("RunTask"));
         shell.WaitForState("Say hi", NodeState.InputRequired);
-        Assert.Equal("Input required · Reply", shell.NodeModel("Say hi").StatusLabel);
+        Assert.Equal("Needs you · Reply", shell.NodeModel("Say hi").StatusLabel);
 
         Shell.Invoke(shell.InView<Button>("Approve"));
 

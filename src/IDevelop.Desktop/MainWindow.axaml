@@ -93,12 +93,12 @@
                       <PathIcon DockPanel.Dock="Right" Classes="wideOnly" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" Margin="6,0,6,0"
                                 Foreground="{DynamicResource TextFaintBrush}" />
                       <TextBlock Classes="wideOnly" Text="{Binding ProjectName}" theme:SpillRow.FollowsText="True" MaxWidth="120" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                                 FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                 FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource TextMutedBrush}"
                                  ToolTip.Tip="{Binding ProjectName}"
                                  AutomationProperties.AutomationId="BreadcrumbProject" />
                     </DockPanel>
                     <TextBlock HorizontalAlignment="Left" Text="{Binding WorkflowName}" theme:SpillRow.FollowsText="True" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                               FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                               FontSize="{StaticResource TypeSmallSize}" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                ToolTip.Tip="{Binding WorkflowName}"
                                AutomationProperties.AutomationId="BreadcrumbWorkflow" />
                   </canvas:CrumbNames>
@@ -167,8 +167,7 @@
                               AutomationProperties.Name="{Binding GenerateLabel}">
                         <StackPanel Orientation="Horizontal">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
-                          <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
-                                    Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding IsPlanning}" />
+                          <theme:StateMark State="Running" IsVisible="{Binding IsPlanning}" />
                           <TextBlock Classes="label" Text="Generate" Margin="6,0,0,0" VerticalAlignment="Center" />
                           <!-- An open proposal shows a dot before its label, or on the glyph when the label hides. -->
                           <Panel Classes="wideOnly" VerticalAlignment="Center">

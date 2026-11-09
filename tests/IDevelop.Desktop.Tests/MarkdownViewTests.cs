@@ -176,7 +176,7 @@ public sealed class MarkdownViewTests
         Assert.Equal((0, 0, 2), Shown("Short.\n\n" + new string('w', 19_992)));
         var longer = "Short.\n\n" + new string('w', 19_993);
         Assert.Equal((0, 0, 1), Shown(longer));
-        Assert.Equal((longer, 54.0), (Blocks(view).Single(), view.Children[0].Bounds.Height));
+        Assert.Equal((longer, 48.0), (Blocks(view).Single(), view.Children[0].Bounds.Height));
         window.Close();
     }
 

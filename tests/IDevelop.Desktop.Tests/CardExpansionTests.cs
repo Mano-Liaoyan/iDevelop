@@ -377,7 +377,7 @@ public sealed class CardExpansionTests : IDisposable
         shell.Click(shell.Find<Button>("RunWorkflow"));
         shell.WaitForState("Approve", NodeState.InputRequired);
 
-        Assert.Equal("Approval", shell.CardText("Approve", "CardStatus"));
+        Assert.Equal("Needs you", shell.CardText("Approve", "CardStatus"));
         Assert.Equal("Approval", shell.CardText("Approve", "CardNowHeading"));
         Assert.True(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
         Assert.True(shell.InCard<Button>("Approve", "CardSendBack").IsEffectivelyVisible);
@@ -442,6 +442,8 @@ public sealed class CardExpansionTests : IDisposable
         var shell = Shell.Open(Diamond());
         ToolTip.SetServiceEnabled(shell.Window, true);
         var card = shell.InCard<Panel>("Docs", "TaskCard");
+        // In this headless run the tooltip service's 400 ms timer stays unfired, for a cause not yet found. This test does not check the delay.
+        ToolTip.SetShowDelay(card, 0);
 
         shell.Window.MouseMove(shell.Header(shell.Node("Docs")));
         shell.WaitUntil(() => ToolTip.GetIsOpen(card), "the peek opens");

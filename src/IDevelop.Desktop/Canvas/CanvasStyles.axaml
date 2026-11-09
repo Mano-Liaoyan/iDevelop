@@ -6,19 +6,20 @@
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:theme="using:IDevelop.Desktop.Theme">
-  <!-- One strong neutral line outside the card, with a gap, says selected, and it leaves the state's own edge whole inside it.
-       Blue marks a running node and its wires only, so a selection never reads as a run (ADR 0071). The canvas's own ring says
-       that it has the keyboard's focus, so a card keeps one outline. -->
+  <!-- A selected card has a 1.5 px accent ring just outside its edge and a 3 px halo outside that, so a state's own ring on the card's
+       edge stays whole inside them, and a selected Running card shows both. The canvas's own ring says that it has the keyboard's focus. -->
   <Style Selector="Border.ring">
-    <Setter Property="Margin" Value="5,-5" />
+    <Setter Property="Margin" Value="8.5,-1.5" />
     <Setter Property="BorderThickness" Value="1.5" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource SelectionHalo}" />
   </Style>
   <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource SelectionHalo}" />
   </Style>
   <!-- A card is 240 wide in its 260 wide container, and an expanded card 320 in 340 (ADR 0024). An expanded card's state
        tint stays on its header, so its details read on the card's own surface. -->
@@ -36,39 +37,7 @@
   <Style Selector="Panel.cardHead">
     <Setter Property="Height" Value="64" />
   </Style>
-  <Style Selector="Panel.taskCard Border.stateTint">
-    <Setter Property="Height" Value="64" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-    <Setter Property="Background" Value="Transparent" />
-  </Style>
-  <!-- The tint fills the taller zoomed out card too. -->
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.stateTint, :is(Control).tier-block Panel.taskCard:not(.expanded) Border.stateTint">
-    <Setter Property="Height" Value="NaN" />
-    <Setter Property="VerticalAlignment" Value="Stretch" />
-  </Style>
   <Style Selector="Border.cardBand">
-    <Setter Property="CornerRadius" Value="10,10,0,0" />
-  </Style>
-  <!-- A running node keeps the card's surface: one strip of color along its top edge, in canvas units, and its spinning badge.
-       No selection or other state takes this form, so running and selected read apart at every zoom. -->
-  <Style Selector="Border.runBand">
-    <Setter Property="Height" Value="4" />
-    <Setter Property="Background" Value="{DynamicResource StateRunningBrush}" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail Border.runBand, :is(Control).tier-compact Border.runBand">
-    <Setter Property="Height" Value="6" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Border.runBand">
-    <Setter Property="Height" Value="10" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Border.runBand">
-    <Setter Property="Height" Value="10" />
-  </Style>
-  <!-- The selection line replaces a quiet state's edge, so a selected card has one outline. -->
-  <Style Selector="nodify|ItemContainer:selected Border.stateStroke.state-idle, nodify|ItemContainer:selected Border.stateStroke.state-completed">
-    <Setter Property="Opacity" Value="0" />
-  </Style>
-  <Style Selector="Panel.taskCard.expanded Border.stateTint">
     <Setter Property="CornerRadius" Value="10,10,0,0" />
   </Style>
   <!-- The card's disclosure: a 24 px target drawn in the 12 px column, right while collapsed and down while expanded,
@@ -90,7 +59,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="ToggleButton.cardChevron:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="ToggleButton.cardChevron PathIcon">
@@ -335,6 +304,10 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- The badge ends the last line, inside the card. Only the Block tier's card, which has no text, wears it on its corner. -->
+  <Style Selector="theme|StateMark.farMark">
+    <Setter Property="Width" Value="NaN" />
+    <Setter Property="Height" Value="NaN" />
+  </Style>
   <Style Selector="Panel.stateBadge">
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Width" Value="24" />
@@ -391,41 +364,22 @@
   <Style Selector=":is(Control).tier-title Rectangle.staleEdge, :is(Control).tier-block Rectangle.staleEdge">
     <Setter Property="StrokeThickness" Value="5" />
   </Style>
-  <!-- A selection line and a focus ring keep their weight on screen as the cards shrink, and a gap as wide as the line
-       keeps them apart from a failed, waiting, or stale card's own edge, so the state's color stays whole inside them. -->
+  <!-- A selection ring keeps its weight on screen as the cards shrink, and it stays just outside the card's edge. -->
   <Style Selector=":is(Control).tier-detail Border.ring, :is(Control).tier-compact Border.ring">
-    <Setter Property="Margin" Value="4,-6" />
+    <Setter Property="Margin" Value="7.5,-2.5" />
     <Setter Property="BorderThickness" Value="2.5" />
   </Style>
   <Style Selector=":is(Control).tier-label Border.ring">
-    <Setter Property="Margin" Value="1,-9" />
+    <Setter Property="Margin" Value="6,-4" />
     <Setter Property="BorderThickness" Value="4" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
-    <Setter Property="Margin" Value="1,-9" />
+    <Setter Property="Margin" Value="3,-7" />
     <Setter Property="BorderThickness" Value="7" />
   </Style>
   <Style Selector=":is(Control).tier-title Border.ring">
+    <Setter Property="Margin" Value="5,-5" />
     <Setter Property="BorderThickness" Value="5" />
-  </Style>
-  <!-- The pointer over a card draws a thin neutral line of one screen pixel outside its edge, with the selection's gap, at each
-       zoom. It is lighter than the selection line and never accent, so hover never competes with a selection (ADR 0064). It
-       draws in the full muted text color, which stands apart from the card's own border (ADR 0069). -->
-  <Style Selector="nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-compact nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="1.6" />
-  </Style>
-  <Style Selector=":is(Control).tier-label nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="2.5" />
-  </Style>
-  <Style Selector=":is(Control).tier-title nodify|ItemContainer:pointerover:not(:selected) Border.ring, :is(Control).tier-block nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="4" />
-  </Style>
-  <Style Selector=":is(Control).tier-title nodify|ItemContainer:pointerover:not(:selected) Border.ring">
-    <Setter Property="BorderThickness" Value="3" />
   </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
        show through it (#85). Its dashed edge and faded tile say it is a proposal. -->
@@ -453,13 +407,13 @@
     <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
   </Style>
   <Style Selector="Border.ghostNote TextBlock">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="TextBlock.cardTitle">
-    <Setter Property="FontSize" Value="13" />
-    <Setter Property="LineHeight" Value="17" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeBodyLine}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="MaxLines" Value="2" />
     <Setter Property="TextWrapping" Value="WrapWithOverflow" />
@@ -471,7 +425,7 @@
        bottom margin the box takes 5 px less than its line, so the row keeps the 18 px of its Panel's MinHeight for any line
        up to 23 px, and a taller box reaches into the empty top of the subtitle's row. -->
   <Style Selector="TextBox.cardTitle">
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="VerticalAlignment" Value="Top" />
@@ -481,9 +435,9 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus, TextBlock.cardModel">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="Height" Value="16" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
@@ -600,9 +554,6 @@
     <Setter Property="Stroke" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="Fill" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.wire.dimmed">
-    <Setter Property="Opacity" Value="0.8" />
-  </Style>
   <Style Selector="nodify|StepConnection.wire.flow-outdated">
     <Setter Property="Stroke" Value="{DynamicResource StateWarningStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource StateWarningStrokeBrush}" />
@@ -671,6 +622,11 @@
   <Style Selector="Border.minimapItem">
     <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
   </Style>
+  <!-- A wire that the selection leaves out goes to the dim color. A wire that feeds a running node keeps moving in its own color. -->
+  <Style Selector="nodify|StepConnection.wire.dimmed:not(.flow-feeding)">
+    <Setter Property="Stroke" Value="{DynamicResource WireDimBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource WireDimBrush}" />
+  </Style>
   <!-- A node that has not run stays visible on the map's surface, under the states that have happened. -->
   <Style Selector="Border.minimapItem.state-idle">
     <Setter Property="Background" Value="{DynamicResource TextFaintBrush}" />
@@ -724,21 +680,21 @@
     <Setter Property="BorderThickness" Value="1" />
   </Style>
   <Style Selector="Border.portLabel TextBlock">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeCaptionLine}" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The canvas has the keys: one thin line inside the canvas's edges, so it never outweighs the selected card. -->
+  <!-- The canvas has the keys: the one focus ring, inside the canvas's edges. -->
   <Style Selector="Border.canvasFocus">
-    <Setter Property="Margin" Value="3" />
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Margin" Value="1" />
+    <Setter Property="BorderThickness" Value="2" />
     <Setter Property="CornerRadius" Value="7" />
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
   </Style>
   <Style Selector="Button.zoomValue TextBlock">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
     <Setter Property="FontWeight" Value="Medium" />
   </Style>
 
@@ -747,8 +703,8 @@
     <Setter Property="TextTrimming" Value="None" />
   </Style>
   <Style Selector="TextBlock.barText">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />

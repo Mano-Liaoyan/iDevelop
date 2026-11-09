@@ -55,7 +55,7 @@ public sealed class ConversationWindowTests : IDisposable
         shell.Type("banana");
         shell.Press(Key.Enter, RawInputModifiers.Control);
         shell.WaitUntil(() => Lines(shell).Contains("Antigravity CLI: Wrote banana."), "the second turn ends");
-        string[] expected = ["[New session]", "Antigravity CLI: Which fruit?", "[Waiting for you]", "You: banana", "Antigravity CLI: Wrote banana.", "[Waiting for you]"];
+        string[] expected = ["[New session]", "Antigravity CLI: Which fruit?", "[Needs you]", "You: banana", "Antigravity CLI: Wrote banana.", "[Needs you]"];
         shell.WaitUntil(() => Lines(shell).SequenceEqual(expected), "the turns read in order", () => string.Join(" | ", Lines(shell)));
 
         var leaving = shell.Window.ViewModel.Leave();

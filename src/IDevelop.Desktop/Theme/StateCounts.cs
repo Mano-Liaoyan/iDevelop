@@ -2,18 +2,20 @@ namespace IDevelop.Desktop.Theme;
 
 /// <summary>How many of a workflow's nodes are in each state.</summary>
 /// <remarks>
-/// Every surface reads these one definitions. Waiting counts the nodes that need the person's word: a reply, a question, an
-/// approval, a conflict, or a round limit. Interrupted counts the nodes that iDevelop's closing stopped, which wait for nobody's word.
+/// Every surface reads these one definitions. Waiting counts every node that needs the person, for any reason.
 /// </remarks>
-public readonly record struct StateCounts(int Completed, int Running, int Waiting, int Interrupted, int Failed, int Stale, int Total)
+public readonly record struct StateCounts(int Completed, int Running, int Waiting, int Failed, int Stale, int Total)
 {
-    public bool HasRun => Completed + Running + Waiting + Interrupted + Failed + Stale > 0;
+    public bool HasRun => Completed + Running + Waiting + Failed + Stale > 0;
 
     /// <summary>
-    /// "5 of 9 · 1 running · 3 waiting · 1 interrupted · 1 failed · 2 stale", with the counts that are not zero, or "9 nodes" before any node ran,
+    /// "5 of 9 · 1 running · 3 need you · 1 failed · 2 stale", with the counts that are not zero, or "9 nodes" before any node ran,
     /// or "No nodes yet".
     /// </summary>
     public string Progress => !HasRun ? Summary() : $"{Completed} of {Total}";
+
+    /// <summary>"1 needs you" or "3 need you".</summary>
+    public static string NeedYou(int count) => count == 1 ? "1 needs you" : $"{count} need you";
 
     /// <summary>A line of several parts with a no-break space in each part of " · ", so a wrap never parts a count from its word.</summary>
     public static string KeepCountsWhole(string line) =>
@@ -35,8 +37,7 @@ public readonly record struct StateCounts(int Completed, int Running, int Waitin
         {
             $"{Completed} of {Total}",
             Running > 0 ? $"{Running} running" : null,
-            Waiting > 0 ? $"{Waiting} waiting" : null,
-            Interrupted > 0 ? $"{Interrupted} interrupted" : null,
+            Waiting > 0 ? NeedYou(Waiting) : null,
             Failed > 0 ? $"{Failed} failed" : null,
             Stale > 0 ? $"{Stale} stale" : null,
         }.OfType<string>());

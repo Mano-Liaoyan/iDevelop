@@ -125,7 +125,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The line over the composer shows while a turn runs.</summary>
     public bool ShowsWorking => Node.State == NodeState.Running;
 
-    public string WorkingLabel => Node.IsAsking ? "Waiting for your answer" : Node.State == NodeState.Running && Node.StatusLabel != "Running" ? Node.StatusLabel : "Working";
+    public string WorkingLabel => Node.IsAsking ? "Needs you" : Node.State == NodeState.Running && Node.StatusLabel != NodeStates.Word(NodeState.Running) ? Node.StatusLabel : "Working";
 
     /// <summary>The first line of what the agent did last, unless the transcript's last row already says it.</summary>
     public string? WorkingLine => Node.Latest?.Split('\n', 2)[0] is { } line && !(Items.LastOrDefault() is StepGroupItemViewModel steps && steps.LastLine == line) ? line : null;
@@ -169,15 +169,28 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public string CardTitle => Card switch
     {
-        AttentionCard.Question => Node.Questions is [var only] ? only.Header : "Question",
-        AttentionCard.Reply => HasOwnReason ? "Question" : "Reply",
-        AttentionCard.Approval => "Approval",
-        AttentionCard.Conflict => "Conflict",
-        AttentionCard.Interrupted => "Interrupted",
-        AttentionCard.Failed => "Failed",
-        AttentionCard.Stale => "Stale",
+        AttentionCard.Question => Node.Questions is [var only] ? only.Header : Needs("Question"),
+        AttentionCard.Reply => Needs(HasOwnReason ? "Question" : "Reply"),
+        AttentionCard.Approval => Node.StatusLabel,
+        AttentionCard.Conflict => Node.StatusLabel,
+        AttentionCard.Interrupted => Node.StatusLabel,
+        AttentionCard.Failed => NodeStates.Word(NodeState.Failed),
+        AttentionCard.Stale => NodeStates.Word(NodeState.Stale),
         _ => "",
     };
+
+    /// <summary>The State Mark on the card's heading. A question that a running agent asks shows the Needs you disc.</summary>
+    public NodeState CardState => Card switch
+    {
+        AttentionCard.Failed => NodeState.Failed,
+        AttentionCard.Stale => NodeState.Stale,
+        _ => NodeState.InputRequired,
+    };
+
+    /// <summary>The reason glyph on the card's mark.</summary>
+    public WaitReason CardWhy => Card == AttentionCard.Question ? WaitReason.Question : Node.WaitReason;
+
+    private static string Needs(string reason) => $"{NodeStates.Word(NodeState.InputRequired)} · {reason}";
 
     /// <summary>What the card explains, or null. A question's rows say it, and a wait on the agent's words leaves them to the message above.</summary>
     public string? CardBody => Card switch

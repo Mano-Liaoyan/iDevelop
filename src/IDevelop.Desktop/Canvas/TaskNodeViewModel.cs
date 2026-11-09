@@ -20,7 +20,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
     {
         [nameof(State)] = [nameof(CardStatus), nameof(ShowsNextRunNote)],
         [nameof(Role)] = [nameof(CardStatus), nameof(IsUnderReview)],
-        [nameof(StatusLabel)] = [nameof(CardStatus)],
+        [nameof(StatusLabel)] = [nameof(CardStatus), nameof(MarkTip)],
         [nameof(Proposal)] = [nameof(CardStatus), nameof(ShowsAcceptAndFinish), nameof(Actions)],
         [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
         [nameof(AgentLabel)] = [nameof(AgentClient), nameof(CardClient), nameof(AgentModel), nameof(CardModel), nameof(HasModel), nameof(CardLine), nameof(ClientMark), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],

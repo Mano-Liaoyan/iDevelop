@@ -39,7 +39,7 @@
             PointerPressed="OnTitleBandPressed" />
 
     <Border Grid.Row="1" Padding="8,8,8,4" IsVisible="{Binding HasProjects}">
-      <TextBox x:Name="FindBox" Classes="search" Height="32" MinHeight="32"
+      <TextBox x:Name="FindBox" Classes="search" Height="28" MinHeight="28"
                Text="{Binding Find.Query, Mode=TwoWay}"
                Watermark="Find node or workflow"
                ToolTip.Tip="Finds nodes and workflows in every open project"
@@ -53,7 +53,7 @@
       </TextBox>
     </Border>
 
-    <!-- What needs the person and what runs now. The list starts folded to this one row, whose counts add up to the list. A badge and
+    <!-- What needs the person and what runs now. The list starts folded to this one row, whose counts add up to the list. A State Mark and
          a number stand for each count here, as on a folded project row, and each count's tooltip says its state in words (ADR 0071). -->
     <Grid Grid.Row="2" RowDefinitions="Auto,Auto" Margin="8,4,0,0" IsVisible="{Binding Activity.HasRows}">
       <ToggleButton Classes="sectionFold" Margin="0,0,8,0" IsChecked="{Binding Activity.IsOpen}"
@@ -64,31 +64,24 @@
           <TextBlock Classes="section" Text="Activity" VerticalAlignment="Center" />
           <StackPanel Grid.Column="1" Classes="counts tight" VerticalAlignment="Center">
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasWaiting}" Background="Transparent"
-                        ToolTip.Tip="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting for you'}"
+                        ToolTip.Tip="{Binding Activity.WaitingLabel}"
                         AutomationProperties.AutomationId="ActivityWaiting"
-                        AutomationProperties.Name="{Binding Activity.WaitingCount, StringFormat='{}{0} waiting'}">
-              <theme:StateBadge State="InputRequired" Why="Question" Width="14" Height="14" />
+                        AutomationProperties.Name="{Binding Activity.WaitingLabel}">
+              <theme:StateMark State="InputRequired" Why="Question" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.WaitingCount}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasFailed}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}"
                         AutomationProperties.AutomationId="ActivityFailed"
                         AutomationProperties.Name="{Binding Activity.FailedCount, StringFormat='{}{0} failed'}">
-              <theme:StateBadge State="Failed" Width="14" Height="14" />
+              <theme:StateMark State="Failed" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.FailedCount}" />
-            </StackPanel>
-            <StackPanel Classes="count" IsVisible="{Binding Activity.HasInterrupted}" Background="Transparent"
-                        ToolTip.Tip="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}"
-                        AutomationProperties.AutomationId="ActivityInterrupted"
-                        AutomationProperties.Name="{Binding Activity.InterruptedCount, StringFormat='{}{0} interrupted'}">
-              <theme:StateBadge State="InputRequired" Why="Interrupted" Width="14" Height="14" />
-              <TextBlock Classes="caption" Text="{Binding Activity.InterruptedCount}" />
             </StackPanel>
             <StackPanel Classes="count" IsVisible="{Binding Activity.HasRunning}" Background="Transparent"
                         ToolTip.Tip="{Binding Activity.RunningCount, StringFormat='{}{0} running'}"
                         AutomationProperties.AutomationId="ActivityRunning"
                         AutomationProperties.Name="{Binding Activity.RunningCount, StringFormat='{}{0} running'}">
-              <theme:StateBadge State="Running" Width="14" Height="14" />
+              <theme:StateMark State="Running" Width="14" Height="14" />
               <TextBlock Classes="caption" Text="{Binding Activity.RunningCount}" />
             </StackPanel>
           </StackPanel>
@@ -115,7 +108,7 @@
                   <!-- The badge says why the node is listed. While several projects are open, a quiet line under the title names the
                        project and the workflow. The tooltip says all of it. -->
                   <Grid ColumnDefinitions="16,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
-                    <theme:StateBadge VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
+                    <theme:StateMark VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
                     <TextBlock Grid.Column="1" Classes="rowName" Text="{Binding Node.Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                     <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding ProjectLine}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                                IsVisible="{Binding ProjectLine, Converter={x:Static ObjectConverters.IsNotNull}}"
@@ -215,7 +208,7 @@
                                       ToolTip.Tip="{Binding RunningLabel}"
                                       AutomationProperties.AutomationId="ProjectRunning"
                                       AutomationProperties.Name="{Binding RunningLabel}">
-                            <theme:StateBadge State="Running" Width="14" Height="14" />
+                            <theme:StateMark State="Running" Width="14" Height="14" />
                             <TextBlock Classes="caption" Text="{Binding RunningCount}" />
                           </StackPanel>
                           <StackPanel Classes="count" IsVisible="{Binding HasFailed}"
@@ -223,7 +216,7 @@
                                       ToolTip.Tip="{Binding FailedLabel}"
                                       AutomationProperties.AutomationId="ProjectFailed"
                                       AutomationProperties.Name="{Binding FailedLabel}">
-                            <theme:StateBadge State="Failed" Width="14" Height="14" />
+                            <theme:StateMark State="Failed" Width="14" Height="14" />
                             <TextBlock Classes="caption" Text="{Binding FailedCount}" />
                           </StackPanel>
                           <StackPanel Classes="count" IsVisible="{Binding IsWaiting}"
@@ -231,16 +224,8 @@
                                       ToolTip.Tip="{Binding WaitingLabel}"
                                       AutomationProperties.AutomationId="ProjectWaiting"
                                       AutomationProperties.Name="{Binding WaitingLabel}">
-                            <theme:StateBadge State="InputRequired" Why="Question" Width="14" Height="14" />
+                            <theme:StateMark State="InputRequired" Why="Question" Width="14" Height="14" />
                             <TextBlock Classes="caption" Text="{Binding WaitingCount}" />
-                          </StackPanel>
-                          <StackPanel Classes="count" IsVisible="{Binding HasInterrupted}"
-                                      Background="Transparent"
-                                      ToolTip.Tip="{Binding InterruptedLabel}"
-                                      AutomationProperties.AutomationId="ProjectInterrupted"
-                                      AutomationProperties.Name="{Binding InterruptedLabel}">
-                            <theme:StateBadge State="InputRequired" Why="Interrupted" Width="14" Height="14" />
-                            <TextBlock Classes="caption" Text="{Binding InterruptedCount}" />
                           </StackPanel>
                         </StackPanel>
                       </Grid>
@@ -312,7 +297,7 @@
                                     <ItemsControl.ItemTemplate>
                                       <DataTemplate DataType="canvas:StateChip">
                                         <DockPanel Background="Transparent" ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Label}">
-                                          <theme:StateBadge DockPanel.Dock="Left" Width="14" Height="14" Margin="0,1,4,0" VerticalAlignment="Top" State="{Binding State}" Why="{Binding Why}" />
+                                          <theme:StateMark DockPanel.Dock="Left" Width="14" Height="14" Margin="0,1,4,0" VerticalAlignment="Top" State="{Binding State}" Why="{Binding Why}" />
                                           <theme:GroupedLine Classes="caption" Whole="{Binding Label}" TextWrapping="Wrap" AutomationProperties.AutomationId="WorkflowStatus" />
                                         </DockPanel>
                                       </DataTemplate>
@@ -320,7 +305,8 @@
                                   </ItemsControl>
                                 </Grid>
                               </Button>
-                              <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32" Margin="48,2,4,2"
+                              <Border Classes="currentBar" IsVisible="{Binding IsSelected}" />
+                              <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="28" Margin="48,0,4,0"
                                                      AutomationProperties.AutomationId="WorkflowNameBox"
                                                      AutomationProperties.Name="Workflow name" />
                             </Panel>
@@ -429,8 +415,8 @@
               <theme:KindTile Kind="{Binding Kind}" TileSize="14" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,2,0,0" />
               <theme:EllipsisText Grid.Column="1" Classes="rowName nodeName" Whole="{Binding Title, Converter={x:Static theme:NameBreaks.KeepTokens}}"
                                   AutomationProperties.AutomationId="NodeRowName" />
-              <!-- One state has one badge in every list, the card's own. -->
-              <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" State="{Binding State}" Why="{Binding WaitReason}"
+              <!-- One state has one State Mark in every list. -->
+              <theme:StateMark Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" State="{Binding State}" Why="{Binding WaitReason}"
                                 ToolTip.Tip="{Binding StatusLabel}"
                                 AutomationProperties.AutomationId="NodeRowState"
                                 AutomationProperties.Name="{Binding StatusLabel}" />
@@ -489,7 +475,7 @@
                              AutomationProperties.Name="{Binding Name}">
                     <Run Text="{Binding BeforeMatch}" /><Run Classes="match" Text="{Binding Match}" /><Run Text="{Binding AfterMatch}" />
                   </TextBlock>
-                  <theme:StateBadge Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                  <theme:StateMark Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
                                     IsVisible="{Binding IsNode}"
                                     State="{Binding Node.State, FallbackValue={x:Null}}" Why="{Binding Node.WaitReason, FallbackValue={x:Null}}" />
                   <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Classes="caption" Text="{Binding Place}" TextWrapping="Wrap" />

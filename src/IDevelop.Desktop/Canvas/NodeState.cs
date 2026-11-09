@@ -5,7 +5,7 @@ using EngineState = IDevelop.Engine.NodeState;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>The engine's state of a node, which its ring, tint, glyph, and status show (ADR 0017).</summary>
+/// <summary>The engine's state of a node, which its ring, State Mark, and status show (ADR 0017).</summary>
 public enum NodeState { Idle, Running, InputRequired, Completed, Failed, Stale }
 
 /// <summary>What the node is to another node, drawn over its state: a running review's subject, or a planner with an open proposal.</summary>
@@ -38,17 +38,21 @@ public static class NodeStates
         _ => WaitReason.None,
     };
 
-    /// <summary>The node's status, in the words of the left tree's groups (ADR 0068), which names why it needs the person, such as "Input required · Approval". An interrupted node needs nothing yet, so it says only that.</summary>
-    public static string Label(EngineState state) => state switch
+    /// <summary>The state's one word. The app shows exactly these six.</summary>
+    public static string Word(NodeState state) => state switch
     {
-        EngineState.Running => "Running",
-        EngineState.InputRequired { Why: EngineState.Interrupted } => "Interrupted",
-        EngineState.InputRequired => $"Input required · {Need(Why(state))}",
-        EngineState.Completed => "Done",
-        EngineState.Failed => "Failed",
-        EngineState.Stale => "Stale",
+        NodeState.Running => "Running",
+        NodeState.InputRequired => "Needs you",
+        NodeState.Completed => "Done",
+        NodeState.Failed => "Failed",
+        NodeState.Stale => "Stale",
         _ => "Not started",
     };
+
+    /// <summary>The state's word. A node that needs the person adds the reason, such as "Needs you · Approval".</summary>
+    public static string Label(EngineState state) => state is EngineState.InputRequired
+        ? $"{Word(NodeState.InputRequired)} · {Need(Why(state))}"
+        : Word(Of(state));
 
     /// <summary>What a waiting node needs, in the one word that a zoomed out card has room for.</summary>
     public static string Need(WaitReason why) => why switch
@@ -62,13 +66,13 @@ public static class NodeStates
     };
 
     /// <summary>
-    /// The status of a running node whose client waits for <paramref name="background"/> work, such as "Waiting for a
-    /// background subagent" (ADR 0030), and otherwise the state's own.
+    /// The status of a running node whose client waits for <paramref name="background"/> work, such as "Running · Background
+    /// subagent" (ADR 0030), and otherwise the state's own.
     /// </summary>
     public static string Label(EngineState state, ImmutableArray<BackgroundTask> background) =>
         state is not EngineState.Running || background.IsDefaultOrEmpty ? Label(state)
-        : background.Any(task => task.IsSubagent) ? "Waiting for a background subagent"
-        : "Waiting for background work";
+        : background.Any(task => task.IsSubagent) ? $"{Word(NodeState.Running)} · Background subagent"
+        : $"{Word(NodeState.Running)} · Background work";
 
     /// <summary>What the node needs from the person, or why it stopped, in a sentence, or null when its status says enough.</summary>
     public static string? Detail(EngineState state) => state switch
@@ -90,10 +94,6 @@ public static class NodeStates
     /// The interrupted state's sentence where Retry is in the More menu, as in the inspector when Continue and Conversation take the header's row.
     /// </summary>
     public const string InterruptedDetailInMenu = "Closed mid-turn. Continue resumes the session. Retry, in the More menu, starts a new attempt.";
-
-    /// <summary>The state's tone. An interrupted node needs nothing yet, so it takes the neutral tone, as its badge's gray disc does.</summary>
-    public static StatusTone Tone(NodeState state, WaitReason why) =>
-        state == NodeState.InputRequired && why == WaitReason.Interrupted ? StatusTone.Neutral : Tone(state);
 
     public static StatusTone Tone(NodeState state) => state switch
     {

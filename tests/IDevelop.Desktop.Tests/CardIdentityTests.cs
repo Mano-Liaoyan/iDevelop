@@ -31,7 +31,7 @@ public sealed class CardIdentityTests
         var mark = node.ClientMark;
 
         shell.RunNode("A");
-        shell.WaitForCard("A", "Reply");
+        shell.WaitForCard("A", "Needs you");
 
         Assert.Equal(lines, node.CardLine);
         // The card shows the end of the inspector's model name, so the name it shows is never a different one.
@@ -118,7 +118,7 @@ public sealed class CardIdentityTests
         Assert.True(model.WaitsForWords);
         var question = Assert.Single(model.Items.OfType<Conversation.MessageItemViewModel>(), message => message.IsAsking);
         Assert.True(question.ShowsAuthor);
-        Assert.EndsWith("Waiting for your reply", question.AuthorLine);
+        Assert.EndsWith("Needs you", question.AuthorLine);
         Assert.True(shell.Find<Avalonia.Controls.Control>("ConversationModel").IsEffectivelyVisible);
     }
 

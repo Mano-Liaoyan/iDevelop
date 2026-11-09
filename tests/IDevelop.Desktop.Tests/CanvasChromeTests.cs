@@ -128,13 +128,13 @@ public sealed class CanvasChromeTests : IDisposable
         f.Install(FakeRule.On().WaitForFile(f.Gate("runs")));
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
-        Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], canvas.BarChips.Select(chip => chip.Label));
+        Assert.Equal(["4 need you", "1 failed"], canvas.BarChips.Select(chip => chip.Label));
         // Every group keeps its words in the bar, and the waiting chip's tooltip names its reasons.
-        Assert.Equal("1 question, 1 reply", canvas.BarChips[1].Tip);
+        Assert.Equal("1 question, 1 reply, 2 interrupted", canvas.BarChips[0].Tip);
         // The row's status line holds the most urgent group's badge and every group. Its tooltip holds every group.
         var row = Assert.Single(canvas.RowChips);
-        Assert.Equal((NodeState.Failed, 1, "1 failed \u00b7 2 waiting \u00b7 2 interrupted"), (row.State, row.Count, row.Label.Replace('\u00a0', ' ')));
-        Assert.Equal("1 failed\n1 question, 1 reply\n2 interrupted", row.Tip);
+        Assert.Equal((NodeState.InputRequired, 4, "4 need you \u00b7 1 failed"), (row.State, row.Count, row.Label.Replace('\u00a0', ' ')));
+        Assert.Equal("1 question, 1 reply, 2 interrupted\n1 failed", row.Tip);
 
         void Sweep()
         {
@@ -157,7 +157,7 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.True(shell.ShowsAny("FitToScreen"), "Fit left a bar with room.");
         Assert.True(shell.ShowsAny("RunStatus"), "The progress left a bar with room.");
         Assert.True(shell.ShowsAny("ShowMinimap"), "The view controls left a bar with room.");
-        Assert.Equal(["1 failed", "2 waiting", "2 interrupted"], shell.Find<Control>("RunChips").GetVisualDescendants().OfType<Control>()
+        Assert.Equal(["4 need you", "1 failed"], shell.Find<Control>("RunChips").GetVisualDescendants().OfType<Control>()
             .Where(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "RunChip").Select(AutomationProperties.GetName));
 
         // Another workflow's chips reach the bar with no change to the canvas's width.
@@ -600,7 +600,7 @@ public sealed class CanvasChromeTests : IDisposable
             else if (compact)
             {
                 Assert.Empty(labels);
-                Assert.Equal((32.0, 32.0), (button.Bounds.Width, button.Bounds.Height));
+                Assert.Equal((28.0, 28.0), (button.Bounds.Width, button.Bounds.Height));
             }
             else
             {

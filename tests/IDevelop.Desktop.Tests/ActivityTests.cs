@@ -27,15 +27,11 @@ public sealed class ActivityTests : IDisposable
     [InlineData(0, 0, 0, 0, 0, 0, "No nodes yet")]
     [InlineData(0, 0, 0, 0, 0, 1, "1 node")]
     [InlineData(0, 0, 0, 0, 0, 9, "9 nodes")]
-    [InlineData(5, 1, 3, 0, 0, 9, "5 of 9 · 1 running · 3 waiting")]
-    [InlineData(5, 0, 1, 2, 1, 9, "5 of 9 · 1 waiting · 2 failed · 1 stale")]
+    [InlineData(5, 1, 3, 0, 0, 9, "5 of 9 · 1 running · 3 need you")]
+    [InlineData(5, 0, 1, 2, 1, 9, "5 of 9 · 1 needs you · 2 failed · 1 stale")]
     [InlineData(9, 0, 0, 0, 0, 9, "9 of 9")]
     public void A_workflow_s_summary_uses_the_run_bar_s_words(int completed, int running, int waiting, int failed, int stale, int total, string summary) =>
-        Assert.Equal(summary, new StateCounts(completed, running, waiting, 0, failed, stale, total).Summary());
-
-    [Fact]
-    public void An_interrupted_node_is_counted_apart_from_what_waits_for_the_person() =>
-        Assert.Equal("5 of 9 · 2 waiting · 1 interrupted", new StateCounts(5, 0, 2, 1, 0, 0, 9).Summary());
+        Assert.Equal(summary, new StateCounts(completed, running, waiting, failed, stale, total).Summary());
 
     [Fact]
     public void A_client_with_a_problem_changes_the_footer_s_words_and_a_missing_client_does_not()
@@ -92,8 +88,9 @@ public sealed class ActivityTests : IDisposable
         open.Focus(NavigationMethod.Tab);
         shell.Render();
 
-        // The ring is 2 px wide, over the button's edge.
-        Assert.Equal(Avalonia.Media.Color.Parse("#0088FF"), shell.ColorAt(open, new Avalonia.Point(open.Bounds.Width / 2, -1)));
+        // The ring is 2 px wide, 1 px outside the button's edge.
+        Assert.NotEqual(Avalonia.Media.Color.Parse("#1E6EF4"), shell.ColorAt(open, new Avalonia.Point(open.Bounds.Width / 2, -1)));
+        Assert.Equal(Avalonia.Media.Color.Parse("#1E6EF4"), shell.ColorAt(open, new Avalonia.Point(open.Bounds.Width / 2, -2)));
         var watermark = shell.Find<TextBox>("FindBox").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Watermark");
         Assert.Equal(1, watermark.Opacity);
     }
@@ -214,7 +211,7 @@ public sealed class ActivityTests : IDisposable
         view.Activity.IsOpen = true;
         shell.Render();
         Assert.True(shell.Find<ItemsControl>("Activity").IsEffectivelyVisible);
-        Assert.Equal("1 of 3 · 1 running · 1 waiting", view.Canvas!.Summary);
+        Assert.Equal("1 of 3 · 1 running · 1 needs you", view.Canvas!.Summary);
         Assert.Equal(1, view.Projects[0].WaitingCount);
 
         shell.Click(shell.Window.GetVisualDescendants().OfType<Button>().First(row => row.Classes.Contains("activity")));

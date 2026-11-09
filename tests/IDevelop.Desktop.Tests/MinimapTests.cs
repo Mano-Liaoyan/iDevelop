@@ -89,7 +89,7 @@ public sealed class MinimapTests : IDisposable
         shell.ShowMinimap();
 
         Assert.Equal(["Plan export", "Ghost Backend API", "Ghost Review the API"], Titles(shell));
-        Assert.Equal(Color.Parse("#1E6EF4"), Fill(Item(shell, "Plan export")));
+        Assert.Equal(Color.Parse("#FF8D28"), Fill(Item(shell, "Plan export")));
         var review = Items(shell).Single(item => item.DataContext is GhostCardViewModel { Title: "Review the API" });
         var dashed = review.GetVisualDescendants().OfType<Rectangle>().Single();
         Assert.Equal((Color.Parse("#008575"), true), (((ISolidColorBrush)dashed.Stroke!).Color, dashed.StrokeDashArray is { Count: > 0 }));

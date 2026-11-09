@@ -16,19 +16,26 @@
       </ControlTemplate>
     </Setter>
   </ControlTheme>
-  <ControlTheme x:Key="{x:Type theme:StateBadge}" TargetType="theme:StateBadge">
+  <!-- The mark is drawn in a 16 unit frame and scales to the size that its place sets. The role's dot stays 6 px at every size. -->
+  <ControlTheme x:Key="{x:Type theme:StateMark}" TargetType="theme:StateMark">
     <Setter Property="Width" Value="16" />
     <Setter Property="Height" Value="16" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Viewbox>
-          <Canvas Width="16" Height="16">
-            <Ellipse Classes="badgeDisc" Width="16" Height="16"
-                     theme:StyleClass.State="{TemplateBinding State}" theme:StyleClass.Why="{TemplateBinding Why}" />
-            <PathIcon Canvas.Left="3" Canvas.Top="3" Classes="badgeGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
-                      theme:StyleClass.State="{TemplateBinding State}" theme:StyleClass.Why="{TemplateBinding Why}" />
-          </Canvas>
-        </Viewbox>
+        <Panel ClipToBounds="False">
+          <Viewbox>
+            <Canvas Width="16" Height="16">
+              <Ellipse Classes="markDisc" Width="16" Height="16"
+                       theme:StyleClass.State="{TemplateBinding State}" theme:StyleClass.Why="{TemplateBinding Why}" />
+              <Arc Classes="markArc" Width="16" Height="16" StartAngle="0" SweepAngle="270"
+                   theme:StyleClass.State="{TemplateBinding State}" />
+              <PathIcon Canvas.Left="3" Canvas.Top="3" Classes="markGlyph" Theme="{StaticResource Glyph}" Width="10" Height="10"
+                        theme:StyleClass.State="{TemplateBinding State}" theme:StyleClass.Why="{TemplateBinding Why}" />
+            </Canvas>
+          </Viewbox>
+          <Ellipse Classes="markRole" Width="6" Height="6" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-1,-1,0"
+                   theme:StyleClass.Role="{TemplateBinding Role}" />
+        </Panel>
       </ControlTemplate>
     </Setter>
   </ControlTheme>

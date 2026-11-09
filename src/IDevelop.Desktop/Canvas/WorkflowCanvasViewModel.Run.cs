@@ -3,6 +3,7 @@ using System.Windows.Input;
 using IDevelop.Clients;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Desktop.Theme;
 using IDevelop.Engine;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
@@ -79,7 +80,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>A node waits for the person or failed, so the bar offers Next.</summary>
     public bool HasAttention => Nodes.Any(NeedsAttention);
 
-    /// <summary>"5/9 done · 1 running · 3 waiting · 1 interrupted · 1 failed", with the parts that are not zero.</summary>
+    /// <summary>"5/9 done · 3 need you · 1 failed · 1 running", with the parts that are not zero.</summary>
     public string BarSummary
     {
         get
@@ -88,10 +89,9 @@ public sealed partial class WorkflowCanvasViewModel
             return string.Join(" · ", new[]
             {
                 counts.Completed > 0 ? BarProgress : null,
-                counts.Running > 0 ? $"{counts.Running} running" : null,
-                counts.Waiting > 0 ? $"{counts.Waiting} waiting" : null,
-                counts.Interrupted > 0 ? $"{counts.Interrupted} interrupted" : null,
+                counts.Waiting > 0 ? StateCounts.NeedYou(counts.Waiting) : null,
                 counts.Failed > 0 ? $"{counts.Failed} failed" : null,
+                counts.Running > 0 ? $"{counts.Running} running" : null,
             }.OfType<string>());
         }
     }
@@ -103,31 +103,29 @@ public sealed partial class WorkflowCanvasViewModel
     public string BarIdle => Counts.Completed > 0 ? BarProgress : Counts.Total == 1 ? "1 node" : $"{Counts.Total} nodes";
 
     /// <summary>
-    /// One chip for each group of nodes that the bar names, in the order of what needs the person first. What waits for the person is
-    /// one group under one word, and its tooltip names the reasons. Interrupted stays its own, because it waits for nobody's word.
+    /// One chip for each group of nodes that the bar names, in the rollup order: Needs you, Failed, Running, Stale. What waits for the
+    /// person is one group under one word, and its tooltip names the reasons.
     /// </summary>
     public IReadOnlyList<StateChip> BarChips
     {
         get
         {
             var counts = Counts;
-            var reasons = Nodes.Where(node => node.State == NodeState.InputRequired && node.WaitReason != WaitReason.Interrupted)
-                .GroupBy(node => node.WaitReason).OrderBy(group => group.Key).ToList();
+            var reasons = Nodes.Where(node => node.IsWaiting).GroupBy(node => node.WaitReason).OrderBy(group => group.Key).ToList();
             var tip = string.Join(", ", reasons.Select(group => $"{group.Count()} {NodeStates.Need(group.Key).ToLowerInvariant()}"));
             return new[]
                 {
-                    StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, "failed"),
-                    StateChip.Of(NodeState.InputRequired, reasons is [var only] ? only.Key : WaitReason.Question, reasons.Sum(group => group.Count()), "waiting", tip),
-                    StateChip.Of(NodeState.InputRequired, WaitReason.Interrupted, counts.Interrupted, "interrupted"),
+                    StateChip.Of(NodeState.InputRequired, reasons is [var only] ? only.Key : WaitReason.Question, counts.Waiting, StateCounts.NeedYou(counts.Waiting), tip),
+                    StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, $"{counts.Failed} failed"),
+                    StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, $"{counts.Running} running"),
+                    StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, $"{counts.Stale} stale"),
                 }
-                .Append(StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, "running"))
-                .Append(StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, "stale"))
                 .OfType<StateChip>().ToList();
         }
     }
 
     /// <summary>What Next selects: the group it goes to, so the button says where it leads.</summary>
-    public string NextLabel => Counts.Waiting > 0 ? "Next waiting" : Counts.Interrupted > 0 && Counts.Failed == 0 ? "Next interrupted" : "Next failed";
+    public string NextLabel => Counts.Waiting > 0 ? "Next that needs you" : "Next failed";
 
     public StatusTone BarTone => RunningCount > 0 ? StatusTone.Running : HasAttention ? StatusTone.Waiting : StatusTone.Complete;
 

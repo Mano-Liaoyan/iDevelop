@@ -55,83 +55,37 @@ public sealed class KindStyleTests
     }
 
     [AvaloniaFact]
-    public void A_card_edge_takes_the_state_s_color_and_running_keeps_the_plain_edge_and_no_state_tints_the_card()
+    public void A_card_ring_takes_the_state_s_stroke_and_a_quiet_state_has_none()
     {
         var ring = new Border { Classes = { "stateStroke" } };
-        var tint = new Border { Classes = { "stateTint" } };
-        var glyph = new PathIcon { Classes = { "stateIcon" } };
-        Show(new StackPanel { Children = { ring, tint, glyph } }, ThemeVariant.Light);
-        string Paint(NodeState state, NodeRole role = NodeRole.None)
+        Show(ring, ThemeVariant.Light);
+        string Paint(NodeState state, WaitReason why = WaitReason.Question)
         {
-            foreach (var element in new StyledElement[] { ring, tint, glyph })
-            {
-                StyleClass.SetKind(element, NodeKind.Implement);
-                StyleClass.SetState(element, state);
-                StyleClass.SetRole(element, role);
-            }
-
-            return $"{Hex(ring.BorderBrush)} {Hex(tint.Background)} {Hex(glyph.Foreground)} {glyph.IsVisible}";
+            StyleClass.SetState(ring, state);
+            StyleClass.SetWhy(ring, why);
+            return $"{Hex(ring.BorderBrush)} {ring.BorderThickness.Top}";
         }
 
         Assert.Equal(
+            ["#FFE5E5E5 1", "#FF0088FF 1.5", "#FFC55300 1.5", "#FFC55300 1.5", "#FFC55300 1.5", "#FFE9152D 1.5", "#FFE5E5E5 1", "#00FFFFFF 1"],
             [
-                "#FFE5E5E5  #FF564ADE False",
-                "#FFE5E5E5  #FF0088FF True",
-                "#FFC55300  #FFC55300 True",
-                "#FFE9152D  #FFE9152D True",
-                "#FFE5E5E5  #FF008932 True",
-                "#FF1E6EF4 #1A0088FF #FF1E6EF4 True",
-            ],
-            [
-                Paint(NodeState.Idle), Paint(NodeState.Running), Paint(NodeState.InputRequired), Paint(NodeState.Failed),
-                Paint(NodeState.Completed), Paint(NodeState.InputRequired, NodeRole.Proposing),
+                Paint(NodeState.Idle), Paint(NodeState.Running), Paint(NodeState.InputRequired), Paint(NodeState.InputRequired, WaitReason.Approval),
+                Paint(NodeState.InputRequired, WaitReason.Interrupted), Paint(NodeState.Failed), Paint(NodeState.Completed), Paint(NodeState.Stale),
             ]);
     }
 
     [AvaloniaFact]
-    public void Each_wait_has_its_own_edge_and_badge_and_no_edge_but_failure_is_red()
+    public void A_stale_card_has_the_one_dashed_ring_in_the_warning_stroke()
     {
-        var ring = new Border { Classes = { "stateStroke" } };
-        var tint = new Border { Classes = { "stateTint" } };
-        var disc = new Avalonia.Controls.Shapes.Ellipse { Classes = { "badgeDisc" } };
-        Show(new StackPanel { Children = { ring, tint, disc } }, ThemeVariant.Light);
-        string Paint(WaitReason why)
-        {
-            foreach (var element in new StyledElement[] { ring, tint, disc })
-            {
-                StyleClass.SetState(element, NodeState.InputRequired);
-                StyleClass.SetWhy(element, why);
-            }
-
-            return $"{Hex(ring.BorderBrush)} {Hex(tint.Background)} {Hex(disc.Fill)}";
-        }
-
-        Assert.Equal(
-            ["#FFC55300  #FFC55300", "#FFB02FC2  #FFB02FC2", "#FF6C6C70  #FF6C6C70"],
-            [Paint(WaitReason.Question), Paint(WaitReason.Approval), Paint(WaitReason.Interrupted)]);
-    }
-
-    [AvaloniaFact]
-    public void A_stale_card_and_its_status_pill_share_one_warning_color_and_the_sync_glyph()
-    {
-        var ring = new Border { Classes = { "stateStroke" } };
-        var tint = new Border { Classes = { "stateTint" } };
-        var glyph = new PathIcon { Classes = { "stateIcon" } };
-        var pillGlyph = new PathIcon();
-        var pill = new Border { Classes = { "pill", "warning" }, Child = pillGlyph };
         var dashes = new Avalonia.Controls.Shapes.Rectangle { Classes = { "staleEdge" } };
-        Show(new StackPanel { Children = { ring, tint, glyph, pill, dashes } }, ThemeVariant.Light);
-        foreach (var element in new StyledElement[] { ring, tint, glyph, dashes })
-        {
-            StyleClass.SetKind(element, NodeKind.Implement);
-            StyleClass.SetState(element, NodeState.Stale);
-        }
+        Show(dashes, ThemeVariant.Light);
+        Assert.False(dashes.IsVisible);
 
-        Assert.Equal("#00FFFFFF", Hex(ring.BorderBrush));
-        Assert.Equal(Hex(dashes.Stroke), Hex(pill.BorderBrush));
-        Assert.Equal(Hex(glyph.Foreground), Hex(pillGlyph.Foreground));
-        Assert.Same(Application.Current!.FindResource("IconStateOutOfDate"), glyph.Data);
-        Assert.Same(glyph.Data, pillGlyph.Data);
+        StyleClass.SetState(dashes, NodeState.Stale);
+
+        Assert.True(dashes.IsVisible);
+        Assert.Equal(1.5, dashes.StrokeThickness);
+        Assert.Equal(((ISolidColorBrush)Application.Current!.FindResource(ThemeVariant.Light, "StateWarningStrokeBrush")!).Color, ((ISolidColorBrush)dashes.Stroke!).Color);
     }
 
     [AvaloniaFact]
@@ -141,24 +95,5 @@ public sealed class KindStyleTests
         Show(pill, ThemeVariant.Light);
 
         Assert.Equal(["#1AFF8D28", "#FFC55300"], [Hex(pill.Background), Hex(pill.BorderBrush)]);
-    }
-
-    [AvaloniaFact]
-    public void Each_state_after_idle_has_its_own_glyph_and_a_proposing_planner_shows_the_sparkle()
-    {
-        var glyph = new PathIcon { Classes = { "stateIcon" } };
-        Show(glyph, ThemeVariant.Light);
-        StyleClass.SetKind(glyph, NodeKind.Plan);
-        Geometry? Glyph(NodeState state, NodeRole role = NodeRole.None)
-        {
-            StyleClass.SetState(glyph, state);
-            StyleClass.SetRole(glyph, role);
-            return glyph.Data;
-        }
-
-        string[] icons = ["IconStateRunning", "IconStateWaiting", "IconStateSucceeded", "IconStateFailed", "IconStateOutOfDate", "IconSparkle"];
-        Assert.Equal(
-            icons.Select(key => Application.Current!.FindResource(key)),
-            [.. Enum.GetValues<NodeState>().Where(state => state != NodeState.Idle).Select(state => Glyph(state)), Glyph(NodeState.InputRequired, NodeRole.Proposing)]);
     }
 }

@@ -23,12 +23,7 @@
           </MultiBinding>
         </ToolTip.Tip>
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-          <Ellipse Classes="status small" VerticalAlignment="Center"
-                   Classes.running="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                   Classes.complete="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                   Classes.problem="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                   Classes.waiting="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
-                   Classes.warning="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}" />
+          <theme:StateMark Width="14" Height="14" VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
           <TextBlock Grid.Column="1" Text="{Binding Node.Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
         </Grid>
       </Button>
@@ -123,7 +118,7 @@
                 Classes.waiting="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
                 Classes.warning="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
           <StackPanel Orientation="Horizontal" Spacing="4">
-            <theme:StateBadge Width="12" Height="12" VerticalAlignment="Center" IsVisible="{Binding !Node.IsIdle}" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
+            <theme:StateMark Width="14" Height="14" VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
             <TextBlock Text="{Binding Node.StatusLabel}" AutomationProperties.AutomationId="ConversationStatus" />
           </StackPanel>
         </Border>
@@ -176,8 +171,7 @@
     <StackPanel x:Name="Bottom" Grid.Row="3" Classes="bottomColumn">
       <Border Classes="workingLine" IsVisible="{Binding ShowsWorking}" AutomationProperties.AutomationId="ConversationWorking">
         <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6">
-          <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Width="12" Height="12" Data="{StaticResource IconStateRunning}"
-                    Foreground="{DynamicResource AccentStrongBrush}" />
+          <theme:StateMark Width="14" Height="14" State="Running" />
           <TextBlock Grid.Column="1" Classes="caption" Text="{Binding WorkingLabel}" VerticalAlignment="Center"
                      AutomationProperties.AutomationId="ConversationWorkingLabel" />
           <TextBlock Grid.Column="2" Classes="caption" Text="{Binding WorkingLine}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
@@ -192,8 +186,8 @@
         <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,Auto">
           <Border Grid.ColumnSpan="2" Classes="attentionHeader">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" VerticalAlignment="Center">
-              <PathIcon Classes="attentionGlyph" Theme="{StaticResource Glyph}" Width="14" Height="14"
-                        theme:StyleClass.Why="{Binding Node.WaitReason}" />
+              <theme:StateMark Width="16" Height="16" VerticalAlignment="Center" State="{Binding CardState}" Why="{Binding CardWhy}"
+                               AutomationProperties.AutomationId="ConversationAttentionMark" />
               <TextBlock Grid.Column="1" Classes="attentionTitle" Text="{Binding CardTitle}" AutomationProperties.AutomationId="ConversationAttentionTitle" />
             </Grid>
           </Border>
@@ -617,8 +611,8 @@
                       <Border Grid.Column="2" Classes="mdRule" VerticalAlignment="Center" />
                     </Grid>
                     <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsSessionStart}">
-                      <PathIcon Classes="markerGlyph" Classes.completed="{Binding IsCompleted}" Classes.problem="{Binding IsProblem}" Classes.waiting="{Binding IsWaiting}"
-                                Theme="{StaticResource Glyph}" Width="12" Height="12" />
+                      <theme:StateMark Width="14" Height="14" VerticalAlignment="Center" IsVisible="{Binding HasMark}" State="{Binding MarkState}" Why="{Binding MarkWhy}" />
+                      <PathIcon Classes="markerGlyph" Theme="{StaticResource Glyph}" Width="14" Height="14" IsVisible="{Binding !HasMark}" />
                       <TextBlock Classes="markerTitle" Classes.problem="{Binding IsProblem}" Text="{Binding Heading}" />
                     </StackPanel>
                     <SelectableTextBlock Classes="markerDetail" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
@@ -651,7 +645,7 @@
               AutomationProperties.Name="Jump to latest">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconArrowDown}" Width="14" Height="14" />
-          <TextBlock Text="Jump to latest" VerticalAlignment="Center" FontSize="13" />
+          <TextBlock Text="Jump to latest" VerticalAlignment="Center" FontSize="{StaticResource TypeBodySize}" />
         </StackPanel>
       </Button>
     </Panel>

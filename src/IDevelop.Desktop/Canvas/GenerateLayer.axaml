@@ -23,10 +23,10 @@
                       Foreground="{DynamicResource OnAccentBrush}" />
           </Border>
           <TextBlock Text="Start with a description" HorizontalAlignment="Center" IsHitTestVisible="False"
-                     FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
+                     FontSize="{StaticResource TypeTitleSize}" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
           <TextBlock Text="Describe what you want to build. A planner proposes the tasks, and you choose which to add."
                      TextAlignment="Center" TextWrapping="Wrap" IsHitTestVisible="False"
-                     FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+                     FontSize="{StaticResource TypeSmallSize}" Foreground="{DynamicResource TextMutedBrush}" />
           <Button Classes="primary" HorizontalAlignment="Center"
                   Command="{Binding OpenGenerateCommand}"
                   AutomationProperties.AutomationId="GenerateStart"

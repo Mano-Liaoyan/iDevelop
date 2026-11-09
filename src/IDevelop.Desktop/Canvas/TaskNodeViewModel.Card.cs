@@ -59,11 +59,11 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The one letter that names the client on a zoomed out card, whose line has no room for the name.</summary>
     public string ClientMark => _task.Execution is { } settings ? CardText.ClientMark(settings.Client) : "";
 
-    /// <summary>The state in a word, at the end of the card's last line: what a waiting node needs, or the proposal it holds.</summary>
-    public string CardStatus => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count)
-        : State == NodeState.InputRequired ? NodeStates.Need(WaitReason)
-        : State == NodeState.Running ? "Running"
-        : StatusLabel;
+    /// <summary>The state's word, at the end of the card's last line. The mark's glyph tells a waiting node's reason.</summary>
+    public string CardStatus => NodeStates.Word(State);
+
+    /// <summary>The tooltip of the card's State Mark: the state and its reason, and who reviews the node while a review goes on.</summary>
+    public string MarkTip => ReviewerTip is { } reviewer ? $"{StatusLabel}\n{reviewer}" : StatusLabel;
 
     /// <summary>How many dependency predecessors feed the node, on the expanded card.</summary>
     public string InputLine => $"Input: {_inputCount}";

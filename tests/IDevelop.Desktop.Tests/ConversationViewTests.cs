@@ -182,7 +182,7 @@ public sealed class ConversationViewTests : IDisposable
         var model = Open();
         var markers = model.Items.OfType<MarkerItemViewModel>().ToArray();
 
-        Assert.Equal(["Attempt 1 · New session", "Waiting for you", "Attempt 2 · New session", "Waiting for you"], markers.Select(marker => marker.Heading));
+        Assert.Equal(["Attempt 1 · New session", "Needs you", "Attempt 2 · New session", "Needs you"], markers.Select(marker => marker.Heading));
         Assert.Equal(["", ""], new[] { markers[1], markers[3] }.Select(marker => marker.Detail));
     }
 

@@ -12,9 +12,6 @@ public static class CardText
         return line.Length <= limit ? line : line[..limit].TrimEnd() + "…";
     }
 
-    /// <summary>"Proposal · 3 tasks", the subtitle of a planner whose proposal is open.</summary>
-    public static string Proposal(int tasks) => tasks == 1 ? "Proposal · 1 task" : $"Proposal · {tasks} tasks";
-
     /// <summary>The two letters that stand for a client where its name has no room.</summary>
     public static string ClientMark(ClientId client) => client switch
     {

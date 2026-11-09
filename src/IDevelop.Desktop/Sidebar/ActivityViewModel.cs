@@ -37,21 +37,19 @@ public sealed class ActivityViewModel : ObservableObject
     /// <summary>"3 nodes", the whole list's size.</summary>
     public int Count => _ordered.Count;
 
-    /// <summary>How many rows need the person's word, as <see cref="Theme.StateCounts"/> counts them, which the heading shows apart from what failed.</summary>
-    public int WaitingCount => _ordered.Count(row => row.Node.State == NodeState.InputRequired && row.Node.WaitReason != WaitReason.Interrupted);
+    /// <summary>How many rows need the person, as <see cref="Theme.StateCounts"/> counts them, which the heading shows apart from what failed.</summary>
+    public int WaitingCount => _ordered.Count(row => row.Node.State == NodeState.InputRequired);
 
-    /// <summary>How many rows iDevelop's closing stopped.</summary>
-    public int InterruptedCount => _ordered.Count(row => row.Node.WaitReason == WaitReason.Interrupted);
+    /// <summary>"1 needs you" or "3 need you".</summary>
+    public string WaitingLabel => Theme.StateCounts.NeedYou(WaitingCount);
 
     /// <summary>How many rows failed.</summary>
     public int FailedCount => _ordered.Count(row => row.Node.State == NodeState.Failed);
 
-    /// <summary>How many rows run. The four counts add up to <see cref="Count"/>.</summary>
+    /// <summary>How many rows run. The three counts add up to <see cref="Count"/>.</summary>
     public int RunningCount => _ordered.Count(row => row.Node.State == NodeState.Running);
 
     public bool HasWaiting => WaitingCount > 0;
-
-    public bool HasInterrupted => InterruptedCount > 0;
 
     public bool HasFailed => FailedCount > 0;
 
@@ -157,8 +155,7 @@ public sealed class ActivityViewModel : ObservableObject
         OnPropertyChanged(nameof(HasRows));
         OnPropertyChanged(nameof(Count));
         OnPropertyChanged(nameof(WaitingCount));
-        OnPropertyChanged(nameof(InterruptedCount));
-        OnPropertyChanged(nameof(HasInterrupted));
+        OnPropertyChanged(nameof(WaitingLabel));
         OnPropertyChanged(nameof(FailedCount));
         OnPropertyChanged(nameof(HasWaiting));
         OnPropertyChanged(nameof(HasFailed));
@@ -283,7 +280,7 @@ public sealed class ActivityRow : ObservableObject
         ProjectLine = showsProject ? $"{Node.Canvas.Project.Name} · {Node.Canvas.Name}" : null;
     }
 
-    // "Input required · Question" names the reason after the state, which the glyph already shows.
+    // "Needs you · Question" names the reason after the state, which the glyph already shows.
     private static string ReasonOf(TaskNodeViewModel node) => node.State switch
     {
         NodeState.Running => OneLine(node.Latest) ?? node.StatusLabel,

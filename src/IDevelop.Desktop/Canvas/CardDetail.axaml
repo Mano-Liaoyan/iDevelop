@@ -25,25 +25,25 @@
       <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
     <Style Selector="TextBlock.cardHeading">
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     </Style>
     <Style Selector="TextBlock.cardFlow">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="LineHeight" Value="16" />
+      <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+      <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
       <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
     <Style Selector="TextBlock.cardMeta">
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
     <Style Selector="TextBlock.cardBody">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="LineHeight" Value="17" />
+      <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
+      <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
@@ -62,14 +62,14 @@
       <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
     </Style>
     <Style Selector="ComboBox.cardPicker">
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
       <Setter Property="MinHeight" Value="28" />
       <Setter Property="Padding" Value="8,4,0,4" />
     </Style>
     <Style Selector="Button.cardAction">
       <Setter Property="Height" Value="28" />
       <Setter Property="Padding" Value="8,0" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
       <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
@@ -141,7 +141,7 @@
                             <ItemsControl.ItemTemplate>
                               <DataTemplate x:DataType="canvas:ChoiceViewModel">
                                 <ToggleButton Content="{Binding Label}" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Detail}"
-                                              FontSize="12" Height="28" Padding="10,0" Margin="0,0,6,6"
+                                              FontSize="{StaticResource TypeSmallSize}" Height="28" Padding="10,0" Margin="0,0,6,6"
                                               AutomationProperties.AutomationId="CardChoice" AutomationProperties.Name="{Binding Label}" />
                               </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -153,7 +153,7 @@
                   <!-- The person's words to the agent, which the conversation's composer shares as its draft. -->
                   <StackPanel Spacing="8" IsVisible="{Binding IsAnswerable}">
                     <TextBox Text="{Binding Draft}" Watermark="{Binding AnswerWatermark}" TextWrapping="Wrap" AcceptsReturn="True"
-                             FontSize="12" MinHeight="52" Padding="8,6"
+                             FontSize="{StaticResource TypeSmallSize}" MinHeight="52" Padding="8,6"
                              AutomationProperties.AutomationId="CardAnswer" AutomationProperties.Name="Answer the agent">
                       <TextBox.KeyBindings>
                         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}" />
@@ -162,7 +162,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                       <TextBlock Classes="cardMeta" Text="{Binding AnswerNote}" TextWrapping="Wrap"
                                  AutomationProperties.AutomationId="CardAnswerNote" />
-                      <Button Grid.Column="1" Classes="primary" Height="28" Padding="10,0" FontSize="12" Command="{Binding SendCommand}"
+                      <Button Grid.Column="1" Classes="primary" Height="28" Padding="10,0" FontSize="{StaticResource TypeSmallSize}" Command="{Binding SendCommand}"
                               AutomationProperties.AutomationId="CardSend" AutomationProperties.Name="Send the answer">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />

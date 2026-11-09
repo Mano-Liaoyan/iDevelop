@@ -87,21 +87,22 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_selected_card_shows_its_ring_in_the_strong_neutral_and_never_in_the_running_blue()
+    public void A_selected_card_shows_an_accent_ring_and_a_halo_outside_it()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        // The line is 2 px wide and sits 3 px outside the card, so this pixel is on its straight top edge, and the gap under it
-        // keeps the card's own edge apart from it. Blue means running only (ADR 0071).
-        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -4));
-        Assert.NotEqual(Color.Parse("#0B0E10"), Ring());
+        // The ring is 1.5 px wide just outside the card's edge, and the 3 px halo lies outside it.
+        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -1));
+        Color Halo() => shell.ColorAt(shell.Node("Design"), new Point(130, -3));
+        var canvas = Halo();
+        Assert.NotEqual(Color.Parse("#1E6EF4"), Ring());
 
         shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Equal(Color.Parse("#0B0E10"), Ring());
-        Assert.NotEqual(Color.Parse("#0B0E10"), shell.ColorAt(shell.Node("Design"), new Point(130, -1)));
+        Assert.Equal(Color.Parse("#1E6EF4"), Ring());
+        Assert.NotEqual(canvas, Halo());
 
         shell.Click(shell.Find<RadioButton>("ThemeDark"));
-        Assert.Equal(Color.Parse("#F2F2EF"), Ring());
+        Assert.Equal(Color.Parse("#0091FF"), Ring());
     }
 
     [AvaloniaFact]

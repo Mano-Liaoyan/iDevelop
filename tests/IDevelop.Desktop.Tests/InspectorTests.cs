@@ -363,7 +363,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal(["ProposalAcceptFinish"], PrimaryButtons(shell));
         Assert.Equal((false, false, false, false), (Shows(shell, "RunTask"), Shows(shell, "Approve"), Shows(shell, "StopTask"), Shows(shell, "StartProblem")));
-        Assert.Equal("Waiting", shell.InView<TextBlock>("RunTaskStatus").Text);
+        Assert.StartsWith("Needs you", shell.InView<TextBlock>("RunTaskStatus").Text);
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Done", "the planner is done");
@@ -409,7 +409,7 @@ public sealed class InspectorTests : IDisposable
         Assert.False(Shows(shell, "SendBack"));
 
         File.WriteAllText(gate, "");
-        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Waiting", "the turn ends waiting");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text?.StartsWith("Needs you") == true, "the turn ends waiting");
 
         Assert.Equal((false, false), (Shows(shell, "RunTask"), Shows(shell, "StopTask")));
     }
@@ -484,7 +484,7 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design export")));
         shell.RunNode();
         shell.WaitForProposal();
-        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text == "Waiting", "the planner waits");
+        shell.WaitUntil(() => shell.Find<TextBlock>("RunTaskStatus").Text?.StartsWith("Needs you") == true, "the planner waits");
         return shell;
     }
 

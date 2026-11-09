@@ -14,7 +14,7 @@ public abstract record Attention(string Label)
 
     public static Attention? Of(EngineState state) => state switch
     {
-        EngineState.InputRequired => new Waiting($"Waiting for you: {NodeStates.Detail(state)}"),
+        EngineState.InputRequired => new Waiting($"Needs you: {NodeStates.Detail(state)}"),
         EngineState.Failed failed => new Problem($"Failed: {failed.Reason}"),
         _ => null,
     };
