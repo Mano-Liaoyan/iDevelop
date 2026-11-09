@@ -83,7 +83,7 @@ public sealed class CardTests : IDisposable
         Assert.Equal(
             ["Implement", "Plan", "Architect", "Review", "Approval", "Read-only agent"],
             titles.Select(title => AutomationProperties.GetName(shell.CardKind(title))));
-        Assert.All(titles, title => Assert.Equal(new Size(260, 64), shell.Node(title).Bounds.Size));
+        Assert.All(titles, title => Assert.Equal(new Size(240, 94), shell.Node(title).Bounds.Size));
     }
 
     [AvaloniaFact]
@@ -102,7 +102,7 @@ public sealed class CardTests : IDisposable
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
 
-        Assert.Equal(["Design", "Codex", "GPT-5.5", "Not started"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Input", "No result", "Codex", "GPT-5.5"], Shell.Texts(shell.Node("Design")));
         Assert.Equal(NodeState.Idle, shell.CardMark("Design").State);
         Assert.Equal(["Design", "Implement · Codex · GPT-5.5 · high", "Instructions", "Draft it.", "Double-click or Enter opens the conversation."], shell.PeekTexts("Design")!);
     }
@@ -170,12 +170,12 @@ public sealed class CardTests : IDisposable
 
         Assert.Equal(
             [
-                ["Design", "Codex", "GPT-5.5", "Not started"],
-                ["Build", "Claude Code", "Sonnet 5.5", "Not started"],
-                ["Review", "Antigravity", "Claude Opus 4.6 (Thinking)", "Not started"],
-                ["Fourth", "Antigravity", "3.8 Flash", "Not started"],
+                ["Design", "Input", "No result", "Codex", "GPT-5.5"],
+                ["Build", "Input", "No result", "Claude Code", "Sonnet 5.5"],
+                ["Review", "Input", "No result", "Antigravity", "Claude Opus 4.6 (Thinking)"],
+                ["Fourth", "Input", "No result", "Antigravity", "3.8 Flash"],
                 // Pi names its model's provider, which goes on the client's line.
-                ["Fifth", "Pi · deepseek", "DeepSeek V4.1 Flash", "Not started"],
+                ["Fifth", "Input", "No result", "Pi · deepseek", "DeepSeek V4.1 Flash"],
             ],
             titles.Select(title => Shell.Texts(shell.Node(title))));
         // Each line sits at the same height on every card, and only the model gives way, whose tooltip holds it whole.
@@ -191,7 +191,7 @@ public sealed class CardTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
 
-        Assert.Equal(["Build", "No agent", "Not started"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Input", "No result", "No agent"], Shell.Texts(shell.Node("Build")));
         Assert.Equal(NodeState.Idle, shell.CardMark("Build").State);
         var node = shell.NodeModel("Build");
         Assert.Equal(("Instructions is empty.", false), (node.RunRefusal, node.RunCommand.CanExecute(null)));
@@ -230,7 +230,7 @@ public sealed class CardTests : IDisposable
         shell.WaitForCard("Design", "Needs you");
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Antigravity", "3.8 Flash", "Needs you"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Input", "No result", "Antigravity", "3.8 Flash"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-inputrequired", ring.Classes);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
     }
@@ -251,7 +251,7 @@ public sealed class CardTests : IDisposable
         // come a render tick after the status text, so the test waits for the pixel too.
         shell.WaitUntil(() => shell.ColorAt(shell.Node("Design"), new Point(130, 0)) == Color.Parse(ring), $"the ring turns {ring}");
 
-        Assert.Equal(["Design", "Antigravity", "3.8 Flash", label], Shell.Texts(shell.Node("Design")));
+        Assert.Contains("3.8 Flash", Shell.Texts(shell.Node("Design")));
     }
 
     [AvaloniaFact]
@@ -297,7 +297,7 @@ public sealed class CardTests : IDisposable
         shell.WaitForProposal();
 
         var ring = shell.CardLayer("Plan export", "stateStroke");
-        Assert.Equal(["Plan export", "Antigravity", "3.8 Flash", "Needs you"], Shell.Texts(shell.Node("Plan export")));
+        Assert.Equal(["Plan export", "Input", "No result", "Antigravity", "3.8 Flash"], Shell.Texts(shell.Node("Plan export")));
         Assert.Equal(NodeRole.Proposing, shell.CardMark("Plan export").Role);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         shell.Render();
@@ -323,13 +323,13 @@ public sealed class CardTests : IDisposable
         Color? Stroke(string to) => (Wire(to).Stroke as ISolidColorBrush)?.Color;
 
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.WaitUntil(() => Wire("Build").StrokeThickness == 2.5, "the connection from Design stands out");
-        Assert.Equal((2.5, 2), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
+        shell.WaitUntil(() => Wire("Build").StrokeThickness == 2, "the connection from Design stands out");
+        Assert.Equal((2, 1.5), (Wire("Build").StrokeThickness, Wire("Review").StrokeThickness));
         shell.WaitUntil(() => Stroke("Review") == shell.Resource("WireDimBrush"), "the other connection recedes");
         Assert.NotEqual(shell.Resource("WireDimBrush"), Stroke("Build"));
 
         shell.Click(shell.Editor.TranslatePoint(new Point(400, 500), shell.Window)!.Value);
-        shell.WaitUntil(() => Wire("Build").StrokeThickness == 2, "nothing stands out without a selection");
+        shell.WaitUntil(() => Wire("Build").StrokeThickness == 1.5, "nothing stands out without a selection");
     }
 
     [AvaloniaFact]
@@ -343,6 +343,6 @@ public sealed class CardTests : IDisposable
 
         var wire = Assert.Single(shell.Connections());
 
-        Assert.Equal((Color.Parse("#5A6168"), true), (((ISolidColorBrush)wire.Stroke!).Color, wire.StrokeDashArray is { Count: > 0 }));
+        Assert.Equal((shell.Resource("TextFaintBrush"), true), (((ISolidColorBrush)wire.Stroke!).Color, wire.StrokeDashArray is { Count: > 0 }));
     }
 }

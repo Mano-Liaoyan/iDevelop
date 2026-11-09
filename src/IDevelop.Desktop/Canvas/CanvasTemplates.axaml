@@ -131,7 +131,7 @@
             <Grid Grid.Row="3" Margin="14,0,8,0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
               <TextBlock Classes="cardCaption cardAgent" Text="{Binding CardClient}" TextTrimming="CharacterEllipsis" MaxWidth="96" ToolTip.Tip="{Binding AgentClient}"
                          AutomationProperties.AutomationId="CardAgent" />
-              <TextBlock Grid.Column="1" Classes="cardCaption cardAgent" Text="{Binding CardModel}" TextTrimming="CharacterEllipsis"
+              <TextBlock Grid.Column="1" Classes="cardCaption cardModel" Text="{Binding CardModel}" TextTrimming="CharacterEllipsis"
                          IsVisible="{Binding HasModel}" ToolTip.Tip="{Binding AgentModel}"
                          AutomationProperties.AutomationId="CardModel" />
               <!-- The disclosure: a 24 px target drawn in the 12 px column. -->

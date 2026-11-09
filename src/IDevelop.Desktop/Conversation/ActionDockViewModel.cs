@@ -25,7 +25,7 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
 
     private static readonly string[] StateProperties =
     [
-        nameof(Kind), nameof(IsShown), nameof(IsFailed), nameof(IsWarning), nameof(HasHeading), nameof(Title), nameof(MarkState), nameof(MarkWhy), nameof(Detail), nameof(HasDetail),
+        nameof(Kind), nameof(SpeaksForNow), nameof(IsShown), nameof(IsFailed), nameof(IsWarning), nameof(HasHeading), nameof(Title), nameof(MarkState), nameof(MarkWhy), nameof(Detail), nameof(HasDetail),
         nameof(ShowsQuestions), nameof(ShowsApprove), nameof(IsApprovePrimary), nameof(ApproveLabel), nameof(ApproveTip), nameof(ShowsSendBack), nameof(ShowsConflict), nameof(ShowsContinue),
         nameof(ShowsRetry), nameof(IsRetryPrimary), nameof(ShowsTerminal), nameof(Refusal), nameof(HasRefusal), nameof(HasOffered), nameof(HasActions), nameof(HasPinned), nameof(HasBody),
         nameof(RetryLabel), nameof(ShowsChangeModel), nameof(HasBlocker), nameof(BlockerLabel), nameof(BlockerTip), nameof(BlockerCommand),
@@ -57,6 +57,9 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
 
     /// <summary>The dock takes the Failed state's stroke and fill.</summary>
     public bool IsFailed => Kind == ActionDockKind.Failed;
+
+    /// <summary>The dock says what the node needs in its own words, so an expanded card's Now section adds nothing.</summary>
+    public bool SpeaksForNow => Kind is ActionDockKind.Approval or ActionDockKind.RoundLimit or ActionDockKind.Conflict or ActionDockKind.Interrupted or ActionDockKind.Failed or ActionDockKind.Stale;
 
     /// <summary>The dock takes the Stale state's stroke and fill, as a refusal to run does.</summary>
     public bool IsWarning => Kind is ActionDockKind.Stale or ActionDockKind.Refusal;

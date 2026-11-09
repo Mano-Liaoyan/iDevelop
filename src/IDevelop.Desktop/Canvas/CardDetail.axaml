@@ -93,7 +93,7 @@
     </UniformGrid>
     <!-- What goes on now: one section whose content follows the task's state. -->
     <Border Classes="cardRule" />
-    <ContentControl Content="{Binding Detail}">
+    <ContentControl Content="{Binding Detail}" IsVisible="{Binding !CardDock.SpeaksForNow, FallbackValue=True}">
       <ContentControl.ContentTemplate>
         <DataTemplate x:DataType="canvas:CardDetailViewModel">
           <StackPanel Classes="cardSection">

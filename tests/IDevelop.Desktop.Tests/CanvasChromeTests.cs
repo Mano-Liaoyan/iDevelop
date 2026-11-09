@@ -214,7 +214,7 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.All(ghosts, ghost => Assert.Equal((card.Width, card.Height), (ghost.Width, ghost.Height)));
         // Each ghost wire still runs from an output port's centre to an input port's centre.
         var canvas = shell.Window.ViewModel.Canvas!;
-        var ports = canvas.Workflow.Positions.Values.Select(WorkflowCanvasViewModel.ToPoint)
+        var ports = canvas.Workflow.Positions.Values.Select(canvas.Space.ToDisplay)
             .Concat(shell.Window.ViewModel.Canvas!.Ghosts.OfType<GhostCardViewModel>().Select(ghost => ghost.Location)).ToArray();
         foreach (var wire in shell.Window.GetVisualDescendants().OfType<StepConnection>().Where(wire => AutomationProperties.GetAutomationId(wire) == "GhostWire"))
         {
