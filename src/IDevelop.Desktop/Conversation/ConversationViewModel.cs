@@ -119,7 +119,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     public bool ShowsSend => !ShowsRun && !ShowsComposerStop && !ShowsStopAndSend;
 
     /// <summary>The first turn shows while the transcript reaches back to the start and the node has a task to show.</summary>
-    public bool ShowsTask => !HasEarlier && Items.Count > 0 && TaskFields.Count > 0;
+    public bool ShowsTask => !HasEarlier && TaskFields.Count > 0;
 
     /// <summary>The node's own fields, which the agent received as its task.</summary>
     public IReadOnlyList<FieldViewModel> TaskFields => [.. Node.Fields.Where(entry => !string.IsNullOrWhiteSpace(entry.Text))];

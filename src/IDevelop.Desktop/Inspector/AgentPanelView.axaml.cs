@@ -19,6 +19,39 @@ public partial class AgentPanelView : UserControl
 
     private readonly InspectorState _state = new();
 
+    // Edit shows the box in place of the rendered text and gives it the keys.
+    private void OnEditField(object? sender, RoutedEventArgs e) => EditField(sender as Control);
+
+    private void OnFieldDoubleTapped(object? sender, TappedEventArgs e) => EditField(sender as Control);
+
+    private static void EditField(Control? from)
+    {
+        if (from?.DataContext is not FieldViewModel field)
+        {
+            return;
+        }
+
+        field.IsEditing = true;
+        var section = from.FindAncestorOfType<InspectorSection>();
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => section?.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(box => box.DataContext == field && box.IsEffectivelyVisible)?.Focus(NavigationMethod.Tab));
+    }
+
+    private void OnFieldBoxGotFocus(object? sender, GotFocusEventArgs e)
+    {
+        if (sender is Control { DataContext: FieldViewModel field })
+        {
+            field.IsEditing = true;
+        }
+    }
+
+    private void OnFieldBoxLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: FieldViewModel field })
+        {
+            field.IsEditing = false;
+        }
+    }
+
     public AgentPanelView()
     {
         InitializeComponent();

@@ -10,7 +10,11 @@ namespace IDevelop.Desktop.Inspector;
 /// <param name="Command">What the button does.</param>
 /// <param name="IsPrimary">The button is the row's filled one.</param>
 /// <param name="Tip">The tooltip, which holds the reason on a button that is off.</param>
-public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip);
+public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip)
+{
+    /// <summary>The icon button's tooltip: what the button does, then its detail or the reason it is off.</summary>
+    public string FullTip => Tip is { Length: > 0 } tip ? $"{Label}\n{tip}" : Label;
+}
 
 /// <summary>The header's slot: the node's one action. While the node needs a person, failed, or is stale, the Action Dock holds it instead, so no action appears twice.</summary>
 internal static class NodeActions

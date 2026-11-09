@@ -80,7 +80,7 @@ public sealed class ActionDockTests
         Open(shell, "A");
 
         AssertHeading(shell, "Needs you · Reply");
-        Assert.Equal("The agent replied. Write back, or approve its reply as the result.", shell.Find<SelectableTextBlock>("RunTaskDetail").Text);
+        Assert.Equal("The agent replied. Write back, or accept its reply as the result.", shell.Find<SelectableTextBlock>("RunTaskDetail").Text);
         Assert.Equal(["Accept as result"], Shown(shell));
         Assert.True(shell.Find<TextBox>("ConversationComposer").IsEffectivelyVisible);
         Assert.Equal("Reply to Antigravity CLI", shell.Find<TextBox>("ConversationComposer").Watermark);
@@ -173,7 +173,7 @@ public sealed class ActionDockTests
 
         AssertHeading(shell, "Failed");
         Assert.Contains("exited with code 2", shell.Find<SelectableTextBlock>("RunTaskDetail").Text);
-        Assert.Equal(["*Retry", "Open in terminal"], Shown(shell));
+        Assert.Equal(["*Retry", "Change model", "Open in terminal"], Shown(shell));
         Assert.Contains("failed", shell.Find<Border>("ActionDock").Classes);
     }
 
@@ -191,7 +191,7 @@ public sealed class ActionDockTests
 
         AssertHeading(shell, "Stale");
         Assert.Contains("Run it again", shell.Find<SelectableTextBlock>("RunTaskDetail").Text);
-        Assert.Equal(["*Retry"], Shown(shell));
+        Assert.Equal(["*Run again"], Shown(shell));
         Assert.Contains("warning", shell.Find<Border>("ActionDock").Classes);
     }
 
@@ -204,7 +204,7 @@ public sealed class ActionDockTests
 
         Assert.Equal(ActionDockKind.Refusal, Dock(shell).Kind);
         Assert.Contains("waits for A", shell.Find<TextBlock>("StartProblem").Text);
-        Assert.False(shell.Find<Control>("ActionDockActions").IsEffectivelyVisible);
+        Assert.Equal(["Open A"], Shown(shell));
         Assert.False(shell.Find<TextBlock>("ActionDockTitle").IsEffectivelyVisible);
     }
 

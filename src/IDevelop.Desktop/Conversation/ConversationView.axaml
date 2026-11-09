@@ -14,7 +14,7 @@
       <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding Node.HasAgent}"
                     AutomationProperties.AutomationId="TranscriptScroller">
         <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
-        <StackPanel Margin="0,8,0,12">
+        <StackPanel Margin="0,8,0,12" VerticalAlignment="Bottom">
           <Button Classes="ghost" HorizontalAlignment="Center" Height="24" Margin="0,0,0,8"
                   Command="{Binding LoadEarlierCommand}" IsVisible="{Binding HasEarlier}"
                   AutomationProperties.AutomationId="LoadEarlier"
@@ -85,12 +85,13 @@
                                      IsVisible="{Binding Result.Commit, FallbackValue={x:Null}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                      AutomationProperties.AutomationId="ResultCardCommit" />
                         </Grid>
-                        <TextBlock Classes="dockText" Text="{Binding Result.PlainSummary, FallbackValue={x:Null}}" MaxLines="3" TextTrimming="CharacterEllipsis"
-                                   AutomationProperties.AutomationId="ResultCardSummary" />
-                        <Button Classes="ghost" Height="24" Margin="-8,0,0,-4" HorizontalAlignment="Left" Click="OnShowResult"
+                        <Button Classes="resultOpen" Click="OnShowResult"
                                 ToolTip.Tip="Opens the Output page"
                                 AutomationProperties.AutomationId="ResultOpenOutput" AutomationProperties.Name="Open output">
-                          <TextBlock Text="Open output" />
+                          <StackPanel Orientation="Horizontal" Spacing="2">
+                            <TextBlock Text="Open output" VerticalAlignment="Center" />
+                            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
+                          </StackPanel>
                         </Button>
                       </StackPanel>
                     </Border>
@@ -176,19 +177,20 @@
 
       <!-- A person's Approval node has no conversation, so the transcript area shows what it reviews. -->
       <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !Node.HasAgent}">
-        <StackPanel Margin="16,12,16,12" AutomationProperties.AutomationId="ChatInputs">
+        <StackPanel Margin="16,12,16,12" Spacing="8" AutomationProperties.AutomationId="ChatInputs">
+          <TextBlock Classes="bodyStrong" Text="Inputs" IsVisible="{Binding !Node.HasNoInputs}" />
           <TextBlock Classes="caption" Text="This agent reads no input." IsVisible="{Binding Node.HasNoInputs}" />
           <ItemsControl ItemsSource="{Binding Node.Inputs}" AutomationProperties.AutomationId="ChatInputLinks">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="canvas:NodeLink">
-                <inspector:NodeLinkRow LinkId="ChatInputLink" />
+                <inspector:NodeLinkRow LinkId="ChatInputLink" ShowsKind="False" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </StackPanel>
       </ScrollViewer>
 
-      <TextBlock Classes="caption" Text="No messages yet." HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding ShowsEmpty}"
+      <TextBlock Classes="caption" Text="No messages yet. Run this agent to start." HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding ShowsEmpty}"
                  AutomationProperties.AutomationId="ConversationEmpty" />
       <Button x:Name="JumpToLatest" Classes="jump" IsVisible="False"
               HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"
@@ -202,7 +204,7 @@
       </Button>
     </Panel>
 
-    <conversation:ActionDock x:Name="DockView" Grid.Row="1" Margin="16,8,16,0" MaxWidth="680" DataContext="{Binding Dock}" />
+    <conversation:ActionDock x:Name="DockView" Grid.Row="1" Classes.lastItem="{Binding !Node.HasAgent}" MaxWidth="680" DataContext="{Binding Dock}" />
 
     <Border x:Name="ComposerFrame" Grid.Row="2" Classes="composer" IsVisible="{Binding Node.HasAgent}">
       <StackPanel>
@@ -218,7 +220,7 @@
                   AutomationProperties.AutomationId="ConversationModel" AutomationProperties.Name="{Binding Node.AgentLabel, StringFormat='Agent: {0}'}">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" Width="12" Height="12" />
-              <TextBlock Grid.Column="1" Text="{Binding Node.AgentLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+              <TextBlock Grid.Column="1" Text="{Binding Node.ComposerAgentLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                          AutomationProperties.AutomationId="ConversationModelLabel" />
               <PathIcon Grid.Column="2" Classes="chipChevron" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronUp}" Width="10" Height="10" />
             </Grid>
@@ -273,7 +275,7 @@
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
             </Button>
             <Button Classes="round send" Command="{Binding Node.SendCommand}" IsVisible="{Binding ShowsSend}"
-                    ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True" ToolTip.Placement="Top"
+                    ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True" ToolTip.Placement="Top" ToolTip.VerticalOffset="-6" ToolTip.HorizontalOffset="0"
                     AutomationProperties.AutomationId="ConversationSend" AutomationProperties.Name="Send">
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
             </Button>

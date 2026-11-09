@@ -322,6 +322,7 @@ public sealed class InspectorTests : IDisposable
         var node = shell.Window.ViewModel.Canvas!.Nodes.Single();
         node.Canvas.Inspect(node);
         node.SetField("instructions", string.Join("\n", Enumerable.Range(1, 30).Select(index => $"Line {index}.")));
+        node.Fields.Single(field => field.AutomationId == "TaskInstructions").IsEditing = true;
         var box = shell.Find<TextBox>("TaskInstructions");
         shell.Render();
 

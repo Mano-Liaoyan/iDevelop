@@ -47,6 +47,22 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>The reset glyph's tooltip, which names the default.</summary>
     public string ResetTip => $"Reset to blueprint default: {(Spec.Default.Length == 0 ? "empty" : CardText.Line(Spec.Default, 80))}";
 
+    /// <summary>The box shows in place of the rendered text: the person chose Edit.</summary>
+    public bool IsEditing
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowsRendered));
+            }
+        }
+    }
+
+    /// <summary>Long text with something in it reads as Markdown until the person edits it.</summary>
+    public bool ShowsRendered => IsMultiline && !IsEditing && Text.Length > 0;
+
     /// <summary>Puts the blueprint's default back in one edit.</summary>
     public ICommand RevertCommand { get; }
 
@@ -58,5 +74,6 @@ public sealed class FieldViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Text));
         OnPropertyChanged(nameof(CanRevert));
+        OnPropertyChanged(nameof(ShowsRendered));
     }
 }

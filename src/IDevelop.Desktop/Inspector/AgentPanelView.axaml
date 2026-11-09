@@ -93,18 +93,22 @@
                 </Grid>
                 <!-- Tab order inside the header is the name, then the action, the menu, and Close. -->
                 <StackPanel Grid.Column="3" Grid.RowSpan="2" Orientation="Horizontal" Spacing="2" Margin="8,0,0,0">
+                  <!-- On the Chat page the composer holds Run and Stop, so the header does not repeat them. -->
                   <ItemsControl Classes="headerActions" ItemsSource="{Binding HeaderActions}" VerticalAlignment="Center" Margin="0,0,4,0"
                                 AutomationProperties.AutomationId="NodeActions">
+                    <ItemsControl.IsVisible>
+                      <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                        <Binding Path="!$parent[inspector:AgentPanelView].Panel.ShowsChat" />
+                        <Binding Path="!ComposerHoldsAction" />
+                      </MultiBinding>
+                    </ItemsControl.IsVisible>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate DataType="inspector:NodeAction">
                         <Button Classes.primary="{Binding IsPrimary}" Classes.action="{Binding !IsPrimary}" Command="{Binding Command}"
-                                ToolTip.Tip="{Binding Tip}" ToolTip.ShowOnDisabled="True"
+                                ToolTip.Tip="{Binding FullTip}" ToolTip.ShowOnDisabled="True"
                                 AutomationProperties.AutomationId="{Binding Id}"
                                 AutomationProperties.Name="{Binding Label}">
-                          <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Theme="{StaticResource Glyph}" Data="{Binding Glyph, Converter={x:Static inspector:InspectorConverters.Icon}}" Width="14" Height="14" />
-                            <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
-                          </StackPanel>
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{Binding Glyph, Converter={x:Static inspector:InspectorConverters.Icon}}" Width="14" Height="14" />
                         </Button>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -188,24 +192,24 @@
               <!-- The strip comes first in the tree, so Tab goes from it to the page. -->
               <Border Grid.Column="1" Classes="pageStrip">
                 <StackPanel>
-                  <inspector:PageTab Label="Chat" Glyph="{StaticResource IconChat}" ToolTip.Tip="Chat (Alt+1)" IsVisible="{Binding !$parent[inspector:AgentPanelView].Panel.IsPinned}"
+                  <inspector:PageTab Label="Chat" Glyph="{StaticResource IconChat}" ToolTip.Tip="Chat (Alt+1). An orange dot means that this agent needs you." IsVisible="{Binding !$parent[inspector:AgentPanelView].Panel.IsPinned}"
                                      Classes.active="{Binding $parent[inspector:AgentPanelView].Panel.IsChat}" Classes.waiting="{Binding IsWaiting}"
                                      Command="{Binding $parent[inspector:AgentPanelView].Panel.ShowCommand}" CommandParameter="{x:Static inspector:AgentPage.Chat}"
                                      AutomationProperties.AutomationId="PageChat" AutomationProperties.Name="Chat" />
-                  <inspector:PageTab Label="Agent" Glyph="{StaticResource IconSparkle}" ToolTip.Tip="Agent (Alt+2)" IsVisible="{Binding HasAgent}"
+                  <inspector:PageTab Label="Agent" Glyph="{StaticResource IconSparkle}" ToolTip.Tip="Agent (Alt+2). A blue dot means that a value differs from the blueprint." IsVisible="{Binding HasAgent}"
                                      Classes.active="{Binding $parent[inspector:AgentPanelView].Panel.IsAgent}" Classes.changed="{Binding AgentHasChanges}"
                                      Command="{Binding $parent[inspector:AgentPanelView].Panel.ShowCommand}" CommandParameter="{x:Static inspector:AgentPage.Agent}"
                                      AutomationProperties.AutomationId="PageAgent" AutomationProperties.Name="Agent" />
-                  <inspector:PageTab Label="Task" Glyph="{StaticResource IconPageTask}" ToolTip.Tip="Task (Alt+3)"
+                  <inspector:PageTab Label="Task" Glyph="{StaticResource IconPageTask}" ToolTip.Tip="Task (Alt+3). A blue dot means that a value differs from the blueprint."
                                      Classes.active="{Binding $parent[inspector:AgentPanelView].Panel.IsTask}" Classes.changed="{Binding TaskHasChanges}"
                                      Command="{Binding $parent[inspector:AgentPanelView].Panel.ShowCommand}" CommandParameter="{x:Static inspector:AgentPage.Task}"
                                      AutomationProperties.AutomationId="PageTask" AutomationProperties.Name="Task" />
-                  <inspector:PageTab Label="Input" Glyph="{StaticResource IconPageInput}" ToolTip.Tip="Input (Alt+4)" Count="{Binding InputBadge}"
+                  <inspector:PageTab Label="Input" Glyph="{StaticResource IconPageInput}" ToolTip.Tip="Input (Alt+4). The number counts the agents that feed this one." Count="{Binding InputBadge}"
                                      Classes.active="{Binding $parent[inspector:AgentPanelView].Panel.IsInput}"
                                      Command="{Binding $parent[inspector:AgentPanelView].Panel.ShowCommand}" CommandParameter="{x:Static inspector:AgentPage.Input}"
                                      AutomationProperties.AutomationId="PageInput" AutomationProperties.Name="Input" />
-                  <inspector:PageTab Label="Output" Glyph="{StaticResource IconPageOutput}" ToolTip.Tip="Output (Alt+5)"
-                                     Classes.active="{Binding $parent[inspector:AgentPanelView].Panel.IsOutput}" Classes.done="{Binding HasResults}"
+                  <inspector:PageTab Label="Output" Glyph="{StaticResource IconPageOutput}" ToolTip.Tip="Output (Alt+5). A green dot means a current result. An amber dot means that the result is stale."
+                                     Classes.active="{Binding $parent[inspector:AgentPanelView].Panel.IsOutput}" Classes.done="{Binding HasResults}" Classes.stale="{Binding IsStale}"
                                      Command="{Binding $parent[inspector:AgentPanelView].Panel.ShowCommand}" CommandParameter="{x:Static inspector:AgentPage.Output}"
                                      AutomationProperties.AutomationId="PageOutput" AutomationProperties.Name="Output" />
                   <inspector:PageTab Label="{Binding ExtraTitle}" Glyph="{Binding ExtraGlyph, Converter={x:Static inspector:InspectorConverters.Icon}}" Count="{Binding ExtraBadge}"
@@ -233,7 +237,8 @@
 
                 <ScrollViewer IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsAgent}">
                   <StackPanel Classes="page" AutomationProperties.AutomationId="AgentPage">
-                    <Border Classes="pageTitle">
+                    <!-- A title that only repeats its tab shows nothing. A review's agent is named as its Reviewer. -->
+                    <Border Classes="pageTitle" IsVisible="{Binding IsReview}">
                       <TextBlock Classes="bodyStrong" Text="{Binding AgentSectionTitle}" AutomationProperties.AutomationId="AgentHeading" />
                     </Border>
                     <StackPanel>
@@ -331,7 +336,7 @@
                       <!-- What the blueprint tells this node's agent, with the node's own values in it. A blueprint edits the template, so Edit opens a copy of it. -->
                       <inspector:InspectorSection Key="SystemPrompt" Title="System prompt" StartsFolded="True" IsShown="{Binding HasSystemPrompt}" Margin="0,8,0,0">
                         <inspector:InspectorSection.HeaderAction>
-                          <Button Classes="ghost sectionAction" Content="Edit" Command="{Binding DeriveCommand}"
+                          <Button Classes="action sectionAction" Content="Edit" Command="{Binding DeriveCommand}"
                                   ToolTip.Tip="A new blueprint with this type's fields and template, where the prompt can change"
                                   AutomationProperties.AutomationId="SystemPromptEdit" AutomationProperties.Name="Edit the system prompt in a new blueprint" />
                         </inspector:InspectorSection.HeaderAction>
@@ -346,18 +351,28 @@
 
                 <ScrollViewer IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsTask}">
                   <StackPanel Classes="page" AutomationProperties.AutomationId="TaskPage">
-                    <Border Classes="pageTitle"><TextBlock Classes="bodyStrong" Text="Task" /></Border>
                     <ItemsControl ItemsSource="{Binding Fields}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="canvas:FieldViewModel">
                           <inspector:InspectorSection Key="{Binding AutomationId}" Title="{Binding Label}" ToolTip.Tip="{Binding LabelTip}">
+                            <!-- Long text reads as Markdown. Edit shows the box, as the System prompt's Edit does. -->
+                            <inspector:InspectorSection.HeaderAction>
+                              <Button Classes="action sectionAction" Content="Edit" Click="OnEditField" IsVisible="{Binding ShowsRendered}"
+                                      ToolTip.Tip="{Binding Label, StringFormat='Edit {0}'}"
+                                      AutomationProperties.AutomationId="{Binding AutomationId, StringFormat='{}{0}Edit'}" AutomationProperties.Name="{Binding Label, StringFormat='Edit {0}'}" />
+                            </inspector:InspectorSection.HeaderAction>
                             <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box. -->
                             <inspector:InspectorRow Layout="Value" RevertCommand="{Binding RevertCommand}" CanRevert="{Binding CanRevert}" RevertId="{Binding RevertId}" RevertTip="{Binding ResetTip}">
-                              <TextBox Text="{Binding Text}" Watermark="{Binding Placeholder}"
-                                       AcceptsReturn="{Binding IsMultiline}" TextWrapping="Wrap" NewLine="&#10;"
-                                       Classes.multiline="{Binding IsMultiline}"
-                                       AutomationProperties.AutomationId="{Binding AutomationId}"
-                                       AutomationProperties.Name="{Binding Label}" />
+                              <Panel>
+                                <TextBox Text="{Binding Text}" Watermark="{Binding Placeholder}" IsVisible="{Binding !ShowsRendered}"
+                                         AcceptsReturn="{Binding IsMultiline}" TextWrapping="Wrap" NewLine="&#10;"
+                                         Classes.multiline="{Binding IsMultiline}" GotFocus="OnFieldBoxGotFocus" LostFocus="OnFieldBoxLostFocus"
+                                         AutomationProperties.AutomationId="{Binding AutomationId}"
+                                         AutomationProperties.Name="{Binding Label}" />
+                                <Border Classes="fieldRendered" IsVisible="{Binding ShowsRendered}" DoubleTapped="OnFieldDoubleTapped">
+                                  <conversation:MarkdownView Markdown="{Binding Text}" AutomationProperties.AutomationId="{Binding AutomationId, StringFormat='{}{0}Rendered'}" />
+                                </Border>
+                              </Panel>
                             </inspector:InspectorRow>
                           </inspector:InspectorSection>
                         </DataTemplate>
@@ -392,7 +407,6 @@
 
                 <ScrollViewer IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsInput}">
                   <StackPanel Classes="page" AutomationProperties.AutomationId="InputPage">
-                    <Border Classes="pageTitle"><TextBlock Classes="bodyStrong" Text="Input" /></Border>
                     <TextBlock Classes="body muted" Text="This agent reads no input." IsVisible="{Binding HasNoInputs}"
                                AutomationProperties.AutomationId="NoInput" />
                     <ItemsControl ItemsSource="{Binding Inputs}" AutomationProperties.AutomationId="InputLinks">
@@ -407,7 +421,6 @@
 
                 <ScrollViewer IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsOutput}">
                   <StackPanel Classes="page" AutomationProperties.AutomationId="OutputPage">
-                    <Border Classes="pageTitle"><TextBlock Classes="bodyStrong" Text="Output" /></Border>
                     <TextBlock Classes="body muted" Text="No result yet." IsVisible="{Binding HasNoOutput}"
                                AutomationProperties.AutomationId="NoResult" />
                     <ContentControl Content="{Binding CurrentResult}" IsVisible="{Binding HasResults}" AutomationProperties.AutomationId="Results">
@@ -463,7 +476,7 @@
                       <ItemsControl ItemsSource="{Binding Outputs}" AutomationProperties.AutomationId="OutputLinks">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate DataType="canvas:NodeLink">
-                            <inspector:NodeLinkRow LinkId="OutputLink" />
+                            <inspector:NodeLinkRow LinkId="OutputLink" ShowsResult="False" />
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
@@ -473,7 +486,6 @@
 
                 <ScrollViewer IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsExtra}">
                   <StackPanel Classes="page" AutomationProperties.AutomationId="ExtraPage">
-                    <Border Classes="pageTitle"><TextBlock Classes="bodyStrong" Text="{Binding ExtraTitle}" /></Border>
                     <StackPanel Spacing="6" IsVisible="{Binding ReviewSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" AutomationProperties.AutomationId="Review">
                       <TextBlock Classes="body" Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontWeight="Medium"
                                  AutomationProperties.AutomationId="ReviewSummary" />

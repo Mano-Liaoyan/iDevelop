@@ -216,7 +216,7 @@ public sealed class AgentPanelTests : IDisposable
         shell.Click(shell.Find<Button>("LinkContext"));
 
         Assert.Equal(ConnectionKind.Context, shell.Window.ViewModel.Canvas!.Connections.Single().Kind);
-        Assert.True(shell.Find<Control>("ContextLink").IsEffectivelyVisible);
+        Assert.False(shell.Find<Button>("LinkContext").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]
@@ -269,5 +269,45 @@ public sealed class AgentPanelTests : IDisposable
         Assert.Equal("Findings", node.ExtraTitle);
         Assert.Equal("IconChecklist", node.ExtraGlyph);
         Assert.Null(node.ExtraBadge);
+    }
+
+    [AvaloniaFact]
+    public void The_Chat_page_leaves_Run_to_the_composer()
+    {
+        var shell = Linked();
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Chat);
+
+        Assert.False(shell.Find<ItemsControl>("NodeActions").IsEffectivelyVisible);
+        Assert.True(shell.InView<Button>("ConversationRunNode").IsEffectivelyVisible);
+
+        shell.Page(AgentPage.Task);
+        Assert.True(shell.Find<ItemsControl>("NodeActions").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_long_field_reads_as_Markdown_until_Edit_shows_its_box()
+    {
+        var shell = Linked();
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.NodeModel("Design").SetField("instructions", "- One step");
+        shell.Page(AgentPage.Task);
+        shell.Render();
+        var box = shell.Find<TextBox>("TaskInstructions");
+        Assert.False(box.IsEffectivelyVisible);
+
+        shell.Click(shell.Find<Button>("TaskInstructionsEdit"));
+        shell.Render();
+
+        Assert.True(box.IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_reader_row_shows_no_result_of_its_own_and_an_input_row_shows_its_kinds()
+    {
+        var shell = Linked();
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Output);
+        Assert.False(shell.Has<Control>("InputSummary"));
     }
 }

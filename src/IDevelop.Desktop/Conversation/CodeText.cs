@@ -18,22 +18,26 @@ public sealed class CodeText : SelectableTextBlock
 
     private readonly string _source;
     private readonly string? _language;
+    private readonly int _reservedFirstLine;
     private int _columns = -1;
 
-    public CodeText(string source, string? language)
+    /// <param name="reservedFirstLine">The columns that the corner's tools take from the first line.</param>
+    public CodeText(string source, string? language, int reservedFirstLine = 0)
     {
         _source = source;
         _language = language;
+        _reservedFirstLine = reservedFirstLine;
         Show(source);
     }
 
     protected override Type StyleKeyOverride => typeof(SelectableTextBlock);
 
     /// <summary>
-    /// The source with each line over <paramref name="columns"/> broken at its last space or comma that fits, or at the limit
-    /// when it has neither. Each continued line starts at the source line's own indent plus <see cref="Continuation"/>.
+    /// The source with each line over <paramref name="columns"/> broken at its last space or comma that fits, then at the last
+    /// other mark between tokens, and at the limit only when a single token is too long. Each continued line starts at the
+    /// source line's own indent plus <see cref="Continuation"/>. The first line stays <paramref name="reservedFirstLine"/> short of the limit.
     /// </summary>
-    internal static string Wrapped(string source, int columns)
+    internal static string Wrapped(string source, int columns, int reservedFirstLine = 0)
     {
         var shown = new StringBuilder();
         foreach (var (line, at) in source.Split('\n').Select((line, at) => (line, at)))
@@ -44,12 +48,11 @@ public sealed class CodeText : SelectableTextBlock
             }
 
             var indent = line[..(line.Length - line.TrimStart().Length)] + Continuation;
-            var room = columns;
+            var room = at == 0 && columns > reservedFirstLine ? columns - reservedFirstLine : columns;
             var left = line;
             while (left.Length > room && room > 0)
             {
-                var cut = left.LastIndexOfAny([' ', ','], room - 1, room) + 1;
-                cut = cut > 0 && left[..cut].Trim().Length > 0 ? cut : room;
+                var cut = CutAt(left, room);
                 shown.Append(left[..cut].TrimEnd()).Append('\n').Append(indent);
                 left = left[cut..].TrimStart();
                 room = columns - indent.Length;
@@ -59,6 +62,26 @@ public sealed class CodeText : SelectableTextBlock
         }
 
         return shown.ToString();
+    }
+
+    // Where a line breaks within room. A space or comma comes first, then the end of any other mark, so that no name splits unless it is longer than a line.
+    private static int CutAt(string line, int room)
+    {
+        var soft = line.LastIndexOfAny([' ', ','], room - 1, room) + 1;
+        if (soft > 0 && line[..soft].Trim().Length > 0)
+        {
+            return soft;
+        }
+
+        for (var at = room - 1; at > 0; at--)
+        {
+            if (!char.IsLetterOrDigit(line[at]) && line[at] != '_' && !char.IsWhiteSpace(line[at]))
+            {
+                return at + 1;
+            }
+        }
+
+        return room;
     }
 
     // The first measure wraps at the width it is offered. After that only the arranged width re-wraps: a measure pass can offer several widths in a row,
@@ -85,7 +108,7 @@ public sealed class CodeText : SelectableTextBlock
         if (columns != _columns && columns > 0)
         {
             _columns = columns;
-            Show(Wrapped(_source, columns));
+            Show(Wrapped(_source, columns, _reservedFirstLine));
         }
     }
 

@@ -235,7 +235,10 @@ public sealed class MarkdownView : StackPanel
         return box;
     }
 
-    private ScrollViewer TableGrid(Table table)
+    // The columns that the corner's language and Copy take from the first code line.
+    private static int CodeToolColumns(string? language) => (string.IsNullOrWhiteSpace(language) ? 0 : language.Trim().Length + 1) + 6;
+
+    private FitTable TableGrid(Table table)
     {
         var rows = table.OfType<TableRow>().ToList();
         var columns = rows.Count == 0 ? 0 : rows.Max(row => row.Count);
@@ -260,14 +263,7 @@ public sealed class MarkdownView : StackPanel
             }
         }
 
-        return new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            AllowAutoHide = false,
-            Classes = { "mdScroll" },
-            Content = new Border { Classes = { "mdTable" }, Child = grid },
-        };
+        return new FitTable(grid);
     }
 
     private static Border Code(string code, string? language)
@@ -285,7 +281,7 @@ public sealed class MarkdownView : StackPanel
             }
         };
 
-        // The language and Copy stand beside the first code line, in a column of their own, so the block has no empty band and nothing covers the code.
+        // The language and Copy rest in the corner, over the code's own width. The first line wraps clear of them, so the block has no empty band and no column kept for them.
         var tools = new StackPanel { Classes = { "mdCodeTools" }, Orientation = Orientation.Horizontal, Spacing = 4 };
         if (!string.IsNullOrWhiteSpace(language))
         {
@@ -293,9 +289,8 @@ public sealed class MarkdownView : StackPanel
         }
 
         tools.Children.Add(copy);
-        var body = new CodeText(source, language) { Classes = { "mdMono", "mdCodeText" } };
-        var layout = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        Grid.SetColumn(tools, 1);
+        var body = new CodeText(source, language, CodeToolColumns(language)) { Classes = { "mdMono", "mdCodeText" } };
+        var layout = new Panel();
         layout.Children.Add(body);
         layout.Children.Add(tools);
         return new Border { Classes = { "mdCode" }, Child = layout };
@@ -310,11 +305,6 @@ public sealed class MarkdownView : StackPanel
         if (style is not null)
         {
             text.Classes.Add(style);
-        }
-        else if (inline?.Descendants<Markdig.Syntax.Inlines.Inline>().Any(child => child is LinkInline { IsImage: false } or AutolinkInline) != true)
-        {
-            // A line that holds a link control sets its own height, because a fixed one would clip the control's text.
-            text.LineHeight = BodyLineHeight;
         }
 
         if (inline is not null)
@@ -391,8 +381,6 @@ public sealed class MarkdownView : StackPanel
     private static string Breakable(string code) => code.Length < LongSpan || code.Contains(' ')
         ? code
         : string.Concat(code.Select((letter, at) => SpanBreaks.Contains(letter) && at + 1 < code.Length ? $"{letter}{BreakHere}" : letter.ToString()));
-
-    private const double BodyLineHeight = 22;
 
     private static string LabelOf(ContainerInline inline) => string.Concat(inline.Descendants<Markdig.Syntax.Inlines.Inline>().Select(child => child switch
     {

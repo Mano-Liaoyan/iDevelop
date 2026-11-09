@@ -21,7 +21,7 @@ public sealed partial class TaskNodeViewModel
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
-        nameof(ShowsGoesTo), nameof(HeaderActions), nameof(RetryIsInMenu), nameof(StopIsInMenu), nameof(RetryLabel), nameof(HasExtraPage), nameof(ExtraTitle), nameof(ExtraGlyph), nameof(ExtraBadge),
+        nameof(ShowsGoesTo), nameof(HeaderActions), nameof(ComposerHoldsAction), nameof(IsStale), nameof(RetryIsInMenu), nameof(StopIsInMenu), nameof(RetryLabel), nameof(HasExtraPage), nameof(ExtraTitle), nameof(ExtraGlyph), nameof(ExtraBadge),
     ];
 
     private EngineState _engineState = new EngineState.Idle();

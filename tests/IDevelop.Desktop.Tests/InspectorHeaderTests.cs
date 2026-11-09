@@ -41,6 +41,7 @@ public sealed class InspectorHeaderTests : IDisposable
     {
         var shell = Linked();
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Task);
 
         Assert.Equal(["*Run"], Actions(shell));
     }
@@ -123,7 +124,7 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.Render();
 
         Assert.True(Assert.Single(node.Inputs).IsContext);
-        Assert.True(shell.Find<Control>("ContextLink").IsEffectivelyVisible);
+        Assert.False(shell.Find<Button>("LinkContext").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]

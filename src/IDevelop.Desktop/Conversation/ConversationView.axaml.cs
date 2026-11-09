@@ -51,9 +51,12 @@ public partial class ConversationView : UserControl
     /// <summary>The least transcript the Chat page keeps in a short window.</summary>
     internal const double MinTranscriptHeight = 180;
 
-    // The dock's share of the page, and the least it keeps for its heading and a line while the page is short.
+    // The dock's share of a page with a composer, and the least it keeps for its heading and a line while the page is short.
     private const double DockShare = 0.4;
     private const double MinDockHeight = 72;
+
+    // With no composer the dock is the page's task, so it keeps only this much room for what the inputs show above it.
+    private const double MinInputsHeight = 96;
 
     private ConversationViewModel? _model;
     private bool _follow = true;
@@ -107,12 +110,18 @@ public partial class ConversationView : UserControl
         SizeChanged += (_, _) => LimitDock();
     }
 
-    // The dock takes at most 40% of the page, and the transcript keeps its least height after the dock and the composer. The dock's own content scrolls.
+    // With a composer the dock takes at most 40% of the page, and the transcript keeps its least height after the dock and the composer. The dock's own content
+    // scrolls. A person's Approval node has no composer and no transcript, so its dock shows everything that it can before it scrolls.
     private void LimitDock()
     {
-        var composer = ComposerFrame.IsVisible ? ComposerFrame.Bounds.Height + ComposerFrame.Margin.Top + ComposerFrame.Margin.Bottom : 0;
-        DockView.MaxHeight = Math.Max(MinDockHeight, Math.Min(Bounds.Height * DockShare, Bounds.Height - composer - DockView.Margin.Top - DockView.Margin.Bottom - MinTranscriptHeight));
+        var margins = DockView.Margin.Top + DockView.Margin.Bottom;
+        DockView.MaxHeight = ComposerFrame.IsVisible
+            ? Math.Max(MinDockHeight, Math.Min(Bounds.Height * DockShare, Bounds.Height - ComposerFrame.Bounds.Height - ComposerFrame.Margin.Top - ComposerFrame.Margin.Bottom - margins - MinTranscriptHeight))
+            : Math.Max(MinDockHeight, Bounds.Height - margins - MinInputsHeight);
     }
+
+    /// <summary>Opens the composer's picker for the node's client, model, and level.</summary>
+    internal void OpenModelPicker() => ModelChip.Flyout?.ShowAt(ModelChip);
 
     /// <summary>The entry at the top of the view and how far it scrolled into it, or null at the end.</summary>
     internal (int Entry, double Offset)? Anchor => _follow ? null : _anchor;

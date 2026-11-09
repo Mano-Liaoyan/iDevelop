@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Windows.Input;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Mvvm;
 using EngineState = IDevelop.Engine.NodeState;
@@ -19,7 +20,7 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
     [
         nameof(TaskNodeViewModel.EngineState), nameof(TaskNodeViewModel.IsAsking), nameof(TaskNodeViewModel.Questions), nameof(TaskNodeViewModel.RunRefusal),
         nameof(TaskNodeViewModel.ShowsApprove), nameof(TaskNodeViewModel.ApproveLabel), nameof(TaskNodeViewModel.StateDetail), nameof(TaskNodeViewModel.LastReply),
-        nameof(TaskNodeViewModel.StatusLabel), nameof(TaskNodeViewModel.Outputs),
+        nameof(TaskNodeViewModel.StatusLabel), nameof(TaskNodeViewModel.Outputs), nameof(TaskNodeViewModel.Inputs), nameof(TaskNodeViewModel.HasClient),
     ];
 
     private static readonly string[] StateProperties =
@@ -27,6 +28,7 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
         nameof(Kind), nameof(IsShown), nameof(IsFailed), nameof(IsWarning), nameof(HasHeading), nameof(Title), nameof(MarkState), nameof(MarkWhy), nameof(Detail), nameof(HasDetail),
         nameof(ShowsQuestions), nameof(ShowsApprove), nameof(IsApprovePrimary), nameof(ApproveLabel), nameof(ApproveTip), nameof(ShowsSendBack), nameof(ShowsConflict), nameof(ShowsContinue),
         nameof(ShowsRetry), nameof(IsRetryPrimary), nameof(ShowsTerminal), nameof(Refusal), nameof(HasRefusal), nameof(HasOffered), nameof(HasActions), nameof(HasPinned), nameof(HasBody),
+        nameof(RetryLabel), nameof(ShowsChangeModel), nameof(HasBlocker), nameof(BlockerLabel), nameof(BlockerTip), nameof(BlockerCommand),
     ];
 
     private bool _disposed;
@@ -83,11 +85,15 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
     /// <summary>The reason glyph on the mark.</summary>
     public WaitReason MarkWhy => Kind == ActionDockKind.Question ? WaitReason.Question : Node.WaitReason;
 
-    /// <summary>The state's sentence. Its "Write back, or approve" stays away while Accept does, and an agent's own words stay in the transcript.</summary>
+    /// <summary>
+    /// The state's sentence. An agent that asks in its reply gives no choices and no way to accept, so the dock says that the composer answers. An agent's
+    /// own words stay in the transcript.
+    /// </summary>
     public string? Detail => Kind switch
     {
         ActionDockKind.None or ActionDockKind.Question or ActionDockKind.Refusal => null,
-        ActionDockKind.Reply when !Node.ShowsApprove || Node.StateDetail?.Trim() == Node.LastReply?.Trim() => null,
+        ActionDockKind.Reply when !Node.ShowsApprove => "The agent asked a question. Answer it below to continue.",
+        ActionDockKind.Reply when Node.StateDetail?.Trim() == Node.LastReply?.Trim() => null,
         _ => Node.StateDetail,
     };
 
@@ -133,6 +139,12 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
 
     public bool IsRetryPrimary => Kind is ActionDockKind.Failed or ActionDockKind.Stale;
 
+    /// <summary>What the button says. Nothing failed on a stale result, so it runs the node again.</summary>
+    public string RetryLabel => Kind == ActionDockKind.Stale ? "Run again" : "Retry";
+
+    /// <summary>A failed agent often needs another model, so the dock opens the picker.</summary>
+    public bool ShowsChangeModel => Kind == ActionDockKind.Failed && Node.HasClient;
+
     public bool ShowsTerminal => Kind == ActionDockKind.Failed;
 
     /// <summary>Why the engine would not start the node, with the Warning mark, or null.</summary>
@@ -140,8 +152,22 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
 
     public bool HasRefusal => !string.IsNullOrEmpty(Refusal);
 
+    // The agent that the refusal names. The dock takes the person there.
+    private TaskNodeViewModel? Blocker => Refusal is { } refusal
+        ? Node.Inputs.Select(link => link.Node).FirstOrDefault(input => refusal == $"It waits for {input.Title}.")
+        : null;
+
+    /// <summary>The refusal names an agent that the dock can open.</summary>
+    public bool HasBlocker => Blocker is not null;
+
+    public string? BlockerLabel => Blocker is { } blocker ? $"Open {blocker.Title}" : null;
+
+    public string? BlockerTip => Blocker is { } blocker ? $"Selects {blocker.Title}, which this agent waits for" : null;
+
+    public ICommand? BlockerCommand => Blocker?.SelectCommand;
+
     /// <summary>The dock's row of buttons has something to hold.</summary>
-    public bool HasActions => ShowsApprove || ShowsSendBack || ShowsConflict || ShowsContinue || ShowsRetry || ShowsTerminal;
+    public bool HasActions => ShowsApprove || ShowsSendBack || ShowsConflict || ShowsContinue || ShowsRetry || ShowsTerminal || ShowsChangeModel || HasBlocker;
 
     /// <summary>The dock has words under its heading.</summary>
     public bool HasBody => HasOffered || HasDetail || HasRefusal || ShowsQuestions;

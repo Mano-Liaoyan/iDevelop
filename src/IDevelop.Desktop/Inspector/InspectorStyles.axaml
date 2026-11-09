@@ -62,9 +62,37 @@
     <Setter Property="IsVisible" Value="True" />
     <Setter Property="Fill" Value="{DynamicResource StateSuccessStrongBrush}" />
   </Style>
-  <!-- A page: its content inside one inset, so its right edge is the action edge, 12 px from the page's edge. -->
+  <Style Selector="inspector|PageTab.done.stale /template/ Ellipse#PART_Dot">
+    <Setter Property="Fill" Value="{DynamicResource StateWarningStrongBrush}" />
+  </Style>
+  <!-- A page: its content inside one inset, so its right edge is the action edge, 12 px from the page's edge. It keeps the Chat column's width and centers when the panel is wider. -->
   <Style Selector="StackPanel.page">
-    <Setter Property="Margin" Value="12,0,12,16" />
+    <Setter Property="Margin" Value="12,8,12,16" />
+    <Setter Property="MaxWidth" Value="680" />
+  </Style>
+  <!-- A long field's text as it reads, in the field's frame. -->
+  <Style Selector="Border.fieldRendered">
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Border.fieldRendered SelectableTextBlock.md">
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeBodyLine}" />
+  </Style>
+  <!-- The connection's kind: two small segments, left-aligned under the row they set. -->
+  <Style Selector="Border.linkKinds">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Padding" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="Button.segment.linkKind">
+    <Setter Property="Height" Value="22" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
   </Style>
   <Style Selector="Border.pageTitle">
     <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.PageTitleHeight}" />
@@ -184,9 +212,14 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
   </Style>
+  <!-- The header's one action is a glyph, so the agent's name keeps the width. Its tooltip names it. -->
   <Style Selector="ItemsControl.headerActions Button">
+    <Setter Property="Width" Value="28" />
     <Setter Property="Height" Value="28" />
-    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
   </Style>
   <!-- What the node needs or why it cannot start: a short paragraph on a rule in the state's color. -->
@@ -546,6 +579,10 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
+  <!-- A value on a row with no box starts where the text in a box starts. -->
+  <Style Selector="inspector|InspectorRow > TextBlock.value">
+    <Setter Property="Margin" Value="8,0,0,0" />
+  </Style>
   <!-- A short note, whose tooltip holds the full text. It wraps rather than losing its end. -->
   <Style Selector="TextBlock.note">
     <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
@@ -655,11 +692,13 @@
     <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
   </Style>
-  <!-- At rest a field is a quiet fill with no outline, so a section reads as properties and not as a form. The hover and the
-       focus bring the edge back. -->
+  <!-- A field is a quiet fill inside one neutral line, so its bounds read in both themes. Hover fills it and leaves the line as it is. -->
   <Style Selector="inspector|InspectorRow ComboBox, inspector|InspectorRow ToggleButton.picker, inspector|InspectorRow TextBox">
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+  </Style>
+  <Style Selector="inspector|InspectorRow ComboBox:pointerover /template/ Border#Background, inspector|InspectorRow TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
   </Style>
   <!-- Hover brings a neutral 1 px edge and a stronger fill, as the skill picker has. Focus draws the accent edge. -->
   <Style Selector="inspector|InspectorRow ComboBox:pointerover /template/ Border#Background, inspector|InspectorRow ComboBox:pressed /template/ Border#Background">

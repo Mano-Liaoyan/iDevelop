@@ -66,8 +66,17 @@ public sealed partial class TaskNodeViewModel
     /// <summary>A node with no result shows "No result yet." and nothing else, so the Output page lists its readers only with a result.</summary>
     public bool ShowsGoesTo => HasOutputs && HasResults;
 
-    /// <summary>The header's second line: " · " and the agent, after the status.</summary>
-    public string PanelAgentLine => HasAgent ? $"  ·  {AgentLabel}" : "";
+    /// <summary>The header's second line: " · " and the client, after the status. The composer's chip shows the model and level.</summary>
+    public string PanelAgentLine => HasAgent ? $"  ·  {AgentClient}" : "";
+
+    /// <summary>The composer's chip: the model and level in full. The header names the client.</summary>
+    public string ComposerAgentLabel => AgentModel.Length > 0 ? AgentModel : AgentLabel;
+
+    /// <summary>The composer holds this action on the Chat page, so the header does not repeat it there.</summary>
+    public bool ComposerHoldsAction => HasAgent && State is NodeState.Idle or NodeState.Running;
+
+    /// <summary>The result was made from what has changed since.</summary>
+    public bool IsStale => State == NodeState.Stale;
 
     /// <summary>The node has no result to show yet.</summary>
     public bool HasNoOutput => !HasResults;

@@ -321,7 +321,8 @@
   <Style Selector="Button.segment:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
   </Style>
   <Style Selector="RadioButton.segment">
     <Setter Property="Template">

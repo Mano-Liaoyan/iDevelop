@@ -1,8 +1,9 @@
-<!-- One row of the Input or the Output page: the socket, the kind, the other agent's full name, its state at the action edge,
-     what it handed on, and the connection's kind on two segments. A click on the name selects that agent. -->
+<!-- One row of the Input or the Output page: the kind, the other agent's full name, its state at the action edge, what it handed on, and
+     under them the connection's kind on two small segments, beside what they set. A click on the name selects that agent. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:inspector="using:IDevelop.Desktop.Inspector"
              xmlns:theme="using:IDevelop.Desktop.Theme"
              xmlns:workflows="using:IDevelop.Workflows"
              x:Class="IDevelop.Desktop.Inspector.NodeLinkRow"
@@ -10,43 +11,43 @@
   <StackPanel Margin="0,0,0,10">
     <Button x:Name="Link" Classes="nodeLink" Command="{Binding Node.SelectCommand}" ToolTip.Tip="{Binding Node.StatusLabel}"
             AutomationProperties.Name="{Binding Node.Title}">
-      <Grid ColumnDefinitions="10,4,14,8,*,24">
-        <Ellipse Width="8" Height="8" Fill="{DynamicResource TextFaintBrush}" VerticalAlignment="Top" Margin="1,5,1,0" IsVisible="{Binding !IsContext}" />
-        <!-- A dashed link stands for a context connection, as on the canvas. -->
-        <Line Classes="wireSwatch" IsVisible="{Binding IsContext}" VerticalAlignment="Top" Margin="0,9,0,0"
-              StartPoint="0,1" EndPoint="10,1" StrokeThickness="2" StrokeDashArray="2,1.5"
-              AutomationProperties.AutomationId="ContextLink" />
-        <theme:KindTile Grid.Column="2" Kind="{Binding Node.Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,2,0,0" />
-        <TextBlock Grid.Column="4" Classes="linkTitle" Text="{Binding Node.Title}" />
-        <theme:StateMark Grid.Column="5" Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0"
+      <Grid ColumnDefinitions="14,8,*,24">
+        <theme:KindTile Kind="{Binding Node.Kind}" TileSize="14" VerticalAlignment="Top" Margin="0,2,0,0" />
+        <TextBlock Grid.Column="2" Classes="linkTitle" Text="{Binding Node.Title}" />
+        <theme:StateMark Grid.Column="3" Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0"
                          State="{Binding Node.State}" Why="{Binding Node.WaitReason}"
                          AutomationProperties.Name="{Binding Node.StatusLabel}" />
       </Grid>
     </Button>
-    <StackPanel Margin="28,2,0,0" Spacing="4">
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4" IsVisible="{Binding Node.HandsOn, Converter={x:Static ObjectConverters.IsNotNull}}">
+    <StackPanel Margin="22,2,0,0" Spacing="4">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+        <Grid.IsVisible>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="$parent[inspector:NodeLinkRow].ShowsResult" />
+            <Binding Path="Node.HandsOn" Converter="{x:Static ObjectConverters.IsNotNull}" />
+          </MultiBinding>
+        </Grid.IsVisible>
         <Panel>
           <TextBlock Classes="inputResult" Text="{Binding Node.OutputSummary}" MaxLines="2" TextTrimming="CharacterEllipsis" IsVisible="{Binding !#Reading.IsChecked}"
                      AutomationProperties.AutomationId="InputSummary" />
           <TextBlock Classes="inputResult" Text="{Binding Node.HandsOn}" IsVisible="{Binding #Reading.IsChecked}"
                      AutomationProperties.AutomationId="InputResult" />
         </Panel>
-        <ToggleButton x:Name="Reading" Grid.Column="1" Classes="disclosure" VerticalAlignment="Top"
+        <ToggleButton x:Name="Reading" Grid.Column="1" Classes="disclosure" VerticalAlignment="Top" ToolTip.Tip="Show or hide the whole result"
                       AutomationProperties.AutomationId="InputResultMore" AutomationProperties.Name="Show the whole result">
           <PathIcon Theme="{StaticResource Glyph}" />
         </ToggleButton>
       </Grid>
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-        <TextBlock Classes="caption" VerticalAlignment="Center" Text="{Binding Connection.Kind}" />
-        <Border Grid.Column="1" Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusSm}" Padding="1">
-          <UniformGrid Columns="2">
-            <Button Classes="segment linkKind" Content="Dependency" Command="{Binding Connection.SetKindCommand}" CommandParameter="{x:Static workflows:ConnectionKind.Dependency}"
-                    AutomationProperties.AutomationId="LinkDependency" AutomationProperties.Name="Dependency" />
-            <Button Classes="segment linkKind" Content="Context" Command="{Binding Connection.SetKindCommand}" CommandParameter="{x:Static workflows:ConnectionKind.Context}"
-                    AutomationProperties.AutomationId="LinkContext" AutomationProperties.Name="Context" />
-          </UniformGrid>
-        </Border>
-      </Grid>
+      <Border Classes="linkKinds" IsVisible="{Binding $parent[inspector:NodeLinkRow].ShowsKind}">
+        <UniformGrid Columns="2">
+          <Button Classes="segment linkKind" Content="Dependency" Command="{Binding Connection.SetKindCommand}" CommandParameter="{x:Static workflows:ConnectionKind.Dependency}"
+                  ToolTip.Tip="Dependency: this agent runs after the other agent is done, and reads its result."
+                  AutomationProperties.AutomationId="LinkDependency" AutomationProperties.Name="Dependency" />
+          <Button Classes="segment linkKind" Content="Context" Command="{Binding Connection.SetKindCommand}" CommandParameter="{x:Static workflows:ConnectionKind.Context}"
+                  ToolTip.Tip="Context: this agent reads the other agent's latest result, and does not wait for it."
+                  AutomationProperties.AutomationId="LinkContext" AutomationProperties.Name="Context" />
+        </UniformGrid>
+      </Border>
     </StackPanel>
   </StackPanel>
 </UserControl>
