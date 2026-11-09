@@ -96,7 +96,7 @@ internal static class NodeActions
         new("SendBack", "Send back", "IconUndo", node.SendBackCommand, false, "Write a note first. It goes to the nodes before this one.");
 
     private static NodeAction Retry(TaskNodeViewModel node, bool primary) =>
-        new("RetryTask", node.State == NodeState.Completed ? "Run from here" : "Retry", "IconRefresh", node.RetryCommand, primary,
+        new("RetryTask", "Retry", "IconRefresh", node.RetryCommand, primary,
             node.RunRefusal ?? "Starts a new attempt in a fresh session, then runs each node after it");
 
     private static NodeAction Stop(TaskNodeViewModel node) => new("StopTask", "Stop", "IconStop", node.StopCommand, false, null);

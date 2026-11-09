@@ -71,7 +71,7 @@ public sealed class InspectorHeaderTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_completed_node_leads_with_its_conversation_and_offers_Run_from_here()
+    public void A_completed_node_leads_with_its_conversation_and_offers_Retry()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105));
         f.Install(Reply("s-1", "Hello."));
@@ -81,7 +81,7 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.Completed);
         shell.Render();
 
-        Assert.Equal(["Run from here"], Actions(shell));
+        Assert.Equal(["Retry"], Actions(shell));
         Assert.Equal(["*Conversation"], ChatActions(shell));
     }
 

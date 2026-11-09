@@ -238,6 +238,18 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Alt_6_opens_the_proposal_page_and_its_tab_counts_the_items()
+    {
+        var shell = WaitingArchitect();
+
+        shell.Press(Key.D6, RawInputModifiers.Alt);
+
+        Assert.True(shell.Window.ViewModel.AgentPanel.IsExtra);
+        Assert.True(shell.Find<Control>("ExtraPage").IsEffectivelyVisible);
+        Assert.Equal(("Proposal", "1"), (shell.Find<PageTab>("PageExtra").Label, shell.Find<PageTab>("PageExtra").Count));
+    }
+
+    [AvaloniaFact]
     public void A_proposal_lists_each_task_by_its_tile_and_title_and_keeps_its_connections_behind_a_disclosure()
     {
         var shell = WaitingArchitect();
