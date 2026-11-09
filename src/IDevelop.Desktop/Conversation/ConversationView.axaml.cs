@@ -39,6 +39,12 @@ public partial class ConversationView : UserControl
     // Within this many pixels of the end, the view counts as at the end and follows new output.
     private const double EndSlack = 24;
 
+    // The space under the last row, the transcript's bottom margin.
+    private const double TranscriptEndGap = 12;
+
+    // How far past the furthest realized row the view moves so that the next row comes in.
+    private const double NextRowStep = 16;
+
     // The composer's hint needs this much room for the composer's tool row.
     private const double HintWidth = 340;
 
@@ -63,6 +69,10 @@ public partial class ConversationView : UserControl
     // The extent where the view last moved above the end to rest on a whole line, and the extent where such a move changed the end.
     private double? _restedAt;
     private double? _restMovedEnd;
+
+    // Whether a jump to the extent's end has been tried since the last row was last realized.
+    private bool _jumpedToEnd;
+    private bool _stepQueued;
 
     public ConversationView()
     {
@@ -125,7 +135,7 @@ public partial class ConversationView : UserControl
             _model.FollowRequested += Follow;
             _anchor = _model.State.Anchor;
             _follow = _anchor is null;
-            (_restedAt, _restMovedEnd) = (null, null);
+            (_restedAt, _restMovedEnd, _jumpedToEnd) = (null, null, false);
         }
     }
 
@@ -202,11 +212,38 @@ public partial class ConversationView : UserControl
 
     private double End => Scroller.Extent.Height - Scroller.Viewport.Height;
 
+    // The list estimates rows it has not realized from those it has, so the extent can flip between two values as the last rows
+    // come and go, and a move to the extent's end would then repeat forever. With the last row realized its own place is the true end.
+    private double RealEnd => LastRowBottom is { } bottom ? bottom + TranscriptEndGap - Scroller.Viewport.Height : End;
+
+    private double? LastRowBottom => _model is { Items.Count: > 0 } model && Transcript.ContainerFromIndex(model.Items.Count - 1) is { } last && Top(last) is { } top
+        ? top + last.Bounds.Height
+        : null;
+
     // The list estimates a row that left the view, and a row the dock holds has no height, so a small move up can change the
     // extent and the end with it. A move to that new end brings the old extent back, and the two would repeat until the layout
     // aborts. An extent where this happened keeps the end itself.
     private void RestAtEnd()
     {
+        // A jump to the extent's end usually realizes the last row. If the estimate moved under the jump, the view walks down from
+        // the furthest row the list has real, and each step brings the next row in.
+        if (LastRowBottom is null && _model is { Items.Count: > 0 })
+        {
+            if (!_jumpedToEnd)
+            {
+                _jumpedToEnd = true;
+                ScrollTo(End);
+            }
+            else if (!_stepQueued)
+            {
+                _stepQueued = true;
+                Dispatcher.UIThread.Post(StepTowardEnd, DispatcherPriority.Background);
+            }
+
+            return;
+        }
+
+        _jumpedToEnd = false;
         var extent = Scroller.Extent.Height;
         if (_restedAt is { } before && Math.Abs(before - extent) >= 0.5)
         {
@@ -214,7 +251,7 @@ public partial class ConversationView : UserControl
             _restedAt = null;
         }
 
-        var end = End;
+        var end = RealEnd;
         var wanted = _restMovedEnd is { } moved && Math.Abs(moved - extent) < 0.5 ? end : OnWholeLine(end);
         if (wanted < end && Math.Abs(Scroller.Offset.Y - wanted) > 0.5)
         {
@@ -222,6 +259,24 @@ public partial class ConversationView : UserControl
         }
 
         ScrollTo(wanted);
+    }
+
+    // Each step is its own turn of the dispatcher, because a layout pass that repeats too often aborts the frame.
+    private void StepTowardEnd()
+    {
+        _stepQueued = false;
+        if (_follow && LastRowBottom is null && Transcript.GetRealizedContainers().MaxBy(Transcript.IndexFromContainer) is { } furthest && Top(furthest) is { } top)
+        {
+            _restoring = true;
+            try
+            {
+                ScrollTo(Math.Max(Scroller.Offset.Y + NextRowStep, top + furthest.Bounds.Height - Scroller.Viewport.Height + NextRowStep));
+            }
+            finally
+            {
+                _restoring = false;
+            }
+        }
     }
 
     // The height at or above y where the view's top edge cuts no line. The space under the last row takes up the difference at the end.
@@ -266,7 +321,7 @@ public partial class ConversationView : UserControl
 
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        var atEnd = Scroller.Offset.Y >= Scroller.Extent.Height - Scroller.Viewport.Height - EndSlack;
+        var atEnd = Scroller.Offset.Y >= RealEnd - EndSlack;
         JumpToLatest.IsVisible = !atEnd && _model is { Items.Count: > 0 };
         var ours = _scrolledTo is { } target && Math.Abs(Scroller.Offset.Y - target) < 1;
         // Only a person's scroll moves the place. The list can stop a jump of ours partway while it realizes rows, and the

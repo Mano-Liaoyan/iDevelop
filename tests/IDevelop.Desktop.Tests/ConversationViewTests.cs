@@ -370,6 +370,26 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_very_tall_row_near_the_end_still_opens_at_the_end_and_settles()
+    {
+        var report = string.Join("\n\n", Enumerable.Range(0, 120).Select(i => $"Paragraph {i} of a report long enough to fill several screens of the transcript column."));
+        _conversation.Add([.. Enumerable.Range(0, 8).Select(i => new ConversationLine.Agent($"Short {i}.")), new ConversationLine.Agent(report), new ConversationLine.Agent("The last words.")]);
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        var scroller = view.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Scroller");
+
+        window.Window.Width = 500;
+        Render();
+        window.Window.Width = 900;
+        Render();
+
+        var lastRow = view.GetVisualDescendants().OfType<ItemsControl>().Single(control => control.Name == "Transcript").ContainerFromIndex(model.Items.Count - 1);
+        Assert.NotNull(lastRow);
+        Assert.True(view.IsFollowing);
+        Assert.True(scroller.Offset.Y >= lastRow.TranslatePoint(default, (Visual)scroller.Content!)!.Value.Y - scroller.Viewport.Height, "The last row shows.");
+    }
+
+    [AvaloniaFact]
     public void A_small_step_down_moves_past_the_line_so_arrows_keep_moving()
     {
         _conversation.Add([.. Enumerable.Range(0, 60).Select(i => new ConversationLine.Agent($"Message {i} with enough words to wrap across the transcript column, and then a few more words so that it runs onto its second line and a third."))]);
