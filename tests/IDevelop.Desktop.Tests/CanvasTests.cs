@@ -176,6 +176,10 @@ public sealed class CanvasTests : IDisposable
     public void Fit_to_screen_stops_at_the_least_zoom_and_keeps_the_selected_task_in_view()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 24000, 16000)));
+        // A fit this far out hides the names, so the workflow opens in Flow, and this test is about Graph's fit.
+        shell.Window.ViewModel.Canvas!.Choose(Desktop.Canvas.MapMode.Graph);
+        shell.Render();
+        shell.AtOrigin();
         var editor = new Rect(shell.Editor.Bounds.Size);
         Assert.False(editor.Intersects(shell.CardRect("Build")));
 
