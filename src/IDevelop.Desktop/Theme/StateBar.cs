@@ -49,16 +49,21 @@ public sealed class StateBar : Control
         var bounds = new Rect(Bounds.Size);
         using (context.PushClip(new RoundedRect(bounds, 3)))
         {
-            context.FillRectangle(Brush("SurfaceMutedBrush"), bounds);
+            Fill(context, "SurfaceMutedBrush", bounds);
             var x = 0.0;
             foreach (var (key, width) in Segments(Counts, bounds.Width))
             {
-                context.FillRectangle(Brush(key), new Rect(x, 0, width, bounds.Height));
+                Fill(context, key, new Rect(x, 0, width, bounds.Height));
                 x += width;
             }
         }
     }
 
-    private IBrush Brush(string key) =>
-        this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush ? brush : Brushes.Transparent;
+    private void Fill(DrawingContext context, string key, Rect rect)
+    {
+        if (this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush)
+        {
+            context.FillRectangle(brush, rect);
+        }
+    }
 }
