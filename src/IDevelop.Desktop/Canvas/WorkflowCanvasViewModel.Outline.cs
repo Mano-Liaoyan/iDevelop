@@ -45,96 +45,64 @@ public sealed partial class WorkflowCanvasViewModel
         return order;
     }
 
-    /// <summary>The group headers of the Nodes section, in its order (ADR 0072).</summary>
-    public IReadOnlyList<NodeGroup> Groups => field ??= [.. Enum.GetValues<NodeGroupKind>().Select(kind => new NodeGroup(kind, OnGroupFolded))];
+    /// <summary>The workflow's depth stages, in order. The Index lists them under the workflow's row, and Flow lays them out in rows.</summary>
+    public ObservableCollection<WorkflowStage> Stages { get; } = [];
 
-    /// <summary>
-    /// The rows of the left tree under an expanded workflow: for each group that holds a node ("Needs you", "Running",
-    /// "Stale", "Not started", "Done"), its header and, unless it is folded, its nodes in reading order. The tree shows the selected
-    /// or open node's row: its group opens and lists all its rows, whatever its size (ADR 0070).
-    /// </summary>
-    public ObservableCollection<object> TreeRows { get; } = [];
-
-    /// <summary>
-    /// The tree's rows in their order. The group of <paramref name="reveal"/> opens. A folded group lists no rows.
-    /// </summary>
-    internal static IReadOnlyList<object> TreeOrder(IReadOnlyList<TaskNodeViewModel> outline, IReadOnlyList<NodeGroup> groups, TaskNodeViewModel? reveal = null)
+    /// <summary>The Index lists the workflow's stages under its row. Opening a workflow expands it, and the window remembers it.</summary>
+    public bool IsExpanded
     {
-        var members = outline.ToLookup(NodeGroup.Of);
-        foreach (var group in groups)
+        get;
+        set
         {
-            group.Count = members[group.Kind].Count();
-        }
-
-        if (reveal is not null)
-        {
-            groups.First(group => group.Kind == NodeGroup.Of(reveal)).Open();
-        }
-
-        var rows = new List<object>(outline.Count + groups.Count);
-        foreach (var group in groups.Where(group => group.Count > 0))
-        {
-            rows.Add(group);
-            if (!group.IsFolded)
+            if (SetProperty(ref field, value))
             {
-                rows.AddRange(members[group.Kind]);
+                OnPropertyChanged(nameof(ExpandLabel));
+                OnPropertyChanged(nameof(ShowsStages));
             }
-
-            group.ListsRows = !group.IsFolded;
-        }
-
-        return rows;
-    }
-
-    /// <summary>The node whose group the tree last opened, and that group, so a group that the person folds stays folded.</summary>
-    private (TaskNodeViewModel Node, NodeGroupKind Group)? _revealed;
-
-    /// <summary>
-    /// Lists the tree's rows again, with a row for <paramref name="keep"/>, which is about to be selected, or else for the selected
-    /// node. The tree opens a node's group once for each selection, and again when the node moves to another group.
-    /// </summary>
-    private void ArrangeTreeRows(TaskNodeViewModel? keep = null)
-    {
-        var shown = keep ?? SelectedNode;
-        var reveal = shown;
-        if (reveal is not null && _revealed == (reveal, NodeGroup.Of(reveal)))
-        {
-            reveal = null;
-        }
-        else if (reveal is not null)
-        {
-            _revealed = (reveal, NodeGroup.Of(reveal));
-        }
-
-        _arrangingTree = true;
-        try
-        {
-            Arrange(TreeRows, TreeOrder(Outline, Groups, reveal));
-        }
-        finally
-        {
-            _arrangingTree = false;
         }
     }
 
-    private bool _arrangingTree;
+    /// <summary>What the row's chevron does now, for a screen reader.</summary>
+    public string ExpandLabel => $"{(IsExpanded ? "Fold" : "Unfold")} {Name}";
 
-    // A group that opens while the tree arranges its rows needs no second pass.
-    private void OnGroupFolded()
+    /// <summary>The Index shows stage rows under the workflow's row.</summary>
+    public bool ShowsStages => IsExpanded && Stages.Count > 0;
+
+    /// <summary>The node's row shows in the Index: its workflow expands and its stage opens.</summary>
+    internal void RevealInIndex(TaskNodeViewModel node)
     {
-        if (!_arrangingTree)
+        IsExpanded = true;
+        Stages.FirstOrDefault(stage => stage.Holds(node))?.Open();
+    }
+
+    private void ArrangeStages()
+    {
+        var stages = FlowLayout.Stages(Workflow);
+        while (Stages.Count > stages.Count)
         {
-            ArrangeTreeRows();
+            Stages.RemoveAt(Stages.Count - 1);
         }
+
+        while (Stages.Count < stages.Count)
+        {
+            Stages.Add(new WorkflowStage(Stages.Count + 1));
+        }
+
+        for (var index = 0; index < stages.Count; index++)
+        {
+            Stages[index].Show([.. stages[index].Select(id => _nodes[id])]);
+        }
+
+        OnPropertyChanged(nameof(ShowsStages));
     }
 
     private void ArrangeOutline()
     {
-        Arrange(Outline, [.. ReadingOrder(Workflow).Select(id => _nodes[id])]);
-        ArrangeTreeRows();
+        Arrange(Outline, [.. ReadingOrder(Workflow).Select(id => _nodes[id])], SelectedNode);
+        ArrangeStages();
     }
 
-    private void Arrange<T>(ObservableCollection<T> rows, IReadOnlyList<T> order)
+    internal static void Arrange<T>(ObservableCollection<T> rows, IReadOnlyList<T> order, TaskNodeViewModel? selected)
         where T : class
     {
         if (rows.SequenceEqual(order))
@@ -144,10 +112,10 @@ public sealed partial class WorkflowCanvasViewModel
 
         // A list forgets its selection when the selected row leaves it, even to come straight back, and tells the canvas.
         // So the selected row stays, and the other rows take their places around it.
-        var stays = SelectedNode is T selected && rows.Contains(selected) && order.Contains(selected) ? selected : null;
-        foreach (var row in rows.Where(row => row != stays).ToList())
+        var stays = selected is T row && rows.Contains(row) && order.Contains(row) ? row : null;
+        foreach (var other in rows.Where(other => other != stays).ToList())
         {
-            rows.Remove(row);
+            rows.Remove(other);
         }
 
         for (var index = 0; index < order.Count; index++)

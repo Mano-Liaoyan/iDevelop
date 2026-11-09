@@ -146,28 +146,6 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>The progress bar shows once any node ran. Before that the strip has only its count.</summary>
     public bool ShowsRunProgress => Counts.HasRun;
 
-    /// <summary>
-    /// One chip for each group of nodes that a workflow row names, in the rollup order: Needs you, Failed, Running, Stale. What waits for the
-    /// person is one group under one word, and its tooltip names the reasons.
-    /// </summary>
-    public IReadOnlyList<StateChip> BarChips
-    {
-        get
-        {
-            var counts = Counts;
-            var reasons = Nodes.Where(node => node.IsWaiting).GroupBy(node => node.WaitReason).OrderBy(group => group.Key).ToList();
-            var tip = string.Join(", ", reasons.Select(group => $"{group.Count()} {NodeStates.Need(group.Key).ToLowerInvariant()}"));
-            return new[]
-                {
-                    StateChip.Of(NodeState.InputRequired, reasons is [var only] ? only.Key : WaitReason.Question, counts.Waiting, StateCounts.NeedYou(counts.Waiting), tip),
-                    StateChip.Of(NodeState.Failed, WaitReason.None, counts.Failed, $"{counts.Failed} failed"),
-                    StateChip.Of(NodeState.Running, WaitReason.None, counts.Running, $"{counts.Running} running"),
-                    StateChip.Of(NodeState.Stale, WaitReason.None, counts.Stale, $"{counts.Stale} stale"),
-                }
-                .OfType<StateChip>().ToList();
-        }
-    }
-
     /// <summary>The tooltip of Run Workflow: what it runs, or why nothing can run.</summary>
     public string RunWorkflowTip => (Nodes.Count, RunWork) switch
     {
@@ -230,7 +208,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         var running = Nodes.Where(node => node.State == NodeState.Running).ToHashSet();
         RunningCount = running.Count;
-        ArrangeTreeRows();
+        ArrangeStages();
         CanMergeIntoBranch = Engine.CanMergeIntoBranch;
         IsRunning = RunningCount > 0;
         OnWaitingChanged();
@@ -239,7 +217,6 @@ public sealed partial class WorkflowCanvasViewModel
         OnPropertyChanged(nameof(StripTip));
         OnPropertyChanged(nameof(RunPills));
         OnPropertyChanged(nameof(ShowsRunProgress));
-        OnPropertyChanged(nameof(BarChips));
         OnPropertyChanged(nameof(RunWork));
         OnPropertyChanged(nameof(CanStartRun));
         OnPropertyChanged(nameof(RunWorkflowTip));

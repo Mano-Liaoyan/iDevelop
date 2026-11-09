@@ -233,9 +233,9 @@ public sealed class AgentPickerTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         var reasoning = shell.Find<ComboBox>("TaskReasoning");
         reasoning.Focus();
-        var build = shell.SidebarRow("Build");
+        var build = shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Title == "Build");
 
-        ControlAutomationPeer.CreatePeerForElement(build).GetProvider<ISelectionItemProvider>()!.Select();
+        shell.Window.ViewModel.Canvas!.SelectedNode = build;
         shell.Render();
 
         Assert.True(reasoning.IsKeyboardFocusWithin);

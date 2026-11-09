@@ -36,10 +36,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = ViewModel;
         PickFolder = PickFolderWithStorageProvider;
-        // A press or the focus in a workflow's task list shows that workflow first, so the list's choice selects a card
-        // on the canvas that shows it.
-        AddHandler(PointerPressedEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Tunnel, handledEventsToo: true);
-        AddHandler(GotFocusEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Bubble, handledEventsToo: true);
         ConversationLinkRouter.SetRouter(this, new ConversationLinkRouter(uri => Launcher.LaunchUriAsync(uri), text => Copy(text)));
         ViewModel.OpenFolder = folder => Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folder));
         ViewModel.OpenFile = file => Launcher.LaunchFileInfoAsync(new FileInfo(file));
@@ -334,7 +330,7 @@ public partial class MainWindow : Window
 
         if (CanvasKeys.Find.Matches(e) || CanvasKeys.FindAlso.Matches(e))
         {
-            Sidebar.FocusFind();
+            OpenFind();
             return true;
         }
 
@@ -494,22 +490,21 @@ public partial class MainWindow : Window
     /// <summary>Opens the Add popover under the Command Bar's button.</summary>
     internal void OpenAddAt(Button button) => CanvasView?.OpenAddInView(button.TranslatePoint(new Point(0, button.Bounds.Height + 4), this) ?? default);
 
+    /// <summary>Opens the node's menu at its Index row.</summary>
+    internal void OpenNodeMenu(Control row) => CanvasView?.OpenNodeMenu(row);
+
+    /// <summary>Opens the Find palette and puts the focus in its field. A Rail's flyout closes first.</summary>
+    internal void OpenFind()
+    {
+        ViewModel.IsIndexFlyoutOpen = false;
+        Palette.Focus(FocusManager?.GetFocusedElement());
+    }
+
     /// <summary>Brings a node's card into view on the canvas, if the canvas does not show it whole.</summary>
     internal void BringIntoViewIfHidden(TaskNodeViewModel node) => CanvasView?.BringIntoViewIfHidden(node);
 
     /// <summary>The control that takes the canvas's keys.</summary>
     internal IInputElement? CanvasFocusTarget => CanvasView?.Editor;
-
-    private void ShowWorkflowOf(object? source)
-    {
-        if ((source as Visual)?.FindAncestorOfType<ListBox>(includeSelf: true) is { DataContext: WorkflowCanvasViewModel canvas } list
-            && list.Classes.Contains("tasks") && canvas != ViewModel.Canvas)
-        {
-            ViewModel.Select(canvas);
-            // The new canvas view lays out now, so a card it brings into view is measured against its real size.
-            UpdateLayout();
-        }
-    }
 
     // Both questions come before either answer acts, and the project's runs stop only once it closes.
     internal void CloseProject(ProjectViewModel project) => UiWork.Start(() => CloseAsked(project), ShowFailure);

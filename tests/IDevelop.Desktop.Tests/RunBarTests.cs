@@ -34,7 +34,6 @@ public sealed class RunBarTests
         Assert.True(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
         Assert.Equal("0/1", shell.Text("RunStatus"));
         Assert.Equal("1 failed", shell.Window.ViewModel.Canvas!.BarSummary);
-        Assert.Equal("1 failed", Assert.Single(shell.Window.ViewModel.Canvas!.BarChips).Label);
         Assert.True(shell.Find<Button>("RunPillFailed").IsEffectivelyVisible);
     }
 

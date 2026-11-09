@@ -189,10 +189,30 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Which page the Agent panel shows.</summary>
     public AgentPanelViewModel AgentPanel { get; } = new();
 
-    /// <summary>The left area's list of nodes that wait, failed, or run, in every open project.</summary>
+    /// <summary>The Index shows its Inbox. Otherwise it shows Projects.</summary>
+    public bool IsInboxView
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(IsProjectsView));
+            }
+        }
+    }
+
+    /// <summary>The Index shows Projects.</summary>
+    public bool IsProjectsView
+    {
+        get => !IsInboxView;
+        set => IsInboxView = !value;
+    }
+
+    /// <summary>The Index's Inbox: every node that waits, failed, or runs, in every open project.</summary>
     public ActivityViewModel Activity { get; }
 
-    /// <summary>The left area's Find box.</summary>
+    /// <summary>The Find palette.</summary>
     public FindViewModel Find { get; }
 
     /// <summary>Lays the window out, so a canvas view that a switch brought in holds its selection before a node is selected
@@ -288,7 +308,10 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public IReadOnlyList<AgentRow> Agents => [.. ClientCatalog.All.Select(id => new AgentRow(id, _clients.Current[id]))];
 
-    /// <summary>"4 ready", "1 needs setup", or "Checking…".</summary>
+    /// <summary>The footer's tooltip: each client and its status, then what a click does.</summary>
+    public string AgentsTip => string.Join("\n", [.. Agents.Select(agent => $"{agent.Name}: {agent.Summary}"), "Click to check again."]);
+
+    /// <summary>"4 agents ready", "1 needs setup", or "Checking…".</summary>
     public string AgentsSummary => RunText.AgentsSummary([.. Agents.Select(agent => agent.Status)]);
 
     /// <summary>The worst of the agents' tones, which the footer's one dot shows.</summary>
@@ -330,6 +353,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public void Select(WorkflowCanvasViewModel canvas)
     {
         CloseIndexFlyout();
+        canvas.IsExpanded = true;
         if (canvas == Canvas)
         {
             return;
@@ -340,7 +364,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Persist();
     }
 
-    // The Projects section opens to the shown workflow's row and shows it, and the Nodes section lists its nodes (ADR 0071).
+    // The Index opens to the shown workflow's row and shows it.
     private void OpenShownNodes(WorkflowCanvasViewModel canvas)
     {
         canvas.Project.IsExpanded = true;
@@ -358,8 +382,8 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         node.Canvas.Project.IsExpanded = true;
-        // Showing a node is a request for its row, so its group opens even when it is large.
-        node.Canvas.Groups.First(group => group.Kind == NodeGroup.Of(node)).Open();
+        // Showing a node is a request for its row, so its stage opens.
+        node.Canvas.RevealInIndex(node);
         node.Canvas.Inspect(node);
         NodeShown?.Invoke(node);
         TreeReveal?.Invoke(node.Canvas, node);
@@ -372,7 +396,6 @@ public sealed class MainWindowViewModel : ObservableObject
         OpenChat(new ConversationTarget(node.Canvas, node.Id));
     }
 
-    /// <summary>Selects the next node that waits or failed, after the selected one, in the Activity list's order.</summary>
     /// <summary>Opens the inspector for what the person asked to see in it.</summary>
     internal void ShowInspector() => ChooseInspector(true);
 
@@ -433,13 +456,21 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Opens the Rail's Index flyout, or closes it when it is open.</summary>
-    internal void ToggleIndexFlyout() => IsIndexFlyoutOpen = !IsIndexFlyoutOpen;
+    /// <summary>The Rail's Projects: the flyout on its Projects view, or closed when that view already shows.</summary>
+    internal void ToggleIndexFlyout() => ToggleFlyout(inbox: false);
 
-    /// <summary>The Rail's Inbox: the flyout, with the list of what needs the person open.</summary>
-    internal void OpenInbox()
+    /// <summary>The Rail's Inbox: the flyout on its Inbox view, or closed when that view already shows.</summary>
+    internal void OpenInbox() => ToggleFlyout(inbox: true);
+
+    private void ToggleFlyout(bool inbox)
     {
-        Activity.IsOpen = true;
+        if (IsIndexFlyoutOpen && IsInboxView == inbox)
+        {
+            IsIndexFlyoutOpen = false;
+            return;
+        }
+
+        IsInboxView = inbox;
         IsIndexFlyoutOpen = true;
     }
 
@@ -501,6 +532,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void Choose(FindResult result)
     {
+        IsInboxView = false;
         if (result.Node is { } node)
         {
             ShowNode(node);
@@ -541,8 +573,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } found)
         {
-            // The open node's row shows in the tree: its group opens and lists all its rows (ADR 0070).
-            target.Canvas.Groups.First(group => group.Kind == NodeGroup.Of(found)).Open();
+            target.Canvas.RevealInIndex(found);
             if (target.Canvas.SelectedNode != found)
             {
                 target.Canvas.Inspect(found);
@@ -709,12 +740,12 @@ public sealed class MainWindowViewModel : ObservableObject
                 }
             }
 
-            Activity.IsOpen = session.ActivityOpen;
             var canvases = Projects.SelectMany(project => project.Workflows).ToList();
             foreach (var canvas in canvases)
             {
                 canvas.RestoreExpandedCards(session.Cards.Where(saved => saved.Workflow.Is(canvas.Project.Folder, canvas.Workflow.Id))
                     .SelectMany(saved => saved.Tasks));
+                canvas.IsExpanded = session.ExpandedWorkflows.Any(saved => saved.Is(canvas.Project.Folder, canvas.Workflow.Id));
             }
 
             foreach (var project in Projects)
@@ -869,6 +900,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         switch (e.PropertyName)
         {
+            case nameof(WorkflowCanvasViewModel.IsExpanded):
             case nameof(WorkflowCanvasViewModel.ExpandedCards):
                 Persist();
                 break;
@@ -931,7 +963,8 @@ public sealed class MainWindowViewModel : ObservableObject
             Cards = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.AnyCardExpanded)
                 .Select(canvas => new WorkflowCards(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ExpandedCards))],
             Folded = [.. Projects.Where(project => !project.IsExpanded).Select(project => project.Folder)],
-            ActivityOpen = Activity.IsOpen,
+            ExpandedWorkflows = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.IsExpanded)
+                .Select(canvas => new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id))],
             Recent = [.. Recent.Select(project => project.Folder).Where(folder => !Projects.Any(open => ProjectFolders.Comparer.Equals(open.Folder, folder)))],
         };
         try
@@ -951,6 +984,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Agents));
         OnPropertyChanged(nameof(AgentsSummary));
+        OnPropertyChanged(nameof(AgentsTip));
         OnPropertyChanged(nameof(AgentsTone));
         OnPropertyChanged(nameof(AgentsNeedingSetup));
         OnPropertyChanged(nameof(HasAgentsNeedingSetup));

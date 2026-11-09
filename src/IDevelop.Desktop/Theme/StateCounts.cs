@@ -1,3 +1,5 @@
+using IDevelop.Desktop.Canvas;
+
 namespace IDevelop.Desktop.Theme;
 
 /// <summary>How many of a workflow's nodes are in each state.</summary>
@@ -7,6 +9,23 @@ namespace IDevelop.Desktop.Theme;
 public readonly record struct StateCounts(int Completed, int Running, int Waiting, int Failed, int Stale, int Total)
 {
     public bool HasRun => Completed + Running + Waiting + Failed + Stale > 0;
+
+    /// <summary>The counts of these nodes.</summary>
+    public static StateCounts Of(IReadOnlyCollection<TaskNodeViewModel> nodes) => new(
+        nodes.Count(node => node.State == NodeState.Completed), nodes.Count(node => node.State == NodeState.Running), nodes.Count(node => node.IsWaiting),
+        nodes.Count(node => node.State == NodeState.Failed), nodes.Count(node => node.State == NodeState.Stale), nodes.Count);
+
+    public static StateCounts operator +(StateCounts a, StateCounts b) => new(
+        a.Completed + b.Completed, a.Running + b.Running, a.Waiting + b.Waiting, a.Failed + b.Failed, a.Stale + b.Stale, a.Total + b.Total);
+
+    /// <summary>The one mark of a group: Needs you, Failed, Running, Stale, then Done when all are done, and otherwise none.</summary>
+    public NodeState? Rollup =>
+        Waiting > 0 ? NodeState.InputRequired
+        : Failed > 0 ? NodeState.Failed
+        : Running > 0 ? NodeState.Running
+        : Stale > 0 ? NodeState.Stale
+        : Total > 0 && Completed == Total ? NodeState.Completed
+        : null;
 
     /// <summary>
     /// "5 of 9 · 1 running · 3 need you · 1 failed · 2 stale", with the counts that are not zero, or "9 nodes" before any node ran,

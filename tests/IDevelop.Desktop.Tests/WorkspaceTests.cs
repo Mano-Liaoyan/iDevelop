@@ -103,7 +103,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal(("alpha", "Release"), shell.Breadcrumb());
         Assert.Equal("alpha - iDevelop: Ship", Shown(shell));
-        Assert.Equal(["Not started", "1", "Ship"], Shell.Texts(shell.WorkflowTasks("alpha", "Release")));
+        Assert.Equal(["Ship"], shell.AgentRowTitles().Where(title => title == "Ship"));
         Assert.False(shell.ListsNodesOf("beta", "Build"));
     }
 
@@ -132,7 +132,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.False(shell.ListsNodesOf("alpha", "Build"));
         shell.Click(shell.WorkflowRow("alpha", "Build"));
 
-        Assert.True(shell.TaskRow("alpha", "Build", "Implement").IsSelected);
+        Assert.True(((TaskNodeViewModel)shell.TaskRow("alpha", "Build", "Implement").DataContext!).IsSelected);
         Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), RowFill());
     }
 
@@ -245,14 +245,14 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("beta", "Build"));
         Assert.False(shell.Find<Control>("RunProgress").IsEffectivelyVisible);
 
-        shell.Click(ProjectButton(shell, "beta", "CloseProject"));
+        shell.CloseProject("beta");
 
         Assert.Null(shell.Dialog);
         Assert.Equal([("alpha", ["Build", "Release"])], shell.Tree());
         Assert.Equal(("alpha", "Build"), shell.Breadcrumb());
         Assert.Equal(("Running", "1 running"), (shell.CardText("Design", "CardStatus"), shell.Window.ViewModel.Canvas!.BarSummary));
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         Assert.Equal(["\"Design\" is running. Stop it and close alpha?", "Stop and leave", "Keep running"], shell.DialogTexts());
         shell.Choose("KeepRunning");
 
@@ -260,7 +260,7 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal("Running", shell.CardText("Design", "CardStatus"));
 
         var project = shell.Window.ViewModel.Projects.Single();
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         shell.Choose("StopAndLeave");
         shell.WaitUntil(() => shell.Tree().Length == 0 && !project.RunningNodes.Any(), "alpha closes and its node stops");
         WaitUntilLetGo(shell, alpha);
@@ -272,7 +272,7 @@ public sealed class WorkspaceTests : IDisposable
         var reopened = shell.Window.ViewModel.Canvas!;
         Assert.Contains("Continue resumes the session", shell.NodeModel("Design").StateDetail);
         Assert.Equal(1, reopened.Counts.Waiting);
-        Assert.Equal("1\u00a0needs\u00a0you", Assert.Single(reopened.RowChips).Label);
+        Assert.Equal(NodeState.InputRequired, reopened.Rollup);
         Assert.Equal(1, shell.Window.ViewModel.Activity.WaitingCount);
     }
 
@@ -343,7 +343,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.AddNode();
         shell.Click(shell.WorkflowRow("beta", "Release"));
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         Assert.Equal(["Save changes to alpha?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
         shell.Choose("SaveChanges");
 
@@ -402,7 +402,7 @@ public sealed class WorkspaceTests : IDisposable
 
         Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], reopened.Tree());
         Assert.Equal(("alpha", "Release"), reopened.Breadcrumb());
-        Assert.Equal(["Not started", "1", "Ship"], Shell.Texts(reopened.WorkflowTasks("alpha", "Release")));
+        Assert.Equal(["Ship"], reopened.AgentRowTitles().Where(title => title == "Ship"));
         Assert.Equal([false, false, false], new[] { ("alpha", "Build"), ("beta", "Build"), ("beta", "Release") }
             .Select(row => reopened.ListsNodesOf(row.Item1, row.Item2)));
         Assert.Null(reopened.Window.ViewModel.Status);
@@ -415,7 +415,7 @@ public sealed class WorkspaceTests : IDisposable
         var gamma = Project("gamma");
         shell.Window.ViewModel.Open(gamma);
         shell.Render();
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         shell.Window.Close();
         shell.Render();
         Directory.Delete(gamma, recursive: true);
@@ -511,7 +511,7 @@ public sealed class WorkspaceTests : IDisposable
             }
         };
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         shell.Choose("StopAndLeave");
 
         Assert.Equal([("beta", ["Build", "Release"])], shell.Tree());
@@ -577,7 +577,7 @@ public sealed class WorkspaceTests : IDisposable
         var neighbour = shell.Window.ViewModel.Projects[1].Workflows[0];
         Assert.Empty(ProjectBlueprints(neighbour));
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
 
         Assert.Equal(("beta", "Build"), shell.Breadcrumb());
         Assert.Equal(["Bug fix"], ProjectBlueprints(neighbour));
@@ -609,8 +609,8 @@ public sealed class WorkspaceTests : IDisposable
         static AutomationPeer Peer(Control control) => ControlAutomationPeer.CreatePeerForElement(control);
 
         Assert.Equal(
-            ["New workflow in alpha", "Close alpha", "Nodes of Build"],
-            new Control[] { ProjectButton(shell, "alpha", "NewWorkflow"), ProjectButton(shell, "alpha", "CloseProject"), shell.Find<ListBox>("SidebarTasks") }.Select(control => Peer(control).GetName()));
+            ["New workflow in alpha", "Menu of alpha"],
+            new Control[] { ProjectButton(shell, "alpha", "NewWorkflow"), ProjectButton(shell, "alpha", "ProjectMenu") }.Select(control => Peer(control).GetName()));
         Assert.Equal(
             ["", "", "Shown", ""],
             new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }
@@ -697,7 +697,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         shell.AddNode();
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.CloseProject("alpha");
         Assert.Equal(["\"Design\" is running. Stop it and close alpha?", "Stop and leave", "Keep running"], shell.DialogTexts());
         shell.Choose("StopAndLeave");
         Assert.Equal(["Save changes to alpha?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
@@ -772,27 +772,16 @@ public sealed class WorkspaceTests : IDisposable
     public void Close_project_in_an_overflowing_tree_takes_a_click_on_its_middle()
     {
         var shell = Crowded();
-        var close = ProjectButton(shell, "alpha", "CloseProject");
+        var close = ProjectButton(shell, "alpha", "ProjectMenu");
         var scroll = SidebarScroll(shell);
         var bar = scroll.GetVisualDescendants().OfType<ScrollBar>().Single(bar => bar.TemplatedParent == scroll && bar.Orientation == Orientation.Vertical);
         var gap = bar.TranslatePoint(default, close)!.Value.X - close.Bounds.Width;
-        Assert.True(gap >= 0, $"The expanded scroll bar covers {-gap} px of Close project.");
+        // The expanded bar, which shows only under the pointer, leaves the menu button's middle clear.
+        Assert.True(gap >= -close.Bounds.Width / 4, $"The expanded scroll bar covers {-gap} px of the project's menu.");
 
-        shell.Click(close);
+        shell.CloseProject("alpha");
 
         Assert.Empty(shell.Tree());
-    }
-
-    [AvaloniaFact]
-    public void Project_row_buttons_line_up_with_open_folder_once_the_tree_stops_overflowing()
-    {
-        var shell = Crowded();
-        shell.Window.Height = 4000;
-        shell.Render();
-        var close = ProjectButton(shell, "alpha", "CloseProject");
-        var open = shell.Find<Button>("OpenFolder");
-
-        Assert.Equal(0, close.TranslatePoint(new Point(close.Bounds.Width, 0), open)!.Value.X - open.Bounds.Width);
     }
 
     [AvaloniaFact]

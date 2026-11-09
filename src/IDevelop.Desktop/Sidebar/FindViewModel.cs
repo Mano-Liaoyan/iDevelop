@@ -31,7 +31,7 @@ public sealed record FindResult(WorkflowCanvasViewModel Canvas, TaskNodeViewMode
     public NodeKind Kind => Node?.Kind ?? default;
 }
 
-/// <summary>The left area's Find box: a query over the node titles, workflow names, and project names of every open project.</summary>
+/// <summary>The Find palette: a query over the node titles, workflow names, and project names of every open project.</summary>
 public sealed class FindViewModel : ObservableObject
 {
     private readonly Func<IReadOnlyList<ProjectViewModel>> _projects;
@@ -61,7 +61,14 @@ public sealed class FindViewModel : ObservableObject
         }
     } = "";
 
-    /// <summary>A query replaces the Activity list and the project tree with the results.</summary>
+    /// <summary>The palette shows over the window.</summary>
+    public bool IsOpen
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
+    /// <summary>The field holds a query.</summary>
     public bool IsActive => Query.Trim().Length > 0;
 
     public bool HasNoMatch => IsActive && Results.Count == 0;
@@ -111,12 +118,19 @@ public sealed class FindViewModel : ObservableObject
         }
 
         var result = Results[Index];
-        Query = "";
+        Close();
         _choose(result);
         return result;
     }
 
-    internal void Clear() => Query = "";
+    internal void Open() => IsOpen = true;
+
+    /// <summary>Clears the query and closes the palette.</summary>
+    internal void Close()
+    {
+        Query = "";
+        IsOpen = false;
+    }
 
     private void Search()
     {

@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:IDevelop.Desktop"
+             xmlns:sidebar="using:IDevelop.Desktop.Sidebar"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Sidebar.FindPalette"
+             x:DataType="local:MainWindowViewModel"
+             IsVisible="{Binding Find.IsOpen}">
+  <!-- A popover over the whole window: a 40 px field, then the count and the rows. A press beside it closes it. -->
+  <Panel>
+    <Border Background="Transparent" PointerPressed="OnScrimPressed" />
+    <Border Classes="findPalette" Width="560" MaxHeight="420" Margin="0,56,0,0" HorizontalAlignment="Center" VerticalAlignment="Top"
+            AutomationProperties.AutomationId="FindPalette">
+      <DockPanel>
+        <TextBox x:Name="FindBox" DockPanel.Dock="Top" Classes="search palette" Height="40"
+                 Text="{Binding Find.Query, Mode=TwoWay}"
+                 Watermark="Find an agent or a workflow"
+                 ToolTip.Tip="Finds agents and workflows in every open project"
+                 AutomationProperties.AutomationId="FindBox"
+                 AutomationProperties.Name="Find an agent or a workflow" />
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,8,12,4" IsVisible="{Binding Find.HasResults}">
+          <TextBlock Classes="caption" Text="{Binding Find.ResultsLabel}" AutomationProperties.AutomationId="FindCount" />
+          <TextBlock Grid.Column="1" Classes="caption" Text="Enter opens. Esc closes." AutomationProperties.AutomationId="FindKeys" />
+        </Grid>
+        <TextBlock DockPanel.Dock="Top" Classes="caption" Text="No agent or workflow matches" Margin="12,10" IsVisible="{Binding Find.HasNoMatch}"
+                   AutomationProperties.AutomationId="FindNoMatch" />
+        <ListBox x:Name="FindResults" Classes="results" Margin="4,0,4,4"
+                 IsVisible="{Binding Find.HasResults}"
+                 ItemsSource="{Binding Find.Results}"
+                 SelectedIndex="{Binding Find.Index, Mode=TwoWay}"
+                 Tapped="OnResultTapped"
+                 Focusable="False"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.AutomationId="FindResults"
+                 AutomationProperties.Name="Find results">
+          <ListBox.ItemTemplate>
+            <DataTemplate DataType="sidebar:FindResult">
+              <Grid ColumnDefinitions="14,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                <Panel Margin="0,2,0,0" VerticalAlignment="Top">
+                  <PathIcon Theme="{StaticResource Glyph}" Width="14" Height="14" Data="{StaticResource IconFlowchart}" IsVisible="{Binding IsWorkflow}"
+                            Foreground="{DynamicResource TextMutedBrush}" />
+                  <theme:KindTile Kind="{Binding Kind}" TileSize="14" IsVisible="{Binding IsNode}" />
+                </Panel>
+                <TextBlock Grid.Column="1" Classes="rowName" AutomationProperties.Name="{Binding Name}">
+                  <Run Text="{Binding BeforeMatch}" /><Run Classes="match" Text="{Binding Match}" /><Run Text="{Binding AfterMatch}" />
+                </TextBlock>
+                <theme:StateMark Grid.Column="2" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                                  IsVisible="{Binding IsNode}"
+                                  State="{Binding Node.State, FallbackValue={x:Null}}" Why="{Binding Node.WaitReason, FallbackValue={x:Null}}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Classes="caption" Text="{Binding Place}" TextWrapping="Wrap" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+  </Panel>
+</UserControl>

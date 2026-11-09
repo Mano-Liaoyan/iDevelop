@@ -121,13 +121,8 @@ public sealed class CanvasChromeTests : IDisposable
         f.Install(FakeRule.On().WaitForFile(f.Gate("runs")));
         var shell = f.Open();
         var canvas = shell.Window.ViewModel.Canvas!;
-        Assert.Equal(["4 need you", "1 failed"], canvas.BarChips.Select(chip => chip.Label));
-        // Every group keeps its words in the bar, and the waiting chip's tooltip names its reasons.
-        Assert.Equal("1 question, 1 reply, 2 interrupted", canvas.BarChips[0].Tip);
-        // The row's status line holds the most urgent group's badge and every group. Its tooltip holds every group.
-        var row = Assert.Single(canvas.RowChips);
-        Assert.Equal((NodeState.InputRequired, 4, "4 need you \u00b7 1 failed"), (row.State, row.Count, row.Label.Replace('\u00a0', ' ')));
-        Assert.Equal("1 question, 1 reply, 2 interrupted\n1 failed", row.Tip);
+        Assert.Equal(NodeState.InputRequired, canvas.Rollup);
+        Assert.Equal(new Theme.StateCounts(0, 0, 4, 1, 0, 6), canvas.Counts);
 
         foreach (var width in new[] { 900.0, 1000, 1180, 1280, 1700, 2560 })
         {

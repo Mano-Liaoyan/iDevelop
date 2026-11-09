@@ -47,6 +47,16 @@ public sealed class ProjectViewModel : ObservableObject
     /// <summary>The window shows one of the project's workflows.</summary>
     public bool IsCurrent => Workflows.Any(canvas => canvas.IsSelected);
 
+    /// <summary>"repo/harbor-api": the folder's last two segments. The Index cuts it at the start, and the row's tooltip holds the whole path.</summary>
+    public string FolderTail
+    {
+        get
+        {
+            var parts = Folder.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return string.Join('/', parts[Math.Max(0, parts.Length - 2)..]);
+        }
+    }
+
     /// <summary>The first letter of the project's name, which its tile in the left area shows.</summary>
     public string Initial => Name.Length > 0 ? char.ToUpperInvariant(Name[0]).ToString() : "";
 
@@ -67,6 +77,17 @@ public sealed class ProjectViewModel : ObservableObject
 
     /// <summary>What the row's toggle does now, for a screen reader.</summary>
     public string ExpandLabel => $"{(IsExpanded ? "Fold" : "Unfold")} {Name}";
+
+    /// <summary>How many of the project's nodes are in each state.</summary>
+    public Theme.StateCounts Counts => Workflows.Aggregate(default(Theme.StateCounts), (sum, canvas) => sum + canvas.Counts);
+
+    /// <summary>The project's one State Mark, or null when no mark shows.</summary>
+    public NodeState? Rollup => Counts.Rollup;
+
+    /// <summary>The reason inside a Needs you rollup mark.</summary>
+    public WaitReason RollupWhy => NodeStates.CommonReason(Workflows.SelectMany(canvas => canvas.Nodes));
+
+    public bool HasRollup => Rollup is not null;
 
     /// <summary>A node of the project runs.</summary>
     public bool IsRunning => Workflows.Any(canvas => canvas.IsRunning);
@@ -143,6 +164,10 @@ public sealed class ProjectViewModel : ObservableObject
                 OnPropertyChanged(nameof(RunningCount));
                 OnPropertyChanged(nameof(HasRunningNodes));
                 OnPropertyChanged(nameof(RunningLabel));
+                OnPropertyChanged(nameof(Counts));
+                OnPropertyChanged(nameof(Rollup));
+                OnPropertyChanged(nameof(RollupWhy));
+                OnPropertyChanged(nameof(HasRollup));
             }
         };
         Workflows.Add(canvas);

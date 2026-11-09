@@ -101,6 +101,9 @@
       </Border>
     </Grid>
 
+    <!-- Find floats over the whole window. A click outside it closes it. -->
+    <sidebar:FindPalette x:Name="Palette" Grid.RowSpan="2" ZIndex="2" />
+
     <!-- A modal sheet covers the whole window, so the Command Bar and the Index take no click while it is open.
          It sits above the splitters, whose ZIndex 1 would otherwise draw them over the scrim and let them take a drag. -->
     <ContentControl Grid.RowSpan="2" ZIndex="3" Content="{Binding Canvas.Sheet, FallbackValue={x:Null}}">

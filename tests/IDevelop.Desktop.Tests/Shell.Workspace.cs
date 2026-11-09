@@ -18,18 +18,9 @@ internal sealed partial class Shell
 
     public Button WorkflowRow(string project, string workflow) => WorkflowItem(project, workflow).Row;
 
-    /// <summary>The Nodes section's list, which lists the nodes of the shown workflow (ADR 0071).</summary>
-    public ListBox WorkflowTasks(string project, string workflow)
-    {
-        var list = Find<ListBox>("SidebarTasks");
-        return list.DataContext is Canvas.WorkflowCanvasViewModel canvas && canvas.Project.Name == project && canvas.Name == workflow
-            ? list
-            : throw new InvalidOperationException($"The Nodes section does not list {project} / {workflow}.");
-    }
-
-    /// <summary>The Nodes section lists the workflow's nodes.</summary>
+    /// <summary>The Index lists the shown workflow's stages under its row.</summary>
     public bool ListsNodesOf(string project, string workflow) =>
-        Find<ListBox>("SidebarTasks") is { IsEffectivelyVisible: true, DataContext: Canvas.WorkflowCanvasViewModel canvas } && canvas.Project.Name == project && canvas.Name == workflow;
+        Window.ViewModel.Canvas is { IsExpanded: true } canvas && canvas.Project.Name == project && canvas.Name == workflow;
 
     public string WorkflowText(string project, string workflow, string automationId) =>
         ById<TextBlock>(WorkflowItem(project, workflow).Item, automationId).Single().Text ?? "";
@@ -37,10 +28,10 @@ internal sealed partial class Shell
     public bool WorkflowShows(string project, string workflow, string automationId) =>
         ById<Control>(WorkflowItem(project, workflow).Item, automationId).Single().IsEffectivelyVisible;
 
-    /// <summary>Lays out the Nodes section, which lists the shown workflow's nodes.</summary>
+    /// <summary>Lays out the Index, which lists the shown workflow's agents.</summary>
     public void ShowTasks() => Render();
 
-    /// <summary>Shows the workflow, so the Nodes section lists its nodes.</summary>
+    /// <summary>Shows the workflow, so the Index lists its agents.</summary>
     public void OpenNodes(string project, string workflow)
     {
         if (!ListsNodesOf(project, workflow))
@@ -58,21 +49,7 @@ internal sealed partial class Shell
         Render();
     }
 
-    /// <summary>Opens the footer's flyout, once, and returns what it shows.</summary>
-    public Control AgentsPanel()
-    {
-        var status = Find<Button>("AgentsStatus");
-        var flyout = (Flyout)status.Flyout!;
-        if (!flyout.IsOpen)
-        {
-            flyout.ShowAt(status);
-            Render();
-        }
-
-        return (Control)flyout.Content!;
-    }
-
-    /// <summary>Runs Check Agents Again, the footer flyout's command, with the flyout closed.</summary>
+    /// <summary>Runs Check Agents Again, the footer's command.</summary>
     public void RefreshAgents() => Window.ViewModel.RefreshAgentsCommand.Execute(null);
 
     /// <summary>No check of the agents runs now.</summary>
@@ -87,8 +64,31 @@ internal sealed partial class Shell
     /// <summary>The project, then the workflow, as the breadcrumb names them.</summary>
     public (string, string) Breadcrumb() => (Find<TextBlock>("BreadcrumbProject").Text ?? "", Find<TextBlock>("BreadcrumbWorkflow").Text ?? "");
 
-    public ListBoxItem TaskRow(string project, string workflow, string title) =>
-        WorkflowTasks(project, workflow).GetVisualDescendants().OfType<ListBoxItem>().Single(row => row.DataContext is TaskNodeViewModel node && node.Title == title);
+    public Button TaskRow(string project, string workflow, string title) =>
+        Window.GetVisualDescendants().OfType<Button>().Single(row => row.Classes.Contains("agent") && row.DataContext is TaskNodeViewModel node
+            && node.Title == title && node.Canvas.Name == workflow && node.Canvas.Project.Name == project);
+
+    /// <summary>The titles of the agent rows the Index shows, from top to bottom.</summary>
+    public string[] AgentRowTitles() =>
+        [.. Window.GetVisualDescendants().OfType<Button>().Where(row => row.Classes.Contains("agent") && row.IsEffectivelyVisible).Select(row => ((TaskNodeViewModel)row.DataContext!).Title)];
+
+    /// <summary>Closes a project through its row's menu, as a person does.</summary>
+    public void CloseProject(string project) => ChooseInMenu(ById<Button>(ProjectItem(project), "ProjectMenu").Single(), "CloseProject");
+
+    /// <summary>Closes the window's one open project through its row's menu.</summary>
+    public void CloseOnlyProject() => CloseProject(Name(ProjectItems().Single()));
+
+    /// <summary>Opens the Index's + menu and chooses its Open folder.</summary>
+    public void OpenFolderFromIndex() => ChooseInMenu(Find<Button>("IndexAdd"), "OpenFolder");
+
+    private void ChooseInMenu(Button menu, string item)
+    {
+        menu.Flyout!.ShowAt(menu);
+        Render();
+        ById<MenuItem>(Window, item).Single().RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.MenuItem.ClickEvent));
+        menu.Flyout?.Hide();
+        Render();
+    }
 
     private IEnumerable<Control> ProjectItems() => Find<ItemsControl>("Projects").GetRealizedContainers();
 

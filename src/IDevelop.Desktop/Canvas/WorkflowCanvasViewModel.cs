@@ -90,21 +90,14 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         get;
         set
         {
-            // The tree's list needs the node's row before it takes the selection. A node in a large folded group has no row,
-            // and the list then shows no selection.
-            if (value is not null && !TreeRows.Contains(value))
-            {
-                ArrangeTreeRows(value);
-            }
-
             if (SetProperty(ref field, value))
             {
                 if (value is not null)
                 {
                     SelectedConnections.Clear();
+                    RevealInIndex(value);
                 }
 
-                ArrangeTreeRows();
                 OnPropertyChanged(nameof(Inspected));
             }
         }
@@ -513,6 +506,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (!ReferenceEquals(previous?.Name, current.Name))
         {
             OnPropertyChanged(nameof(Name));
+            OnPropertyChanged(nameof(ExpandLabel));
         }
 
         OnPropertyChanged(nameof(HasUnsavedChanges));

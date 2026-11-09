@@ -55,6 +55,10 @@ public static class NodeStates
         : Word(Of(state));
 
     /// <summary>What a waiting node needs, in the one word that a zoomed out card has room for.</summary>
+    /// <summary>The reason a rollup mark shows: the one reason every waiting node shares, or a question for several reasons.</summary>
+    public static WaitReason CommonReason(IEnumerable<TaskNodeViewModel> nodes) =>
+        nodes.Where(node => node.IsWaiting).Select(node => node.WaitReason).Distinct().ToList() is [var only] ? only : WaitReason.Question;
+
     public static string Need(WaitReason why) => why switch
     {
         WaitReason.Reply => "Reply",

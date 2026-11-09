@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:theme="using:IDevelop.Desktop.Theme">
 
   <!-- The app's one design language. Type is the ramp below. Spacing sits on a 4 px grid, with 2 px only
        between rows. Heights: 20 chip, 24 pill and small glyph button, 28 control and row, 32 primary, 40 bar, 44 two-line
@@ -15,7 +16,7 @@
     </Setter>
   </Style>
   <!-- A row in a scrolling list would lose an outer ring to the list's clip, so its ring sits 1 px inside its edge. -->
-  <Style Selector="Button.nav, Button.activity, ToggleButton.projectRow, ListBox.tasks ListBoxItem">
+  <Style Selector="Button.nav, Button.activity, ToggleButton.projectRow">
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
         <Border Margin="1" BorderThickness="2" CornerRadius="5" BorderBrush="{DynamicResource AccentStrokeBrush}" />
@@ -361,42 +362,13 @@
     <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
   </Style>
 
-  <Style Selector="ListBox.tasks, ListBox.results">
+  <Style Selector="ListBox.results">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
   </Style>
   <!-- A node's row is flat and has the workflow row's 26 px and type (ADR 0072). Hover and selection are its only fills, so state color stays the loudest
        thing in the list. -->
-  <Style Selector="ListBox.tasks ListBoxItem">
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="8,5,8,5" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
-  </Style>
-  <Style Selector="ListBox.tasks ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.tasks ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-  </Style>
-  <Style Selector="ListBox.tasks ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-  </Style>
-  <Style Selector="ListBox.tasks ListBoxItem:selected TextBlock.rowName">
-    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-  </Style>
-  <!-- A group header in a workflow's node list: a quiet chevron, the group's name, and its count (ADR 0064). -->
-  <!-- A group header stands one level before its node rows: a node's tile starts under the group's name, so the levels read. -->
-  <Style Selector="ListBox.tasks ListBoxItem.groupRow">
-    <Setter Property="Padding" Value="8,6,8,6" />
-  </Style>
-  <Style Selector="ListBox.tasks ListBoxItem:not(.groupRow)">
-    <Setter Property="Padding" Value="26,5,8,5" />
-  </Style>
   <Style Selector="PathIcon.groupChevron">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
@@ -406,27 +378,39 @@
   <Style Selector="PathIcon.groupChevron.folded">
     <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
   </Style>
-  <!-- A group is one level under a section, whose label keeps the semibold. -->
-  <Style Selector="TextBlock.groupName">
-    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
-    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
-    <Setter Property="FontWeight" Value="Normal" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-  </Style>
   <!-- A node's name shows in full and wraps, selected or not (issue 108). -->
   <Style Selector="TextBlock.nodeName">
     <Setter Property="MaxLines" Value="0" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-  <!-- Find's list takes the panel under its box, so it cuts through no row. -->
+  <!-- Find's palette floats over the window. -->
   <Style Selector="Border.findPalette">
-    <Setter Property="Padding" Value="4" />
-    <Setter Property="Background" Value="{DynamicResource AppSidebarBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource PopoverShadow}" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <!-- The field is the palette's head: no box of its own, and a hairline under it. The palette itself shows where the keys are. -->
+  <Style Selector="TextBox.palette">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="8,0,12,0" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+  <Style Selector="TextBox.palette:pointerover /template/ Border#PART_BorderElement, TextBox.palette:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
   </Style>
   <!-- Find's rows have two lines. The one in the box's choice takes the row selection fill. -->
   <Style Selector="ListBox.results ListBoxItem">
-    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="MinHeight" Value="36" />
     <Setter Property="Padding" Value="8,4" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Background" Value="Transparent" />
@@ -436,7 +420,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
 
-  <!-- A name's type. A row of Activity cuts its name to one line, and the row's tooltip holds all of it. A tree row shows its whole name. -->
+  <!-- A name's type. A row of the Index shows its whole name. -->
   <Style Selector="TextBlock.rowName">
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
@@ -444,13 +428,6 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <!-- A workflow is the tree's middle level: plain weight under its semibold project, and strong only while it is shown. -->
-  <Style Selector="TextBlock.rowName.workflowName">
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  </Style>
-  <Style Selector="TextBlock.rowName.workflowName.shown">
-    <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-  </Style>
   <Style Selector="TextBlock.rowName.strong">
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
@@ -462,16 +439,19 @@
     <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
   </Style>
 
-  <!-- A project's row, the tree's top level: 26 px, with a semibold name. Its chevron folds the project. -->
+  <!-- A project's row: 40 px, two lines, the tree's top level. A click folds the project. -->
   <Style Selector="ToggleButton.projectRow">
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="4,4,4,4" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBlock.projectName">
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="ToggleButton.projectRow /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.projectRow:checked /template/ ContentPresenter#PART_ContentPresenter">
@@ -480,50 +460,26 @@
   <Style Selector="ToggleButton.projectRow:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.projectRow:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.projectRow:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter, Panel.projectRow:pointerover ToggleButton.projectRow /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
-  <Style Selector="ToggleButton.projectRow PathIcon:not(.markGlyph)">
-    <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
-  </Style>
-  <Style Selector="ToggleButton.projectRow:checked PathIcon:not(.markGlyph)">
-    <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
-  </Style>
-  <Style Selector="StackPanel.counts, StackPanel.count, StackPanel.rowActions">
-    <Setter Property="Orientation" Value="Horizontal" />
-  </Style>
-  <Style Selector="StackPanel.counts">
-    <Setter Property="Spacing" Value="8" />
-  </Style>
-  <Style Selector="StackPanel.counts.tight">
-    <Setter Property="Spacing" Value="6" />
-  </Style>
-  <Style Selector="StackPanel.counts.tight StackPanel.count">
-    <Setter Property="Spacing" Value="2" />
-  </Style>
-  <Style Selector="StackPanel.count">
-    <Setter Property="Spacing" Value="4" />
-  </Style>
-  <Style Selector="StackPanel.count.tight">
-    <Setter Property="Spacing" Value="2" />
-  </Style>
-  <Style Selector="StackPanel.count > PathIcon">
-    <Setter Property="VerticalAlignment" Value="Center" />
-  </Style>
-  <!-- A row's actions show on hover or keyboard focus only, over the row's end, in the row's hover fill. They stay in the
-       Tab order, so a keyboard reaches them. -->
+  <!-- On hover or focus a project's mark gives way to its buttons, at the same right edge. -->
   <Style Selector="StackPanel.rowActions">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="2" />
     <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Margin" Value="0,2,8,0" />
+    <Setter Property="Margin" Value="0,8,4,0" />
     <Setter Property="Opacity" Value="0" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
-  <Style Selector="Panel.projectRow:pointerover StackPanel.rowActions, StackPanel.rowActions:focus-within">
+  <Style Selector="Panel.projectRow:pointerover theme|StateMark.projectMark, Panel.projectRow:focus-within theme|StateMark.projectMark">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="Panel.projectRow:pointerover StackPanel.rowActions, StackPanel.rowActions:focus-within, Panel.projectRow:focus-within StackPanel.rowActions">
     <Setter Property="Opacity" Value="1" />
   </Style>
 
   <!-- A project's letter tile. The project on show takes the accent's tint, so the list marks it. -->
   <Style Selector="Border.projectTile">
-    <Setter Property="Width" Value="16" />
-    <Setter Property="Height" Value="16" />
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
     <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
@@ -537,79 +493,16 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="Border.treeHead">
-    <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Background" Value="{DynamicResource AppSidebarBrush}" />
-  </Style>
-  <Style Selector="Border.treeCover">
-    <Setter Property="IsHitTestVisible" Value="False" />
-    <Setter Property="Background" Value="{DynamicResource AppSidebarBrush}" />
-  </Style>
-  <Style Selector="Button.stickyRow">
-    <Setter Property="HorizontalAlignment" Value="Stretch" />
-    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
-    <Setter Property="Height" Value="28" />
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="16,0" />
-    <Setter Property="CornerRadius" Value="0" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Background" Value="Transparent" />
-  </Style>
-  <Style Selector="Button.stickyRow.projectHead">
-    <Setter Property="Padding" Value="34,0,16,0" />
-  </Style>
-  <!-- The rule over the Nodes section, with its heading. It keeps the panel's color, so the two sections read as one panel (ADR 0071). -->
-  <Style Selector="Border.sectionRule">
-    <Setter Property="Height" Value="36" />
-    <Setter Property="Margin" Value="0,4,0,0" />
-    <Setter Property="Padding" Value="0,4,0,0" />
-    <Setter Property="BorderThickness" Value="0,1,0,0" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-  </Style>
-  <!-- A section heading that folds its list: its label starts where the other section labels start, and its chevron ends the row where their actions end. -->
-  <Style Selector="ToggleButton.sectionFold">
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Height" Value="NaN" />
-    <Setter Property="Padding" Value="8,4" />
-    <Setter Property="HorizontalAlignment" Value="Stretch" />
-    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector="ToggleButton.sectionFold /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.sectionFold:checked /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector="ToggleButton.sectionFold:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.sectionFold:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
-  </Style>
-  <Style Selector="ToggleButton.sectionFold PathIcon:not(.markGlyph)">
-    <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
-  </Style>
-  <Style Selector="ToggleButton.sectionFold:checked PathIcon:not(.markGlyph)">
-    <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
-  </Style>
-  <Style Selector="TextBlock.caption.reason.state-failed">
-    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
-  </Style>
-  <Style Selector="TextBlock.caption.reason.state-inputrequired">
-    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
-  </Style>
   <Style Selector="Run.match">
-    <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
-  <!-- A row of the Activity list has one line. A workflow's row keeps its first line clear of its chevron, which draws over the
-       row's left end. -->
+  <!-- An Inbox row: two lines, the state and the full name, and under it why and where. -->
   <Style Selector="Button.activity">
     <Setter Property="Height" Value="NaN" />
     <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="Padding" Value="8,5,6,5" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
@@ -620,21 +513,89 @@
   <Style Selector="Button.activity:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.activity:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
   </Style>
+
+  <!-- A workflow's row: 30 px and more when its name wraps. Its left end holds the 14 px slot that the mark and the chevron share. -->
   <Style Selector="Button.nav.workflow">
     <Setter Property="Height" Value="NaN" />
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="48,5,8,5" />
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="30,6,4,6" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="FontWeight" Value="Normal" />
   </Style>
-  <!-- A workflow row's hover is fainter than the shown workflow's fill, so a hovered row does not read as the shown one. -->
-  <Style Selector="Button.nav.workflow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  <Style Selector="Button.nav.workflow TextBlock.workflowName">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.nav.workflow TextBlock.workflowName.shown">
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="Button.nav.workflow.selected /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <!-- The shown workflow is the parent of the selected node, so its row takes a neutral fill, and only the node's row takes the accent fill.
-         The fill is clearly stronger than the hover fill, so that the two states differ by more than the text's weight. -->
+    <!-- Neutral means "where I am", and only a selected agent takes the accent fill. -->
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="theme|StateMark.rowSlot">
+    <Setter Property="ZIndex" Value="1" />
+  </Style>
+  <Style Selector="Panel.workflowRow:pointerover theme|StateMark.rowSlot, Panel.workflowRow:focus-within theme|StateMark.rowSlot">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <!-- The chevron shows on hover, on focus, or while the workflow is expanded. A row with no mark always shows it. -->
+  <Style Selector="ToggleButton.chevron.rowSlot">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="ZIndex" Value="2" />
+  </Style>
+  <Style Selector="ToggleButton.chevron.rowSlot:checked, ToggleButton.chevron.rowSlot.noMark, Panel.workflowRow:pointerover ToggleButton.chevron.rowSlot, Panel.workflowRow:focus-within ToggleButton.chevron.rowSlot">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- A stage: 22 px, a Caption heading with its count, and a chevron at the row's right edge. -->
+  <Style Selector="Button.nav.stage">
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="10,0,4,0" />
+    <Setter Property="FontWeight" Value="Normal" />
+  </Style>
+  <Style Selector="TextBlock.stageName">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <!-- An agent: 28 px and more when its name wraps. A selected agent takes the blue fill. -->
+  <Style Selector="Button.nav.agent">
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="10,5,4,5" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+    <Setter Property="FontWeight" Value="Normal" />
+  </Style>
+  <Style Selector="Button.nav.agent TextBlock.nodeName">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.nav.agent.selected /template/ ContentPresenter#PART_ContentPresenter, Button.nav.agent.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.nav.agent.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
+  </Style>
+  <Style Selector="Button.nav.agent.selected TextBlock.nodeName">
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Button.nav.newWorkflow">
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="7,0,4,0" />
+  </Style>
+  <!-- The guide of the levels under a workflow, under the workflow's slot. -->
+  <Style Selector="Border.indentGuide">
+    <Setter Property="Width" Value="1" />
+    <Setter Property="Margin" Value="14,0,0,0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Background" Value="{DynamicResource Border60Brush}" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+  <Style Selector="TextBlock.tabular">
+    <Setter Property="FontFeatures" Value="tnum" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.inboxCount">
+    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
   </Style>
 
   <!-- The 2 px accent bar at the left of the current workflow's row. Neutral means "where I am". -->
@@ -680,11 +641,6 @@
   <Style Selector="ToggleButton.chevron:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chevron:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chevron:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-  </Style>
-  <!-- A pinned row's chevron folds what the row names, on the row's 28 px line. -->
-  <Style Selector="ToggleButton.stickyChevron">
-    <Setter Property="Height" Value="28" />
-    <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
   <Style Selector="ToggleButton.chevron PathIcon">
     <Setter Property="Width" Value="12" />

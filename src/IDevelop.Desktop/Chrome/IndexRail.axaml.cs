@@ -14,5 +14,5 @@ public partial class IndexRail : UserControl
 
     private void OnInbox(object? sender, RoutedEventArgs e) => ViewModel?.OpenInbox();
 
-    private void OnFind(object? sender, RoutedEventArgs e) => (TopLevel.GetTopLevel(this) as MainWindow)?.Sidebar.FocusFind();
+    private void OnFind(object? sender, RoutedEventArgs e) => (TopLevel.GetTopLevel(this) as MainWindow)?.OpenFind();
 }

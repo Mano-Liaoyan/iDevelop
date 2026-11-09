@@ -18,7 +18,7 @@ internal readonly record struct WorkflowCards(WorkflowRef Workflow, ImmutableArr
 /// <summary>
 /// The projects a window had open, which it opens again at the next start, in the per-user session file beside the theme
 /// preference: <c>{"projects":[folder...],"selected":{"folder":...,"workflow":...},
-/// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}],"folded":[folder...],"recent":[folder...],"activityFolded":false}</c>. Expanded cards live here, on this machine, and never in
+/// "cards":[{"folder":...,"workflow":...,"tasks":[id...]}],"folded":[folder...],"recent":[folder...],"expandedWorkflows":[{"folder":...,"workflow":...}]}</c>. Expanded cards live here, on this machine, and never in
 /// the workflow's file (ADR 0024).
 /// </summary>
 internal sealed record WorkspaceSession(ImmutableArray<string> Projects, WorkflowRef? Selected)
@@ -32,8 +32,8 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
     /// <summary>The folders the person closed, newest first, which the empty left area offers again.</summary>
     public ImmutableArray<string> Recent { get; init; } = [];
 
-    /// <summary>The person opened the left area's Activity list. It starts folded to one row.</summary>
-    public bool ActivityOpen { get; init; }
+    /// <summary>The workflows whose rows the Index expands.</summary>
+    public ImmutableArray<WorkflowRef> ExpandedWorkflows { get; init; } = [];
 
     public static readonly WorkspaceSession Empty = new([], null);
 
@@ -63,7 +63,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
             Cards = [.. Items(session["cards"]).Select(CardsOf).OfType<WorkflowCards>()],
             Folded = [.. Items(session["folded"]).Select(Text).OfType<string>()],
             Recent = [.. Items(session["recent"]).Select(Text).OfType<string>()],
-            ActivityOpen = session["activityOpen"] is JsonValue open && open.TryGetValue<bool>(out var isOpen) && isOpen,
+            ExpandedWorkflows = [.. Items(session["expandedWorkflows"]).Select(Ref).OfType<WorkflowRef>()],
         };
     }
 
@@ -81,7 +81,7 @@ internal sealed record WorkspaceSession(ImmutableArray<string> Projects, Workflo
             })]),
             ["folded"] = new JsonArray([.. Folded.Select(folder => JsonValue.Create(folder))]),
             ["recent"] = new JsonArray([.. Recent.Select(folder => JsonValue.Create(folder))]),
-            ["activityOpen"] = ActivityOpen,
+            ["expandedWorkflows"] = new JsonArray([.. ExpandedWorkflows.Select(workflow => (JsonNode)Node(workflow))]),
         };
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
         AtomicFile.Replace(file, JsonSerializer.SerializeToUtf8Bytes(session));

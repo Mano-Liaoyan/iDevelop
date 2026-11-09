@@ -6,19 +6,14 @@ using IDevelop.Desktop.Mvvm;
 namespace IDevelop.Desktop.Sidebar;
 
 /// <summary>
-/// The left area's Activity list: every node in every open project that waits, failed, or runs, so a person sees who needs
-/// them and what the agents do now without a click. It only reads the nodes, and it holds no state of its own but how
-/// many rows it shows.
+/// The Index's Inbox: every node in every open project that waits, failed, or runs, in three groups, so a person sees who needs them
+/// and what the agents do now without a click. It only reads the nodes, and it holds no state of its own.
 /// </summary>
 public sealed class ActivityViewModel : ObservableObject
 {
-    /// <summary>The rows a list shows before Show all.</summary>
-    public const int NormalLimit = 3;
-
     private readonly Func<IReadOnlyList<ProjectViewModel>> _projects;
     private readonly Action<TaskNodeViewModel> _open;
     private readonly Dictionary<TaskNodeViewModel, ActivityRow> _rows = [];
-    private List<ActivityRow> _ordered = [];
 
     /// <param name="projects">The open projects, in their order.</param>
     /// <param name="open">Shows a node and what it needs from the person.</param>
@@ -26,150 +21,67 @@ public sealed class ActivityViewModel : ObservableObject
     {
         _projects = projects;
         _open = open;
-        ShowAllCommand = new RelayCommand(() => IsShowingAll = true);
     }
 
-    /// <summary>The rows in view: waiting, then failed, then running, each in project order and then the node list's order.</summary>
+    /// <summary>Every row: waiting, then failed, then running, each in project order and then the node list's order.</summary>
     public ObservableCollection<ActivityRow> Rows { get; } = [];
 
-    public bool HasRows => _ordered.Count > 0;
+    /// <summary>The Inbox's three groups, in their order. An empty group shows nothing.</summary>
+    public IReadOnlyList<InboxGroup> Groups { get; } = [new("Needs you"), new("Failed"), new("Running")];
 
-    /// <summary>"3 nodes", the whole list's size.</summary>
-    public int Count => _ordered.Count;
+    public bool HasRows => Rows.Count > 0;
 
-    /// <summary>How many rows need the person, as <see cref="Theme.StateCounts"/> counts them, which the heading shows apart from what failed.</summary>
-    public int WaitingCount => _ordered.Count(row => row.Node.State == NodeState.InputRequired);
-
-    /// <summary>"1 needs you" or "3 need you".</summary>
-    public string WaitingLabel => Theme.StateCounts.NeedYou(WaitingCount);
+    /// <summary>How many rows need the person, as <see cref="Theme.StateCounts"/> counts them.</summary>
+    public int WaitingCount => Rows.Count(row => row.Node.State == NodeState.InputRequired);
 
     /// <summary>How many rows failed.</summary>
-    public int FailedCount => _ordered.Count(row => row.Node.State == NodeState.Failed);
+    public int FailedCount => Rows.Count(row => row.Node.State == NodeState.Failed);
 
-    /// <summary>How many rows run. The three counts add up to <see cref="Count"/>.</summary>
-    public int RunningCount => _ordered.Count(row => row.Node.State == NodeState.Running);
+    /// <summary>How many rows run.</summary>
+    public int RunningCount => Rows.Count(row => row.Node.State == NodeState.Running);
 
     /// <summary>What the Inbox counts: the rows that need the person and the rows that failed.</summary>
     public int InboxCount => WaitingCount + FailedCount;
 
     public bool HasInbox => InboxCount > 0;
 
-    public bool HasWaiting => WaitingCount > 0;
-
-    public bool HasFailed => FailedCount > 0;
-
-    public bool HasRunning => RunningCount > 0;
-
-    /// <summary>How many rows the list shows before Show all.</summary>
-    internal int Limit
-    {
-        get;
-        set
-        {
-            field = value;
-            ShowRows();
-        }
-    } = NormalLimit;
-
-    public bool IsShowingAll
-    {
-        get;
-        private set
-        {
-            if (SetProperty(ref field, value))
-            {
-                ShowRows();
-            }
-        }
-    }
-
-    /// <summary>The person opened the list under its heading. The list starts folded, and the session file keeps this choice.</summary>
-    public bool IsOpen
-    {
-        get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(FoldLabel));
-                OnPropertyChanged(nameof(FoldTip));
-            }
-        }
-    }
-
-    /// <summary>What the heading's toggle does now, for a screen reader and the tooltip.</summary>
-    public string FoldLabel => IsOpen ? "Hide Activity" : "Show Activity";
-
-    /// <summary>The toggle's tooltip, which also names the list's scope while several projects are open.</summary>
-    public string FoldTip => CoversSeveralProjects ? $"{FoldLabel}. It lists all open projects." : FoldLabel;
-
-    public bool HasMore => !IsShowingAll && _ordered.Count > Limit;
-
-    public string ShowAllLabel => $"Show all {_ordered.Count}";
-
-    /// <summary>Several projects are open, and the list covers them all.</summary>
-    public bool CoversSeveralProjects
-    {
-        get;
-        private set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(FoldTip));
-            }
-        }
-    }
-
-    public ICommand ShowAllCommand { get; }
-
     /// <summary>The nodes in <paramref name="state"/>, in list order.</summary>
-    internal IEnumerable<TaskNodeViewModel> InState(NodeState state) => _ordered.Where(row => row.Node.State == state).Select(row => row.Node);
+    internal IEnumerable<TaskNodeViewModel> InState(NodeState state) => Rows.Where(row => row.Node.State == state).Select(row => row.Node);
 
-    /// <summary>Reads every node again.</summary>
+    /// <summary>Reads every node again. The rows that stay keep their controls, so a keyboard focus on one survives a change to another.</summary>
     internal void Refresh()
     {
-        var projects = _projects();
-        var nodes = projects.SelectMany(project => project.Workflows).SelectMany(canvas => canvas.Outline)
+        var nodes = _projects().SelectMany(project => project.Workflows).SelectMany(canvas => canvas.Outline)
             .Where(node => GroupOf(node) is not null)
             .OrderBy(node => GroupOf(node))
             .ToList();
-        // The project's name says whose a row is while more than one project is open.
-        var showsProject = projects.Count > 1;
-        CoversSeveralProjects = showsProject;
         foreach (var gone in _rows.Keys.Except(nodes).ToList())
         {
             _rows.Remove(gone);
         }
 
-        _ordered = [.. nodes.Select(node =>
+        var ordered = nodes.Select(node =>
         {
             if (!_rows.TryGetValue(node, out var row))
             {
                 _rows.Add(node, row = new ActivityRow(node, _open));
             }
 
-            row.Read(showsProject);
+            row.Read();
             return row;
-        })];
-        if (_ordered.Count <= Limit)
+        }).ToList();
+        Sync(Rows, ordered);
+        for (var index = 0; index < Groups.Count; index++)
         {
-            IsShowingAll = false;
+            Groups[index].Show([.. ordered.Where(row => GroupOf(row.Node) == index)]);
         }
 
-        ShowRows();
         OnPropertyChanged(nameof(HasRows));
-        OnPropertyChanged(nameof(Count));
         OnPropertyChanged(nameof(WaitingCount));
+        OnPropertyChanged(nameof(FailedCount));
+        OnPropertyChanged(nameof(RunningCount));
         OnPropertyChanged(nameof(InboxCount));
         OnPropertyChanged(nameof(HasInbox));
-        OnPropertyChanged(nameof(WaitingLabel));
-        OnPropertyChanged(nameof(FailedCount));
-        OnPropertyChanged(nameof(HasWaiting));
-        OnPropertyChanged(nameof(HasFailed));
-        OnPropertyChanged(nameof(RunningCount));
-        OnPropertyChanged(nameof(HasRunning));
-        OnPropertyChanged(nameof(HasMore));
-        OnPropertyChanged(nameof(ShowAllLabel));
     }
 
     private static int? GroupOf(TaskNodeViewModel node) => node.State switch
@@ -180,47 +92,53 @@ public sealed class ActivityViewModel : ObservableObject
         _ => null,
     };
 
-    /// <summary>
-    /// A short list of <paramref name="limit"/> rows, in list order: the first row of each need, so that no kind of need hides
-    /// behind Show all, and then the rows that follow. The first failure always stays in view.
-    /// </summary>
-    internal static List<T> Shortened<T, TNeed>(IReadOnlyList<T> rows, int limit, Func<T, TNeed> need, Func<T, bool> failed)
+    internal static void Sync<T>(ObservableCollection<T> shown, IReadOnlyList<T> rows)
     {
-        var failure = rows.Index().Where(row => failed(row.Item)).Select(row => row.Index).Take(1);
-        var firsts = rows.Index().DistinctBy(row => need(row.Item)).Select(row => row.Index);
-        return [.. failure.Union(firsts).Union(Enumerable.Range(0, rows.Count)).Take(limit).Order().Select(index => rows[index])];
-    }
-
-    // The rows that stay keep their controls, so a keyboard focus on one survives a change to another.
-    private void ShowRows()
-    {
-        var shown = IsShowingAll ? _ordered : Shortened(_ordered, Limit, row => (row.Node.State, row.Node.WaitReason), row => row.Node.State == NodeState.Failed);
-        if (!Rows.SequenceEqual(shown))
+        if (shown.SequenceEqual(rows))
         {
-            foreach (var row in Rows.Except(shown).ToList())
-            {
-                Rows.Remove(row);
-            }
-
-            for (var index = 0; index < shown.Count; index++)
-            {
-                var at = Rows.IndexOf(shown[index]);
-                if (at < 0)
-                {
-                    Rows.Insert(index, shown[index]);
-                }
-                else if (at != index)
-                {
-                    Rows.Move(at, index);
-                }
-            }
+            return;
         }
 
-        OnPropertyChanged(nameof(HasMore));
+        foreach (var row in shown.Except(rows).ToList())
+        {
+            shown.Remove(row);
+        }
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var at = shown.IndexOf(rows[index]);
+            if (at < 0)
+            {
+                shown.Insert(index, rows[index]);
+            }
+            else if (at != index)
+            {
+                shown.Move(at, index);
+            }
+        }
     }
 }
 
-/// <summary>One node in the Activity list: its title, and why it is listed.</summary>
+/// <summary>One group of the Inbox: its heading and its rows.</summary>
+public sealed class InboxGroup(string title) : ObservableObject
+{
+    public string Title { get; } = title;
+
+    public ObservableCollection<ActivityRow> Rows { get; } = [];
+
+    public bool HasRows => Rows.Count > 0;
+
+    public int Count => Rows.Count;
+
+    internal void Show(IReadOnlyList<ActivityRow> rows)
+    {
+        ActivityViewModel.Sync(Rows, rows);
+        OnPropertyChanged(nameof(HasRows));
+        OnPropertyChanged(nameof(Count));
+    }
+}
+
+/// <summary>One node in the Inbox: its title, and why it is listed.</summary>
 public sealed class ActivityRow : ObservableObject
 {
     private readonly Action<TaskNodeViewModel> _open;
@@ -236,7 +154,7 @@ public sealed class ActivityRow : ObservableObject
 
     public ICommand OpenCommand { get; }
 
-    /// <summary>"Question · Payment webhook hardening · Claude Code", with the project's name after the workflow's while several projects are open.</summary>
+    /// <summary>"Question · harbor-api › Payment webhook hardening · Claude Code": why the node is listed, where it is, and its agent.</summary>
     public string Detail => string.Join(" · ", new[] { Reason, Place, Node.AgentClientName }.OfType<string>());
 
     /// <summary>Why the node is listed, in the state's own word.</summary>
@@ -253,10 +171,10 @@ public sealed class ActivityRow : ObservableObject
         }
     } = "";
 
-    /// <summary>The row's tooltip: the whole title, which the row may cut, then the detail.</summary>
+    /// <summary>The row's tooltip: the whole title, then the detail.</summary>
     public string Tip => $"{Node.Title}\n{Detail}";
 
-    /// <summary>The node's workflow, and its project's name after it while several projects are open, so a cut takes the project first.</summary>
+    /// <summary>"harbor-api › Payment webhook hardening": where the node is.</summary>
     public string Place
     {
         get;
@@ -270,21 +188,18 @@ public sealed class ActivityRow : ObservableObject
         }
     } = "";
 
-    /// <summary>
-    /// "harbor-api · Payment webhook hardening" under the title while several projects are open, so a person knows the project
-    /// before opening the row, or null with one project open.
-    /// </summary>
-    public string? ProjectLine
+    /// <summary>"Question ·" before the row's place while the node needs the person, or null.</summary>
+    public string? ReasonLead
     {
         get;
         private set => SetProperty(ref field, value);
     }
 
-    internal void Read(bool showsProject)
+    internal void Read()
     {
         Reason = ReasonOf(Node);
-        Place = showsProject ? $"{Node.Canvas.Name} · {Node.Canvas.Project.Name}" : Node.Canvas.Name;
-        ProjectLine = showsProject ? $"{Node.Canvas.Project.Name} · {Node.Canvas.Name}" : null;
+        Place = $"{Node.Canvas.Project.Name} › {Node.Canvas.Name}";
+        ReasonLead = Node.State == NodeState.InputRequired ? $"{Reason} ·" : null;
     }
 
     // "Needs you · Question" names the reason after the state, which the glyph already shows.

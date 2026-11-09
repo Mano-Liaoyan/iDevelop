@@ -217,7 +217,6 @@ public sealed class RoomTests : IDisposable
     public void Enter_on_a_row_opens_Chat_and_Shift_Enter_opens_the_Room()
     {
         var shell = Chain();
-        Canvas(shell).Groups.First().Open();
         shell.Render();
         shell.Click(shell.SidebarRow("Build"));
         shell.Click(shell.Find<PageTab>("PageTask"));

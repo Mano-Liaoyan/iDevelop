@@ -51,9 +51,9 @@ public sealed class MainWindowTests : IDisposable
             picks++;
             return picker.Task;
         };
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.OpenFolderFromIndex();
 
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.OpenFolderFromIndex();
 
         Assert.Equal(1, picks);
         picker.SetResult(other);
@@ -97,7 +97,7 @@ public sealed class MainWindowTests : IDisposable
         shell.Window.ViewModel.Open(_temp.Create("plan"));
         shell.Render();
 
-        Assert.Equal([true, true, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
+        Assert.Equal([true, true, true], new[] { "AddTask", "Save", "IndexAdd" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.Equal(
             [
                 "Workflow", "No nodes yet", "Library",

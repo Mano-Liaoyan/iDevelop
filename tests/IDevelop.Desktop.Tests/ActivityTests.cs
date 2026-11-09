@@ -45,16 +45,6 @@ public sealed class ActivityTests : IDisposable
     }
 
     [Fact]
-    public void The_short_list_shows_each_need_before_a_second_row_of_any_need()
-    {
-        static bool Failed(string row) => row[0] == 'f';
-        Assert.Equal(["r1", "q1", "f1"], Sidebar.ActivityViewModel.Shortened(["r1", "r2", "q1", "q2", "f1"], 3, row => row[0], Failed));
-        Assert.Equal(["r1", "r2", "f1"], Sidebar.ActivityViewModel.Shortened(["r1", "r2", "r3", "f1"], 3, row => row[0], Failed));
-        Assert.Equal(["r1", "r2"], Sidebar.ActivityViewModel.Shortened(["r1", "r2", "r3"], 2, _ => 'r', Failed));
-        Assert.Equal(["r1", "f1"], Sidebar.ActivityViewModel.Shortened(["r1", "q1", "a1", "f1"], 2, row => row[0], Failed));
-    }
-
-    [Fact]
     public void A_running_node_s_line_is_its_last_line_of_text() =>
         Assert.Equal(("Bash dotnet test", null), (Sidebar.ActivityRow.OneLine("Reading\n\nBash dotnet test\n"), Sidebar.ActivityRow.OneLine(null)));
 
@@ -73,6 +63,7 @@ public sealed class ActivityTests : IDisposable
 
     private static string[] Find(Shell shell, string query)
     {
+        shell.Window.OpenFind();
         shell.Window.ViewModel.Find.Query = query;
         shell.Render();
         return [.. shell.Window.ViewModel.Find.Results.Select(result => $"{result.Name} | {result.Place}")];
@@ -83,7 +74,7 @@ public sealed class ActivityTests : IDisposable
     {
         var shell = OpenWaiting(1);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        var open = shell.Find<Button>("OpenFolder");
+        var open = shell.Find<Button>("IndexAdd");
 
         open.Focus(NavigationMethod.Tab);
         shell.Render();
@@ -91,17 +82,21 @@ public sealed class ActivityTests : IDisposable
         // The ring is 2 px wide, 1 px outside the button's edge.
         Assert.NotEqual(Avalonia.Media.Color.Parse("#1E6EF4"), shell.ColorAt(open, new Avalonia.Point(open.Bounds.Width / 2, -1)));
         Assert.Equal(Avalonia.Media.Color.Parse("#1E6EF4"), shell.ColorAt(open, new Avalonia.Point(open.Bounds.Width / 2, -2)));
+        shell.Window.OpenFind();
+        shell.Render();
         var watermark = shell.Find<TextBox>("FindBox").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Watermark");
         Assert.Equal(1, watermark.Opacity);
     }
 
     [AvaloniaFact]
-    public void Activity_hides_while_nothing_needs_a_person_or_runs()
+    public void The_Inbox_says_nothing_needs_you_while_no_agent_waits_failed_or_runs()
     {
         var shell = OpenWaiting(2);
+        shell.Click(shell.Find<RadioButton>("IndexInbox"));
 
         Assert.False(shell.Window.ViewModel.Activity.HasRows);
-        Assert.DoesNotContain(Shell.ById<ItemsControl>(shell.Window, "Activity"), list => list.IsEffectivelyVisible);
+        Assert.Equal("Nothing needs you.", shell.Find<TextBlock>("InboxEmpty").Text);
+        Assert.False(shell.Find<ItemsControl>("Projects").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -116,7 +111,6 @@ public sealed class ActivityTests : IDisposable
 
         Assert.Equal(["Node docs | beta", "Node 1 | alpha › Build", "Node 2 | alpha › Build", "Node 3 | alpha › Build"], Find(shell, "node"));
         Assert.True(shell.Find<ListBox>("FindResults").IsEffectivelyVisible);
-        Assert.True(shell.Find<ItemsControl>("Projects").IsEffectivelyVisible);
 
         Assert.Empty(Find(shell, "nothing like this"));
         Assert.True(shell.Find<TextBlock>("FindNoMatch").IsEffectivelyVisible);
@@ -131,10 +125,10 @@ public sealed class ActivityTests : IDisposable
         var shell = OpenWaiting(3);
         shell.Window.ViewModel.NewWorkflow(shell.Window.ViewModel.Projects[0]);
         shell.Render();
-        var box = shell.Find<TextBox>("FindBox");
-
         shell.Editor.Focus();
         shell.Press(Key.K, RawInputModifiers.Control);
+        shell.Render();
+        var box = shell.Find<TextBox>("FindBox");
         Assert.True(box.IsFocused, "Ctrl+K does not focus Find.");
         shell.Press(Key.Escape);
         Assert.True(shell.Editor.IsFocused, "Esc does not return the focus.");
@@ -146,7 +140,7 @@ public sealed class ActivityTests : IDisposable
         shell.Press(Key.Enter);
 
         Assert.Equal("Node 2", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
-        Assert.Equal("", box.Text);
+        Assert.Equal("", shell.Window.ViewModel.Find.Query);
         Assert.True(shell.Editor.IsFocused, "The canvas does not take the keys after a choice.");
     }
 
@@ -161,14 +155,24 @@ public sealed class ActivityTests : IDisposable
         shell.Press(Key.Down);
         Assert.True(row.IsFocused, "Down does not reach the workflow.");
 
-        // Down goes on from the Projects section to the Nodes section's rows (ADR 0071).
+        shell.Press(Key.Down);
+        var stage = shell.Window.GetVisualDescendants().OfType<Button>().Single(row => row.Classes.Contains("stage"));
+        Assert.True(stage.IsFocused, "Down does not reach the stage.");
         shell.Press(Key.Down);
         shell.Press(Key.Down);
-        shell.Press(Key.Down);
-        Assert.Equal("Node 2", shell.Window.FocusManager!.GetFocusedElement() is ListBoxItem { DataContext: Canvas.TaskNodeViewModel node } ? node.Title : null);
+        Assert.Equal("Node 2", shell.Window.FocusManager!.GetFocusedElement() is Button { DataContext: Canvas.TaskNodeViewModel node } ? node.Title : null);
 
         shell.Press(Key.Left);
+        Assert.True(stage.IsFocused, "Left does not move to the parent stage.");
+        shell.Press(Key.Left);
+        Assert.True(((Canvas.WorkflowStage)stage.DataContext!).IsFolded, "Left does not fold the stage.");
+        shell.Press(Key.Right);
+        Assert.False(((Canvas.WorkflowStage)stage.DataContext!).IsFolded, "Right does not open the stage.");
+        shell.Press(Key.Left);
+        shell.Press(Key.Left);
         Assert.True(row.IsFocused, "Left does not move to the parent workflow.");
+        shell.Press(Key.Left);
+        Assert.False(shell.Window.ViewModel.Canvas!.IsExpanded, "Left does not fold the workflow.");
         shell.Press(Key.Left);
         Assert.True(project.IsFocused, "Left does not move to the parent project.");
         shell.Press(Key.Left);
@@ -186,13 +190,13 @@ public sealed class ActivityTests : IDisposable
         WorkflowDocument.Create(other, "Docs").Save();
         view.Open(other);
         shell.Render();
-        shell.WaitUntil(() => view.Activity.Rows.All(row => row.ProjectLine is not null), "the rows name their project");
+        shell.WaitUntil(() => view.Activity.Rows.All(row => row.Place is not null), "the rows name their project");
 
-        view.Activity.IsOpen = true;
+        view.IsInboxView = true;
         shell.Render();
         var project = view.Projects.Single(item => item.Folder != other).Name;
-        Assert.All(view.Activity.Rows, row => Assert.Equal($"{project} · Workflow", row.ProjectLine));
-        Assert.Contains(Shell.ById<TextBlock>(shell.Window, "ActivityProject"), text => text.IsEffectivelyVisible && text.Text == $"{project} · Workflow");
+        Assert.All(view.Activity.Rows, row => Assert.Equal($"{project} › Workflow", row.Place));
+        Assert.Contains(Shell.ById<TextBlock>(shell.Window, "ActivityPlace"), text => text.IsEffectivelyVisible && text.Text == $"{project} › Workflow");
     }
 
     [AvaloniaFact]
@@ -203,14 +207,11 @@ public sealed class ActivityTests : IDisposable
         FanOut.Run(shell);
         var view = shell.Window.ViewModel;
 
-        Assert.Equal(["Write docs · Reply · Workflow", "Build the API · Running · Workflow"], view.Activity.Rows.Select(row => $"{row.Node.Title} · {row.Reason} · {row.Place}"));
-        // With one project open, a row needs no project line.
-        Assert.All(view.Activity.Rows, row => Assert.Null(row.ProjectLine));
-        Assert.DoesNotContain(Shell.ById<TextBlock>(shell.Window, "ActivityProject"), text => text.IsEffectivelyVisible);
-        Assert.True(shell.Find<ToggleButton>("ActivityFold").IsEffectivelyVisible);
-        view.Activity.IsOpen = true;
+        Assert.Equal(["Write docs · Reply", "Build the API · Running"], view.Activity.Rows.Select(row => $"{row.Node.Title} · {row.Reason}"));
+        Assert.All(view.Activity.Rows, row => Assert.EndsWith(" › Workflow", row.Place));
+        view.IsInboxView = true;
         shell.Render();
-        Assert.True(shell.Find<ItemsControl>("Activity").IsEffectivelyVisible);
+        Assert.True(shell.Find<ItemsControl>("Inbox").IsEffectivelyVisible);
         Assert.Equal("1 of 3 · 1 running · 1 needs you", view.Canvas!.Summary);
         Assert.Equal(1, view.Projects[0].WaitingCount);
 
@@ -222,29 +223,6 @@ public sealed class ActivityTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Activity_starts_folded_to_one_row_and_stays_open_at_every_height_after_a_click()
-    {
-        using var f = FanOut.Fixture();
-        var shell = f.Open();
-        FanOut.Run(shell);
-        var activity = shell.Window.ViewModel.Activity;
-        var fold = shell.Find<ToggleButton>("ActivityFold");
-
-        shell.Render();
-        Assert.Equal((false, "Show Activity"), (activity.IsOpen, activity.FoldLabel));
-        Assert.DoesNotContain(Shell.ById<Button>(shell.Window, "ActivityRow"), row => row.IsEffectivelyVisible);
-        Assert.InRange(fold.Bounds.Height, 26, 30);
-
-        activity.IsOpen = true;
-        shell.Window.Height = 600;
-        shell.Render();
-        Assert.True(activity.IsOpen);
-        shell.Window.Height = 900;
-        shell.Render();
-        Assert.True(activity.IsOpen, "A change of height does not take back the person's choice.");
-    }
-
-    [AvaloniaFact]
     public void The_heading_s_counts_add_up_to_the_list()
     {
         using var f = FanOut.Fixture();
@@ -252,22 +230,8 @@ public sealed class ActivityTests : IDisposable
         FanOut.Run(shell);
         var activity = shell.Window.ViewModel.Activity;
 
-        Assert.Equal(activity.Count, activity.WaitingCount + activity.FailedCount + activity.RunningCount);
-    }
-
-    [AvaloniaFact]
-    public void Show_all_expands_a_long_list_in_place()
-    {
-        using var f = FanOut.Fixture();
-        var shell = f.Open();
-        FanOut.Run(shell);
-        var activity = shell.Window.ViewModel.Activity;
-
-        activity.Limit = 1;
-        Assert.Equal(("Show all 2", true, 1), (activity.ShowAllLabel, activity.HasMore, activity.Rows.Count));
-
-        activity.ShowAllCommand.Execute(null);
-        Assert.Equal((false, 2), (activity.HasMore, activity.Rows.Count));
+        Assert.Equal(activity.Rows.Count, activity.WaitingCount + activity.FailedCount + activity.RunningCount);
+        Assert.Equal([activity.WaitingCount, activity.FailedCount, activity.RunningCount], activity.Groups.Select(group => group.Count));
     }
 
     [AvaloniaFact]
@@ -325,14 +289,15 @@ public sealed class ActivityTests : IDisposable
     }
 
     [Fact]
-    public void The_session_keeps_an_open_Activity_list()
+    public void The_session_keeps_expanded_workflows()
     {
         var file = Path.GetTempFileName();
         try
         {
-            (WorkspaceSession.Empty with { ActivityOpen = true }).Write(file);
+            var workflow = new WorkflowRef("/work/alpha", WorkflowId.New());
+            (WorkspaceSession.Empty with { ExpandedWorkflows = [workflow] }).Write(file);
 
-            Assert.True(WorkspaceSession.Read(file).ActivityOpen);
+            Assert.True(WorkspaceSession.Read(file).ExpandedWorkflows.Single().Is(workflow.Folder, workflow.Workflow));
         }
         finally
         {

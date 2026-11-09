@@ -103,6 +103,13 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
         set => SetProperty(ref _location, value);
     }
 
+    /// <summary>The node is in the canvas's selection, so its Index row shows the blue fill.</summary>
+    public bool IsSelected
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
+
     public string Title
     {
         get => _task.Title;

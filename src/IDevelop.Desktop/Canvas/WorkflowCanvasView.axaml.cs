@@ -575,6 +575,15 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
+    /// <summary>Opens the node's menu at an Index row. The node is the selected one, so the menu acts on it.</summary>
+    internal void OpenNodeMenu(Control row)
+    {
+        if (_viewModel is { } canvas)
+        {
+            Open("NodeMenu", canvas.NodeMenu(), row);
+        }
+    }
+
     // A double-click on a card opens its agent's conversation, as Enter does; on the empty canvas it adds a node there.
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {
