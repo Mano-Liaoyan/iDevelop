@@ -10,13 +10,16 @@
              IsVisible="{Binding IsShown}">
   <Border Classes="actionDock" Classes.failed="{Binding IsFailed}" Classes.warning="{Binding IsWarning}"
           AutomationProperties.AutomationId="ActionDock" AutomationProperties.Name="{Binding Title}">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-      <StackPanel Spacing="8">
+    <!-- The heading and the actions stay in view. Only the words between them scroll when the dock meets its cap. -->
+    <Grid RowDefinitions="Auto,*,Auto">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding HasHeading}">
           <theme:StateMark Width="16" Height="16" VerticalAlignment="Center" State="{Binding MarkState}" Why="{Binding MarkWhy}"
                            AutomationProperties.AutomationId="ActionDockMark" />
           <TextBlock Grid.Column="1" Classes="dockTitle" Text="{Binding Title}" AutomationProperties.AutomationId="ActionDockTitle" />
         </Grid>
+
+      <ScrollViewer Grid.Row="1" Classes="dockBody" Classes.afterHeading="{Binding HasHeading}" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasBody}">
+        <StackPanel Spacing="8">
 
         <SelectableTextBlock Classes="dockText" Text="{Binding Offered}" MaxLines="6" IsVisible="{Binding HasOffered}"
                              AutomationProperties.AutomationId="ActionDockOffered" />
@@ -67,9 +70,12 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
 
+      <StackPanel Grid.Row="2" Spacing="8" Margin="0,8,0,0" IsVisible="{Binding HasPinned}">
         <TextBox Classes="sendBackNote" Text="{Binding Node.SendBackNote}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
-                 IsVisible="{Binding ShowsSendBack}"
+                 IsVisible="{Binding ShowsSendBack}" Margin="0" MinHeight="52" MaxHeight="52"
                  Watermark="Why send it back? The note goes to the nodes before it."
                  AutomationProperties.AutomationId="SendBackNote"
                  AutomationProperties.Name="Note to send back" />
@@ -113,6 +119,6 @@
           </Button>
         </WrapPanel>
       </StackPanel>
-    </ScrollViewer>
+    </Grid>
   </Border>
 </UserControl>

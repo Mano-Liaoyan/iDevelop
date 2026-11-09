@@ -285,7 +285,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         {
             marker.IsHeldByCard = marker == last && (Dock.Kind is ActionDockKind.Reply or ActionDockKind.Approval or ActionDockKind.RoundLimit or ActionDockKind.Interrupted or ActionDockKind.Question && marker.Kind == MarkerKind.Waiting
                 || Dock.Kind == ActionDockKind.Failed && marker.Kind == MarkerKind.Failed
-                || Node.State == NodeState.Completed && marker.Kind == MarkerKind.Completed
+                || Node.State is NodeState.Completed or NodeState.Stale && marker.Kind == MarkerKind.Completed
                 || Dock.Kind == ActionDockKind.Conflict && marker.Kind == MarkerKind.Conflict);
         }
 

@@ -26,7 +26,7 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
     [
         nameof(Kind), nameof(IsShown), nameof(IsFailed), nameof(IsWarning), nameof(HasHeading), nameof(Title), nameof(MarkState), nameof(MarkWhy), nameof(Detail), nameof(HasDetail),
         nameof(ShowsQuestions), nameof(ShowsApprove), nameof(IsApprovePrimary), nameof(ApproveLabel), nameof(ApproveTip), nameof(ShowsSendBack), nameof(ShowsConflict), nameof(ShowsContinue),
-        nameof(ShowsRetry), nameof(IsRetryPrimary), nameof(ShowsTerminal), nameof(Refusal), nameof(HasRefusal), nameof(HasOffered), nameof(HasActions),
+        nameof(ShowsRetry), nameof(IsRetryPrimary), nameof(ShowsTerminal), nameof(Refusal), nameof(HasRefusal), nameof(HasOffered), nameof(HasActions), nameof(HasPinned), nameof(HasBody),
     ];
 
     private bool _disposed;
@@ -102,6 +102,7 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(HasOffered));
+                OnPropertyChanged(nameof(HasBody));
             }
         }
     }
@@ -141,6 +142,12 @@ public sealed class ActionDockViewModel : ObservableObject, IDisposable
 
     /// <summary>The dock's row of buttons has something to hold.</summary>
     public bool HasActions => ShowsApprove || ShowsSendBack || ShowsConflict || ShowsContinue || ShowsRetry || ShowsTerminal;
+
+    /// <summary>The dock has words under its heading.</summary>
+    public bool HasBody => HasOffered || HasDetail || HasRefusal || ShowsQuestions;
+
+    /// <summary>The note box or a button shows, and they stay in view under the words.</summary>
+    public bool HasPinned => HasActions || ShowsSendBack;
 
     // "A and B", "A, B, and 2 more", or the node itself when nothing reads it.
     private string Recipients => Node.Outputs.Select(link => link.Node.Title).ToList() switch

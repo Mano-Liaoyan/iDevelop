@@ -87,7 +87,7 @@
                         </Grid>
                         <TextBlock Classes="dockText" Text="{Binding Result.PlainSummary, FallbackValue={x:Null}}" MaxLines="3" TextTrimming="CharacterEllipsis"
                                    AutomationProperties.AutomationId="ResultCardSummary" />
-                        <Button Classes="ghost" Height="24" HorizontalAlignment="Left" Click="OnShowResult"
+                        <Button Classes="ghost" Height="24" Margin="-8,0,0,-4" HorizontalAlignment="Left" Click="OnShowResult"
                                 ToolTip.Tip="Opens the Output page"
                                 AutomationProperties.AutomationId="ResultOpenOutput" AutomationProperties.Name="Open output">
                           <TextBlock Text="Open output" />
@@ -202,7 +202,7 @@
       </Button>
     </Panel>
 
-    <conversation:ActionDock x:Name="DockView" Grid.Row="1" Margin="16,8,16,0" DataContext="{Binding Dock}" />
+    <conversation:ActionDock x:Name="DockView" Grid.Row="1" Margin="16,8,16,0" MaxWidth="680" DataContext="{Binding Dock}" />
 
     <Border x:Name="ComposerFrame" Grid.Row="2" Classes="composer" IsVisible="{Binding Node.HasAgent}">
       <StackPanel>

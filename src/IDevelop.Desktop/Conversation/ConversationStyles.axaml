@@ -345,6 +345,9 @@
     <Setter Property="BorderBrush" Value="{DynamicResource StateWarningStrokeBrush}" />
     <Setter Property="Background" Value="{DynamicResource StateWarning10Brush}" />
   </Style>
+  <Style Selector="ScrollViewer.dockBody.afterHeading">
+    <Setter Property="Margin" Value="0,8,0,0" />
+  </Style>
   <Style Selector="TextBlock.dockTitle">
     <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
     <Setter Property="LineHeight" Value="{StaticResource TypeBodyLine}" />
@@ -420,6 +423,7 @@
   <!-- The composer. Focus thickens its one line and takes the half pixel of padding, so the text stays still. -->
   <Style Selector="Border.composer">
     <Setter Property="Margin" Value="16,8,16,12" />
+    <Setter Property="MaxWidth" Value="680" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
@@ -442,6 +446,11 @@
     <Setter Property="Padding" Value="12,8,12,4" />
   </Style>
   <Style Selector="TextBox.composerBox:pointerover /template/ Border#PART_BorderElement, TextBox.composerBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BoxShadow" Value="none" />
+  </Style>
+  <Style Selector="TextBox.composerBox:disabled /template/ Border#PART_BorderElement">
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BoxShadow" Value="none" />
