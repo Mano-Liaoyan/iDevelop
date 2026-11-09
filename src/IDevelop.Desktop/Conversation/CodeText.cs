@@ -61,19 +61,32 @@ public sealed class CodeText : SelectableTextBlock
         return shown.ToString();
     }
 
+    // The first measure wraps at the width it is offered. After that only the arranged width re-wraps: a measure pass can offer several widths in a row,
+    // and re-wrapping on each would invalidate the layout that measures it until the layout gives up.
     protected override Size MeasureOverride(Size availableSize)
     {
-        if (double.IsFinite(availableSize.Width))
+        if (_columns < 0 && double.IsFinite(availableSize.Width))
         {
-            var columns = (int)(availableSize.Width / CharacterWidth());
-            if (columns != _columns && columns > 0)
-            {
-                _columns = columns;
-                Show(Wrapped(_source, columns));
-            }
+            Wrap(availableSize.Width);
         }
 
         return base.MeasureOverride(availableSize);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        Wrap(finalSize.Width);
+        return base.ArrangeOverride(finalSize);
+    }
+
+    private void Wrap(double width)
+    {
+        var columns = (int)(width / CharacterWidth());
+        if (columns != _columns && columns > 0)
+        {
+            _columns = columns;
+            Show(Wrapped(_source, columns));
+        }
     }
 
     private double CharacterWidth()
