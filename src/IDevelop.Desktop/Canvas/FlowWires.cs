@@ -30,11 +30,14 @@ public sealed class FlowWires : Control
     {
         foreach (var wire in Wires ?? [])
         {
-            context.DrawGeometry(null, PenOf(wire), Rounded(wire.Points));
+            if (PenOf(wire) is { } pen)
+            {
+                context.DrawGeometry(null, pen, Rounded(wire.Points));
+            }
         }
     }
 
-    private Pen PenOf(FlowWire wire)
+    private Pen? PenOf(FlowWire wire)
     {
         var (key, thickness) = wire switch
         {
@@ -44,8 +47,12 @@ public sealed class FlowWires : Control
             { Emphasis: WireEmphasis.Highlighted } => ("TextMutedBrush", 2.0),
             _ => ("TextFaintBrush", 1.5),
         };
-        var brush = this.TryFindResource(key, ActualThemeVariant, out var found) ? found as IBrush : null;
-        return new Pen(brush ?? Brushes.Gray, thickness, wire.Kind == ConnectionKind.Context ? new DashStyle([4, 3], 0) : null, PenLineCap.Round);
+        if (!this.TryFindResource(key, ActualThemeVariant, out var found) || found is not IBrush brush)
+        {
+            return null;
+        }
+
+        return new Pen(brush, thickness, wire.Kind == ConnectionKind.Context ? new DashStyle([4, 3], 0) : null, PenLineCap.Round);
     }
 
     private static StreamGeometry Rounded(ImmutableArray<Point> points)
