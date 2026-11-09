@@ -274,28 +274,29 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         return null;
     }
 
-    // What each row owes the row before it: its gap, and the card that holds the last marker.
+    // What each row owes the row before it: its gap, and the Action Dock that holds the last marker. A held row keeps no gap of its own.
     private void Relate()
     {
+        Dock.Offered = Dock.Kind is ActionDockKind.Approval or ActionDockKind.RoundLimit
+            ? Items.OfType<MarkerItemViewModel>().LastOrDefault(marker => marker.Kind == MarkerKind.Waiting)?.Offered
+            : null;
+        var last = Items.LastOrDefault();
+        foreach (var marker in Items.OfType<MarkerItemViewModel>())
+        {
+            marker.IsHeldByCard = marker == last && (Dock.Kind is ActionDockKind.Reply or ActionDockKind.Approval or ActionDockKind.RoundLimit or ActionDockKind.Interrupted or ActionDockKind.Question && marker.Kind == MarkerKind.Waiting
+                || Dock.Kind == ActionDockKind.Failed && marker.Kind == MarkerKind.Failed
+                || Node.State == NodeState.Completed && marker.Kind == MarkerKind.Completed
+                || Dock.Kind == ActionDockKind.Conflict && marker.Kind == MarkerKind.Conflict);
+        }
+
         ConversationItemViewModel? before = null;
         foreach (var item in Items)
         {
-            item.GapAbove = before is null ? 0
+            item.GapAbove = before is null || item is MarkerItemViewModel { IsHeldByCard: true } ? 0
                 : item is MarkerItemViewModel { IsSessionStart: true } ? ConversationItemViewModel.AttemptGap
                 : item is MessageItemViewModel { IsPerson: true } || before is MessageItemViewModel { IsPerson: true } ? ConversationItemViewModel.TurnGap
                 : ConversationItemViewModel.StepGap;
             before = item;
-        }
-
-        Dock.Offered = Dock.Kind is ActionDockKind.Approval or ActionDockKind.RoundLimit
-            ? Items.OfType<MarkerItemViewModel>().LastOrDefault(marker => marker.Kind == MarkerKind.Waiting)?.Offered
-            : null;
-        foreach (var marker in Items.OfType<MarkerItemViewModel>())
-        {
-            marker.IsHeldByCard = marker == before && (Dock.Kind is ActionDockKind.Reply or ActionDockKind.Approval or ActionDockKind.RoundLimit or ActionDockKind.Interrupted or ActionDockKind.Question && marker.Kind == MarkerKind.Waiting
-                || Dock.Kind == ActionDockKind.Failed && marker.Kind == MarkerKind.Failed
-                || Node.State == NodeState.Completed && marker.Kind == MarkerKind.Completed
-                || Dock.Kind == ActionDockKind.Conflict && marker.Kind == MarkerKind.Conflict);
         }
 
         ShowResult();

@@ -173,7 +173,6 @@
   <!-- A row that the Action Dock speaks for keeps a little height, because the virtualizing list cannot settle on a row of no height. -->
   <Style Selector="Panel.row.held">
     <Setter Property="Height" Value="12" />
-    <Setter Property="Margin" Value="0" />
   </Style>
   <Style Selector="Panel.row.held > StackPanel">
     <Setter Property="IsVisible" Value="False" />
