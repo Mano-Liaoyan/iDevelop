@@ -1,25 +1,20 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>A 1 px layout that centers its child on its own origin, so a decorator's child stands on the point of its location.</summary>
+/// <summary>Centers its child on its own location, so a decorator's label stands on the midpoint of its wire at every zoom.</summary>
 public sealed class WirePillAnchor : Decorator
 {
-    protected override Size MeasureOverride(Size availableSize)
-    {
-        Child?.Measure(Size.Infinity);
-        return new Size(1, 1);
-    }
-
     protected override Size ArrangeOverride(Size finalSize)
     {
+        var arranged = base.ArrangeOverride(finalSize);
         if (Child is { } child)
         {
-            var size = child.DesiredSize;
-            child.Arrange(new Rect(-size.Width / 2, -size.Height / 2, size.Width, size.Height));
+            child.RenderTransform = new TranslateTransform(-finalSize.Width / 2, -finalSize.Height / 2);
         }
 
-        return finalSize;
+        return arranged;
     }
 }
