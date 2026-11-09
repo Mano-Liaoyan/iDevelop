@@ -57,19 +57,6 @@ public sealed class WireCurveTests
     }
 
     [Fact]
-    public void Two_wires_into_one_port_stay_apart_up_to_the_card()
-    {
-        var slots = PortSlots.Of([100, 300], 200, 168, 232);
-        var (upper, lower) = (new Point(500, 200 + slots[0]), new Point(500, 200 + slots[1]));
-        Point[] Route(double row, Point target) => [new Point(126, row), new Point(300, row), new Point(300, target.Y), new Point(474, target.Y)];
-        var first = WireCurve.Of(new Point(100, 100), Route(100, upper), upper, []);
-        var second = WireCurve.Of(new Point(100, 300), Route(300, lower), lower, []);
-
-        Assert.Equal(PortSlots.Pitch, second[^1].End.Y - first[^1].End.Y);
-        Assert.True(second[^1].At(0.9).Y - first[^1].At(0.9).Y > 3);
-    }
-
-    [Fact]
     public void A_wire_without_a_route_is_the_plain_curve()
     {
         var piece = Assert.Single(WireCurve.Plain(Source, new Point(300, 200)));

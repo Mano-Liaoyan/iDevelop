@@ -14,14 +14,29 @@
       </ResourceDictionary.MergedDictionaries>
       <!-- Below a zoom of 0.5 the dots turn into a texture, so the canvas has only its color. -->
       <SolidColorBrush x:Key="CanvasPlainBrush" Color="{DynamicResource CanvasGrid.BackgroundColor}" />
-      <x:Double x:Key="FarTitleSize">46</x:Double>
-      <x:Double x:Key="FarTitleLine">51</x:Double>
-      <x:Int32 x:Key="FarTitleLines">2</x:Int32>
-      <x:Double x:Key="FarCardHeight">158</x:Double>
-      <Thickness x:Key="FarCardMargin">0,0,0,-94</Thickness>
-      <Thickness x:Key="FarLineMargin">34,112,62,0</Thickness>
-      <x:Double x:Key="FarLineHeight">44</x:Double>
-      <Thickness x:Key="FarBadgeMargin">0,116,16,0</Thickness>
+      <!-- The view sets these from the zoom (ZoomTiers.Metrics), so a card's text and strokes stay near their size on screen. -->
+      <x:Double x:Key="CardTitleSize">13</x:Double>
+      <x:Double x:Key="CardTitleLine">18</x:Double>
+      <x:Double x:Key="CardCaptionSize">11.5</x:Double>
+      <x:Double x:Key="CardCaptionLine">14</x:Double>
+      <x:Double x:Key="PlateTitleSize">12</x:Double>
+      <x:Double x:Key="PlateTitleLine">14</x:Double>
+      <x:Int32 x:Key="PlateTitleLines">2</x:Int32>
+      <x:Double x:Key="PlateMarkSize">14</x:Double>
+      <x:Double x:Key="PlateSocketSize">6</x:Double>
+      <x:Double x:Key="PlateSocketStroke">1</x:Double>
+      <Thickness x:Key="PlateTitleMargin">4</Thickness>
+      <Thickness x:Key="PlateMarkMargin">0,0,4,0</Thickness>
+      <Thickness x:Key="EdgeThickness">1</Thickness>
+      <Thickness x:Key="RingThickness">1.5</Thickness>
+      <Thickness x:Key="RingMargin">8.5,-1.5</Thickness>
+      <Thickness x:Key="HaloThickness">3</Thickness>
+      <Thickness x:Key="HaloMargin">5.5,-4.5</Thickness>
+      <x:Double x:Key="StaleEdgeWidth">1.5</x:Double>
+      <x:Double x:Key="WirePillSize">11.5</x:Double>
+      <Thickness x:Key="WirePillPadding">6,1</Thickness>
+      <Thickness x:Key="WirePillEdge">1</Thickness>
+      <CornerRadius x:Key="WirePillRadius">4</CornerRadius>
     </ResourceDictionary>
   </UserControl.Resources>
 
@@ -45,7 +60,7 @@
                          ConnectionCompletedCommand="{Binding ConnectCommand}"
                          RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                          ItemsDragCompletedCommand="{Binding CommitMovesCommand}"
-                         Decorators="{Binding Ghosts}"
+                         Decorators="{Binding Decorations}"
                          ItemTemplate="{StaticResource TaskCardTemplate}"
                          ConnectionTemplate="{StaticResource ConnectionTemplate}"
                          PendingConnectionTemplate="{StaticResource PendingConnectionTemplate}"
@@ -82,24 +97,24 @@
            A proposal's tasks draw as dashed cards over the empty cards they fill, and its connections as dashed wires.
            A wire dropped on empty canvas stays as the line it was while the Add popover is open. -->
       <nodify:NodifyEditor.DataTemplates>
-        <!-- A ghost has a card's three lines. A tab hanging from it says why the planner's choice of agent falls back. -->
+        <!-- A ghost has a card's three lines, its form follows the zoom tiers. A tab hanging from it says why the planner's choice of agent falls back. -->
         <DataTemplate DataType="canvas:GhostCardViewModel">
           <StackPanel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
                       AutomationProperties.AutomationId="GhostCard"
                       AutomationProperties.Name="{Binding Title}">
             <Panel Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}">
-              <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusLg}" />
-              <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="10" RadiusY="10" StrokeThickness="1.5" StrokeDashArray="4,3"
+              <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusMd}" />
+              <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="8" RadiusY="8" StrokeThickness="1.5" StrokeDashArray="4,3"
                          theme:StyleClass.Kind="{Binding Kind}" />
-              <theme:EllipsisText Classes="ghostFar farTitle" Whole="{Binding Title}" />
-              <Grid Classes="ghostFull" Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
-                <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Classes="cardText">
+              <theme:EllipsisText Classes="ghostFar plateTitle" Whole="{Binding Title}" />
+              <Grid Classes="ghostFull" Margin="18,10" ColumnDefinitions="20,*" ColumnSpacing="8">
+                <theme:KindTile Kind="{Binding Kind}" TileSize="20" Opacity="0.55" VerticalAlignment="Top" />
+                <StackPanel Grid.Column="1" Spacing="2">
                   <theme:EllipsisText Classes="cardTitle" Whole="{Binding Title}"
                                       AutomationProperties.AutomationId="GhostTitle" />
-                  <TextBlock Classes="cardAgent" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
+                  <TextBlock Classes="ghostAgent" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="GhostLabel" />
-                  <TextBlock Classes="cardAgent" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
+                  <TextBlock Classes="ghostAgent" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="GhostDetail" />
                 </StackPanel>
               </Grid>
@@ -111,6 +126,14 @@
               </StackPanel>
             </Border>
           </StackPanel>
+        </DataTemplate>
+        <!-- A highlighted wire's label: "Result" or "Context", centered on the wire's midpoint. -->
+        <DataTemplate DataType="canvas:WirePillViewModel">
+          <canvas:WirePillAnchor>
+            <Border Classes="wirePill" ToolTip.Tip="{Binding Tip}" AutomationProperties.AutomationId="WirePill">
+              <TextBlock Text="{Binding Label}" />
+            </Border>
+          </canvas:WirePillAnchor>
         </DataTemplate>
         <DataTemplate DataType="canvas:GhostWireViewModel">
           <canvas:RoutedConnection Classes="ghost" Source="{Binding Source}" Target="{Binding Target}"
@@ -136,13 +159,13 @@
         </ControlTheme>
       </nodify:NodifyEditor.ItemContainerTheme>
 
-      <!-- A proposal's tasks and connections, and a dropped wire, draw as ghosts that take no input. -->
+      <!-- A proposal's tasks and connections and a dropped wire draw as ghosts that take no input. A highlighted wire's label takes the pointer. -->
       <nodify:NodifyEditor.DecoratorContainerStyle>
         <ControlTheme TargetType="nodify:DecoratorContainer"
                       BasedOn="{StaticResource {x:Type nodify:DecoratorContainer}}"
                       x:DataType="canvas:Ghost">
           <Setter Property="Location" Value="{Binding Location}" />
-          <Setter Property="IsHitTestVisible" Value="False" />
+          <Setter Property="IsHitTestVisible" Value="{Binding TakesPointer}" />
           <!-- NodifyAvalonia 6.6.0 undoes the editor's zoom on each decorator, so a ghost would keep its size as the cards
                shrink and cover its neighbours. Without that transform, a ghost takes the zoom as the cards do. -->
           <Setter Property="RenderTransform" Value="{x:Null}" />
@@ -154,6 +177,10 @@
     <!-- The Map's other view: agents in rows by graph depth. It reads the workflow and never changes a position. -->
     <canvas:FlowView x:Name="FlowPane" DataContext="{Binding Flow}" IsVisible="{Binding Canvas.IsFlow}"
                      Classes.behindEditor="{Binding Canvas.Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+    <!-- The Run frame: while an agent runs, the Map sheet's edge says so. It draws no text, and the Run Strip gives the count. -->
+    <Border Classes="runFrame" Grid.RowSpan="2" IsHitTestVisible="False" IsVisible="{Binding IsRunning}"
+            AutomationProperties.AutomationId="RunFrame" />
 
     <!-- The keyboard's place: the canvas took the focus by a key, so its keys act here. -->
     <Border x:Name="CanvasFocus" Classes="canvasFocus" IsHitTestVisible="False" IsVisible="False"

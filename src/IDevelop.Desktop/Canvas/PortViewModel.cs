@@ -19,15 +19,25 @@ public sealed class PortViewModel(TaskNodeViewModel node, PortSide side) : Obser
         set => SetProperty(ref field, value);
     }
 
-    /// <summary>
-    /// The port's dot is filled: an input whose dependency predecessors are all completed and current, or an output with a
-    /// current latest result.
-    /// </summary>
-    public bool IsLive
+    /// <summary>What the socket's wires carry, which colors a connected socket.</summary>
+    public WireFlow Flow
     {
         get;
-        internal set => SetProperty(ref field, value);
-    }
+        internal set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(IsFeeding));
+                OnPropertyChanged(nameof(IsStopped));
+            }
+        }
+    } = WireFlow.Idle;
+
+    /// <summary>A wire joins the socket into a running agent.</summary>
+    public bool IsFeeding => Flow == WireFlow.Feeding;
+
+    /// <summary>A wire joins the socket from a failed agent.</summary>
+    public bool IsStopped => Flow == WireFlow.Stopped;
 
     /// <summary>The port's name and what passes through it.</summary>
     public string? Tip

@@ -3,60 +3,6 @@ using IDevelop.Desktop.Canvas;
 
 namespace IDevelop.Desktop.Tests;
 
-public sealed class ZoomTitleTextTests
-{
-    [Theory]
-    [InlineData(0.23, 40)]
-    [InlineData(0.244, 37)]
-    [InlineData(0.29, 32)]
-    [InlineData(0.34, 30)]
-    public void The_title_tier_keeps_its_text_readable_and_takes_three_lines_where_the_rows_leave_room(double zoom, double size)
-    {
-        var text = ZoomTiers.TitleText(zoom);
-
-        Assert.Equal((size, 3), (text.Size, text.Lines));
-        Assert.True(text.Size * zoom >= 9, $"The text draws at {text.Size * zoom} px.");
-    }
-
-    [Theory]
-    [InlineData(0.244, 2)]
-    [InlineData(0.276, 3)]
-    [InlineData(0.32, 3)]
-    [InlineData(0.23, 2)]
-    public void A_title_tier_card_grows_only_as_far_as_a_6_px_gap_to_the_card_under_it(double zoom, int lines)
-    {
-        const double pitch = 190;
-        var text = ZoomTiers.TitleText(zoom, ZoomTier.Title, pitch);
-
-        Assert.Equal(lines, text.Lines);
-        Assert.True((pitch - 64 - text.Reach) * zoom >= ZoomTiers.CardGap, $"The gap is {(pitch - 64 - text.Reach) * zoom} px.");
-        Assert.True(text.Reach >= ZoomTiers.CardReach(ZoomTier.Title), "A card never draws shorter than its tier's height.");
-    }
-
-    [Fact]
-    public void Close_rows_keep_the_title_tier_card_at_its_height_and_two_lines()
-    {
-        var text = ZoomTiers.TitleText(0.244, ZoomTier.Title, 120);
-
-        Assert.Equal((2, ZoomTiers.CardReach(ZoomTier.Title)), (text.Lines, text.Reach));
-    }
-
-    [Theory]
-    [InlineData(0.22, 2)]
-    [InlineData(0.152, 2)]
-    [InlineData(0.144, 2)]
-    [InlineData(0.13, 1)]
-    [InlineData(0.1, 1)]
-    public void A_block_tier_card_keeps_its_title_in_one_or_two_lines_at_9_px(double zoom, int lines)
-    {
-        var text = ZoomTiers.TitleText(zoom, ZoomTier.Block);
-
-        Assert.Equal(lines, text.Lines);
-        Assert.True(text.Size * zoom >= 9, $"The text draws at {text.Size * zoom} px.");
-        Assert.True(text.Line * text.Lines <= 142, "The title fits the card's room.");
-    }
-}
-
 /// <summary>Fit keeps titles readable (ADR 0045).</summary>
 public sealed class FitZoomTests
 {
@@ -75,21 +21,10 @@ public sealed class FitZoomTests
     }
 
     [Fact]
-    public void Fit_never_zooms_past_the_largest_fit_zoom_where_a_card_keeps_its_form()
+    public void Fit_never_zooms_past_a_true_one_to_one_card()
     {
-        Assert.Equal(ZoomTiers.LargestFitZoom, CanvasChrome.FitZoom(new Rect(0, 0, 260, 64), Room));
-        Assert.Equal(ZoomTier.Label, ZoomTiers.Next(ZoomTier.Label, ZoomTiers.LargestFitZoom));
-    }
-
-    [Fact]
-    public void A_large_window_fits_a_graph_that_can_take_it_at_the_full_card()
-    {
-        var large = new Rect(0, 0, 1900, 1200);
-
-        Assert.Equal(ZoomTiers.LargeWindowFitZoom, CanvasChrome.FitZoom(new Rect(0, 0, 1700, 500), large));
-        Assert.Equal(ZoomTier.Full, ZoomTiers.Next(ZoomTier.Label, ZoomTiers.LargeWindowFitZoom));
-        // A graph too wide for the full card stays at the Label form's limit, past which a card's text shrinks.
-        Assert.Equal(ZoomTiers.LargestFitZoom, CanvasChrome.FitZoom(new Rect(0, 0, 3000, 500), large));
+        Assert.Equal(1, CanvasChrome.FitZoom(new Rect(0, 0, 240, 94), Room));
+        Assert.Equal(ZoomTier.Full, ZoomTiers.Next(ZoomTier.Full, ZoomTiers.LargestFitZoom));
     }
 
     [Fact]

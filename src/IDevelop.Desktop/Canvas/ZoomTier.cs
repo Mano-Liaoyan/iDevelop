@@ -1,72 +1,59 @@
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>How much a card shows at the canvas's zoom. Every tier shows the card's title, never under 9 px on screen.</summary>
-public enum ZoomTier { Full, Detail, Compact, Label, Title, Block }
+/// <summary>How much a card shows at the Map's zoom.</summary>
+public enum ZoomTier { Full, Plate, Block }
 
 /// <summary>
-/// A Title or Block tier card's text size and line height in canvas units, its title lines, how far the card draws under its
-/// 64 px box, and the top of its chip row under the card's top.
+/// The Graph's sizes in canvas units at one zoom, so a card's text and strokes stay near their size on screen (brief S2).
 /// </summary>
-public readonly record struct FarText(double Size, double Line, int Lines, double Reach, double ChipTop = 0);
+/// <param name="TitleSize">The card title's font size. It grows under 100% so it never draws under 11.5 px on screen at the Full tier.</param>
+/// <param name="TitleLine">The card title's line height.</param>
+/// <param name="CaptionSize">The socket and agent rows' font size.</param>
+/// <param name="CaptionLine">The socket and agent rows' line height.</param>
+/// <param name="PlateTitleSize">The Plate tier's title size, 12 px on screen.</param>
+/// <param name="PlateTitleLine">The Plate tier's title line height.</param>
+/// <param name="PlateLines">How many title lines fit in a Plate tier card.</param>
+/// <param name="MarkSize">A Plate or Block tier card's State Mark.</param>
+/// <param name="SocketSize">A Plate tier socket, 6 px on screen.</param>
+/// <param name="Stroke">A card's state and selection rings, 1.5 px on screen.</param>
+/// <param name="Halo">The selection's halo, 3 px on screen.</param>
+/// <param name="Inset">The space inside a Plate tier card.</param>
+public readonly record struct GraphMetrics(
+    double TitleSize, double TitleLine, double CaptionSize, double CaptionLine, double PlateTitleSize, double PlateTitleLine, int PlateLines,
+    double MarkSize, double SocketSize, double Stroke, double Halo, double Inset);
 
 public static class ZoomTiers
 {
-    private const double FullFrom = 0.84;
-    private const double DetailFrom = 0.6;
-    private const double CompactFrom = 0.5;
-    private const double LabelFrom = 0.36;
-    private const double TitleFrom = 0.23;
+    private const double FullFrom = 0.75;
+    private const double PlateFrom = 0.3;
 
-    /// <summary>The least zoom at which a card's title reads at a glance.</summary>
-    public const double ReadableZoom = LabelFrom;
+    /// <summary>The least zoom at which a card's title reads: the Plate tier.</summary>
+    public const double ReadableZoom = PlateFrom;
 
-    /// <summary>The zoom that the bar calls 100%: a card here reads at the app's body size, title and agent, at a size that fits a workflow.</summary>
-    public const double ActualSize = 0.4;
+    /// <summary>The largest zoom of a fit: 100%, a card at its true size.</summary>
+    public const double LargestFitZoom = 1;
 
-    /// <summary>The largest zoom of a fit: 120%, the last zoom at which a card keeps the form it has at 100%.</summary>
-    public const double LargestFitZoom = 0.48;
+    private const double PlateTitlePixels = 12;
+    private const double PlateLinePixels = 14;
+    private const double PlateMarkPixels = 14;
+    private const double PlateSocketPixels = 6;
+    private const double PlateInsetPixels = 4;
 
-    /// <summary>The zoom of a fit in a large window: the Full tier's whole card, a size past the zooms whose cards hold less (ADR 0074).</summary>
-    public const double LargeWindowFitZoom = 0.86;
+    // A card's text stays at the Type ramp's Caption and Body sizes on screen while the Full tier zooms out.
+    private const double LeastTextPixels = 11.5;
+    private const double TitleSize = 13;
+    private const double TitleLine = 18;
+    private const double CaptionSize = 11.5;
+    private const double CaptionLine = 14;
 
-    /// <summary>The width in screen pixels of a canvas from which a fit may take <see cref="LargeWindowFitZoom"/>.</summary>
-    public const double LargeWindowWidth = 1600;
+    // The card's box height, which holds a Plate tier title's lines.
+    private const double PlateCardHeight = 94;
 
-    /// <summary>The least size in screen pixels of a Title or Block tier card's text.</summary>
-    public const double ReadablePixels = 9;
-
-    /// <summary>The most title lines of a Title tier card.</summary>
-    private const int TitleLines = 3;
-
-    /// <summary>The space in canvas units over a Title tier card's title.</summary>
-    public const double TitleTop = 2;
-
-    /// <summary>The space in canvas units under a Title tier card's chip row.</summary>
-    private const double TitleBottom = 5;
-
-    /// <summary>The height in canvas units of a Title tier card's chip row: the client's badge and the state's badge.</summary>
-    public const double ChipRow = 36;
-
-    /// <summary>
-    /// The space under a Title tier card's last title line, as a part of the text size. It holds the descenders of "g" and "Q",
-    /// which draw under the tight line, and keeps about 4 px on screen between them and the chip row (ADR 0071).
-    /// </summary>
-    private const double TitleAir = 0.45;
-
-    /// <summary>The least gap in screen pixels between a Title tier card that grows and the card under it.</summary>
-    public const double CardGap = 6;
-
-    /// <summary>The height in canvas units for the title of a Block tier card, which has no agent's line and no badge.</summary>
-    private const double BlockRoom = 142;
-
-    /// <summary>The most title lines of a Block tier card.</summary>
-    private const int BlockLines = 2;
+    /// <summary>A rising zoom enters a larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
+    private const double Gap = 0.012;
 
     /// <summary>Whether a card at <paramref name="tier"/> gives up its agent's name, so a workflow that fits only at this tier opens in Flow.</summary>
     public static bool HidesNames(ZoomTier tier) => tier == ZoomTier.Block;
-
-    /// <summary>A zoom that rises enters the larger tier this far past its threshold, so a zoom near a threshold does not flicker.</summary>
-    private const double Gap = 0.012;
 
     /// <summary>The tier at <paramref name="zoom"/>, after <paramref name="current"/>. A falling zoom leaves a tier at its threshold.</summary>
     public static ZoomTier Next(ZoomTier current, double zoom)
@@ -75,99 +62,30 @@ public static class ZoomTiers
         return at > current ? at : past < current ? past : current;
     }
 
-    /// <summary>How much thicker a wire draws in the tier, so that it stays near its weight on screen.</summary>
-    public static double WireScale(ZoomTier tier) => tier switch
+    /// <summary>How much thicker a wire draws so it stays near its weight on screen under 100%, in steps of a quarter.</summary>
+    public static double WireScale(double zoom) => zoom >= 1 ? 1 : Math.Round(4 / zoom) / 4;
+
+    /// <summary>The sizes at <paramref name="zoom"/>.</summary>
+    public static GraphMetrics Metrics(double zoom)
     {
-        ZoomTier.Detail => 1.3,
-        ZoomTier.Compact => 1.5,
-        ZoomTier.Label => 2,
-        ZoomTier.Title => 3,
-        ZoomTier.Block => 3,
-        _ => 1,
-    };
-
-    /// <summary>How far a collapsed card draws under its 64 px box in the tier. The styles set the same heights, and the wires go around them.</summary>
-    public static double CardReach(ZoomTier tier) => tier switch
-    {
-        ZoomTier.Detail => 30,
-        ZoomTier.Compact => 34,
-        ZoomTier.Label => 90,
-        ZoomTier.Title => 94,
-        ZoomTier.Block => 94,
-        _ => 0,
-    };
-
-    /// <summary>
-    /// The text size in canvas units that keeps a Title or Block tier card's text just readable on screen at <paramref name="zoom"/>,
-    /// with its line height, the title lines, and how far the card draws under its 64 px box.
-    /// A Title tier card takes up to three title lines over its agent's line and grows to hold them, but only as far as
-    /// <paramref name="pitch"/>, the least distance in canvas units from a card's top to the top of the card under it, leaves a 6 px gap (ADR 0068).
-    /// A Block tier card gives up its agent's line and its badge, so its title keeps one or two lines at 9 px at every zoom.
-    /// </summary>
-    public static FarText TitleText(double zoom, ZoomTier tier = ZoomTier.Title, double pitch = double.PositiveInfinity)
-    {
-        var least = 2 * Math.Ceiling(ReadablePixels / zoom / 2);
-        if (tier == ZoomTier.Block)
-        {
-            var blockSize = Math.Max(least, 30);
-            var blockLine = Math.Ceiling(blockSize * 1.04);
-            return new(blockSize, blockLine, Math.Clamp((int)(BlockRoom / blockLine), 1, BlockLines), CardReach(tier));
-        }
-
-        // The Title tier's size steps by one, so the text keeps as close to 9 px as the room for three lines needs. The card
-        // takes the most lines whose height leaves the 6 px gap to the card under it, so a card never grows into its neighbour.
-        var size = Math.Clamp(Math.Ceiling(ReadablePixels / zoom), 30, 44);
-        var line = Math.Ceiling(size * 1.04);
-        var air = Math.Ceiling(size * TitleAir);
-        var drawn = 64 + CardReach(ZoomTier.Title);
-        var room = Math.Max(drawn, pitch - CardGap / zoom);
-        var lines = TitleLines;
-        while (lines > 1 && Height(lines) > room)
-        {
-            lines--;
-        }
-
-        var height = Math.Max(drawn, Height(lines));
-        return new(size, line, lines, height - 64, height - TitleBottom - ChipRow);
-
-        // The title's lines, the air under them, and the chip row, under the top's space.
-        double Height(int count) => TitleTop + count * line + air + ChipRow + TitleBottom;
+        var least = Math.Max(1, LeastTextPixels / TitleSize / zoom);
+        var (title, line) = zoom >= FullFrom ? (TitleSize * least, TitleLine * least) : (TitleSize, TitleLine);
+        var captionScale = zoom >= FullFrom ? Math.Max(1, 1 / zoom) : 1;
+        var plateLine = PlateLinePixels / zoom;
+        var lines = plateLine * 2 + 2 * PlateInsetPixels / zoom <= PlateCardHeight ? 2 : 1;
+        var pixel = Math.Max(1, 1 / zoom);
+        return new GraphMetrics(
+            title, line, CaptionSize * captionScale, CaptionLine * captionScale, PlateTitlePixels / zoom, plateLine, lines,
+            Math.Min(PlateMarkPixels / zoom, PlateCardHeight * 0.6), PlateSocketPixels / zoom, 1.5 * pixel, 3 * pixel, PlateInsetPixels / zoom);
     }
 
-    /// <summary>
-    /// The least distance in canvas units from a card's top at <paramref name="cards"/> to the top of a card under it that it
-    /// overlaps across, ports included. A Title tier card grows only within it (ADR 0068).
-    /// </summary>
-    public static double RowPitch(IReadOnlyList<Avalonia.Point> cards)
+    /// <summary>The style class that the canvas takes in the tier.</summary>
+    public static string StyleClass(ZoomTier tier) => tier switch
     {
-        const double width = WorkflowCanvasViewModel.TaskCardWidth + 32;
-        var pitch = double.PositiveInfinity;
-        for (var first = 0; first < cards.Count; first++)
-        {
-            for (var second = first + 1; second < cards.Count; second++)
-            {
-                var (dx, dy) = (Math.Abs(cards[first].X - cards[second].X), Math.Abs(cards[first].Y - cards[second].Y));
-                if (dx < width && dy > 0)
-                {
-                    pitch = Math.Min(pitch, dy);
-                }
-            }
-        }
-
-        return pitch;
-    }
-
-    /// <summary>The style class that the canvas takes in the tier, or null for the full card.</summary>
-    public static string? StyleClass(ZoomTier tier) => tier switch
-    {
-        ZoomTier.Detail => "tier-detail",
-        ZoomTier.Compact => "tier-compact",
-        ZoomTier.Label => "tier-label",
-        ZoomTier.Title => "tier-title",
+        ZoomTier.Plate => "tier-plate",
         ZoomTier.Block => "tier-block",
-        _ => null,
+        _ => "tier-full",
     };
 
-    internal static ZoomTier Of(double zoom) =>
-        zoom >= FullFrom ? ZoomTier.Full : zoom >= DetailFrom ? ZoomTier.Detail : zoom >= CompactFrom ? ZoomTier.Compact : zoom >= LabelFrom ? ZoomTier.Label : zoom >= TitleFrom ? ZoomTier.Title : ZoomTier.Block;
+    internal static ZoomTier Of(double zoom) => zoom >= FullFrom ? ZoomTier.Full : zoom >= PlateFrom ? ZoomTier.Plate : ZoomTier.Block;
 }

@@ -3,11 +3,9 @@ using IDevelop.Desktop.Canvas;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>Random layouts: no wire crosses a card, in any zoom tier.</summary>
+/// <summary>Random layouts: no wire crosses a card.</summary>
 public sealed class WireClearanceTests
 {
-    public static TheoryData<ZoomTier> Tiers => [.. Enum.GetValues<ZoomTier>()];
-
     /// <summary>Cards on a loose grid at a layout's closest pitch, joined at random, forward and back.</summary>
     private static ((double X, double Y)[] Nodes, (int From, int To)[] Edges) Random(int seed, double columns, double rows)
     {
@@ -17,14 +15,13 @@ public sealed class WireClearanceTests
         return (nodes, edges);
     }
 
-    [Theory]
-    [MemberData(nameof(Tiers))]
-    public void No_wire_crosses_a_card_in_any_zoom_tier(ZoomTier tier)
+    [Fact]
+    public void No_wire_crosses_a_card()
     {
         foreach (var seed in Enumerable.Range(0, 200))
         {
             var (nodes, edges) = Random(seed, 340, 190);
-            var plan = WirePlans.Of(nodes, edges, tier);
+            var plan = WirePlans.Of(nodes, edges);
 
             Assert.Empty(WirePlans.CardHits(plan));
         }

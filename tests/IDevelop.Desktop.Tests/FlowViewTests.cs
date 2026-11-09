@@ -106,7 +106,7 @@ public sealed class FlowViewTests
     public void A_workflow_that_a_Graph_fit_cannot_name_opens_in_Flow_and_a_small_one_in_Graph()
     {
         Assert.True(ZoomTiers.HidesNames(ZoomTier.Block));
-        Assert.False(ZoomTiers.HidesNames(ZoomTier.Title));
+        Assert.False(ZoomTiers.HidesNames(ZoomTier.Plate));
         using var f = new NodeFixture(
             [.. Enumerable.Range(0, 60).Select(index => (WorkflowEdit)NodeFixture.Task(new TaskId(Guid.NewGuid()), $"Node {index}", 105 + 340 * index))]);
         var large = Shell.OpenFitted(f.Project).Window.ViewModel.Canvas!;

@@ -21,7 +21,8 @@ public sealed class ExecutionLanguageTests
     private static Basis On(string? result) => new([new BasisInput(Source, result)], "instruction", null);
 
     [Theory]
-    [InlineData(ConnectionKind.Context, NodeState.Completed, NodeState.Running, WireFlow.Context)]
+    [InlineData(ConnectionKind.Context, NodeState.Completed, NodeState.Running, WireFlow.Feeding)]
+    [InlineData(ConnectionKind.Context, NodeState.Idle, NodeState.Idle, WireFlow.Context)]
     [InlineData(ConnectionKind.Dependency, NodeState.Completed, NodeState.Running, WireFlow.Feeding)]
     [InlineData(ConnectionKind.Dependency, NodeState.Completed, NodeState.InputRequired, WireFlow.Delivered)]
     [InlineData(ConnectionKind.Dependency, NodeState.Completed, NodeState.Idle, WireFlow.Ready)]
@@ -43,40 +44,64 @@ public sealed class ExecutionLanguageTests
     }
 
     [Fact]
-    public void Feeding_is_the_heaviest_wire_and_a_wire_that_carries_nothing_is_the_lightest()
+    public void A_wire_is_quiet_until_it_is_highlighted_or_feeds_a_running_agent()
     {
-        Assert.Equal(2.5, WireFlows.Stroke(WireFlow.Feeding));
-        Assert.All(new[] { WireFlow.Delivered, WireFlow.Outdated, WireFlow.Ready, WireFlow.Context, WireFlow.Stopped, WireFlow.Idle }, flow => Assert.Equal(2, WireFlows.Stroke(flow)));
+        Assert.Equal(2, WireFlows.Stroke(WireFlow.Feeding, highlighted: false));
+        Assert.All(new[] { WireFlow.Delivered, WireFlow.Outdated, WireFlow.Ready, WireFlow.Context, WireFlow.Stopped, WireFlow.Idle }, flow =>
+        {
+            Assert.Equal(1.5, WireFlows.Stroke(flow, highlighted: false));
+            Assert.Equal(2, WireFlows.Stroke(flow, highlighted: true));
+        });
+    }
+
+    [Fact]
+    public void A_wire_keeps_its_weight_on_screen_under_100_percent()
+    {
+        Assert.Equal(1, ZoomTiers.WireScale(1));
+        Assert.Equal(1, ZoomTiers.WireScale(1.6));
+        Assert.Equal(2, ZoomTiers.WireScale(0.5));
+        Assert.Equal(4, ZoomTiers.WireScale(0.25));
     }
 
     [Theory]
     [InlineData(1.0, ZoomTier.Full)]
-    [InlineData(0.84, ZoomTier.Full)]
-    [InlineData(0.83, ZoomTier.Detail)]
-    [InlineData(0.6, ZoomTier.Detail)]
-    [InlineData(0.59, ZoomTier.Compact)]
-    [InlineData(0.5, ZoomTier.Compact)]
-    [InlineData(0.49, ZoomTier.Label)]
-    [InlineData(0.36, ZoomTier.Label)]
-    [InlineData(0.35, ZoomTier.Title)]
-    [InlineData(0.23, ZoomTier.Title)]
-    [InlineData(0.22, ZoomTier.Block)]
-    public void A_falling_zoom_leaves_a_tier_at_its_threshold_so_a_title_never_draws_under_10_px(double zoom, ZoomTier tier) =>
+    [InlineData(0.75, ZoomTier.Full)]
+    [InlineData(0.74, ZoomTier.Plate)]
+    [InlineData(0.3, ZoomTier.Plate)]
+    [InlineData(0.29, ZoomTier.Block)]
+    public void A_falling_zoom_leaves_a_tier_at_its_threshold(double zoom, ZoomTier tier) =>
         Assert.Equal(tier, ZoomTiers.Next(ZoomTier.Full, zoom));
 
     [Theory]
-    [InlineData(ZoomTier.Detail, 0.85, ZoomTier.Detail)]
-    [InlineData(ZoomTier.Detail, 0.86, ZoomTier.Full)]
-    [InlineData(ZoomTier.Compact, 0.61, ZoomTier.Compact)]
-    [InlineData(ZoomTier.Compact, 0.62, ZoomTier.Detail)]
-    [InlineData(ZoomTier.Label, 0.51, ZoomTier.Label)]
-    [InlineData(ZoomTier.Label, 0.52, ZoomTier.Compact)]
-    [InlineData(ZoomTier.Title, 0.37, ZoomTier.Title)]
-    [InlineData(ZoomTier.Title, 0.39, ZoomTier.Label)]
-    [InlineData(ZoomTier.Block, 0.24, ZoomTier.Block)]
-    [InlineData(ZoomTier.Block, 0.26, ZoomTier.Title)]
+    [InlineData(ZoomTier.Plate, 0.76, ZoomTier.Plate)]
+    [InlineData(ZoomTier.Plate, 0.77, ZoomTier.Full)]
+    [InlineData(ZoomTier.Block, 0.305, ZoomTier.Block)]
+    [InlineData(ZoomTier.Block, 0.32, ZoomTier.Plate)]
     public void A_rising_zoom_enters_the_larger_tier_past_a_gap_so_a_zoom_near_a_threshold_does_not_flicker(ZoomTier current, double zoom, ZoomTier tier) =>
         Assert.Equal(tier, ZoomTiers.Next(current, zoom));
+
+    [Theory]
+    [InlineData(0.75)]
+    [InlineData(0.8)]
+    public void The_full_tier_keeps_its_caption_at_the_type_ramp_size_on_screen(double zoom) =>
+        Assert.Equal(11.5, ZoomTiers.Metrics(zoom).CaptionSize * zoom, 3);
+
+    [Fact]
+    public void The_plate_tier_keeps_a_12_px_title_and_6_px_sockets_on_screen()
+    {
+        var metrics = ZoomTiers.Metrics(0.5);
+
+        Assert.Equal(12, metrics.PlateTitleSize * 0.5, 3);
+        Assert.Equal(6, metrics.SocketSize * 0.5, 3);
+        Assert.Equal(2, metrics.PlateLines);
+    }
+
+    [Fact]
+    public void The_plate_tier_takes_one_title_line_where_two_lines_would_leave_the_card()
+    {
+        Assert.Equal(1, ZoomTiers.Metrics(0.3).PlateLines);
+        Assert.Equal(2, ZoomTiers.Metrics(0.4).PlateLines);
+    }
 
     private static WireLanes.Wire Wire(double order, double targetOrder, params (double X, double Y)[] points) =>
         new([.. points.Select(point => new Point(point.X, point.Y))], order, targetOrder);
@@ -139,53 +164,15 @@ public sealed class ExecutionLanguageTests
     }
 
     [Fact]
-    public void Lanes_and_port_points_widen_as_much_as_the_tier_thickens_the_wires_so_they_stay_apart_on_screen()
+    public void The_wires_of_one_output_share_one_trunk_and_a_wire_of_another_output_keeps_its_own_lane()
     {
-        var routes = WireLanes.Spread(
-        [
-            Wire(1, 0, (100, 0), (200, 0), (200, 100), (300, 100)),
-            Wire(2, 0, (100, 50), (200, 50), (200, 150), (300, 150)),
-        ], [], scale: 2).Routes;
+        WireLanes.Wire From(int output, double order, double y) => new([new Point(100, 0), new Point(200, 0), new Point(200, y), new Point(300, y)], order, 0, Trunk: output);
 
-        Assert.Equal(216, routes[0][1].X);
-        Assert.Equal(184, routes[1][1].X);
-        Assert.Equal(PortSlots.Of([0, 50], 80, 0, 154).Select(slot => slot * 2), PortSlots.Of([0, 50], 80, 0, 154, 2));
-    }
+        var routes = WireLanes.Spread([From(1, 1, 100), From(1, 2, 200), From(2, 3, 150)], []).Routes;
 
-    [Fact]
-    public void Wires_that_share_a_port_meet_the_card_at_their_own_points_in_the_order_of_their_far_rows()
-    {
-        // Three wires out of a port at row 32 of a card from 0 to 64: one point each, the highest far row on top, 12 apart.
-        Assert.Equal([12.0, -12.0, 0.0], PortSlots.Of([300, -100, 100], 32, 0, 64));
-        // One wire keeps the port's own point, and so does the wire whose other end lies on the port's row.
-        Assert.Equal([0.0], PortSlots.Of([300], 32, 0, 64));
-        Assert.Equal([0.0, 12.0], PortSlots.Of([32, 300], 32, 0, 64));
-        // Many wires squeeze into the card's edge, 10 from its top and its bottom.
-        var squeezed = PortSlots.Of([.. Enumerable.Range(0, 9).Select(row => (double)row)], 32, 0, 64);
-        Assert.Equal(-22, squeezed[0], 3);
-        Assert.Equal(22, squeezed[^1], 3);
-    }
-
-    [Fact]
-    public void A_port_near_the_cards_top_keeps_one_wire_on_its_own_point_and_the_points_evenly_apart()
-    {
-        // At the Title tier the port stands 32 under the top of a 150-high card, so the fan cannot center on it.
-        var slots = PortSlots.Of([-500, 100, 200, 300], 32, 0, 150, 3);
-
-        Assert.Contains(0.0, slots);
-        var points = slots.Order().ToList();
-        var pitch = points[1] - points[0];
-        Assert.All(points.Zip(points.Skip(1)), pair => Assert.Equal(pitch, pair.Second - pair.First, 3));
-        Assert.True(pitch >= PortSlots.Pitch * 3 * 0.5, $"The points are {pitch} apart.");
-    }
-
-    [Fact]
-    public void A_fan_that_has_too_little_room_still_keeps_one_wire_on_the_port()
-    {
-        var slots = PortSlots.Of([0, 1, 2, 3, 4], 32, 0, 64);
-
-        Assert.Contains(0.0, slots);
-        Assert.Equal(22, slots.Max(), 3);
+        Assert.Equal(routes[0][1].X, routes[1][1].X);
+        Assert.NotEqual(routes[0][1].X, routes[2][1].X);
+        Assert.Equal(routes[0][2].X, routes[1][2].X);
     }
 
     [AvaloniaTheory]

@@ -196,6 +196,21 @@ public sealed class FlowViewModel : ObservableObject
         private set => SetProperty(ref field, value);
     } = [];
 
+    /// <summary>The wires into running agents, drawn in their own moving layer, so only that layer redraws each frame.</summary>
+    public IReadOnlyList<FlowWire> MovingWires
+    {
+        get;
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasMovingWires));
+            }
+        }
+    } = [];
+
+    public bool HasMovingWires => MovingWires.Count > 0;
+
     internal FlowPlan? Plan { get; private set; }
 
     internal void Measure(double width)
@@ -389,6 +404,7 @@ public sealed class FlowViewModel : ObservableObject
         if (Plan is not { } plan)
         {
             Wires = [];
+            MovingWires = [];
             return;
         }
 
@@ -448,8 +464,10 @@ public sealed class FlowViewModel : ObservableObject
                 && !_canvas.Connections.Any(wire => (wire.From == card.Node && active.Contains(wire.Key.To)) || (wire.To == card.Node && active.Contains(wire.Key.From)));
         }
 
-        // Stronger wires draw last, so a highlighted or carrying wire stays whole over the ones it shares a lane with.
-        Wires = [.. wires.OrderBy(wire => wire.Emphasis == WireEmphasis.Dimmed ? 0 : wire.Emphasis == WireEmphasis.Normal ? 1 : 2).ThenBy(wire => wire.Flow is WireFlow.Feeding or WireFlow.Stopped ? 1 : 0)];
+        // Stronger wires draw last, so a highlighted or carrying wire stays whole over the ones it shares a lane with. A wire into a
+        // running agent moves, in its own layer.
+        Wires = [.. wires.Where(wire => wire.Flow != WireFlow.Feeding).OrderBy(wire => wire.Emphasis == WireEmphasis.Dimmed ? 0 : wire.Emphasis == WireEmphasis.Normal ? 1 : 2).ThenBy(wire => wire.Flow == WireFlow.Stopped ? 1 : 0)];
+        MovingWires = [.. wires.Where(wire => wire.Flow == WireFlow.Feeding)];
     }
 
     private Point? BandEnd(TaskNodeViewModel node, bool bottom)
@@ -462,8 +480,5 @@ public sealed class FlowViewModel : ObservableObject
         return new Point(band.X + band.Width / 2, band.Y + (bottom ? FlowLayout.HeaderHeight : 0));
     }
 
-    private static WireFlow Stronger(WireFlow current, WireFlow next) =>
-        next == WireFlow.Feeding || current == WireFlow.Feeding ? WireFlow.Feeding
-        : next == WireFlow.Stopped || current == WireFlow.Stopped ? WireFlow.Stopped
-        : current == WireFlow.Idle ? next : current;
+    private static WireFlow Stronger(WireFlow current, WireFlow next) => WireFlows.Stronger(current, next);
 }

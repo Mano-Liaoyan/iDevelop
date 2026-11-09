@@ -54,23 +54,22 @@ public sealed class RunBarTests
     }
 
     [AvaloniaFact]
-    public void A_completed_node_lights_its_output_pin_and_the_next_nodes_input_pin_and_its_wire_is_delivered()
+    public void A_completed_node_says_it_has_a_result_on_its_socket_row_and_its_wire_is_delivered()
     {
         using var f = new NodeFixture(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
         f.Install(Reply("s-1", "Done."));
         var shell = f.Open();
         var (first, second) = (shell.NodeModel("A"), shell.NodeModel("B"));
         var wire = shell.Window.ViewModel.Canvas!.Connections.Single();
-        Assert.False(second.Input.IsLive);
-        Assert.False(first.Output.IsLive);
+        Assert.Equal("No result", first.CardResult);
         Assert.Equal(WireFlow.Idle, wire.Flow);
 
         shell.RunNode("A");
         shell.WaitForState("B", NodeState.Completed);
 
-        Assert.True(first.Output.IsLive);
-        Assert.True(second.Input.IsLive);
-        Assert.False(first.Input.IsLive);
+        Assert.Equal("Result", first.CardResult);
+        Assert.Equal("Report", first.CardResultDetail);
+        Assert.Equal("Input", second.CardInput);
         Assert.Equal("Input: A", second.Input.Tip);
         Assert.Equal("Output: Result 1", first.OutputLine);
         Assert.Equal("Input: 1", second.InputLine);

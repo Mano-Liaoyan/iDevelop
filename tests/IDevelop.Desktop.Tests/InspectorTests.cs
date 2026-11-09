@@ -216,7 +216,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Single(shell.Window.ViewModel.Canvas!.Workflow.Tasks.Values, task => task.Title == "Wire export");
         Assert.Equal("Added 1 task.", shell.Status);
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Done", "the planner is done");
+        shell.WaitUntil(() => shell.CardStatus("Design export") == "Done", "the planner is done");
         Assert.False(shell.Has<StackPanel>("Proposal"));
     }
 
@@ -230,7 +230,7 @@ public sealed class InspectorTests : IDisposable
         Assert.StartsWith("Needs you", shell.InView<TextBlock>("RunTaskStatus").Text);
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Done", "the planner is done");
+        shell.WaitUntil(() => shell.CardStatus("Design export") == "Done", "the planner is done");
 
         Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "RetryTask")));
         shell.Page(AgentPage.Chat);

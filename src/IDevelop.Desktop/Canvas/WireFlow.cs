@@ -8,7 +8,7 @@ public enum WireFlow { Context, Feeding, Delivered, Outdated, Ready, Stopped, Id
 
 public static class WireFlows
 {
-    /// <summary>The first rule that matches, in the order of <see cref="WireFlow"/>.</summary>
+    /// <summary>What a wire carries. A wire into a running agent moves, whatever its kind, and a wire from a failed agent is red.</summary>
     /// <param name="kind">The connection's kind.</param>
     /// <param name="from">The source node's state.</param>
     /// <param name="to">The target node's state.</param>
@@ -17,9 +17,9 @@ public static class WireFlows
     /// <param name="targetBasis">What the target node's latest result ran on, or null before its first result.</param>
     public static WireFlow Of(ConnectionKind kind, NodeState from, NodeState to, TaskId source, string? sourceResult, Basis? targetBasis)
     {
-        if (kind == ConnectionKind.Context)
+        if (to == NodeState.Running)
         {
-            return WireFlow.Context;
+            return WireFlow.Feeding;
         }
 
         if (from == NodeState.Failed)
@@ -27,14 +27,14 @@ public static class WireFlows
             return WireFlow.Stopped;
         }
 
+        if (kind == ConnectionKind.Context)
+        {
+            return WireFlow.Context;
+        }
+
         if (from != NodeState.Completed)
         {
             return WireFlow.Idle;
-        }
-
-        if (to == NodeState.Running)
-        {
-            return WireFlow.Feeding;
         }
 
         if (to == NodeState.InputRequired)
@@ -50,12 +50,14 @@ public static class WireFlows
         return targetBasis.Inputs.FirstOrDefault(input => input.Node == source)?.Result == sourceResult ? WireFlow.Delivered : WireFlow.Outdated;
     }
 
-    /// <summary>The wire's stroke before emphasis and zoom.</summary>
-    public static double Stroke(WireFlow flow) => flow switch
-    {
-        WireFlow.Feeding => 2.5,
-        _ => 2,
-    };
+    /// <summary>The wire's stroke on screen. A wire into a running agent and a highlighted wire are 2 px, and every other wire is 1.5 px.</summary>
+    public static double Stroke(WireFlow flow, bool highlighted) => flow == WireFlow.Feeding || highlighted ? 2 : 1.5;
+
+    /// <summary>The flow that a socket shows when several wires join it: a wire into a running agent wins, then a wire from a failed agent.</summary>
+    public static WireFlow Stronger(WireFlow current, WireFlow next) =>
+        next == WireFlow.Feeding || current == WireFlow.Feeding ? WireFlow.Feeding
+        : next == WireFlow.Stopped || current == WireFlow.Stopped ? WireFlow.Stopped
+        : current == WireFlow.Idle ? next : current;
 
     /// <summary>A sentence for the wire's tooltip.</summary>
     public static string Tip(WireFlow flow, string source, string target) => flow switch

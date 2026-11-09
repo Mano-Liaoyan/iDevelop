@@ -121,8 +121,8 @@ public sealed partial class WorkflowCanvasViewModel
             return;
         }
 
-        var shift = FreeShift([.. copies.Keys.Select(id => Workflow.Positions[id])]);
-        var places = SelectedNodes.Select(node => node.CopyAs(copies[node.Id], Offset(Workflow.Positions[node.Id], shift))).ToList();
+        var shift = FreeShift([.. copies.Keys.Select(id => Space.ToDisplay(Workflow.Positions[id]))]);
+        var places = SelectedNodes.Select(node => node.CopyAs(copies[node.Id], Space.ToSaved(Space.ToDisplay(Workflow.Positions[node.Id]) + shift))).ToList();
         var connections = Workflow.Connections
             .Where(connection => copies.ContainsKey(connection.Key.From) && copies.ContainsKey(connection.Key.To))
             .Select(connection => (WorkflowEdit)new WorkflowEdit.Connect(new(copies[connection.Key.From], copies[connection.Key.To]), connection.Value));
@@ -208,15 +208,13 @@ public sealed partial class WorkflowCanvasViewModel
 
     private CanvasPoint Position(AddTarget target) => target switch
     {
-        AddTarget.AtPoint at => Offset(at.Point, -new Vector(TaskCardWidth / 2, TaskCardHeight / 2)),
-        AddTarget.InView => FreeSpot(new CanvasPoint(ViewportLocation.X + 60, ViewportLocation.Y + 60)),
-        AddTarget.FromOutput from => Offset(from.Drop, -(Vector)InputPortCenter),
-        AddTarget.ToInput to => Offset(to.Drop, -(Vector)OutputPortCenter),
-        AddTarget.Between between => Offset(between.Point, -new Vector(TaskCardWidth / 2, TaskCardHeight / 2)),
+        AddTarget.AtPoint at => Space.ToSaved(ToPoint(at.Point) - new Vector(TaskCardWidth / 2, TaskCardHeight / 2)),
+        AddTarget.InView => Space.ToSaved(FreeSpot(new Point(ViewportLocation.X + 60, ViewportLocation.Y + 60))),
+        AddTarget.FromOutput from => Space.ToSaved(ToPoint(from.Drop) - (Vector)InputPortCenter),
+        AddTarget.ToInput to => Space.ToSaved(ToPoint(to.Drop) - (Vector)OutputPortCenter),
+        AddTarget.Between between => Space.ToSaved(ToPoint(between.Point) - new Vector(TaskCardWidth / 2, TaskCardHeight / 2)),
         _ => throw new UnreachableException(),
     };
-
-    private static CanvasPoint Offset(CanvasPoint point, Vector by) => new(point.X + by.X, point.Y + by.Y);
 
     /// <summary>Applies the edits as one batch. A rejection names the tasks the batch adds by their new titles.</summary>
     private bool Apply(ImmutableArray<WorkflowEdit> edits, IReadOnlyList<WorkflowEdit.PlaceNode> added) =>

@@ -74,7 +74,7 @@ public sealed class ConversationWindowTests : IDisposable
         var shell = f.Open();
         shell.NodeModel("Design").RunCommand.Execute(null);
         shell.WaitForState("Design", NodeState.Failed);
-        shell.Editor.ViewportZoom = ZoomTiers.ActualSize;
+        shell.Editor.ViewportZoom = 1;
         shell.Render();
         var attention = shell.InCard<Button>("Design", "CardFarAttention");
 

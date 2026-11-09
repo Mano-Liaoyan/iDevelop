@@ -14,9 +14,12 @@ public sealed class FlowWires : Control
 {
     public static readonly StyledProperty<IReadOnlyList<FlowWire>?> WiresProperty = AvaloniaProperty.Register<FlowWires, IReadOnlyList<FlowWire>?>(nameof(Wires));
 
+    /// <summary>The moving layer's dash offset, in multiples of the pen's width, which a style animates.</summary>
+    public static readonly StyledProperty<double> DashOffsetProperty = AvaloniaProperty.Register<FlowWires, double>(nameof(DashOffset));
+
     private const double Corner = 6;
 
-    static FlowWires() => AffectsRender<FlowWires>(WiresProperty);
+    static FlowWires() => AffectsRender<FlowWires>(WiresProperty, DashOffsetProperty);
 
     public FlowWires() => ActualThemeVariantChanged += (_, _) => InvalidateVisual();
 
@@ -24,6 +27,12 @@ public sealed class FlowWires : Control
     {
         get => GetValue(WiresProperty);
         set => SetValue(WiresProperty, value);
+    }
+
+    public double DashOffset
+    {
+        get => GetValue(DashOffsetProperty);
+        set => SetValue(DashOffsetProperty, value);
     }
 
     public override void Render(DrawingContext context)
@@ -52,7 +61,8 @@ public sealed class FlowWires : Control
             return null;
         }
 
-        return new Pen(brush, thickness, wire.Kind == ConnectionKind.Context ? new DashStyle([4, 3], 0) : null, PenLineCap.Round);
+        var dashed = wire.Flow == WireFlow.Feeding || wire.Kind == ConnectionKind.Context;
+        return new Pen(brush, thickness, dashed ? new DashStyle([4, 3], DashOffset) : null, dashed ? PenLineCap.Flat : PenLineCap.Round);
     }
 
     private static StreamGeometry Rounded(ImmutableArray<Point> points)

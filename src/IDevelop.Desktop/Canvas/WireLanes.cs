@@ -35,10 +35,13 @@ internal static class WireLanes
     // How far past its ends a run looks for the cards beside it.
     private const double EndReach = 1;
 
+    // How far apart two first runs of one output may stand and still become one trunk.
+    private const double TrunkReach = 40;
+
     private const double Tolerance = 0.01;
 
     /// <summary>One wire's route, its place in a stable order, and whether it may leave a full channel.</summary>
-    public readonly record struct Wire(ImmutableArray<Point> Route, double Order, double TargetOrder, bool Stays = false);
+    public readonly record struct Wire(ImmutableArray<Point> Route, double Order, double TargetOrder, bool Stays = false, int? Trunk = null);
 
     /// <summary>A channel that lacks room, and the wire that must leave it.</summary>
     public readonly record struct Overflow(int Wire, Rect Channel);
@@ -46,20 +49,22 @@ internal static class WireLanes
     /// <summary>Each wire's route with its lanes, in the order given, and the channels that lack room.</summary>
     public readonly record struct Spreading(ImmutableArray<Point>[] Routes, IReadOnlyList<Overflow> Overflows);
 
-    // A run of a wire. Its ends have a place along the run and a side, -1 or 1, on which the wire's next run leaves it.
-    private readonly record struct Run(int Wire, int First, double Line, double Start, double End, double StartAt, int StartSide, double EndAt, int EndSide)
+    // A run of a wire. Its ends have a place along the run and a side, -1 or 1, on which the wire's next run leaves it. A trunk holds
+    // the first up or down run of every wire of one output, so it moves as one run.
+    private readonly record struct Run(int Wire, int First, double Line, double Start, double End, double StartAt, int StartSide, double EndAt, int EndSide, bool IsFirst = false)
     {
+        public IReadOnlyList<(int Wire, int First, double Line)> Shared { get; init; } = [];
+
         public bool Spans(double at) => at > Start + Tolerance && at < End - Tolerance;
 
         public bool Overlaps(Run other) => Math.Min(End, other.End) - Math.Max(Start, other.Start) > Tolerance;
     }
 
-    /// <param name="scale">How much thicker wires draw at the zoom tier, which widens the lanes as much, so they stay apart on screen.</param>
-    public static Spreading Spread(IReadOnlyList<Wire> wires, IReadOnlyList<Rect> cards, double scale = 1)
+    public static Spreading Spread(IReadOnlyList<Wire> wires, IReadOnlyList<Rect> cards)
     {
         var routes = wires.Select(wire => wire.Route.ToArray()).ToArray();
         var overflows = new List<Overflow>();
-        Separate(wires, routes, cards, vertical: true, scale, overflows);
+        Separate(wires, routes, cards, vertical: true, overflows);
         foreach (var route in routes)
         {
             // A lane past a stub's end shortens the stub, so the wire never turns back on itself beside its port.
@@ -74,16 +79,16 @@ internal static class WireLanes
             }
         }
 
-        Separate(wires, routes, cards, vertical: false, scale, overflows);
+        Separate(wires, routes, cards, vertical: false, overflows);
         // A lane that moved a wire into a card leaves that wire on its own route.
         return new([.. wires.Select((wire, index) => Hits(routes[index], cards) ? wire.Route : [.. routes[index]])], overflows);
     }
 
-    private static void Separate(IReadOnlyList<Wire> wires, Point[][] routes, IReadOnlyList<Rect> cards, bool vertical, double scale, List<Overflow> overflows)
+    private static void Separate(IReadOnlyList<Wire> wires, Point[][] routes, IReadOnlyList<Rect> cards, bool vertical, List<Overflow> overflows)
     {
-        var runs = routes.SelectMany((route, index) => Runs(route, index, vertical)).OrderBy(run => run.Line).ThenBy(run => wires[run.Wire].Order).ThenBy(run => wires[run.Wire].TargetOrder).ToList();
+        var runs = Merged(routes.SelectMany((route, index) => Runs(route, index, vertical)), wires, vertical).OrderBy(run => run.Line).ThenBy(run => wires[run.Wire].Order).ThenBy(run => wires[run.Wire].TargetOrder).ToList();
         var free = runs.Select(run => Free(run, cards, vertical)).ToList();
-        var near = NearLanes * PreferredLane * scale;
+        var near = NearLanes * PreferredLane;
         bool Conflict(int a, int b) =>
             runs[a].Overlaps(runs[b]) && Math.Abs(runs[a].Line - runs[b].Line) < near
             && Math.Max(free[a].Low, free[b].Low) < Math.Min(free[a].High, free[b].High);
@@ -97,18 +102,18 @@ internal static class WireLanes
                 levels[i] = Enumerable.Range(0, i).Where(j => Conflict(order[i], order[j])).Select(j => levels[j] + 1).DefaultIfEmpty(0).Max();
             }
 
-            Place(channel, order, levels, runs, free, routes, wires, vertical, scale, overflows);
+            Place(channel, order, levels, runs, free, routes, wires, vertical, overflows);
         }
     }
 
     private static void Place(
         List<int> channel, List<int> order, int[] levels, List<Run> runs, List<(double Low, double High)> free, Point[][] routes,
-        IReadOnlyList<Wire> wires, bool vertical, double scale, List<Overflow> overflows)
+        IReadOnlyList<Wire> wires, bool vertical, List<Overflow> overflows)
     {
         var lanes = levels.Max() + 1;
         var (low, high) = (channel.Max(run => free[run].Low), channel.Min(run => free[run].High));
         var margin = vertical ? ColumnMargin : RowMargin;
-        var (minimum, spacing) = ((vertical ? MinimumColumnLane : MinimumRowLane) * scale, PreferredLane * scale);
+        var (minimum, spacing) = (vertical ? MinimumColumnLane : MinimumRowLane, PreferredLane);
         double middle;
         if (double.IsFinite(low) && double.IsFinite(high))
         {
@@ -134,7 +139,7 @@ internal static class WireLanes
             var lines = channel.Select(run => runs[run].Line).Order().ToList();
             var half = (lanes - 1) * spacing / 2;
             middle = lines[lines.Count / 2];
-            var open = OpenMargin * scale;
+            var open = OpenMargin;
             middle = Math.Max(middle, double.IsFinite(low) ? low + open + half : middle);
             middle = Math.Min(middle, double.IsFinite(high) ? high - open - half : middle);
         }
@@ -146,6 +151,12 @@ internal static class WireLanes
             var move = vertical ? new Vector(line - run.Line, 0) : new Vector(0, line - run.Line);
             routes[run.Wire][run.First] += move;
             routes[run.Wire][run.First + 1] += move;
+            foreach (var (wire, first, own) in run.Shared)
+            {
+                var shared = vertical ? new Vector(line - own, 0) : new Vector(0, line - own);
+                routes[wire][first] += shared;
+                routes[wire][first + 1] += shared;
+            }
         }
     }
 
@@ -173,6 +184,7 @@ internal static class WireLanes
     // The runs of a wire that may move: each run up or down, and each run across that is not on a port's row.
     private static IEnumerable<Run> Runs(Point[] route, int wire, bool vertical)
     {
+        var foundFirst = false;
         for (var first = 0; first < route.Length - 1; first++)
         {
             var (a, b) = (route[first], route[first + 1]);
@@ -183,13 +195,51 @@ internal static class WireLanes
                 // A route's first point comes from the output at its left, and its last point goes to the input at its right.
                 var before = first > 0 ? Math.Sign(route[first - 1].X - a.X) : -1;
                 var after = first + 2 < route.Length ? Math.Sign(route[first + 2].X - b.X) : 1;
-                yield return new Run(wire, first, a.X, Math.Min(a.Y, b.Y), Math.Max(a.Y, b.Y), a.Y, before, b.Y, after);
+                yield return new Run(wire, first, a.X, Math.Min(a.Y, b.Y), Math.Max(a.Y, b.Y), a.Y, before, b.Y, after, !foundFirst);
+                foundFirst = true;
             }
             else if (!vertical && across && first > 0 && first + 1 < route.Length - 1)
             {
                 yield return new Run(wire, first, a.Y, Math.Min(a.X, b.X), Math.Max(a.X, b.X), a.X, Math.Sign(route[first - 1].Y - a.Y), b.X, Math.Sign(route[first + 2].Y - b.Y));
             }
         }
+    }
+
+    // The wires of one output leave it along one trunk, then fan out: their first runs up or down that lie in one channel become one run.
+    private static IEnumerable<Run> Merged(IEnumerable<Run> runs, IReadOnlyList<Wire> wires, bool vertical)
+    {
+        var all = runs.ToList();
+        if (!vertical)
+        {
+            return all;
+        }
+
+        var result = all.Where(run => !run.IsFirst || wires[run.Wire].Trunk is null).ToList();
+        foreach (var group in all.Where(run => run.IsFirst && wires[run.Wire].Trunk is not null).GroupBy(run => wires[run.Wire].Trunk))
+        {
+            var cluster = new List<Run>();
+            foreach (var run in group.OrderBy(run => run.Line))
+            {
+                if (cluster.Count > 0 && run.Line - cluster[^1].Line > TrunkReach)
+                {
+                    result.Add(Trunk(cluster));
+                    cluster = [];
+                }
+
+                cluster.Add(run);
+            }
+
+            result.Add(Trunk(cluster));
+        }
+
+        return result;
+
+        static Run Trunk(List<Run> members) => members[0] with
+        {
+            Start = members.Min(run => run.Start),
+            End = members.Max(run => run.End),
+            Shared = [.. members.Skip(1).Select(run => (run.Wire, run.First, run.Line))],
+        };
     }
 
     // The free space on both sides of a run, up to the nearest cards that stand beside any of its length, its ends included:

@@ -206,6 +206,8 @@ public sealed partial class WorkflowCanvasViewModel
             ShowPorts(node);
         }
 
+        Flow.ShowActive();
+
         var running = Nodes.Where(node => node.State == NodeState.Running).ToHashSet();
         RunningCount = running.Count;
         ArrangeStages();
@@ -227,15 +229,17 @@ public sealed partial class WorkflowCanvasViewModel
         ShowGhosts();
     }
 
-    // A filled dot says that an input is ready or that an output holds a current result. Each tooltip names what it says.
+    // A connected socket takes its wires' color, and the socket row says what it carries.
     private void ShowPorts(TaskNodeViewModel node)
     {
-        var sources = Connections.Where(wire => wire.To == node && wire.Kind == ConnectionKind.Dependency).Select(wire => wire.From).ToList();
-        node.Input.IsLive = sources.Count > 0 && sources.All(source => source.State == NodeState.Completed);
+        var incoming = Connections.Where(wire => wire.To == node).ToList();
+        var sources = incoming.Where(wire => wire.Kind == ConnectionKind.Dependency).Select(wire => wire.From).ToList();
+        node.Input.Flow = incoming.Aggregate(WireFlow.Idle, (flow, wire) => WireFlows.Stronger(flow, wire.Flow));
+        node.Output.Flow = Connections.Where(wire => wire.From == node).Aggregate(WireFlow.Idle, (flow, wire) => WireFlows.Stronger(flow, wire.Flow));
         node.Input.Tip = sources.Count == 0 ? "Input: no earlier node" : $"Input: {string.Join(", ", sources.Select(source => source.Title))}";
-        node.Output.IsLive = node.HasResults && node.State != NodeState.Stale;
         node.Output.Tip = node.OutputLine;
         node.ShowInputCount(sources.Count);
+        node.ShowConnectionCount(incoming.Count);
     }
 
     /// <summary>

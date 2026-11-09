@@ -32,7 +32,6 @@ public sealed partial class WorkflowCanvasViewModel
     private void Reroute()
     {
         _rerouteRequested = false;
-        ShowFarText();
         var cardIndex = Nodes.Select((node, index) => (node, index)).ToDictionary(pair => pair.node, pair => pair.index);
         var wires = Connections.Select(wire => new WireRouter.Wire(
             wire.Key,
@@ -44,13 +43,14 @@ public sealed partial class WorkflowCanvasViewModel
             new Rect(wire.From.Output.Anchor - new Vector(wire.From.CardSize.Width - InputPortCenter.X, InputPortCenter.Y), wire.From.DrawnSize),
             new Rect(wire.To.Input.Anchor - (Vector)InputPortCenter, wire.To.DrawnSize),
             wire.Flow == WireFlow.Feeding)).ToList();
-        // Every card stands where it shows and at the size it draws, so a wire goes around an expanded card (ADR 0024) and a
-        // zoomed out card's last line.
-        var drawn = _wireRouter.Plan([.. Nodes.Select(node => node.DrawnRect)], wires, CardReach, ZoomTiers.WireScale(Tier));
+        // Every card stands where it shows and at the size it draws, so a wire goes around an expanded card (ADR 0024).
+        var drawn = _wireRouter.Plan([.. Nodes.Select(node => node.DrawnRect)], wires);
         for (var wire = 0; wire < drawn.Count; wire++)
         {
             Connections[wire].Show(drawn[wire]);
         }
+
+        ShowPills();
     }
 
     /// <summary>Tells each card which words of its title set it apart from every other card's title.</summary>
@@ -62,16 +62,4 @@ public sealed partial class WorkflowCanvasViewModel
             node.TitleKey = keep;
         }
     }
-
-    /// <summary>Sets the zoomed out card's text for the zoom and the cards' rows. It returns whether a card's drawn height changed.</summary>
-    private bool ShowFarText()
-    {
-        var text = ZoomTiers.TitleText(ViewportZoom, Tier == ZoomTier.Block ? ZoomTier.Block : ZoomTier.Title, Tier == ZoomTier.Title ? RowPitch() : double.PositiveInfinity);
-        var grew = text.Reach != FarText.Reach;
-        FarText = text;
-        return grew;
-    }
-
-    /// <summary>The least distance from a collapsed card's top to the top of a collapsed card under it that it overlaps across.</summary>
-    private double RowPitch() => ZoomTiers.RowPitch([.. Nodes.Where(node => !node.IsExpanded).Select(node => node.DisplayLocation)]);
 }

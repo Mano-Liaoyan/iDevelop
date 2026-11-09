@@ -1,8 +1,9 @@
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>While nodes are selected, their connections stand out and every other connection recedes.</summary>
+/// <summary>While nodes are selected or under the pointer, their connections stand out and every other connection recedes.</summary>
 public sealed partial class WorkflowCanvasViewModel
 {
     partial void InitializeHighlight()
@@ -30,14 +31,64 @@ public sealed partial class WorkflowCanvasViewModel
         Emphasize(Connections);
     }
 
+    /// <summary>The card under the pointer in Graph, or null.</summary>
+    internal void Hover(TaskNodeViewModel? node)
+    {
+        if (node != _hovered)
+        {
+            _hovered = node;
+            Emphasize(Connections);
+        }
+    }
+
+    private TaskNodeViewModel? _hovered;
+
     private void Emphasize(IEnumerable<ConnectionViewModel> connections)
     {
-        var selected = SelectedNodes.Select(node => node.Id).ToHashSet();
+        var active = SelectedNodes.Select(node => node.Id).ToHashSet();
+        if (_hovered is { } hovered)
+        {
+            active.Add(hovered.Id);
+        }
+
         foreach (var connection in connections)
         {
-            connection.Emphasis = selected.Count == 0 ? WireEmphasis.Normal
-                : selected.Contains(connection.Key.From) || selected.Contains(connection.Key.To) ? WireEmphasis.Highlighted
+            connection.Emphasis = active.Count == 0 ? WireEmphasis.Normal
+                : active.Contains(connection.Key.From) || active.Contains(connection.Key.To) ? WireEmphasis.Highlighted
                 : WireEmphasis.Dimmed;
+        }
+
+        ShowPills();
+    }
+
+    /// <summary>The ghosts, then a label on each highlighted wire: what the editor draws over the Map.</summary>
+    public ObservableCollection<Ghost> Decorations { get; } = [];
+
+    /// <summary>A highlighted wire's label stands on its curve's midpoint.</summary>
+    private void ShowPills()
+    {
+        var pills = Connections.Where(wire => wire.IsHighlighted && wire.Curve.Count > 0)
+            .Select(wire => new WirePillViewModel(WireCurve.Middle(wire.Curve), wire.PillText, wire.PillTip)).ToArray();
+        if (!pills.SequenceEqual(_pills))
+        {
+            _pills = pills;
+            ShowDecorations();
+        }
+    }
+
+    private WirePillViewModel[] _pills = [];
+
+    private void ShowDecorations()
+    {
+        Decorations.Clear();
+        foreach (var ghost in Ghosts)
+        {
+            Decorations.Add(ghost);
+        }
+
+        foreach (var pill in _pills)
+        {
+            Decorations.Add(pill);
         }
     }
 

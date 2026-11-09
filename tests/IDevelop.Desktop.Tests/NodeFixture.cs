@@ -126,7 +126,7 @@ internal sealed partial class Shell
     public string Text(string automationId) => Find<Avalonia.Controls.TextBlock>(automationId).Text ?? "";
 
     public void WaitForCard(string title, string status) =>
-        WaitUntil(() => CardText(title, "CardStatus") == status, $"\"{title}\" shows {status}", () => $"It shows {CardText(title, "CardStatus")}.");
+        WaitUntil(() => CardStatus(title) == status, $"\"{title}\" shows {status}", () => $"It shows {CardStatus(title)}.");
 
     /// <summary>Waits until the node's card shows the state.</summary>
     public void WaitForState(string title, NodeState state) =>

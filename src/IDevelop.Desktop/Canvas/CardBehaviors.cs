@@ -15,7 +15,7 @@ public static class CardBehaviors
     /// <summary>The disclosure's 24 px target overhangs its 12 px column and 18 px line.</summary>
     public static readonly Thickness ChevronMargin = new(-6, -3);
 
-    /// <summary>A port's 20 px square centres on the header's first line, 32 px down.</summary>
+    /// <summary>A socket's 20 px square centres on the card's socket row.</summary>
     public static readonly Thickness PortMargin = new(0, WorkflowCanvasViewModel.InputPortCenter.Y - 10, 0, 0);
 
     public static readonly AttachedProperty<bool> ReportsSizeProperty =

@@ -6,43 +6,90 @@
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:theme="using:IDevelop.Desktop.Theme">
-  <!-- A selected card has a 1.5 px accent ring just outside its edge and a 3 px halo outside that, so a state's own ring on the card's
-       edge stays whole inside them, and a selected Running card shows both. The canvas's own ring says that it has the keyboard's focus. -->
+  <!-- A selected card has a 1.5 px accent ring just outside its edge and a 3 px halo outside that, in canvas units the view keeps near
+       their size on screen, so a state's own ring on the card's edge stays whole inside them. -->
   <Style Selector="Border.ring">
-    <Setter Property="Margin" Value="8.5,-1.5" />
-    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="Margin" Value="{DynamicResource RingMargin}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource RingThickness}" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
-  <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource SelectionHalo}" />
+  <Style Selector="Border.halo">
+    <Setter Property="Margin" Value="{DynamicResource HaloMargin}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource HaloThickness}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
-  <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
+  <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring, nodify|ItemContainer:previewing-selection Border.ring">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource SelectionHalo}" />
   </Style>
-  <!-- A card is 240 wide in its 260 wide container, and an expanded card 320 in 340 (ADR 0024). An expanded card's state
-       tint stays on its header, so its details read on the card's own surface. -->
+  <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.halo, nodify|ItemContainer:previewing-selection Border.halo">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSelected25Brush}" />
+  </Style>
+  <!-- A card is 220 wide in its 240 wide container, and an expanded card 320 in 340 (ADR 0024). -->
   <Style Selector="Panel.taskCard">
-    <Setter Property="Width" Value="260" />
-    <Setter Property="MinHeight" Value="64" />
+    <Setter Property="Width" Value="240" />
+    <Setter Property="MinHeight" Value="94" />
   </Style>
   <Style Selector="Panel.taskCard.expanded">
     <Setter Property="Width" Value="340" />
   </Style>
-  <!-- The smallest cards with text widen into the gap at their right, so a title keeps its words at the size that stays readable. -->
-  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded), :is(Control).tier-block Panel.taskCard:not(.expanded)">
-    <Setter Property="Width" Value="292" />
+  <Style Selector="Panel.cardBody">
+    <Setter Property="MinHeight" Value="94" />
   </Style>
-  <Style Selector="Panel.cardHead">
-    <Setter Property="Height" Value="64" />
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource NodeShadow}" />
   </Style>
-  <Style Selector="Border.cardBand">
-    <Setter Property="CornerRadius" Value="10,10,0,0" />
+  <Style Selector="nodify|ItemContainer:pointerover Border.card">
+    <Setter Property="BoxShadow" Value="{DynamicResource NodeHoverShadow}" />
   </Style>
-  <!-- The card's disclosure: a 24 px target drawn in the 12 px column, right while collapsed and down while expanded,
-       as the sidebar's rows show theirs. -->
+  <Style Selector="Border.cardHeader">
+    <Setter Property="CornerRadius" Value="8,8,0,0" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <Style Selector="Grid.cardFull">
+    <Setter Property="Height" Value="94" />
+  </Style>
+  <Style Selector="TextBlock.cardCaption">
+    <Setter Property="FontSize" Value="{DynamicResource CardCaptionSize}" />
+    <Setter Property="LineHeight" Value="{DynamicResource CardCaptionLine}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.cardCaption.noResult">
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="TextBlock.cardCaption.mono">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+  </Style>
+  <!-- The header's hover glyphs take 56 px, which moves the State Mark left; the title gives up the width. -->
+  <Style Selector="StackPanel.cardHover">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Width" Value="56" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+  </Style>
+  <Style Selector="nodify|ItemContainer:pointerover Panel.taskCard:not(.expanded) StackPanel.cardHover">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="Button.cardHoverAction">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.cardHoverAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <!-- The disclosure shows on hover and on an expanded card: a 24 px target drawn in the row's 12 px column, right while collapsed and down
+       while expanded. -->
   <Style Selector="ToggleButton.cardChevron">
+    <Setter Property="Opacity" Value="0" />
     <Setter Property="Width" Value="24" />
     <Setter Property="Height" Value="24" />
     <Setter Property="Padding" Value="0" />
@@ -53,6 +100,9 @@
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="nodify|ItemContainer:pointerover ToggleButton.cardChevron, ToggleButton.cardChevron:checked">
+    <Setter Property="Opacity" Value="1" />
   </Style>
   <Style Selector="ToggleButton.cardChevron /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:checked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
@@ -70,270 +120,61 @@
   <Style Selector="ToggleButton.cardChevron:checked PathIcon">
     <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
   </Style>
-  <Style Selector="Border.card">
-    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource NodeShadow}" />
-  </Style>
-  <Style Selector="nodify|ItemContainer:pointerover Border.card">
-    <Setter Property="BoxShadow" Value="{DynamicResource NodeHoverShadow}" />
-  </Style>
 
-  <!-- A zoomed out card. A collapsed card gives up its zones and an expanded card stays in the Full tier, so that it can be used.
-       Each tier sets its stripe, title, badge, and edge in canvas units, so they stay near one size on screen. -->
-  <Style Selector=":is(Control).cardFar, Border.cardEdgeClip, Border.cardBlock, Panel.stateBadge">
+  <!-- Three tiers. A collapsed card gives up its zones below the Full tier, and an expanded card stays Full so it can be used. -->
+  <Style Selector=":is(Control).tier-plate Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-block Panel.taskCard:not(.expanded) Grid.cardFull">
     <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-compact Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-label Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-title Panel.taskCard:not(.expanded) Grid.cardFull, :is(Control).tier-block Panel.taskCard:not(.expanded) Grid.cardFull">
+  <Style Selector="Grid.cardPlate, Border.cardBlock">
     <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Height" Value="94" />
+    <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-compact Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-label Panel.taskCard:not(.expanded) :is(Control).cardFar, :is(Control).tier-title Panel.taskCard:not(.expanded) :is(Control).cardFar">
+  <Style Selector=":is(Control).tier-plate Panel.taskCard:not(.expanded) Grid.cardPlate">
     <Setter Property="IsVisible" Value="True" />
   </Style>
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-compact Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-label Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-title Panel.taskCard:not(.expanded) Border.cardEdgeClip, :is(Control).tier-block Panel.taskCard:not(.expanded) Border.cardEdgeClip">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <!-- The Block tier keeps the title and gives up the last line and the badge, so the title keeps 9 px on screen (ADR 0067). -->
-  <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) :is(Control).farTitle">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-compact Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-label Panel.taskCard:not(.expanded) Panel.stateBadge, :is(Control).tier-title Panel.taskCard:not(.expanded) Panel.stateBadge">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <!-- At the Block tier the state's fill is a band along the card's bottom edge, under the title. -->
   <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) Border.cardBlock">
     <Setter Property="IsVisible" Value="True" />
-    <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Height" Value="12" />
-    <Setter Property="CornerRadius" Value="0,0,10,10" />
   </Style>
-  <Style Selector="Border.cardEdge">
-    <Setter Property="HorizontalAlignment" Value="Left" />
-    <Setter Property="Width" Value="5" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Border.cardEdge">
-    <Setter Property="Width" Value="8" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Border.cardEdge, :is(Control).tier-block Border.cardEdge">
-    <Setter Property="Width" Value="12" />
-  </Style>
-  <!-- The title has the card's whole width, and the last line's height comes on top of the card's 64 px. Each tier sets both in
-       canvas units, so the text stays at least 10 px on screen. -->
-  <!-- The title and the last line start on one line past the kind stripe at every tier: the title sits inside the card body, and the last line outside it, so their margins differ by the body's 10 px. The lines are tighter than the
-       font's own, so the title draws its descenders past its box into the room under it, and a "g" or a "Q" keeps its tail (ADR 0071). -->
-  <Style Selector="TextBlock.farTitle">
-    <Setter Property="ClipToBounds" Value="False" />
-    <Setter Property="Margin" Value="18,0,20,0" />
-    <Setter Property="FontSize" Value="17" />
-    <Setter Property="LineHeight" Value="21" />
-    <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="MaxLines" Value="2" />
-    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+  <Style Selector="TextBlock.plateTitle">
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="{DynamicResource PlateTitleMargin}" />
+    <Setter Property="FontSize" Value="{DynamicResource PlateTitleSize}" />
+    <Setter Property="LineHeight" Value="{DynamicResource PlateTitleLine}" />
+    <Setter Property="MaxLines" Value="{DynamicResource PlateTitleLines}" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+    <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector=":is(Control).tier-compact TextBlock.farTitle">
-    <Setter Property="FontSize" Value="20" />
-    <Setter Property="LineHeight" Value="26" />
+  <Style Selector="Panel.plateMark">
+    <Setter Property="Width" Value="{DynamicResource PlateMarkSize}" />
+    <Setter Property="Height" Value="{DynamicResource PlateMarkSize}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="{DynamicResource PlateMarkMargin}" />
   </Style>
-  <!-- A workflow fits the window at this tier, so the card takes a third title line and a title reads whole there. -->
-  <Style Selector=":is(Control).tier-label TextBlock.farTitle">
-    <Setter Property="Margin" Value="24,6,8,0" />
-    <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="FontSize" Value="28" />
-    <Setter Property="LineHeight" Value="31" />
-    <Setter Property="MaxLines" Value="3" />
-  </Style>
-  <!-- The smallest cards with text keep the client's badge under the title, because a node is an agent wherever it shows. The view
-       sets the text's size from the zoom, so the text stays just readable and the title keeps as many lines as its room holds. -->
-  <Style Selector=":is(Control).tier-title TextBlock.farTitle">
-    <Setter Property="Margin" Value="24,2,12,0" />
-    <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
-    <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
-    <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />
-    <Setter Property="VerticalAlignment" Value="Top" />
-  </Style>
-  <Style Selector=":is(Control).tier-block TextBlock.farTitle">
-    <Setter Property="Margin" Value="24,2,12,0" />
-    <Setter Property="FontSize" Value="{DynamicResource FarTitleSize}" />
-    <Setter Property="LineHeight" Value="{DynamicResource FarTitleLine}" />
-    <Setter Property="MaxLines" Value="{DynamicResource FarTitleLines}" />
-    <Setter Property="VerticalAlignment" Value="Top" />
-  </Style>
-  <!-- A ghost keeps a card's form at each zoom: its three lines close up, and far out only its title shows, as large as a card's. -->
-  <Style Selector="TextBlock.ghostFar">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail TextBlock.ghostFar, :is(Control).tier-compact TextBlock.ghostFar, :is(Control).tier-label TextBlock.ghostFar, :is(Control).tier-title TextBlock.ghostFar">
-    <Setter Property="IsVisible" Value="True" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail Grid.ghostFull, :is(Control).tier-compact Grid.ghostFull, :is(Control).tier-label Grid.ghostFull, :is(Control).tier-title Grid.ghostFull, :is(Control).tier-block Grid.ghostFull">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <Style Selector="Panel.cardBody">
-    <Setter Property="MinHeight" Value="64" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail Panel.taskCard:not(.expanded) Panel.cardBody">
-    <Setter Property="MinHeight" Value="94" />
-    <Setter Property="Margin" Value="0,0,0,-30" />
-  </Style>
-  <Style Selector=":is(Control).tier-compact Panel.taskCard:not(.expanded) Panel.cardBody">
-    <Setter Property="MinHeight" Value="98" />
-    <Setter Property="Margin" Value="0,0,0,-34" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardBody">
-    <Setter Property="MinHeight" Value="154" />
-    <Setter Property="Margin" Value="0,0,0,-90" />
-  </Style>
-  <!-- Under a zoom of 0.36 the card keeps its lines in the height a saved layout's rows leave. A Title tier card grows to hold a
-       third title line where the rows leave a 6 px gap under it, and the view sets its height from the zoom (ADR 0068). -->
-  <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) Panel.cardBody">
-    <Setter Property="MinHeight" Value="158" />
-    <Setter Property="Margin" Value="0,0,0,-94" />
-  </Style>
-  <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) Panel.cardHead">
-    <Setter Property="Height" Value="158" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardBody">
-    <Setter Property="MinHeight" Value="{DynamicResource FarCardHeight}" />
-    <Setter Property="Margin" Value="{DynamicResource FarCardMargin}" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Panel.taskCard:not(.expanded) Panel.cardHead">
-    <Setter Property="Height" Value="{DynamicResource FarCardHeight}" />
-  </Style>
-  <!-- The largest text keeps a text line's room from the card's edges too. -->
-  <Style Selector=":is(Control).tier-label Panel.taskCard:not(.expanded) Panel.cardHead">
-    <Setter Property="Height" Value="112" />
-  </Style>
-  <Style Selector="DockPanel.farLine">
-    <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Margin" Value="28,62,48,0" />
-    <Setter Property="Height" Value="24" />
-  </Style>
-  <Style Selector=":is(Control).tier-compact DockPanel.farLine">
-    <Setter Property="Height" Value="28" />
-    <Setter Property="Margin" Value="28,62,52,0" />
-  </Style>
-  <!-- At the Label tier, where a fit rests, the last line keeps to the card's drawn bottom. It keeps one line: a model name that
-       does not fit ends in an ellipsis, so every card's title keeps the same three lines (ADR 0065). -->
-  <Style Selector=":is(Control).tier-label DockPanel.farLine">
-    <Setter Property="Height" Value="NaN" />
-    <Setter Property="MinHeight" Value="32" />
-    <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="24,0,57,4" />
-  </Style>
-  <Style Selector="DockPanel.farLine > :is(Control)">
+  <Style Selector="theme|StateMark.blockMark">
+    <Setter Property="Width" Value="{DynamicResource PlateMarkSize}" />
+    <Setter Property="Height" Value="{DynamicResource PlateMarkSize}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
-  <Style Selector=":is(Control).tier-label DockPanel.farLine > :is(Control)">
-    <Setter Property="VerticalAlignment" Value="Top" />
+  <Style Selector="Border.cardBlock">
+    <Setter Property="Background" Value="{DynamicResource StateNeutral10Brush}" />
   </Style>
-
-  <Style Selector=":is(Control).tier-title DockPanel.farLine">
-    <Setter Property="Height" Value="{DynamicResource FarLineHeight}" />
-    <Setter Property="Margin" Value="{DynamicResource FarLineMargin}" />
+  <Style Selector="Border.cardBlock.state-completed">
+    <Setter Property="Background" Value="{DynamicResource StateSuccess10Brush}" />
   </Style>
-  <Style Selector="theme|KindTile.farTile">
-    <Setter Property="TileSize" Value="20" />
-    <Setter Property="Margin" Value="0,0,6,0" />
+  <Style Selector="Border.cardBlock.state-running">
+    <Setter Property="Background" Value="{DynamicResource Accent10Brush}" />
   </Style>
-  <Style Selector=":is(Control).tier-compact theme|KindTile.farTile">
-    <Setter Property="TileSize" Value="22" />
+  <Style Selector="Border.cardBlock.state-inputrequired">
+    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
   </Style>
-  <Style Selector=":is(Control).tier-label theme|KindTile.farTile">
-    <Setter Property="TileSize" Value="26" />
+  <Style Selector="Border.cardBlock.state-failed">
+    <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
   </Style>
-  <!-- The letter of the client that runs the node, in the tile's place. -->
-  <Style Selector="Border.farClient">
-    <Setter Property="MinWidth" Value="22" />
-    <Setter Property="Height" Value="22" />
-    <Setter Property="Padding" Value="3,0" />
-    <Setter Property="Margin" Value="0,0,6,0" />
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
-  </Style>
-  <Style Selector="Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="17" />
-    <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector=":is(Control).tier-compact Border.farClient">
-    <Setter Property="MinWidth" Value="24" />
-    <Setter Property="Height" Value="24" />
-  </Style>
-  <Style Selector=":is(Control).tier-compact Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="20" />
-  </Style>
-  <!-- The client's letters keep the agent's text size on screen, so they read at every zoom with text. -->
-  <!-- At the Label tier, where a fit rests, the letters and the model's name share the line with the badge, so both keep a size
-       at which a name such as "GPT-6.1 Terra" or "Sonnet 5.5" fits whole, and the model's words a step under the title's (ADR 0066, ADR 0070). -->
-  <Style Selector=":is(Control).tier-label Border.farClient">
-    <Setter Property="MinWidth" Value="26" />
-    <Setter Property="Height" Value="30" />
-    <Setter Property="Padding" Value="2,0" />
-    <Setter Property="Margin" Value="0,0,2,0" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="24" />
-  </Style>
-  <!-- The client's letters on an overview card, without the model's words beside them. -->
-  <Style Selector=":is(Control).tier-title Border.farClient">
-    <Setter Property="MinWidth" Value="44" />
-    <Setter Property="Height" Value="36" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Border.farClient TextBlock">
-    <Setter Property="FontSize" Value="34" />
-  </Style>
-  <Style Selector="TextBlock.farAgent">
-    <Setter Property="FontSize" Value="17" />
-    <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector=":is(Control).tier-compact TextBlock.farAgent">
-    <Setter Property="FontSize" Value="20" />
-  </Style>
-  <Style Selector=":is(Control).tier-label TextBlock.farAgent">
-    <Setter Property="FontSize" Value="24" />
-    <Setter Property="LineHeight" Value="30" />
-    <Setter Property="VerticalAlignment" Value="Top" />
-  </Style>
-  <!-- An overview card gives its text to the title. Its last line keeps the client's badge and the state's badge, and the model
-       shows from the Label tier up, in the card's tooltip, and in the inspector (ADR 0070). -->
-  <Style Selector=":is(Control).tier-title TextBlock.farAgent">
-    <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- The badge ends the last line, inside the card. Only the Block tier's card, which has no text, wears it on its corner. -->
-  <Style Selector="theme|StateMark.farMark">
-    <Setter Property="Width" Value="NaN" />
-    <Setter Property="Height" Value="NaN" />
-  </Style>
-  <Style Selector="Panel.stateBadge">
-    <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Width" Value="24" />
-    <Setter Property="Height" Value="24" />
-    <Setter Property="Margin" Value="0,62,18,0" />
-  </Style>
-  <Style Selector=":is(Control).tier-compact Panel.stateBadge">
-    <Setter Property="Width" Value="26" />
-    <Setter Property="Height" Value="26" />
-    <Setter Property="Margin" Value="0,63,18,0" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Panel.stateBadge">
-    <Setter Property="Width" Value="30" />
-    <Setter Property="Height" Value="30" />
-    <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Margin" Value="0,0,17,12" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Panel.stateBadge">
-    <Setter Property="Width" Value="36" />
-    <Setter Property="Height" Value="36" />
-    <Setter Property="Margin" Value="{DynamicResource FarBadgeMargin}" />
-  </Style>
-  <Style Selector=":is(Control).tier-block Panel.stateBadge">
-    <Setter Property="Width" Value="80" />
-    <Setter Property="Height" Value="80" />
-    <Setter Property="Margin" Value="0,-40,-30,0" />
+  <Style Selector="Border.cardBlock.state-stale">
+    <Setter Property="Background" Value="{DynamicResource StateWarning10Brush}" />
   </Style>
   <Style Selector="Button.attention.farAttention">
     <Setter Property="Width" Value="NaN" />
@@ -348,38 +189,27 @@
   <Style Selector="Button.attention.farAttention:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
   </Style>
-  <!-- A card's edge keeps its weight on screen as the cards shrink, and a node with no state keeps a visible edge. -->
-  <Style Selector=":is(Control).tier-detail Border.stateStroke, :is(Control).tier-compact Border.stateStroke">
-    <Setter Property="BorderThickness" Value="2" />
+  <!-- A card's edge and ring keep their weight on screen as the cards shrink. An idle or done card keeps a 1 px edge. -->
+  <Style Selector="Panel.taskCard Border.stateStroke">
+    <Setter Property="BorderThickness" Value="{DynamicResource EdgeThickness}" />
   </Style>
-  <Style Selector=":is(Control).tier-label Border.stateStroke">
-    <Setter Property="BorderThickness" Value="3" />
+  <Style Selector="Panel.taskCard Border.stateStroke.state-running, Panel.taskCard Border.stateStroke.state-inputrequired, Panel.taskCard Border.stateStroke.state-failed">
+    <Setter Property="BorderThickness" Value="{DynamicResource RingThickness}" />
   </Style>
-  <Style Selector=":is(Control).tier-title Border.stateStroke, :is(Control).tier-block Border.stateStroke">
-    <Setter Property="BorderThickness" Value="5" />
+  <Style Selector="Panel.taskCard Rectangle.staleEdge">
+    <Setter Property="StrokeThickness" Value="{DynamicResource StaleEdgeWidth}" />
   </Style>
-  <Style Selector=":is(Control).tier-label Rectangle.staleEdge">
-    <Setter Property="StrokeThickness" Value="3" />
+  <!-- A ghost keeps a card's form at each zoom: its three lines close up, and far out only its title shows, as large as a card's. -->
+  <Style Selector="TextBlock.ghostFar">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
-  <Style Selector=":is(Control).tier-title Rectangle.staleEdge, :is(Control).tier-block Rectangle.staleEdge">
-    <Setter Property="StrokeThickness" Value="5" />
+  <Style Selector=":is(Control).tier-plate TextBlock.ghostFar">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Margin" Value="18,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
-  <!-- A selection ring keeps its weight on screen as the cards shrink, and it stays just outside the card's edge. -->
-  <Style Selector=":is(Control).tier-detail Border.ring, :is(Control).tier-compact Border.ring">
-    <Setter Property="Margin" Value="7.5,-2.5" />
-    <Setter Property="BorderThickness" Value="2.5" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Border.ring">
-    <Setter Property="Margin" Value="6,-4" />
-    <Setter Property="BorderThickness" Value="4" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Border.ring, :is(Control).tier-block Border.ring">
-    <Setter Property="Margin" Value="3,-7" />
-    <Setter Property="BorderThickness" Value="7" />
-  </Style>
-  <Style Selector=":is(Control).tier-title Border.ring">
-    <Setter Property="Margin" Value="5,-5" />
-    <Setter Property="BorderThickness" Value="5" />
+  <Style Selector=":is(Control).tier-plate Grid.ghostFull, :is(Control).tier-block Grid.ghostFull">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
        show through it (#85). Its dashed edge and faded tile say it is a proposal. -->
@@ -412,8 +242,8 @@
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="TextBlock.cardTitle">
-    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
-    <Setter Property="LineHeight" Value="{StaticResource TypeBodyLine}" />
+    <Setter Property="FontSize" Value="{DynamicResource CardTitleSize}" />
+    <Setter Property="LineHeight" Value="{DynamicResource CardTitleLine}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="MaxLines" Value="2" />
     <Setter Property="TextWrapping" Value="WrapWithOverflow" />
@@ -434,94 +264,45 @@
     <Setter Property="CornerRadius" Value="5" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus, TextBlock.cardModel">
-    <Setter Property="FontSize" Value="{StaticResource TypeSmallSize}" />
-    <Setter Property="Height" Value="16" />
-    <Setter Property="LineHeight" Value="{StaticResource TypeSmallLine}" />
-    <Setter Property="VerticalAlignment" Value="Center" />
+  <!-- Ghost cards use these two lines under a title. -->
+  <Style Selector="TextBlock.ghostAgent">
+    <Setter Property="FontSize" Value="{StaticResource TypeCaptionSize}" />
+    <Setter Property="LineHeight" Value="{StaticResource TypeCaptionLine}" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="TextBlock.cardStatus, TextBlock.cardAgent">
-    <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="Margin" Value="0,0,6,0" />
-  </Style>
-  <Style Selector="TextBlock.cardStatus.state-running">
-    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
-  </Style>
-  <Style Selector="TextBlock.cardStatus.state-failed">
-    <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
-  </Style>
-  <Style Selector="TextBlock.cardStatus.state-inputrequired, TextBlock.cardStatus.state-stale">
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-  </Style>
-
-  <!-- A port keeps its size on screen as the cards shrink. -->
-  <Style Selector="Ellipse.port, Ellipse.portDot">
+  <!-- A socket: 10 px on the card's edge, 6 px on screen at the Plate tier. The Block tier shows none. -->
+  <Style Selector="Ellipse.port">
     <Setter Property="Width" Value="10" />
     <Setter Property="Height" Value="10" />
+    <Setter Property="StrokeThickness" Value="1.5" />
   </Style>
-  <Style Selector=":is(Control).tier-detail Ellipse.port, :is(Control).tier-detail Ellipse.portDot, :is(Control).tier-compact Ellipse.port, :is(Control).tier-compact Ellipse.portDot">
-    <Setter Property="Width" Value="14" />
-    <Setter Property="Height" Value="14" />
+  <Style Selector=":is(Control).tier-plate Panel.taskCard:not(.expanded) Ellipse.port">
+    <Setter Property="Width" Value="{DynamicResource PlateSocketSize}" />
+    <Setter Property="Height" Value="{DynamicResource PlateSocketSize}" />
+    <Setter Property="StrokeThickness" Value="{DynamicResource PlateSocketStroke}" />
   </Style>
-  <Style Selector=":is(Control).tier-label Ellipse.port, :is(Control).tier-label Ellipse.portDot, :is(Control).tier-title Ellipse.port, :is(Control).tier-title Ellipse.portDot">
-    <Setter Property="Width" Value="16" />
-    <Setter Property="Height" Value="16" />
-  </Style>
-  <Style Selector="Ellipse.port">
-    <Setter Property="StrokeThickness" Value="2" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Ellipse.port, :is(Control).tier-title Ellipse.port">
-    <Setter Property="StrokeThickness" Value="4" />
-  </Style>
-  <Style Selector="Ellipse.portDot">
-    <Setter Property="StrokeThickness" Value="0" />
-    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <!-- A socket sits outside the card's edge, clear of the kind's stripe and the selection line, and a wire ends at its outer edge. -->
-  <Style Selector="Ellipse.port.input, Ellipse.portDot.input">
-    <Setter Property="RenderTransform" Value="translateX(-5px)" />
-  </Style>
-  <Style Selector="Ellipse.port.output, Ellipse.portDot.output">
-    <Setter Property="RenderTransform" Value="translateX(5px)" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail Ellipse.port.input, :is(Control).tier-detail Ellipse.portDot.input, :is(Control).tier-compact Ellipse.port.input, :is(Control).tier-compact Ellipse.portDot.input">
-    <Setter Property="RenderTransform" Value="translateX(-7px)" />
-  </Style>
-  <Style Selector=":is(Control).tier-detail Ellipse.port.output, :is(Control).tier-detail Ellipse.portDot.output, :is(Control).tier-compact Ellipse.port.output, :is(Control).tier-compact Ellipse.portDot.output">
-    <Setter Property="RenderTransform" Value="translateX(7px)" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Ellipse.port.input, :is(Control).tier-label Ellipse.portDot.input, :is(Control).tier-title Ellipse.port.input, :is(Control).tier-title Ellipse.portDot.input">
-    <Setter Property="RenderTransform" Value="translateX(-8px)" />
-  </Style>
-  <Style Selector=":is(Control).tier-label Ellipse.port.output, :is(Control).tier-label Ellipse.portDot.output, :is(Control).tier-title Ellipse.port.output, :is(Control).tier-title Ellipse.portDot.output">
-    <Setter Property="RenderTransform" Value="translateX(8px)" />
-  </Style>
-  <!-- A port's ring stays quiet, but it reads on the canvas in both themes, until a connection uses it. -->
-  <Style Selector="Ellipse.port">
-    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
-  </Style>
-  <Style Selector="Ellipse.port.connected">
-    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
+  <Style Selector=":is(Control).tier-block Panel.taskCard:not(.expanded) Ellipse.port">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
 
   <!-- Nodify's own rule that draws connections below the cards never matches its internal host type. -->
   <Style Selector="nodify|NodifyEditor /template/ :is(Control)#PART_ConnectionsHost">
     <Setter Property="ZIndex" Value="-1" />
   </Style>
+  <!-- The wires: one solid quiet line for a dependency, the same line dashed for context, in canvas units the view keeps near their
+       weight on screen. A wire reaches the socket's center and a filled socket covers its end. -->
   <Style Selector="nodify|StepConnection">
     <Setter Property="StrokeThickness" Value="2" />
     <Setter Property="Opacity" Value="1" />
-    <!-- A routed wire ignores the spacing. WireRouting.Stub reaches past the spacing and the offset, one value for both ends. -->
-    <Setter Property="Spacing" Value="20" />
-    <!-- A handle's width, so each end meets the outer edge of its 10 px socket. -->
-    <Setter Property="SourceOffset" Value="10,0" />
-    <Setter Property="TargetOffset" Value="10,0" />
-    <!-- A small arrowhead at the input says which way a wire runs. -->
-    <Setter Property="ArrowSize" Value="7,6" />
+    <Setter Property="Spacing" Value="0" />
+    <Setter Property="SourceOffset" Value="0,0" />
+    <Setter Property="TargetOffset" Value="0,0" />
+    <Setter Property="ArrowSize" Value="0,0" />
     <!-- An invisible solid outline gives the pointer a 12 px target around the line, gaps in a dash included. -->
     <Setter Property="OutlineBrush" Value="Transparent" />
     <Setter Property="OutlineThickness" Value="5" />
+    <Setter Property="Stroke" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextFaintBrush}" />
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="StrokeThickness" Duration="0:0:0.12" />
@@ -529,48 +310,38 @@
       </Transitions>
     </Setter>
   </Style>
-  <!-- A wire keeps to the outer edge of its socket as the sockets grow at each tier. -->
-  <Style Selector=":is(Control).tier-detail nodify|StepConnection, :is(Control).tier-compact nodify|StepConnection">
-    <Setter Property="SourceOffset" Value="14,0" />
-    <Setter Property="TargetOffset" Value="14,0" />
-  </Style>
-  <Style Selector=":is(Control).tier-label nodify|StepConnection, :is(Control).tier-title nodify|StepConnection">
-    <Setter Property="SourceOffset" Value="16,0" />
-    <Setter Property="TargetOffset" Value="16,0" />
-  </Style>
-  <!-- A wire's color shows what happens on it, never the kinds of its nodes (ADR 0045). It is quiet while it is idle or done,
-       and only the wire into a running node is loud: bright and moving, at the weight of a wire. The neutral brushes keep 3:1 with the
-       canvas in both themes. The stroke comes from the wire's view model, because the flow, the selection, and the zoom tier
-       all set it. -->
-  <Style Selector="nodify|StepConnection">
-    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
   <Style Selector="nodify|StepConnection.wire">
     <Setter Property="StrokeThickness" Value="{ReflectionBinding Stroke}" />
   </Style>
-  <!-- A selected card's wires take the selection's strong neutral, so blue on a wire always means a node reads it now (ADR 0071). -->
+  <!-- A selected or hovered card's wires go to the strong neutral, and every other wire recedes. -->
   <Style Selector="nodify|StepConnection.wire.highlighted">
-    <Setter Property="Stroke" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.wire.flow-outdated">
-    <Setter Property="Stroke" Value="{DynamicResource StateWarningStrokeBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource StateWarningStrokeBrush}" />
+  <Style Selector="nodify|StepConnection.wire.dimmed">
+    <Setter Property="Stroke" Value="{DynamicResource WireDimBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource WireDimBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.wire.flow-stopped">
+  <!-- A wire from a failed agent is red. -->
+  <Style Selector="nodify|StepConnection.wire.flow-stopped:not(.dimmed)">
     <Setter Property="Stroke" Value="{DynamicResource StateFailedStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
-  <!-- Moving arrows follow the wire's curve and mean a node reads this result now. Dashes mean context, so nothing dashes here. -->
+  <!-- A wire into a running agent moves: the only wires that do, a 1 s dash offset. Its color stays even while another node is selected. -->
   <Style Selector="nodify|StepConnection.wire.flow-feeding">
     <Setter Property="Stroke" Value="{DynamicResource StateRunningBrush}" />
     <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
-    <Setter Property="Opacity" Value="1" />
-    <Setter Property="ArrowSize" Value="8,8" />
-    <Setter Property="DirectionalArrowsCount" Value="3" />
-    <Setter Property="IsAnimatingDirectionalArrows" Value="True" />
-    <Setter Property="DirectionalArrowsAnimationDuration" Value="1.2" />
+    <Setter Property="StrokeDashArray" Value="4,3" />
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="StrokeDashOffset" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="StrokeDashOffset" Value="-7" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
   </Style>
   <Style Selector="nodify|StepConnection.context">
     <Setter Property="StrokeDashArray" Value="4,3" />
@@ -587,7 +358,7 @@
   </Style>
   <!-- The line Nodify's pending connection draws while a wire is dragged. -->
   <Style Selector="nodify|LineConnection.dangling">
-    <Setter Property="StrokeThickness" Value="3" />
+    <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeDashArray" Value="4,4" />
     <Setter Property="Spacing" Value="0" />
     <Setter Property="ArrowSize" Value="0,0" />
@@ -602,6 +373,18 @@
   <Style Selector="nodify|StepConnection.wire[(nodify|BaseConnection.IsSelected)=true]">
     <Setter Property="StrokeThickness" Value="{ReflectionBinding HotStroke}" />
     <Setter Property="Opacity" Value="1" />
+  </Style>
+  <!-- A highlighted wire's label, at its midpoint, at a Caption's size on screen. -->
+  <Style Selector="Border.wirePill">
+    <Setter Property="Padding" Value="{DynamicResource WirePillPadding}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource WirePillRadius}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource WirePillEdge}" />
+  </Style>
+  <Style Selector="Border.wirePill TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource WirePillSize}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="nodify|PendingConnection">
     <Setter Property="Stroke" Value="{DynamicResource TextMutedBrush}" />
@@ -620,12 +403,7 @@
   <!-- An item is a card in canvas units, which the minimap draws about eight times smaller. It takes its state's fill, as a
        card does at the Block tier. A ghost is a faint fill in a dashed ring. -->
   <Style Selector="Border.minimapItem">
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-  </Style>
-  <!-- A wire that the selection leaves out goes to the dim color. A wire that feeds a running node keeps moving in its own color. -->
-  <Style Selector="nodify|StepConnection.wire.dimmed:not(.flow-feeding)">
-    <Setter Property="Stroke" Value="{DynamicResource WireDimBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource WireDimBrush}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
   </Style>
   <!-- A node that has not run stays visible on the map's surface, under the states that have happened. -->
   <Style Selector="Border.minimapItem.state-idle">
@@ -852,16 +630,24 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
 
-  <!-- Flow has no zoom, so a card keeps the ring's true size. These come last, because the Graph tiers on the view set theirs in canvas units. -->
-  <Style Selector="Panel.flowCard Border.stateStroke">
-    <Setter Property="BorderThickness" Value="1" />
+  <!-- Flow's moving wires: the wires into running agents, in their own layer, so only that layer redraws each frame. -->
+  <Style Selector="canvas|FlowWires.moving">
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="DashOffset" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="DashOffset" Value="-7" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
   </Style>
-  <Style Selector="Panel.flowCard Border.stateStroke.state-running, Panel.flowCard Border.stateStroke.state-inputrequired, Panel.flowCard Border.stateStroke.state-failed">
-    <Setter Property="BorderThickness" Value="1.5" />
-  </Style>
-  <Style Selector="Panel.flowCard Rectangle.staleEdge">
-    <Setter Property="StrokeThickness" Value="1.5" />
-    <Setter Property="StrokeDashArray" Value="4,3" />
+  <!-- The Run frame: while an agent runs, a 2 px inset border on the Map sheet, as Unreal shows a simulating graph. -->
+  <Style Selector="Border.runFrame">
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
   </Style>
   <!-- Rows of chips stand 8 px apart, so a chip's socket is 6 px and two sockets across a gap keep apart. -->
   <Style Selector="Panel.flowCard.chip Ellipse.flowSocket">

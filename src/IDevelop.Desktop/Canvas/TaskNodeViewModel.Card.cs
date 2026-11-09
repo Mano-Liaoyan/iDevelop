@@ -44,22 +44,40 @@ public sealed partial class TaskNodeViewModel
     public string CardModel => _task.Execution is { } settings && RunText.AgentNames(settings, Status).Model is { } model
         ? CardText.ModelName(settings.Client, model) : "";
 
-    /// <summary>
-    /// The zoomed out card's last line: the model in every state, or the type of a node with no agent. State never takes the
-    /// agent's place, and the badge at the line's end shows the state.
-    /// </summary>
+    /// <summary>Flow's card line: the model in every state, or the type of a node with no agent.</summary>
     public string CardLine => AgentModel.Length == 0 ? TypeName : CardModel;
 
     /// <summary>The node names a model, which the card's last line shows after its client.</summary>
     public bool HasModel => AgentModel.Length > 0;
 
-    /// <summary>The client's name on a card's last line, without the words that every client's name would carry.</summary>
-    public string CardClient => AgentClient.Replace(" CLI", "", StringComparison.Ordinal);
+    /// <summary>The agent row's start: the client's name without the words that every client's name would carry, or Approval for a person's node.</summary>
+    public string CardClient => HasAgent ? AgentClient.Replace(" CLI", "", StringComparison.Ordinal) : "Approval";
 
-    /// <summary>The one letter that names the client on a zoomed out card, whose line has no room for the name.</summary>
-    public string ClientMark => _task.Execution is { } settings ? CardText.ClientMark(settings.Client) : "";
+    /// <summary>The socket row's left label, "Input", or "Input 3" with more than one connection.</summary>
+    public string CardInput => _connectionCount > 1 ? $"Input {_connectionCount}" : "Input";
 
-    /// <summary>The state's word, at the end of the card's last line. The mark's glyph tells a waiting node's reason.</summary>
+    /// <summary>The socket row's right label: "Result" while a result exists, else "No result".</summary>
+    public string CardResult => HasResults ? "Result" : "No result";
+
+    /// <summary>The commit's seven characters, or "Report" for a result with no commit, or empty with no result.</summary>
+    public string CardResultDetail => LatestResult is not { } result ? "" : result.Commit is { Length: >= 7 } commit ? commit[..7] : "Report";
+
+    /// <summary>The socket row's detail is a commit, so it draws in the mono font.</summary>
+    public bool CardResultIsCommit => LatestResult?.Commit is { Length: >= 7 };
+
+    private int _connectionCount;
+
+    /// <summary>The node's connection count, in and out of the canvas, which names its input socket.</summary>
+    internal void ShowConnectionCount(int count)
+    {
+        if (_connectionCount != count)
+        {
+            _connectionCount = count;
+            OnPropertyChanged(nameof(CardInput));
+        }
+    }
+
+    /// <summary>The state's word. A card shows it as its State Mark, and the mark's glyph tells a waiting node's reason.</summary>
     public string CardStatus => NodeStates.Word(State);
 
     /// <summary>The tooltip of the card's State Mark: the state and its reason, and who reviews the node while a review goes on.</summary>

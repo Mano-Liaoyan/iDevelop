@@ -7,7 +7,17 @@ namespace IDevelop.Desktop.Canvas;
 /// What the canvas draws for a change that no edit holds yet: a proposal's tasks and connections, and a dropped wire
 /// while the Add popover is open. A ghost takes no input.
 /// </summary>
-public abstract record Ghost(Point Location);
+public abstract record Ghost(Point Location)
+{
+    /// <summary>Whether the decorator takes the pointer. A ghost does not, so a press reaches the canvas.</summary>
+    public virtual bool TakesPointer => false;
+}
+
+/// <summary>A highlighted wire's label, at the wire's midpoint. Its tooltip names the wire's target.</summary>
+public sealed record WirePillViewModel(Point Location, string Label, string Tip) : Ghost(Location)
+{
+    public override bool TakesPointer => true;
+}
 
 /// <summary>
 /// A dashed card for a task that a proposal adds, or fills in place of the empty card, with a card's three lines: the

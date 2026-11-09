@@ -360,7 +360,7 @@ public sealed class CardExpansionTests : IDisposable
         shell.Pick(shell.InCard<ComboBox>("A", "CardPickReasoning"), "high");
 
         shell.WaitForState("A", NodeState.Stale);
-        Assert.Equal("Stale", shell.CardText("A", "CardStatus"));
+        Assert.Equal("Stale", shell.CardStatus("A"));
         Assert.True(shell.InCard<Button>("A", "CardRetry").IsEffectivelyVisible);
         Assert.False(shell.InCard<TextBlock>("A", "CardNextRunNote").IsEffectivelyVisible);
     }
@@ -377,7 +377,7 @@ public sealed class CardExpansionTests : IDisposable
         shell.Click(shell.Find<Button>("RunWorkflow"));
         shell.WaitForState("Approve", NodeState.InputRequired);
 
-        Assert.Equal("Needs you", shell.CardText("Approve", "CardStatus"));
+        Assert.Equal("Needs you", shell.CardStatus("Approve"));
         Assert.Equal("Approval", shell.CardText("Approve", "CardNowHeading"));
         Assert.True(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
         Assert.True(shell.InCard<Button>("Approve", "CardSendBack").IsEffectivelyVisible);

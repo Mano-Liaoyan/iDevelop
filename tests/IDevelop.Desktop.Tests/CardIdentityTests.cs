@@ -28,7 +28,6 @@ public sealed class CardIdentityTests
         var shell = f.Open();
         var node = shell.NodeModel("A");
         var lines = node.CardLine;
-        var mark = node.ClientMark;
 
         shell.RunNode("A");
         shell.WaitForCard("A", "Needs you");
@@ -36,8 +35,6 @@ public sealed class CardIdentityTests
         Assert.Equal(lines, node.CardLine);
         // The card shows the end of the inspector's model name, so the name it shows is never a different one.
         Assert.Contains(node.CardModel, node.AgentModel);
-        Assert.Equal("AG", mark);
-        Assert.Equal(mark, node.ClientMark);
         Assert.Equal("Antigravity", node.CardClient);
     }
 
@@ -137,32 +134,39 @@ public sealed class CardIdentityTests
     }
 
     [AvaloniaFact]
-    public void The_zoom_label_calls_the_reading_size_100_percent()
+    public void The_zoom_label_shows_the_true_zoom()
     {
         using var f = new NodeFixture(Task(A, "A", 105));
         var canvas = f.Open().Window.ViewModel.Canvas!;
 
-        canvas.ViewportZoom = ZoomTiers.ActualSize;
-
+        canvas.ViewportZoom = 1;
         Assert.Equal("100%", canvas.ZoomLabel);
+        canvas.ViewportZoom = 0.42;
+        Assert.Equal("42%", canvas.ZoomLabel);
     }
 
     [AvaloniaFact]
-    public void An_overview_card_drops_the_model_and_keeps_the_client_badge()
+    public void A_plate_card_keeps_its_title_and_a_block_card_only_its_mark()
     {
         using var f = new NodeFixture(Task(A, "A", 105));
         var shell = f.Open();
         bool Shows(string id) => shell.Window.GetVisualDescendants().OfType<Control>()
             .Any(control => Avalonia.Automation.AutomationProperties.GetAutomationId(control) == id && control.IsEffectivelyVisible);
+        bool ShowsClass(string css) => shell.Window.GetVisualDescendants().OfType<Control>().Any(control => control.Classes.Contains(css) && control.IsEffectivelyVisible);
 
-        shell.Editor.ViewportZoom = 0.3;
+        shell.Editor.ViewportZoom = 0.5;
         shell.Render();
-        Assert.False(Shows("CardLine"), "A Title tier card shows no model.");
-        Assert.True(Shows("CardClientMark"), "A Title tier card keeps its client's badge.");
+        Assert.False(Shows("CardModel"), "A Plate card hides the agent row.");
+        Assert.True(ShowsClass("plateTitle"), "A Plate card shows its title.");
 
-        shell.Editor.ViewportZoom = ZoomTiers.ActualSize;
+        shell.Editor.ViewportZoom = 0.2;
         shell.Render();
-        Assert.True(Shows("CardLine"), "A card at 100% shows its model.");
+        Assert.False(ShowsClass("plateTitle"), "A Block card has no text.");
+        Assert.True(ShowsClass("blockMark"), "A Block card has its State Mark.");
+
+        shell.Editor.ViewportZoom = 1;
+        shell.Render();
+        Assert.True(Shows("CardModel"), "A card at 100% shows its model.");
     }
 
     /// <summary>Each model in the app's model lists, and the card's text for it.</summary>

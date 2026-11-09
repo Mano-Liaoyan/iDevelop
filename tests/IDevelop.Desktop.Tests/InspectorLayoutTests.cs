@@ -323,7 +323,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.RunNode();
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Done", "the run completes");
+        shell.WaitUntil(() => shell.CardStatus("Say hi") == "Done", "the run completes");
         shell.Render();
 
         var inspector = shell.Bounds(shell.Find<Control>("Inspector"));

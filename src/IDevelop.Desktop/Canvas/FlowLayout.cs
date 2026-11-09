@@ -153,7 +153,7 @@ public static class FlowLayout
         var between = cards.Any(card => card.Top >= source.Y && card.Bottom <= target.Y);
         var run = target.Y - 6 - lane;
         var (sourceStub, targetStub) = !between && run - source.Y >= 4 ? (run - source.Y, target.Y - run) : (8.0, 8.0);
-        var route = WireRouting.Route(Swap(source), Swap(target), [.. cards.Select(Swap)], 0, null, sourceStub, targetStub, new Thickness(2));
+        var route = WireRouting.Route(Swap(source), Swap(target), [.. cards.Select(Swap)], null, sourceStub, targetStub, new Thickness(2));
         return [source, .. route.Select(Swap), target];
     }
 

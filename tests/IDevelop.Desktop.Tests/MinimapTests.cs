@@ -58,7 +58,7 @@ public sealed class MinimapTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         shell.RunNode();
-        shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Failed", "the run fails");
+        shell.WaitUntil(() => shell.CardStatus("Design") == "Failed", "the run fails");
 
         shell.WaitUntil(() => Fill(Item(shell, "Design")) == shell.Resource("StateFailedBrush"), "the minimap item turns red");
         Assert.Equal(shell.Resource("TextFaintBrush"), Fill(Item(shell, "Build")));

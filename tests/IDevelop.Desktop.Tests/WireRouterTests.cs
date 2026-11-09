@@ -8,53 +8,37 @@ namespace IDevelop.Desktop.Tests;
 /// <summary>Plans for the review fixture's saved layouts (ADR 0075).</summary>
 public sealed class WireRouterTests(ITestOutputHelper output)
 {
-    public static TheoryData<string, ZoomTier> Plans => Cases();
+    public static TheoryData<string> Plans => [.. WireFixtures.All.Select(fixture => fixture.Name)];
 
-    private static TheoryData<string, ZoomTier> Cases()
-    {
-        var data = new TheoryData<string, ZoomTier>();
-        foreach (var fixture in WireFixtures.All)
-        {
-            foreach (var tier in Enum.GetValues<ZoomTier>())
-            {
-                data.Add(fixture.Name, tier);
-            }
-        }
-
-        return data;
-    }
-
-    private static WirePlans.Plan PlanOf(string name, ZoomTier tier)
+    private static WirePlans.Plan PlanOf(string name)
     {
         var fixture = WireFixtures.All.Single(item => item.Name == name);
-        return WirePlans.Of(fixture.Nodes, fixture.Edges, tier);
+        return WirePlans.Of(fixture.Nodes, fixture.Edges);
     }
 
     [Theory]
     [MemberData(nameof(Plans))]
-    public void No_wire_touches_a_card_it_does_not_join_or_a_body_it_joins(string name, ZoomTier tier) =>
-        Assert.Empty(WirePlans.CardHits(PlanOf(name, tier)));
+    public void No_wire_touches_a_card_it_does_not_join_or_a_body_it_joins(string name) =>
+        Assert.Empty(WirePlans.CardHits(PlanOf(name)));
 
     [Theory]
     [MemberData(nameof(Plans))]
-    public void Lanes_that_run_side_by_side_keep_the_least_spacing(string name, ZoomTier tier)
+    public void Lanes_of_different_outputs_keep_the_least_spacing_side_by_side(string name)
     {
-        var plan = PlanOf(name, tier);
-        var leastUpOrDown = WireLanes.MinimumColumnLane * ZoomTiers.WireScale(tier) - 0.01;
-        var leastAcross = WireLanes.MinimumRowLane * ZoomTiers.WireScale(tier) - 0.01;
+        var plan = PlanOf(name);
         var runs = plan.Drawn.SelectMany((wire, index) => wire.Route.Zip(wire.Route.Skip(1)).Select(run => (Wire: index, A: run.First, B: run.Second))).ToList();
         foreach (var a in runs)
         {
-            foreach (var b in runs.Where(other => other.Wire > a.Wire))
+            foreach (var b in runs.Where(other => other.Wire > a.Wire && plan.Wires[other.Wire].FromCard != plan.Wires[a.Wire].FromCard))
             {
                 if (Math.Abs(a.A.X - a.B.X) < 0.01 && Math.Abs(b.A.X - b.B.X) < 0.01 && Overlap(a.A.Y, a.B.Y, b.A.Y, b.B.Y) > 1)
                 {
-                    Assert.True(Math.Abs(a.A.X - b.A.X) >= leastUpOrDown, $"{name}: wires {a.Wire} and {b.Wire} run {Math.Abs(a.A.X - b.A.X)} apart up or down at x {a.A.X}.");
+                    Assert.True(Math.Abs(a.A.X - b.A.X) >= WireLanes.MinimumColumnLane - 0.01, $"{name}: wires {a.Wire} and {b.Wire} run {Math.Abs(a.A.X - b.A.X)} apart up or down at x {a.A.X}.");
                 }
 
                 if (Math.Abs(a.A.Y - a.B.Y) < 0.01 && Math.Abs(b.A.Y - b.B.Y) < 0.01 && Overlap(a.A.X, a.B.X, b.A.X, b.B.X) > 1)
                 {
-                    Assert.True(Math.Abs(a.A.Y - b.A.Y) >= leastAcross, $"{name}: wires {a.Wire} and {b.Wire} run {Math.Abs(a.A.Y - b.A.Y)} apart across at y {a.A.Y}.");
+                    Assert.True(Math.Abs(a.A.Y - b.A.Y) >= WireLanes.MinimumRowLane - 0.01, $"{name}: wires {a.Wire} and {b.Wire} run {Math.Abs(a.A.Y - b.A.Y)} apart across at y {a.A.Y}.");
                 }
             }
         }
@@ -62,19 +46,17 @@ public sealed class WireRouterTests(ITestOutputHelper output)
 
     [Theory]
     [MemberData(nameof(Plans))]
-    public void Wires_that_share_a_port_take_separate_points_on_the_card_edge(string name, ZoomTier tier)
+    public void The_wires_of_one_output_leave_its_socket_on_one_trunk(string name)
     {
-        var plan = PlanOf(name, tier);
-        var least = WireLanes.MinimumRowLane * ZoomTiers.WireScale(tier) - 0.01;
-        foreach (var (group, side) in new[] { (plan.Wires.Select((wire, index) => (Card: wire.FromCard, Slot: plan.Drawn[index].Exit)), "output"), (plan.Wires.Select((wire, index) => (Card: wire.ToCard, Slot: plan.Drawn[index].Entry)), "input") })
+        var plan = PlanOf(name);
+        foreach (var output in plan.Wires.Select((wire, index) => (wire, index)).GroupBy(pair => pair.wire.FromCard).Where(group => group.Count() > 1))
         {
-            foreach (var port in group.GroupBy(end => end.Card).Where(port => port.Count() > 1))
-            {
-                var slots = port.Select(end => end.Slot).Order().ToList();
-                Assert.All(slots.Zip(slots.Skip(1)), pair => Assert.True(pair.Second - pair.First >= least, $"{name}: {side} of card {port.Key} has points {pair.First} and {pair.Second}."));
-                Assert.All(slots, slot => Assert.InRange(slot, -plan.Cards[port.Key].Height, plan.Cards[port.Key].Height));
-            }
+            var trunks = output.Select(pair => FirstVertical(plan.Drawn[pair.index].Route)).Where(x => x is not null).Select(x => x!.Value).Distinct().ToList();
+            var near = trunks.GroupBy(x => Math.Round(x / 40)).Max(group => group.Count());
+            Assert.True(trunks.Count == 0 || near == 1 || trunks.Max() - trunks.Min() > 40, $"{name}: output {output.Key} leaves on {trunks.Count} trunks.");
         }
+
+        static double? FirstVertical(IReadOnlyList<Point> route) => route.Zip(route.Skip(1)).Where(run => Math.Abs(run.First.X - run.Second.X) < 0.01).Select(run => (double?)run.First.X).FirstOrDefault();
     }
 
     [Fact]
@@ -82,9 +64,9 @@ public sealed class WireRouterTests(ITestOutputHelper output)
     {
         var fixture = WireFixtures.Ledger;
         var router = new WireRouter();
-        var (cards, wires) = WirePlans.Input(fixture.Nodes, fixture.Edges, ZoomTier.Title);
+        var (cards, wires) = WirePlans.Input(fixture.Nodes, fixture.Edges);
         var first = Stopwatch.StartNew();
-        router.Plan(cards, wires, ZoomTiers.CardReach(ZoomTier.Title), ZoomTiers.WireScale(ZoomTier.Title));
+        router.Plan(cards, wires);
         first.Stop();
 
         var timer = Stopwatch.StartNew();
@@ -94,7 +76,7 @@ public sealed class WireRouterTests(ITestOutputHelper output)
         for (var step = 0; step < Steps; step++)
         {
             moved[0] = cards[0].Translate(new Vector(step, 0));
-            router.Plan(moved, wires, ZoomTiers.CardReach(ZoomTier.Title), ZoomTiers.WireScale(ZoomTier.Title));
+            router.Plan(moved, wires);
         }
 
         timer.Stop();
@@ -108,7 +90,7 @@ public sealed class WireRouterTests(ITestOutputHelper output)
     {
         foreach (var fixture in new[] { WireFixtures.Usage, WireFixtures.Webhook })
         {
-            var plan = WirePlans.Of(fixture.Nodes, fixture.Edges, ZoomTier.Full);
+            var plan = WirePlans.Of(fixture.Nodes, fixture.Edges);
             var crossings = 0;
             for (var a = 0; a < plan.Drawn.Count; a++)
             {
@@ -131,28 +113,28 @@ internal static class WirePlans
 {
     internal sealed record Plan(IReadOnlyList<Rect> Cards, IReadOnlyList<WireRouter.Wire> Wires, IReadOnlyList<WireRouter.Drawn> Drawn);
 
-    public static (Rect[] Cards, WireRouter.Wire[] Wires) Input((double X, double Y)[] nodes, (int From, int To)[] edges, ZoomTier tier)
+    /// <summary>The cards at their compacted positions on the Map, as the Graph shows them.</summary>
+    public static (Rect[] Cards, WireRouter.Wire[] Wires) Input((double X, double Y)[] nodes, (int From, int To)[] edges)
     {
-        var reach = ZoomTiers.CardReach(tier);
-        // A Title or Block tier card's container is wider, for its larger text (CanvasStyles.axaml).
-        var width = tier is ZoomTier.Title or ZoomTier.Block ? 292 : WorkflowCanvasViewModel.TaskCardWidth;
-        Rect[] cards = [.. nodes.Select(node => new Rect(node.X, node.Y, width, WorkflowCanvasViewModel.TaskCardHeight + reach))];
+        var space = GraphSpace.Of([.. nodes.Select(node => new IDevelop.Workflows.CanvasPoint(node.X, node.Y))]);
+        var shown = nodes.Select(node => space.ToDisplay(new IDevelop.Workflows.CanvasPoint(node.X, node.Y))).ToArray();
+        Rect[] cards = [.. shown.Select(at => new Rect(at.X, at.Y, WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight))];
         WireRouter.Wire[] wires = [.. edges.Select((edge, index) => new WireRouter.Wire(
             index,
             edge.From,
             edge.To,
-            new Point(nodes[edge.From].X + width - WorkflowCanvasViewModel.InputPortCenter.X, nodes[edge.From].Y + WorkflowCanvasViewModel.InputPortCenter.Y),
-            new Point(nodes[edge.To].X, nodes[edge.To].Y) + (Vector)WorkflowCanvasViewModel.InputPortCenter,
+            shown[edge.From] + (Vector)WorkflowCanvasViewModel.OutputPortCenter,
+            shown[edge.To] + (Vector)WorkflowCanvasViewModel.InputPortCenter,
             cards[edge.From],
             cards[edge.To],
             false))];
         return (cards, wires);
     }
 
-    public static Plan Of((double X, double Y)[] nodes, (int From, int To)[] edges, ZoomTier tier)
+    public static Plan Of((double X, double Y)[] nodes, (int From, int To)[] edges)
     {
-        var (cards, wires) = Input(nodes, edges, tier);
-        return new Plan(cards, wires, new WireRouter().Plan(cards, wires, ZoomTiers.CardReach(tier), ZoomTiers.WireScale(tier)));
+        var (cards, wires) = Input(nodes, edges);
+        return new Plan(cards, wires, new WireRouter().Plan(cards, wires));
     }
 
     /// <summary>Each place where a wire's curve enters a card's whole rectangle, or its own card past the port gutters.</summary>

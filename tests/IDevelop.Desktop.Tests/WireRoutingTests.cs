@@ -59,21 +59,6 @@ public sealed class WireRoutingTests : IDisposable
     }
 
     [Fact]
-    public void A_detour_at_a_zoomed_out_tier_keeps_out_of_a_row_gap_that_the_drawn_cards_leave_too_narrow()
-    {
-        // The pack's workflow at 100%: Build to Merge in one row, Review between them and Audit above Review. The cards draw 90
-        // under their boxes, so the gap between Audit and Review is 36, and a wire there would run on a card's border.
-        const double Reach = 90;
-        Rect Drawn(double x, double y) => new(x, y, 260, 64 + Reach);
-        Rect[] cards = [Drawn(460, 90), Drawn(800, 90), Drawn(800, -100), Drawn(1140, 90), Drawn(460, -100), Drawn(460, 280)];
-        var route = WireRouting.Route(new Point(710, 122), new Point(1150, 122), cards, Reach);
-
-        var review = cards[1];
-        var across = route.Zip(route.Skip(1)).Where(run => run.First.Y == run.Second.Y && Math.Max(run.First.X, run.Second.X) > review.Left && Math.Min(run.First.X, run.Second.X) < review.Right);
-        Assert.All(across, run => Assert.True(run.First.Y >= review.Bottom + 30 || run.First.Y <= review.Top - 30, $"A run at {run.First.Y} passes Review at {review} closer than 30."));
-    }
-
-    [Fact]
     public void A_detour_passes_between_cards_stacked_one_footprint_apart()
     {
         // The second card sits one footprint below Build, where FreeSpot stacks cards, which leaves a 30 px gap.

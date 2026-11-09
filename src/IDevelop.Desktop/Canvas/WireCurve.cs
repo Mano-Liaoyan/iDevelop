@@ -20,9 +20,9 @@ public readonly record struct WirePiece(Point Start, Point First, Point Second, 
 /// <summary>
 /// Turns a wire's orthogonal route into the curve the canvas draws (ADR 0045). The route stays the wire's plan: it says
 /// which gaps the wire takes past the cards. Each up or down run of the route becomes an S curve that leaves and arrives
-/// across, as a Blender or Unreal wire does, so a wire with one such run is one curve from port to port. Where that curve
-/// would touch a card, the curve keeps closer to the route. Wires that share a port leave it or reach it at their own points
-/// on the card's edge (<see cref="PortSlots"/>), so no two of them share a trunk.
+/// across, as a Blender or Unreal wire does, so a wire with one such run is one curve from socket to socket. Where that curve
+/// would touch a card, the curve keeps closer to the route. Wires that share an output leave it along one trunk and fan out
+/// (<see cref="WireLanes"/>).
 /// </summary>
 internal static class WireCurve
 {
@@ -35,7 +35,7 @@ internal static class WireCurve
 
     // A wire's own card, inside its container's 10 px port gutters, less 1 px, so the wire may leave its own port, and past its top and
     // bottom by a wire's clear space, so a curve never runs along a card's edge where a small bend avoids it.
-    private static readonly Thickness Gutter = new(11, -14);
+    private static readonly Thickness Gutter = new(11, -10);
 
     // The card's body alone, for a wire that has no way to keep that clear space.
     private static readonly Thickness Body = new(11, -1);
@@ -71,6 +71,25 @@ internal static class WireCurve
     {
         var middle = (source.X + target.X) / 2;
         return Pieces(Corners([source, new Point(middle, source.Y), new Point(middle, target.Y), target]), double.PositiveInfinity);
+    }
+
+    /// <summary>The point halfway along the curve, which a highlighted wire's label stands on.</summary>
+    public static Point Middle(IReadOnlyList<WirePiece> curve)
+    {
+        Point[] points = [.. curve.SelectMany(piece => Enumerable.Range(0, Samples).Select(step => piece.At((double)step / Samples))), curve[^1].End];
+        var half = points.Zip(points.Skip(1)).Sum(run => Point.Distance(run.First, run.Second)) / 2;
+        foreach (var (first, second) in points.Zip(points.Skip(1)))
+        {
+            var length = Point.Distance(first, second);
+            if (half <= length)
+            {
+                return length < Tolerance ? first : first + (second - first) * (half / length);
+            }
+
+            half -= length;
+        }
+
+        return points[^1];
     }
 
     private static ImmutableArray<WirePiece> Pieces(List<Point> points, double reach)

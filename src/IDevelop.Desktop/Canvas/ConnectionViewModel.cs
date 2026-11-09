@@ -17,7 +17,6 @@ public sealed class ConnectionViewModel : ObservableObject
     private ConnectionKind _kind;
     private ImmutableArray<Point> _route = [];
     private IReadOnlyList<WirePiece> _curve = [];
-    private (double Exit, double Entry) _slots;
 
     internal ConnectionViewModel(WorkflowCanvasViewModel canvas, ConnectionKey key, TaskNodeViewModel from, TaskNodeViewModel to, ConnectionKind kind)
     {
@@ -81,32 +80,32 @@ public sealed class ConnectionViewModel : ObservableObject
     /// <summary>The wire's layer: a context connection draws under the dependencies, and a wire into a running node over them.</summary>
     public int Layer => Kind == ConnectionKind.Context ? -1 : Flow == WireFlow.Feeding ? 1 : 0;
 
-    /// <summary>The wire's stroke in canvas units. It shows a selection by weight, and it follows the zoom tier.</summary>
-    public double Stroke => (WireFlows.Stroke(Flow) + (IsHighlighted ? 0.5 : 0)) * ZoomTiers.WireScale(_canvas.Tier);
+    /// <summary>The wire's stroke in canvas units. It shows a selection by weight and stays near its weight on screen under 100%.</summary>
+    public double Stroke => WireFlows.Stroke(Flow, IsHighlighted) * ZoomTiers.WireScale(_canvas.ViewportZoom);
 
     /// <summary>The stroke under the pointer and while the wire is selected.</summary>
-    public double HotStroke => Math.Max(Stroke, 3 * ZoomTiers.WireScale(_canvas.Tier));
+    public double HotStroke => Math.Max(Stroke, 3 * ZoomTiers.WireScale(_canvas.ViewportZoom));
 
     /// <summary>What the wire says it carries, as its tooltip.</summary>
     public string Tip => From.HandsOn is { Length: > 0 } result ? $"{WireFlows.Tip(Flow, From.Title, To.Title)}\n{CardText.Line(result, 200)}" : WireFlows.Tip(Flow, From.Title, To.Title);
 
-    /// <summary>Where the wire leaves its source card: its own point on the output side, under or over the port when the port has several wires.</summary>
-    public Point SourcePoint => From.Output.Anchor + new Vector(0, _slots.Exit);
+    /// <summary>The center of the source's output socket.</summary>
+    public Point SourcePoint => From.Output.Anchor;
 
-    /// <summary>Where the wire enters its target card: its own point on the input side.</summary>
-    public Point TargetPoint => To.Input.Anchor + new Vector(0, _slots.Entry);
-
-    /// <summary>The wire leaves its card at its own point, away from the port's socket, so it starts at the card's edge.</summary>
-    public bool LeavesOwnPoint => _slots.Exit != 0;
-
-    /// <summary>The wire enters its card at its own point, away from the port's socket, so it ends at the card's edge.</summary>
-    public bool EntersOwnPoint => _slots.Entry != 0;
+    /// <summary>The center of the target's input socket.</summary>
+    public Point TargetPoint => To.Input.Anchor;
 
     /// <summary>The corners of the wire's plan, from the end of its source stub to the start of its target stub.</summary>
     public IReadOnlyList<Point> Route => _route;
 
     /// <summary>The curve the canvas draws along the plan.</summary>
     public IReadOnlyList<WirePiece> Curve => _curve;
+
+    /// <summary>What a highlighted wire's label reads: what the wire carries.</summary>
+    public string PillText => Kind == ConnectionKind.Context ? "Context" : "Result";
+
+    /// <summary>The tooltip of a highlighted wire's label.</summary>
+    public string PillTip => $"{PillText} for {To.Title}";
 
     public ICommand SetKindCommand => _setKind;
 
@@ -124,18 +123,9 @@ public sealed class ConnectionViewModel : ObservableObject
         }
     }
 
-    /// <summary>Shows what <see cref="WireRouter"/> found: where the wire meets its cards, its lane, and its curve.</summary>
+    /// <summary>Shows what <see cref="WireRouter"/> found: its lane and its curve.</summary>
     internal void Show(WireRouter.Drawn drawn)
     {
-        if ((drawn.Exit, drawn.Entry) != _slots)
-        {
-            _slots = (drawn.Exit, drawn.Entry);
-            OnPropertyChanged(nameof(SourcePoint));
-            OnPropertyChanged(nameof(TargetPoint));
-            OnPropertyChanged(nameof(LeavesOwnPoint));
-            OnPropertyChanged(nameof(EntersOwnPoint));
-        }
-
         if (!drawn.Route.SequenceEqual(_route))
         {
             _route = drawn.Route;

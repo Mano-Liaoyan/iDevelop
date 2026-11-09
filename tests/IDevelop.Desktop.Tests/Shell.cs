@@ -171,6 +171,9 @@ internal sealed partial class Shell
     public T InCard<T>(string title, string automationId) where T : Control => ById<T>(Node(title), automationId).Single();
 
     /// <summary>A text block's text even while it is hidden, as a card shows one of two subtitles at a time.</summary>
+    /// <summary>The state word the card's node shows, which the card itself shows as its State Mark.</summary>
+    public string CardStatus(string title) => NodeModel(title).CardStatus;
+
     public string CardText(string title, string automationId) =>
         InCard<Control>(title, automationId) is TextBlock text ? text.Text ?? "" : TextOf(InCard<Control>(title, automationId));
 

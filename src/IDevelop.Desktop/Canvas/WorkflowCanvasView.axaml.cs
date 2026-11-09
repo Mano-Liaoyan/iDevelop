@@ -27,10 +27,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private const double DotPitch = 24;
 
     /// <summary>The zoom at which a found card's title and neighbours read: the bar's 100%.</summary>
-    private const double FoundZoom = ZoomTiers.ActualSize;
-
-    /// <summary>How far a zoomed out card's last line reaches under its box at <see cref="FoundZoom"/>.</summary>
-    private static readonly double FarLineHeight = ZoomTiers.CardReach(ZoomTier.Label);
+    private const double FoundZoom = 1;
 
     private WorkflowCanvasViewModel? _viewModel;
     private Point? _windowAnchor;
@@ -68,7 +65,11 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         Editor.AddHandler(Connector.DisconnectEvent, OnPortDisconnect);
         Editor.DoubleTapped += OnDoubleTapped;
         Editor.AddHandler(PointerMovedEvent, OnPointerOverPort, RoutingStrategies.Tunnel, handledEventsToo: true);
-        Editor.PointerExited += (_, _) => ShowPortLabel(null, null);
+        Editor.PointerExited += (_, _) =>
+        {
+            ShowPortLabel(null, null);
+            _viewModel?.Hover(null);
+        };
         Editor.KeyDown += OnEditorKeyDown;
         Editor.KeyUp += OnEditorKeyUp;
         FlowPane.KeyDown += OnEditorKeyDown;
@@ -133,46 +134,61 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
-    // The steps are even, so a zoom gesture measures the cards' text only when its size changes.
-    private void ShowTitleText()
+    // Sets the sizes that keep a card's text and strokes near their size on screen. A zoom gesture changes them only when a card's text or stroke changes.
+    private void ShowMetrics()
     {
-        if (_viewModel?.FarText is not { } text || Resources.TryGetValue("FarTitleText", out var shown) && Equals(shown, text))
+        if (_viewModel?.Metrics is not { } metrics || Equals(_shownMetrics, metrics))
         {
             return;
         }
 
-        // A Title tier card's chip row stands at the card's bottom, under its title's lines and their air, and the card grows to
-        // hold them (ADR 0068, ADR 0071).
-        var lineTop = text.ChipTop;
-        Resources["FarTitleText"] = text;
-        Resources["FarTitleSize"] = text.Size;
-        Resources["FarTitleLine"] = text.Line;
-        Resources["FarTitleLines"] = text.Lines;
-        Resources["FarCardHeight"] = 64 + text.Reach;
-        Resources["FarCardMargin"] = new Thickness(0, 0, 0, -text.Reach);
-        Resources["FarLineMargin"] = new Thickness(34, lineTop, 62, 0);
-        Resources["FarLineHeight"] = ZoomTiers.ChipRow;
-        Resources["FarBadgeMargin"] = new Thickness(0, lineTop, 16, 0);
+        _shownMetrics = metrics;
+        Resources["CardTitleSize"] = metrics.TitleSize;
+        Resources["CardTitleLine"] = metrics.TitleLine;
+        Resources["CardCaptionSize"] = metrics.CaptionSize;
+        Resources["CardCaptionLine"] = metrics.CaptionLine;
+        Resources["PlateTitleSize"] = metrics.PlateTitleSize;
+        Resources["PlateTitleLine"] = metrics.PlateTitleLine;
+        Resources["PlateTitleLines"] = metrics.PlateLines;
+        Resources["PlateMarkSize"] = metrics.MarkSize;
+        Resources["PlateSocketSize"] = metrics.SocketSize;
+        Resources["PlateSocketStroke"] = metrics.Stroke;
+        Resources["PlateTitleMargin"] = new Thickness(metrics.Inset * 1.5, metrics.Inset / 2);
+        Resources["PlateMarkMargin"] = new Thickness(0, 0, metrics.Inset * 1.5, 0);
+        Resources["EdgeThickness"] = new Thickness(metrics.Stroke / 1.5);
+        Resources["RingThickness"] = new Thickness(metrics.Stroke);
+        Resources["RingMargin"] = new Thickness(10 - metrics.Stroke, -metrics.Stroke);
+        Resources["HaloThickness"] = new Thickness(metrics.Halo);
+        Resources["HaloMargin"] = new Thickness(10 - metrics.Stroke - metrics.Halo, -metrics.Stroke - metrics.Halo);
+        Resources["StaleEdgeWidth"] = metrics.Stroke;
+        // A wire's label is Caption text on screen at every zoom.
+        var pixel = Math.Max(1, 1 / _viewModel.ViewportZoom);
+        Resources["WirePillSize"] = 11.5 * pixel;
+        Resources["WirePillPadding"] = new Thickness(6 * pixel, pixel);
+        Resources["WirePillEdge"] = new Thickness(pixel);
+        Resources["WirePillRadius"] = new CornerRadius(4 * pixel);
     }
 
-    // A tier takes one class on the view, so only a threshold changes the cards' layout. Under a zoom of 0.5 the dots would turn
-    // into a texture, so they spread to a four times wider grid, and the smallest cards have only the canvas's color.
+    private GraphMetrics? _shownMetrics;
+
+    // A tier takes one class on the view, so only a threshold changes the cards' layout. The dots spread out with the tier and the
+    // smallest cards have only the canvas's color, so a wide zoom-out never turns the dots into a texture.
     private void ShowTier()
     {
-        if (_viewModel is not { Tier: var tier } || tier == _shownTier && Classes.Contains(ZoomTiers.StyleClass(tier) ?? "tier-full"))
+        if (_viewModel is not { Tier: var tier } || tier == _shownTier && Classes.Contains(ZoomTiers.StyleClass(tier)))
         {
             return;
         }
 
         foreach (var known in Enum.GetValues<ZoomTier>())
         {
-            Classes.Set(ZoomTiers.StyleClass(known) ?? "tier-full", known == tier);
+            Classes.Set(ZoomTiers.StyleClass(known), known == tier);
         }
 
         _shownTier = tier;
         if (_dots is DrawingBrush dots)
         {
-            var pitch = tier is ZoomTier.Full or ZoomTier.Compact ? DotPitch : DotPitch * 4;
+            var pitch = tier == ZoomTier.Full ? DotPitch : DotPitch * 2;
             dots.DestinationRect = new RelativeRect(0, 0, pitch, pitch, RelativeUnit.Absolute);
         }
 
@@ -222,13 +238,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
 
         Editor.ViewportZoom = FoundZoom;
-        // A card shows its last line under its 64 px box at this zoom.
         var card = node.DisplayRect;
-        var cards = Cards().Select(rect => new Rect(rect.Position, rect.Size + new Size(0, FarLineHeight))).ToArray();
         var room = Room();
-        var found = new Rect(card.Position, card.Size + new Size(0, FarLineHeight));
         Editor.ViewportLocation = CanvasChrome.OnWholePixels(
-            CanvasChrome.ClearOfCards(CanvasChrome.ViewOn(Extent(), room, FoundZoom, card.Center), Editor.Bounds.Size, room, FoundZoom, cards, found),
+            CanvasChrome.ClearOfCards(CanvasChrome.ViewOn(Extent(), room, FoundZoom, card.Center), Editor.Bounds.Size, room, FoundZoom, [.. Cards()], card),
             FoundZoom);
         // Choosing the node can change the panels beside the canvas, so the card gets one more look after their layout.
         Dispatcher.UIThread.Post(() => BringIntoViewIfHidden(node), DispatcherPriority.Background);
@@ -268,22 +281,15 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
         if (Cards().Any())
         {
-            // A fit can change the zoom tier, and with it how far the cards draw, so it measures again at the zoom it reached.
             var extent = Extent();
             Fit(extent, FocusPoint(), CanvasChrome.FitZoom(extent, Room(FitMargin)));
-            if (Extent() != extent)
-            {
-                Fit(Extent(), FocusPoint(), CanvasChrome.FitZoom(Extent(), Room(FitMargin)));
-            }
         }
     }
 
-    // The cards as they draw at this zoom, so a fit leaves room for a zoomed out card's lower lines, and the wires, so a fit
-    // never cuts a wire that arcs past the cards.
+    // The cards and the wires, so a fit never cuts a wire that arcs past the cards.
     private Rect Extent()
     {
-        var reach = _viewModel?.CardReach ?? 0;
-        var cards = Cards().Aggregate((union, card) => union.Union(card)).Inflate(new Thickness(0, 0, 0, reach));
+        var cards = Cards().Aggregate((union, card) => union.Union(card));
         var wires = _viewModel?.Connections.SelectMany(wire => wire.Curve).SelectMany(piece => new[] { piece.Start, piece.At(0.5), piece.End }) ?? [];
         return wires.Aggregate(cards, (union, point) => new Rect(
             new Point(Math.Min(union.Left, point.X), Math.Min(union.Top, point.Y)),
@@ -362,7 +368,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
-    private void ZoomActual() => Editor.ZoomAtPosition(ZoomTiers.ActualSize / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
+    private void ZoomActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -381,7 +387,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             Editor.LayoutUpdated += RestoreSelection;
             Editor.LayoutUpdated += PositionOnce;
             ShowTier();
-            ShowTitleText();
+            ShowMetrics();
         }
 
         ShowAdd();
@@ -389,6 +395,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
     private void OnPointerOverPort(object? sender, PointerEventArgs e)
     {
+        _viewModel?.Hover(Card(e.Source)?.DataContext as TaskNodeViewModel);
         for (var visual = e.Source as Visual; visual is not null && visual != Editor; visual = visual.GetVisualParent())
         {
             if (visual is StyledElement { DataContext: PortViewModel port })
@@ -429,16 +436,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         PortLabel.Margin = new Thickness(
             Math.Clamp(left, room.X, Math.Max(room.X, room.Right - label.Width)),
             Math.Clamp(at.Y - label.Height / 2, room.Y, Math.Max(room.Y, room.Bottom - label.Height)), 0, 0);
-    }
-
-    // The card as the screen shows it, its port gutters left out and its zoomed out lines under its box included.
-    private Rect CardRect(TaskNodeViewModel node)
-    {
-        var zoom = Editor.ViewportZoom;
-        var at = (node.DisplayLocation - Editor.ViewportLocation) * zoom;
-        var height = node.IsExpanded ? node.CardSize.Height : WorkflowCanvasViewModel.TaskCardHeight + _viewModel!.CardReach;
-        var width = node.IsExpanded ? node.CardSize.Width : WorkflowCanvasViewModel.TaskCardWidth;
-        return new Rect(at.X + 10 * zoom, at.Y, (width - 20) * zoom, height * zoom);
     }
 
     // The selection comes back once the editor has laid out its cards, as a selection made on the canvas would.
@@ -492,11 +489,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Tier))
         {
             ShowTier();
-            ShowTitleText();
         }
-        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.FarText))
+        else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Metrics))
         {
-            ShowTitleText();
+            ShowMetrics();
         }
         else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Mode))
         {

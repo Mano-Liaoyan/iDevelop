@@ -34,6 +34,8 @@
                 AutomationProperties.AutomationId="FlowScroller">
     <Panel x:Name="Surface" Height="{Binding SurfaceHeight}" Background="{DynamicResource FlowDots}">
       <canvas:FlowWires Wires="{Binding Wires}" IsHitTestVisible="False" />
+      <canvas:FlowWires Classes="moving" Wires="{Binding MovingWires}" IsVisible="{Binding HasMovingWires}" IsHitTestVisible="False"
+                        AutomationProperties.AutomationId="FlowMovingWires" />
 
       <!-- Stage bands. A header is one wide row that folds its stage. -->
       <ItemsControl ItemsSource="{Binding Bands}">

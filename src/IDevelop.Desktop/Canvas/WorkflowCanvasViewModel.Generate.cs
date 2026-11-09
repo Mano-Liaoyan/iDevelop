@@ -114,8 +114,8 @@ public sealed partial class WorkflowCanvasViewModel
     internal void Generate(string prompt, ExecutionSettings planner)
     {
         CloseSheet();
-        var start = new CanvasPoint(ViewportLocation.X + 60, ViewportLocation.Y + ViewportSize.Height / 2 - TaskCardHeight / 2);
-        var edit = new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, FreeSpot(start))
+        var start = new Avalonia.Point(ViewportLocation.X + 60, ViewportLocation.Y + ViewportSize.Height / 2 - TaskCardHeight / 2);
+        var edit = new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, Space.ToSaved(FreeSpot(start)))
         {
             Title = PlannerTitle(prompt),
             Fields = ImmutableDictionary<string, string>.Empty.Add("goal", prompt.Trim()),

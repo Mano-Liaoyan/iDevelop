@@ -17,18 +17,19 @@ namespace IDevelop.Desktop.Canvas;
 /// </summary>
 public sealed partial class WorkflowCanvasViewModel : ObservableObject
 {
-    // The visible card is 240 wide. The container adds a 10 px gutter on each side, where the ports sit on the card's edge.
-    public const double TaskCardWidth = 260;
+    // The visible card is 220 wide. The container adds a 10 px gutter on each side, where the sockets sit on the card's edge.
+    public const double TaskCardWidth = 240;
 
-    public const double TaskCardHeight = 64;
+    public const double TaskCardHeight = 94;
 
-    /// <summary>The input port's center in the card's container. The card template places the port here.</summary>
-    public static readonly Point InputPortCenter = new(10, 32);
+    /// <summary>The input socket's center in the card's container. The card template places the socket here.</summary>
+    public static readonly Point InputPortCenter = new(10, 58);
 
-    /// <summary>The output port's center in the card's container. The card template places the port here.</summary>
-    public static readonly Point OutputPortCenter = new(250, 32);
+    /// <summary>The output socket's center in the card's container. The card template places the socket here.</summary>
+    public static readonly Point OutputPortCenter = new(230, 58);
 
-    internal static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
+    /// <summary>How much room a card keeps on the Map: a column's 24 px gap between containers, and a row's 26 px gap.</summary>
+    internal static readonly Size TaskFootprint = new(TaskCardWidth + 24, TaskCardHeight + 26);
 
     private readonly Action<string?> _setNotice;
     private readonly Func<string, Task> _copy;
@@ -54,6 +55,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         Clients = clients;
         _setNotice = setNotice;
         _copy = copy;
+        Space = GraphSpace.Of([.. document.Current.Positions.Values]);
         Flow = new FlowViewModel(this);
         PendingConnection = new PendingConnectionViewModel(this);
         Blueprints = new BlueprintsViewModel(
@@ -69,6 +71,9 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         InitializeHighlight();
         InitializeGenerate();
     }
+
+    /// <summary>The Graph's compaction, computed when the workflow opens and kept until it closes.</summary>
+    internal GraphSpace Space { get; }
 
     /// <summary>The environment Git runs with for this workflow.</summary>
     internal IReadOnlyDictionary<string, string> GitEnvironment { get; }
@@ -148,13 +153,21 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(ZoomLabel));
                 Tier = ZoomTiers.Next(Tier, value);
-                if (ShowFarText())
+                Metrics = ZoomTiers.Metrics(value);
+                var scale = ZoomTiers.WireScale(value);
+                if (scale != _wireScale)
                 {
-                    Reroute();
+                    _wireScale = scale;
+                    foreach (var connection in Connections)
+                    {
+                        connection.OnStrokeChanged();
+                    }
                 }
             }
         }
     } = 1;
+
+    private double _wireScale = 1;
 
     /// <summary>
     /// The view the last fit made, if any. It outlives the canvas's view, so a workflow left at a fit, such as above a docked
@@ -167,35 +180,21 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         ? $"Enter Chat   {CanvasKeys.Hint(CanvasKeys.Run)} Run   G to arrange"
         : $"Enter Chat   {CanvasKeys.Hint(CanvasKeys.Run)} Run   N Add   G Flow";
 
-    /// <summary>The zoom as a percent, on the control that resets it.</summary>
-    public string ZoomLabel => $"{Math.Round(ViewportZoom / ZoomTiers.ActualSize * 100)}%";
+    /// <summary>The zoom as a percent, on the control that resets it. 100% is a 1:1 card.</summary>
+    public string ZoomLabel => $"{Math.Round(ViewportZoom * 100)}%";
 
-    /// <summary>The zoomed out card's text at this zoom, and how far a card draws under its box.</summary>
-    public FarText FarText
+    /// <summary>The sizes that hold a card's text and strokes near their size on screen at this zoom.</summary>
+    public GraphMetrics Metrics
     {
         get;
         private set => SetProperty(ref field, value);
-    } = ZoomTiers.TitleText(1);
-
-    /// <summary>How far a collapsed card draws under its 64 px box at this zoom.</summary>
-    internal double CardReach => Tier == ZoomTier.Title ? FarText.Reach : ZoomTiers.CardReach(Tier);
+    } = ZoomTiers.Metrics(1);
 
     /// <summary>How much a card shows at this zoom.</summary>
     public ZoomTier Tier
     {
         get;
-        private set
-        {
-            if (SetProperty(ref field, value))
-            {
-                foreach (var connection in Connections)
-                {
-                    connection.OnStrokeChanged();
-                }
-
-                Reroute();
-            }
-        }
+        private set => SetProperty(ref field, value);
     }
 
     /// <summary>Whether a view has shown this canvas yet. The first view places the cards below the floating chrome.</summary>
@@ -358,6 +357,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         {
             Ghosts.Add(ghost);
         }
+
+        ShowDecorations();
     }
 
     internal static ConnectionKey? ResolveEndpoints(object? source, object? target) => (source, target) switch
@@ -374,7 +375,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     /// <summary>Places a node of the blueprint near the top left of the view, below any card already there, and selects it.</summary>
     internal void PlaceInView(Blueprint blueprint) =>
-        Place(NewTask(blueprint, FreeSpot(new CanvasPoint(ViewportLocation.X + 60, ViewportLocation.Y + 60))));
+        Place(NewTask(blueprint, Space.ToSaved(FreeSpot(new Point(ViewportLocation.X + 60, ViewportLocation.Y + 60)))));
 
     /// <summary>Applies the placement, selects the new node, and returns it, or returns null when the edit was rejected.</summary>
     private TaskNodeViewModel? Place(WorkflowEdit.PlaceNode edit)
@@ -389,17 +390,18 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         return node;
     }
 
-    /// <summary>The first spot at or below <paramref name="start"/>, in steps of a card's footprint, that no card is near.</summary>
-    private CanvasPoint FreeSpot(CanvasPoint start) => Offset(start, FreeShift([start]));
+    /// <summary>The first spot on the Map at or below <paramref name="start"/>, in steps of a card's footprint, that no card is near.</summary>
+    private Point FreeSpot(Point start) => start + FreeShift([start]);
 
     /// <summary>
-    /// The shortest shift down, in steps of a card's footprint, after which no card is near any of the spots. The spots move
+    /// The shortest shift down on the Map, in steps of a card's footprint, after which no card is near any of the spots. The spots move
     /// together, so a group keeps its layout.
     /// </summary>
-    private Vector FreeShift(IReadOnlyCollection<CanvasPoint> spots)
+    private Vector FreeShift(IReadOnlyCollection<Point> spots)
     {
         var shift = default(Vector);
-        while (spots.Any(spot => Workflow.Positions.Values.Any(other =>
+        var cards = Workflow.Positions.Values.Select(Space.ToDisplay).ToArray();
+        while (spots.Any(spot => cards.Any(other =>
             Math.Abs(other.X - spot.X - shift.X) < TaskFootprint.Width && Math.Abs(other.Y - spot.Y - shift.Y) < TaskFootprint.Height)))
         {
             shift += new Vector(0, TaskFootprint.Height);
@@ -439,8 +441,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     private void CommitMoves()
     {
         var moves = _nodes.Values
-            .Where(node => node.Location != ToPoint(Workflow.Positions[node.Id]))
-            .Select(node => new TaskPosition(node.Id, new CanvasPoint(node.Location.X, node.Location.Y)))
+            .Where(node => node.Location != Space.ToDisplay(Workflow.Positions[node.Id]))
+            .Select(node => new TaskPosition(node.Id, Space.ToSaved(node.Location)))
             .ToImmutableArray();
         if (moves.Length > 0)
         {
