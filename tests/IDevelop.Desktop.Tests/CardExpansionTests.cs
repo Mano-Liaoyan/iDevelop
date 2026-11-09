@@ -442,11 +442,11 @@ public sealed class CardExpansionTests : IDisposable
         var shell = Shell.Open(Diamond());
         ToolTip.SetServiceEnabled(shell.Window, true);
         var card = shell.InCard<Panel>("Docs", "TaskCard");
-        // In this headless run the tooltip service's 400 ms timer stays unfired, for a cause not yet found. This test does not check the delay.
-        ToolTip.SetShowDelay(card, 0);
 
         shell.Window.MouseMove(shell.Header(shell.Node("Docs")));
-        shell.WaitUntil(() => ToolTip.GetIsOpen(card), "the peek opens");
+        // The peek opens after the tooltip service's real delay, which only the dispatcher's own loop lets pass.
+        Assert.Equal(400, ToolTip.GetShowDelay(card));
+        shell.RunLoopUntil(() => ToolTip.GetIsOpen(card), "the peek opens");
 
         var peek = Assert.IsType<CardPeek>(ToolTip.GetTip(card));
         Assert.Equal(

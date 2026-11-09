@@ -361,6 +361,22 @@ internal sealed partial class Shell
         }
     }
 
+    /// <summary>
+    /// Runs the dispatcher's own loop until the condition holds, for work that waits on a <see cref="DispatcherTimer"/>. RunJobs
+    /// never starts a timer, so <see cref="WaitUntil"/> sees one fire only when other timer work happens to move the dispatcher.
+    /// </summary>
+    public void RunLoopUntil(Func<bool> condition, string what, int seconds = 10)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(seconds);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.");
+            using var slice = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
+            Dispatcher.UIThread.MainLoop(slice.Token);
+            Render();
+        }
+    }
+
     /// <summary>Invokes the control through its automation peer, as a screen reader does.</summary>
     public static void Invoke(Control control) =>
         ControlAutomationPeer.CreatePeerForElement(control).GetProvider<IInvokeProvider>()!.Invoke();
