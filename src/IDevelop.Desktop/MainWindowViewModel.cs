@@ -363,6 +363,7 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Shows the node's workflow and selects the node, as a choice from outside its canvas.</summary>
     internal void ShowNode(TaskNodeViewModel node)
     {
+        CloseIndexFlyout();
         if (node.Canvas != Canvas)
         {
             Select(node.Canvas);

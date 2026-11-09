@@ -421,7 +421,7 @@
   <!-- Find's list takes the panel under its box, so it cuts through no row. -->
   <Style Selector="Border.findPalette">
     <Setter Property="Padding" Value="4" />
-    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AppSidebarBrush}" />
   </Style>
   <!-- Find's rows have two lines. The one in the box's choice takes the row selection fill. -->
   <Style Selector="ListBox.results ListBoxItem">
@@ -538,11 +538,11 @@
   </Style>
   <Style Selector="Border.treeHead">
     <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AppSidebarBrush}" />
   </Style>
   <Style Selector="Border.treeCover">
     <Setter Property="IsHitTestVisible" Value="False" />
-    <Setter Property="Background" Value="{DynamicResource AppTopbarBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AppSidebarBrush}" />
   </Style>
   <Style Selector="Button.stickyRow">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
