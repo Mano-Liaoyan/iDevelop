@@ -352,6 +352,24 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_jump_that_stops_partway_keeps_the_conversation_at_its_latest_message()
+    {
+        _conversation.Add([.. Enumerable.Range(0, 60).Select(i => new ConversationLine.Agent($"Message {i} with enough words to wrap across the transcript column, and then a few more words."))]);
+        var state = new ConversationState();
+        var model = Open(state);
+        using var window = new DisposableWindow(Host(model, out var view));
+        var scroller = view.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Scroller");
+
+        // No wheel, drag, or key moved it, as when the list stops a jump to the end while it realizes rows.
+        scroller.Offset = scroller.Offset.WithY(scroller.Offset.Y - 900);
+        Render();
+
+        Assert.True(view.IsFollowing);
+        Assert.Null(state.Anchor);
+        Assert.True(scroller.Offset.Y >= scroller.Extent.Height - scroller.Viewport.Height - 24, $"The view rests at {scroller.Offset.Y} of {scroller.Extent.Height}.");
+    }
+
+    [AvaloniaFact]
     public void A_small_step_down_moves_past_the_line_so_arrows_keep_moving()
     {
         _conversation.Add([.. Enumerable.Range(0, 60).Select(i => new ConversationLine.Agent($"Message {i} with enough words to wrap across the transcript column, and then a few more words so that it runs onto its second line and a third."))]);

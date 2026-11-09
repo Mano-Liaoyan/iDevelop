@@ -126,6 +126,7 @@ public partial class ConversationView : UserControl
             _model.FollowRequested += Follow;
             _anchor = _model.State.Anchor;
             _follow = _anchor is null;
+            (_restedAt, _restMovedEnd) = (null, null);
         }
     }
 
@@ -269,9 +270,11 @@ public partial class ConversationView : UserControl
         var atEnd = Scroller.Offset.Y >= Scroller.Extent.Height - Scroller.Viewport.Height - EndSlack;
         JumpToLatest.IsVisible = !atEnd && _model is { Items.Count: > 0 };
         var ours = _scrolledTo is { } target && Math.Abs(Scroller.Offset.Y - target) < 1;
-        var layoutOnly = (e.ExtentDelta.Y != 0 || e.ViewportDelta.Y != 0) && !_userInput;
+        // Only a person's scroll moves the place. The list can stop a jump of ours partway while it realizes rows, and the
+        // jump then looks like a scroll with no change of extent. Taken for a person's, it would save a place above the end.
+        var byPerson = _userInput;
         _userInput = false;
-        if (_restoring || ours || layoutOnly)
+        if (_restoring || ours || !byPerson)
         {
             return;
         }
