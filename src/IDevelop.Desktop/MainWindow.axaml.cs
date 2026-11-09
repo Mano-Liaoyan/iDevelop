@@ -53,6 +53,14 @@ public partial class MainWindow : Window
                 ShowPanels();
             }
         };
+        ViewModel.AgentPanel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AgentPanelViewModel.IsRoom))
+            {
+                PlaceRoom();
+            }
+        };
+        InspectorFrame.SizeChanged += (_, e) => ViewModel.AgentPanel.Width = e.NewSize.Width;
         ViewModel.NextRequested += GoNext;
         ViewModel.FrameRunningRequested += () => CanvasView?.FrameRunning();
         // A click outside the flyout or Esc closes it. Anything that is not the flyout's own keeps working as it would.
@@ -143,6 +151,18 @@ public partial class MainWindow : Window
         Columns.Margin = new Thickness(ViewModel.ShowsRail ? 0 : PanelWidths.SheetGap, 0, PanelWidths.SheetGap, PanelWidths.SheetGap);
         PlaceFlyout();
         LimitPanels();
+    }
+
+    // The Room takes the Map's column and the panel's. On the way back the selected card comes into view again.
+    private void PlaceRoom()
+    {
+        var room = ViewModel.AgentPanel.IsRoom;
+        Grid.SetColumn(InspectorFrame, room ? 2 : 4);
+        Grid.SetColumnSpan(InspectorFrame, room ? 3 : 1);
+        if (!room)
+        {
+            KeepSelectionInView();
+        }
     }
 
     // The flyout spans the body beside the Rail and covers the Map, which it does not rearrange. Closed, the sheet returns to its column.
@@ -299,6 +319,13 @@ public partial class MainWindow : Window
             return true;
         }
 
+        // A key that nothing took on its way here, such as Esc with the focus in the Index, still leaves the Room.
+        if (e is { Key: Key.Escape, KeyModifiers: KeyModifiers.None } && ViewModel.AgentPanel.IsRoom)
+        {
+            StepBack();
+            return true;
+        }
+
         if (CanvasKeys.ToggleInspector.Matches(e) || CanvasKeys.ToggleSidebar.Matches(e))
         {
             (e.KeyModifiers.HasFlag(KeyModifiers.Alt) ? ViewModel.ToggleInspectorCommand : ViewModel.ToggleSidebarCommand).Execute(null);
@@ -344,6 +371,11 @@ public partial class MainWindow : Window
         {
             ViewModel.ShowInspector();
             ViewModel.AgentPanel.Show(page);
+            if (ViewModel.AgentPanel is { IsChat: true, IsPinned: true })
+            {
+                FocusComposer();
+            }
+
             return true;
         }
 
@@ -353,8 +385,19 @@ public partial class MainWindow : Window
     // The next node's Chat page takes the keys, so a person can reply at once.
     private void GoNext(NodeState state) => ViewModel.ShowNext(state);
 
-    /// <summary>Esc from the Chat page puts the keys back on the Map, on the node's card.</summary>
-    internal void FocusMap() => CanvasView?.Editor.Focus(NavigationMethod.Directional);
+    /// <summary>Esc moves one distance back: from the Room to the panel of the same node, and from the panel to its card on the Map.</summary>
+    internal void StepBack()
+    {
+        if (ViewModel.AgentPanel.IsRoom)
+        {
+            ViewModel.LeaveRoom();
+            Dispatcher.UIThread.Post(FocusInspector, DispatcherPriority.Background);
+        }
+        else
+        {
+            CanvasView?.Editor.Focus(NavigationMethod.Directional);
+        }
+    }
 
     private ConversationView? ShownConversation => this.GetVisualDescendants().OfType<ConversationView>().FirstOrDefault(view => view.IsEffectivelyVisible);
 
@@ -402,7 +445,7 @@ public partial class MainWindow : Window
                 yield return (Rail, () => Rail.GetVisualDescendants().OfType<Button>().FirstOrDefault()?.Focus(NavigationMethod.Directional));
             }
 
-            if (CanvasView is { } canvas)
+            if (CanvasView is { } canvas && !ViewModel.AgentPanel.IsRoom)
             {
                 yield return (canvas, () => canvas.Editor.Focus(NavigationMethod.Directional));
             }

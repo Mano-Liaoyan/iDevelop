@@ -49,6 +49,7 @@ public partial class SidebarView : UserControl
         FindBox.AddHandler(KeyDownEvent, OnFindKeyDown, RoutingStrategies.Tunnel);
         // A click anywhere else leaves Find, as it leaves any floating list. A result takes no focus, so a click on one stays here.
         FindBox.LostFocus += (_, _) => ViewModel.Find.Clear();
+        AddHandler(KeyDownEvent, OnAgentRowEnter, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnRowKeyDown, RoutingStrategies.Tunnel);
         // A group header folds or opens its group, and the list never selects it.
         AddHandler(PointerPressedEvent, OnGroupPressed, RoutingStrategies.Tunnel);
@@ -311,6 +312,29 @@ public partial class SidebarView : UserControl
             && e.GetCurrentPoint(item).Properties.IsLeftButtonPressed)
         {
             group.Toggle();
+            e.Handled = true;
+        }
+    }
+
+    // Enter on an agent's row moves one distance closer, to its Chat page, and Shift+Enter opens its Room.
+    private void OnAgentRowEnter(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || e.Source is TextBox || e.Source is not Visual source || source.FindAncestorOfType<MenuItem>(includeSelf: true) is not null)
+        {
+            return;
+        }
+
+        var node = source.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext as TaskNodeViewModel;
+        var target = node ?? ((source as Control)?.DataContext as ActivityRow)?.Node;
+        if (e.KeyModifiers == KeyModifiers.Shift && target is not null)
+        {
+            target.OpenRoom();
+            e.Handled = true;
+        }
+        else if (e.KeyModifiers == KeyModifiers.None && node is { HasAgent: true })
+        {
+            node.OpenConversationCommand.Execute(null);
+            BringRowIntoView(source);
             e.Handled = true;
         }
     }

@@ -19,6 +19,9 @@ public static class CanvasKeys
     /// <summary>Runs the shown workflow, or Stop and send in a composer.</summary>
     public static KeyGesture RunWorkflow => new(Key.Enter, Command | KeyModifiers.Shift);
 
+    /// <summary>Opens a node's Room.</summary>
+    public static KeyGesture Room { get; } = new(Key.Enter, KeyModifiers.Shift);
+
     /// <summary>Puts the focus in the left area's Find box.</summary>
     public static KeyGesture Find => new(Key.K, Command);
 

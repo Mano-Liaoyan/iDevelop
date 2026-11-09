@@ -142,6 +142,48 @@
     <Setter Property="Width" Value="28" />
     <Setter Property="Height" Value="28" />
   </Style>
+  <Style Selector="Button.glyph.headerGlyph.roomOpen /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
+  </Style>
+  <!-- The rule between a pinned Chat and the page column. -->
+  <Style Selector="Border.pinRule">
+    <Setter Property="Background" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <!-- The Room's Lineage Strip, 44 px. A neighbor is a quiet button, and this agent has the neutral "where I am" fill. -->
+  <Style Selector="Border.lineage">
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <Style Selector="Button.lineageChip">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="FontSize" Value="{StaticResource TypeBodySize}" />
+  </Style>
+  <Style Selector="Button.lineageChip:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.lineageChip:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
+  </Style>
+  <Style Selector="Border.lineageThis">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+  </Style>
+  <Style Selector="PathIcon.lineageArrow">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Margin" Value="4,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
   <Style Selector="ItemsControl.headerActions Button">
     <Setter Property="Height" Value="28" />
     <Setter Property="Padding" Value="10,0" />

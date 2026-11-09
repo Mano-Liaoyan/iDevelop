@@ -10,7 +10,7 @@ namespace IDevelop.Desktop.Inspector;
 
 /// <summary>
 /// The Agent panel: a 56 px header, and under it a node's pages with their tab strip, or the page of what else is selected.
-/// The blueprint editor takes the whole panel while it is open.
+/// In the Room a Lineage Strip stands over the header. The blueprint editor takes the whole panel while it is open.
 /// </summary>
 public partial class AgentPanelView : UserControl
 {
@@ -89,6 +89,13 @@ public partial class AgentPanelView : UserControl
             RenameTitle();
             e.Handled = true;
         }
+        // A control that takes Esc, such as an open picker, has handled it by now.
+        else if (e is { Key: Key.Escape, KeyModifiers: KeyModifiers.None } && (DataContext as WorkflowCanvasViewModel)?.Inspected is TaskNodeViewModel
+            && TopLevel.GetTopLevel(this) is MainWindow window)
+        {
+            window.StepBack();
+            e.Handled = true;
+        }
     }
 
     private void OnTitleDoubleTapped(object? sender, TappedEventArgs e) => RenameTitle();
@@ -104,6 +111,9 @@ public partial class AgentPanelView : UserControl
             e.Handled = true;
         }
     }
+
+    private void OnToggleRoom(object? sender, RoutedEventArgs e) =>
+        (TopLevel.GetTopLevel(this) as MainWindow)?.ViewModel.ToggleRoomCommand.Execute(null);
 
     private void OnClosePanel(object? sender, RoutedEventArgs e) =>
         (TopLevel.GetTopLevel(this) as MainWindow)?.ViewModel.ToggleInspectorCommand.Execute(null);

@@ -92,7 +92,6 @@ public partial class ConversationView : UserControl
         Transcript.LayoutUpdated += OnTranscriptLaidOut;
         Transcript.AddHandler(KeyDownEvent, OnStepKey, RoutingStrategies.Bubble);
         Composer.AddHandler(KeyDownEvent, OnComposerKey, RoutingStrategies.Tunnel);
-        AddHandler(KeyDownEvent, OnEscape, RoutingStrategies.Bubble);
         ComposerBar.SizeChanged += (_, e) => KeyHint.IsVisible = e.NewSize.Width >= HintWidth;
         ComposerFrame.SizeChanged += (_, _) => LimitDock();
         SizeChanged += (_, _) => LimitDock();
@@ -358,16 +357,6 @@ public partial class ConversationView : UserControl
         {
             e.Handled = true;
             Composer.CaretIndex = Composer.Text?.Length ?? 0;
-        }
-    }
-
-    // Esc moves one distance back: from the Chat page to the node's card on the Map.
-    private void OnEscape(object? sender, KeyEventArgs e)
-    {
-        if (e is { Key: Key.Escape, KeyModifiers: KeyModifiers.None } && TopLevel.GetTopLevel(this) is MainWindow window)
-        {
-            window.FocusMap();
-            e.Handled = true;
         }
     }
 

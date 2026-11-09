@@ -54,9 +54,17 @@
       </ContentControl.DataTemplates>
     </ContentControl>
 
-    <!-- The header never changes height. Under it, a node's pages and their tab strip, or the page of what else is selected. -->
-    <Grid RowDefinitions="56,*" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
-      <Border Classes="panelHeader">
+    <!-- The header never changes height. Under it, a node's pages and their tab strip, or the page of what else is selected. A Room puts its Lineage Strip on top. -->
+    <Grid RowDefinitions="Auto,56,*" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
+      <ContentControl Content="{Binding Inspected}" IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsRoom}">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="canvas:TaskNodeViewModel">
+            <inspector:LineageStrip />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+
+      <Border Grid.Row="1" Classes="panelHeader">
         <ContentControl>
           <ContentControl.Content>
             <MultiBinding Converter="{x:Static inspector:InspectorConverters.FirstSet}">
@@ -101,6 +109,12 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
+                  <Button Classes="glyph headerGlyph" Classes.roomOpen="{Binding $parent[inspector:AgentPanelView].Panel.IsRoom}" Click="OnToggleRoom"
+                          ToolTip.Tip="{Binding $parent[inspector:AgentPanelView].Panel.RoomTip}"
+                          AutomationProperties.AutomationId="RoomToggle"
+                          AutomationProperties.Name="{Binding $parent[inspector:AgentPanelView].Panel.RoomTip}">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMaximize}" />
+                  </Button>
                   <Button Classes="glyph headerGlyph" ToolTip.Tip="More"
                           AutomationProperties.AutomationId="InspectorMore"
                           AutomationProperties.Name="More">
@@ -161,7 +175,7 @@
         </ContentControl>
       </Border>
 
-      <ContentControl Grid.Row="1">
+      <ContentControl Grid.Row="2">
         <ContentControl.Content>
           <MultiBinding Converter="{x:Static inspector:InspectorConverters.FirstSet}">
             <Binding Path="Inspected" />
@@ -174,7 +188,7 @@
               <!-- The strip comes first in the tree, so Tab goes from it to the page. -->
               <Border Grid.Column="1" Classes="pageStrip">
                 <StackPanel>
-                  <inspector:PageTab Label="Chat" Glyph="{StaticResource IconChat}" ToolTip.Tip="Chat (Alt+1)"
+                  <inspector:PageTab Label="Chat" Glyph="{StaticResource IconChat}" ToolTip.Tip="Chat (Alt+1)" IsVisible="{Binding !$parent[inspector:AgentPanelView].Panel.IsPinned}"
                                      Classes.active="{Binding $parent[inspector:AgentPanelView].Panel.IsChat}" Classes.waiting="{Binding IsWaiting}"
                                      Command="{Binding $parent[inspector:AgentPanelView].Panel.ShowCommand}" CommandParameter="{x:Static inspector:AgentPage.Chat}"
                                      AutomationProperties.AutomationId="PageChat" AutomationProperties.Name="Chat" />
@@ -202,9 +216,9 @@
                 </StackPanel>
               </Border>
 
-              <Panel>
-                <!-- The Chat page: the node's conversation, its Action Dock, and its composer. -->
-                <ContentControl IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsChat}"
+              <inspector:AgentPageColumns IsPinned="{Binding $parent[inspector:AgentPanelView].Panel.IsPinned}" IsRoom="{Binding $parent[inspector:AgentPanelView].Panel.IsRoom}">
+                <!-- The Chat page: the node's conversation, its Action Dock, and its composer. Pinned, it stands beside the page column. -->
+                <ContentControl IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.ShowsChat}"
                                 Content="{Binding $parent[inspector:AgentPanelView].Panel.Conversation}"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
                                 AutomationProperties.AutomationId="ChatPage">
@@ -214,6 +228,8 @@
                     </DataTemplate>
                   </ContentControl.DataTemplates>
                 </ContentControl>
+
+                <Border Classes="pinRule" IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsPinned}" />
 
                 <ScrollViewer IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsAgent}">
                   <StackPanel Classes="page" AutomationProperties.AutomationId="AgentPage">
@@ -641,7 +657,7 @@
                     </inspector:InspectorSection>
                   </StackPanel>
                 </ScrollViewer>
-              </Panel>
+              </inspector:AgentPageColumns>
             </Grid>
           </DataTemplate>
 

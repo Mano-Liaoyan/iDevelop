@@ -38,6 +38,16 @@ internal static class PanelWidths
     /// <summary>The widths that open a tier. Below the first, the tier is Compact.</summary>
     private const double DefaultFrom = 1180, RoomyFrom = 1700, LargeFrom = 2200;
 
+    /// <summary>An Agent panel at this width or more shows Chat and the current page side by side.</summary>
+    public const double PinFrom = 880;
+
+    /// <summary>The page column's width in the Room, at every window width.</summary>
+    public const double RoomPageWidth = 348;
+
+    /// <summary>The page column beside a pinned Chat, in a panel or a Room with this much width for both columns.</summary>
+    public static double PageColumnWidth(double available, bool isRoom) =>
+        isRoom ? RoomPageWidth : Math.Ceiling(Math.Clamp(available * 0.35, 320, 480));
+
     /// <summary>Below this window width the Command Bar's progress bar is shorter.</summary>
     public const double MinimalFrom = 960;
 

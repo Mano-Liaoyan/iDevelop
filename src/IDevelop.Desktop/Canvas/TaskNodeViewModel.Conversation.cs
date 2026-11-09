@@ -23,6 +23,9 @@ public sealed partial class TaskNodeViewModel
     /// <summary>Opens the node's Chat page.</summary>
     public ICommand OpenConversationCommand => _openConversation;
 
+    /// <summary>Opens the node's Room, Shift+Enter on its card or its row.</summary>
+    public void OpenRoom() => _canvas.Project.OpenRoom(new ConversationTarget(_canvas, Id));
+
     /// <summary>What the card's attention glyph does: it opens the node's Chat page.</summary>
     public ICommand AttendCommand => _openConversation;
 

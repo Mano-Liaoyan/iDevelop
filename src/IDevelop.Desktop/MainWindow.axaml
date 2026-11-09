@@ -52,7 +52,7 @@
       <GridSplitter Grid.Column="1" Classes="sheetGap" ZIndex="1" IsVisible="{Binding CanResizeIndex}" />
 
       <!-- The Map. Its fill is the canvas's background, so a corner never shows a different color. -->
-      <Border x:Name="MapSheet" Grid.Column="2" Classes="sheet">
+      <Border x:Name="MapSheet" Grid.Column="2" Classes="sheet" IsVisible="{Binding !AgentPanel.IsRoom}">
         <Border.Background>
           <SolidColorBrush Color="{DynamicResource CanvasGrid.BackgroundColor}" />
         </Border.Background>

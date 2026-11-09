@@ -684,6 +684,9 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             case Key.Enter when plain && single is { HasAgent: true }:
                 single.OpenConversationCommand.Execute(null);
                 return true;
+            case Key.Enter when modifiers == KeyModifiers.Shift && single is not null:
+                single.OpenRoom();
+                return true;
             case Key.OemPeriod when plain && canvas.SelectedNodes.Count > 0:
                 Frame(canvas.SelectedNodes);
                 return true;

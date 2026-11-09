@@ -63,11 +63,16 @@ public sealed class MainWindowViewModel : ObservableObject
         _refreshAgents = new RelayCommand(() => UiWork.Start(RefreshAgents, text => Status = text), () => !_refreshingAgents);
         AgentPanel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(AgentPanelViewModel.Page))
+            if (e.PropertyName == nameof(AgentPanelViewModel.ShowsChat))
             {
                 SyncConversation();
             }
+            else if (e.PropertyName == nameof(AgentPanelViewModel.IsRoom))
+            {
+                RaiseInspector();
+            }
         };
+        ToggleRoomCommand = new RelayCommand(ToggleRoom);
         Activity = new ActivityViewModel(() => Projects, Attend);
         Find = new FindViewModel(() => Projects, Choose);
         Projects.CollectionChanged += (_, _) => RaiseProjects();
@@ -129,6 +134,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 _swapClosedFor = null;
                 IsSidebarOpen = true;
                 IsIndexFlyoutOpen = false;
+                AgentPanel.IsCompactWindow = value == WidthTier.Compact;
                 OnPropertyChanged(nameof(IsCompact));
                 RaiseInspector();
             }
@@ -169,13 +175,16 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool CanResizeIndex => IsSidebarShown && !IsCompact;
 
     /// <summary>A drag can resize the Agent panel: it shows, and the tier gives it a range.</summary>
-    public bool CanResizePanel => IsInspectorShown && !IsCompact;
+    public bool CanResizePanel => IsInspectorShown && !IsCompact && !AgentPanel.IsRoom;
 
     public string SidebarToggleLabel => IsSidebarShown ? "Show the Rail" : "Show the Index";
 
     public ICommand ToggleSidebarCommand { get; }
 
     public ICommand ToggleInspectorCommand { get; }
+
+    /// <summary>The panel header's Room button: into the Room with the same page, or back to the panel.</summary>
+    public ICommand ToggleRoomCommand { get; }
 
     /// <summary>Which page the Agent panel shows.</summary>
     public AgentPanelViewModel AgentPanel { get; } = new();
@@ -370,6 +379,7 @@ public sealed class MainWindowViewModel : ObservableObject
     // Closing the Agent panel ends its on-demand opening for this node and leaves the person's other choices as they were.
     private void ToggleInspector()
     {
+        AgentPanel.IsRoom = false;
         if (IsInspectorSwapped)
         {
             _swapClosedFor = Canvas?.SelectedNode;
@@ -545,6 +555,18 @@ public sealed class MainWindowViewModel : ObservableObject
         ComposerRequested?.Invoke();
     }
 
+    // The node's Chat page and then the Room around it, so a Room opens where Enter would have gone.
+    private void OpenRoom(ConversationTarget target)
+    {
+        OpenChat(target);
+        AgentPanel.IsRoom = Canvas?.Inspected is TaskNodeViewModel;
+    }
+
+    /// <summary>Goes back to the panel, with the same node selected.</summary>
+    internal void LeaveRoom() => AgentPanel.IsRoom = false;
+
+    private void ToggleRoom() => AgentPanel.IsRoom = !AgentPanel.IsRoom && Canvas?.Inspected is TaskNodeViewModel;
+
     // The panel shows: as the person last chose, or on demand in the Compact tier.
     private void RevealPanel()
     {
@@ -567,7 +589,13 @@ public sealed class MainWindowViewModel : ObservableObject
     // The Chat page reads its node's log only while it shows.
     private void SyncConversation()
     {
-        var node = IsInspectorShown && AgentPanel.IsChat ? Canvas?.Inspected as TaskNodeViewModel : null;
+        if (AgentPanel.IsRoom && !IsInspectorShown)
+        {
+            AgentPanel.IsRoom = false;
+        }
+
+        QueueRoomEnd();
+        var node = IsInspectorShown && AgentPanel.ShowsChat ? Canvas?.Inspected as TaskNodeViewModel : null;
         if (node is null)
         {
             CloseConversation();
@@ -575,6 +603,22 @@ public sealed class MainWindowViewModel : ObservableObject
         else if (Conversation is not { } open || open.Target.Canvas != Canvas || open.Node != node)
         {
             ShowConversation(new ConversationTarget(Canvas!, node.Id));
+        }
+    }
+
+    // A Room is one node's, so it ends with the node's selection. A change from one node to another passes through no selection,
+    // so the check waits for the change to end.
+    private void QueueRoomEnd()
+    {
+        if (AgentPanel.IsRoom && Canvas?.Inspected is not TaskNodeViewModel)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (Canvas?.Inspected is not TaskNodeViewModel)
+                {
+                    AgentPanel.IsRoom = false;
+                }
+            }, DispatcherPriority.Background);
         }
     }
 
@@ -775,6 +819,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         var project = new ProjectViewModel(identity, windowLock, documents, NewCanvas);
         project.ConversationRequested += OpenChat;
+        project.RoomRequested += OpenRoom;
         project.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ProjectViewModel.IsExpanded))

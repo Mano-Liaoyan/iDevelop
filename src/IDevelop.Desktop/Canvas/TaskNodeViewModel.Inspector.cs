@@ -49,6 +49,20 @@ public sealed partial class TaskNodeViewModel
 
     public bool HasOutputs => Outputs.Count > 0;
 
+    /// <summary>The first predecessor, which the Room's Lineage Strip names, or null.</summary>
+    public TaskNodeViewModel? FirstPredecessor => Inputs.FirstOrDefault()?.Node;
+
+    /// <summary>The first successor, which the Room's Lineage Strip names, or null.</summary>
+    public TaskNodeViewModel? FirstSuccessor => Outputs.FirstOrDefault()?.Node;
+
+    /// <summary>The strip's count of predecessors it does not name, such as "+2", or null.</summary>
+    public string? MorePredecessors => More(Inputs.Count);
+
+    /// <summary>The strip's count of successors it does not name, such as "+2", or null.</summary>
+    public string? MoreSuccessors => More(Outputs.Count);
+
+    private static string? More(int count) => count > 1 ? $"+{count - 1}" : null;
+
     /// <summary>A node with no result shows "No result yet." and nothing else, so the Output page lists its readers only with a result.</summary>
     public bool ShowsGoesTo => HasOutputs && HasResults;
 
@@ -230,6 +244,10 @@ public sealed partial class TaskNodeViewModel
         OnPropertyChanged(nameof(Outputs));
         OnPropertyChanged(nameof(HasOutputs));
         OnPropertyChanged(nameof(ShowsGoesTo));
+        OnPropertyChanged(nameof(FirstPredecessor));
+        OnPropertyChanged(nameof(FirstSuccessor));
+        OnPropertyChanged(nameof(MorePredecessors));
+        OnPropertyChanged(nameof(MoreSuccessors));
     }
 
     private void WatchProposal()

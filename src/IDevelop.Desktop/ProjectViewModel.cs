@@ -106,6 +106,11 @@ public sealed class ProjectViewModel : ObservableObject
 
     internal void OpenConversation(ConversationTarget target) => ConversationRequested?.Invoke(target);
 
+    /// <summary>A card or an Index row asks the window to open a node's Room through this one route.</summary>
+    internal event Action<ConversationTarget>? RoomRequested;
+
+    internal void OpenRoom(ConversationTarget target) => RoomRequested?.Invoke(target);
+
     /// <summary>The task's conversation state in the workflow, kept while the project stays open.</summary>
     internal ConversationState ConversationOf(WorkflowCanvasViewModel canvas, TaskId task)
     {

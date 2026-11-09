@@ -19,13 +19,18 @@ public enum AgentPage
 }
 
 /// <summary>
-/// Which page the window's Agent panel shows. Chat is first and the default. Selecting another node keeps the current page. Coming from the Workflow
-/// page or a connection, the panel returns to the page last used for that kind of node. A page that the node does not have falls back to Chat.
+/// Which page the window's Agent panel shows, and at which size. Chat is first and the default. Selecting another node keeps the current page. Coming from
+/// the Workflow page or a connection, the panel returns to the page last used for that kind of node. A page that the node does not have falls back to Chat.
+/// A panel at <see cref="PanelWidths.PinFrom"/> or wider pins Chat beside the current page, so the page column then shows the last page other than Chat.
+/// The Room is the panel at the size of the Map and the panel together.
 /// </summary>
 public sealed class AgentPanelViewModel : ObservableObject
 {
     private readonly Dictionary<NodeKind, AgentPage> _lastPage = [];
     private TaskNodeViewModel? _node;
+
+    // The last page other than Chat, which the page column shows beside a pinned Chat.
+    private AgentPage _sidePage = AgentPage.Agent;
 
     public AgentPanelViewModel() => ShowCommand = new RelayCommand<AgentPage>(Show);
 
@@ -36,27 +41,81 @@ public sealed class AgentPanelViewModel : ObservableObject
         {
             if (SetProperty(ref field, value))
             {
+                if (value != AgentPage.Chat)
+                {
+                    _sidePage = value;
+                }
+
                 OnPropertyChanged(nameof(IsChat));
-                OnPropertyChanged(nameof(IsAgent));
-                OnPropertyChanged(nameof(IsTask));
-                OnPropertyChanged(nameof(IsInput));
-                OnPropertyChanged(nameof(IsOutput));
-                OnPropertyChanged(nameof(IsExtra));
+                RaisePages();
             }
         }
     } = AgentPage.Chat;
 
+    /// <summary>Chat is the current page. While Chat is pinned it can be, and the page column still shows another page.</summary>
     public bool IsChat => Page == AgentPage.Chat;
 
-    public bool IsAgent => Page == AgentPage.Agent;
+    /// <summary>The page that the panel's page area shows: the current page, or beside a pinned Chat a page other than Chat.</summary>
+    public AgentPage ShownPage => !IsPinned || Page != AgentPage.Chat ? Page : _node is { } node && !Has(node, _sidePage) ? FirstSidePage(node) : _sidePage;
 
-    public bool IsTask => Page == AgentPage.Task;
+    public bool IsAgent => ShownPage == AgentPage.Agent;
 
-    public bool IsInput => Page == AgentPage.Input;
+    public bool IsTask => ShownPage == AgentPage.Task;
 
-    public bool IsOutput => Page == AgentPage.Output;
+    public bool IsInput => ShownPage == AgentPage.Input;
 
-    public bool IsExtra => Page == AgentPage.Extra;
+    public bool IsOutput => ShownPage == AgentPage.Output;
+
+    public bool IsExtra => ShownPage == AgentPage.Extra;
+
+    /// <summary>The Chat column shows: its page is current, or it is pinned.</summary>
+    public bool ShowsChat => IsChat || IsPinned;
+
+    /// <summary>Chat stands beside the page column. The strip then has no Chat tab.</summary>
+    public bool IsPinned => Width >= PanelWidths.PinFrom && !(IsRoom && IsCompactWindow);
+
+    /// <summary>The Agent panel's width, which the window reports when the panel is laid out.</summary>
+    internal double Width
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                RaisePages();
+            }
+        }
+    }
+
+    /// <summary>The panel fills the Map and panel area, under a Lineage Strip.</summary>
+    public bool IsRoom
+    {
+        get;
+        internal set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(RoomTip));
+                RaisePages();
+            }
+        }
+    }
+
+    /// <summary>The window is in the Compact tier, where a Room shows one column.</summary>
+    internal bool IsCompactWindow
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                RaisePages();
+            }
+        }
+    }
+
+    /// <summary>What the header's Room button does.</summary>
+    public string RoomTip => IsRoom ? "Back to the panel (Esc)" : "Open the Room (Shift+Enter)";
 
     /// <summary>The Chat page's conversation, which the window opens while the page shows, or null.</summary>
     public Conversation.ConversationViewModel? Conversation
@@ -100,6 +159,8 @@ public sealed class AgentPanelViewModel : ObservableObject
             return;
         }
 
+        RaisePages();
+
         var wanted = !fromNode && _lastPage.TryGetValue(node.Kind, out var last) ? last : Page;
         if (Has(node, wanted))
         {
@@ -113,6 +174,20 @@ public sealed class AgentPanelViewModel : ObservableObject
     }
 
     private static AgentPage FirstPage(TaskNodeViewModel node) => AgentPage.Chat;
+
+    private static AgentPage FirstSidePage(TaskNodeViewModel node) => node.HasAgent ? AgentPage.Agent : AgentPage.Task;
+
+    private void RaisePages()
+    {
+        OnPropertyChanged(nameof(IsPinned));
+        OnPropertyChanged(nameof(ShowsChat));
+        OnPropertyChanged(nameof(ShownPage));
+        OnPropertyChanged(nameof(IsAgent));
+        OnPropertyChanged(nameof(IsTask));
+        OnPropertyChanged(nameof(IsInput));
+        OnPropertyChanged(nameof(IsOutput));
+        OnPropertyChanged(nameof(IsExtra));
+    }
 
     private void Watch(TaskNodeViewModel? node)
     {
@@ -131,9 +206,14 @@ public sealed class AgentPanelViewModel : ObservableObject
     // A proposal that closes takes its page with it.
     private void OnNodeChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(TaskNodeViewModel.HasExtraPage) && _node is { } node && !Has(node, Page))
+        if (e.PropertyName == nameof(TaskNodeViewModel.HasExtraPage) && _node is { } node)
         {
-            Page = FirstPage(node);
+            if (!Has(node, Page))
+            {
+                Page = FirstPage(node);
+            }
+
+            RaisePages();
         }
     }
 }

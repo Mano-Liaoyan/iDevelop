@@ -1,0 +1,72 @@
+<!-- The Room's top line: the agent before this one, this agent, and the agent after it. A neighbor's button goes to it, and with several neighbors it lists them. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:inspector="using:IDevelop.Desktop.Inspector"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Inspector.LineageStrip"
+             x:DataType="canvas:TaskNodeViewModel"
+             AutomationProperties.AutomationId="LineageStrip">
+  <UserControl.Resources>
+    <ControlTheme x:Key="LineageMenuItem" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="canvas:NodeLink">
+      <Setter Property="Header" Value="{Binding}" />
+      <Setter Property="Command" Value="{Binding Node.SelectCommand}" />
+      <Setter Property="AutomationProperties.AutomationId" Value="LineageChoice" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding Node.Title}" />
+      <Setter Property="HeaderTemplate">
+        <DataTemplate DataType="canvas:NodeLink">
+          <Grid ColumnDefinitions="14,8,*,8,14" MaxWidth="360">
+            <theme:KindTile Kind="{Binding Node.Kind}" IsLibrary="{Binding Node.IsLibrary}" TileSize="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="{Binding Node.Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Node.Title}" />
+            <theme:StateMark Grid.Column="4" Width="14" Height="14" VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
+          </Grid>
+        </DataTemplate>
+      </Setter>
+    </ControlTheme>
+  </UserControl.Resources>
+  <Border Classes="lineage">
+    <StackPanel Orientation="Horizontal">
+      <Button x:Name="Before" Classes="lineageChip" IsVisible="{Binding !HasNoInputs}" Click="OnNeighbor"
+              ToolTip.Tip="{Binding FirstPredecessor.Title, FallbackValue={x:Null}}"
+              AutomationProperties.AutomationId="LineageBefore"
+              AutomationProperties.Name="{Binding FirstPredecessor.Title, StringFormat='Go to {0}', FallbackValue={x:Null}}">
+        <FlyoutBase.AttachedFlyout>
+          <MenuFlyout Placement="BottomEdgeAlignedLeft" ItemsSource="{Binding Inputs}" ItemContainerTheme="{StaticResource LineageMenuItem}" />
+        </FlyoutBase.AttachedFlyout>
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6">
+          <theme:KindTile Kind="{Binding FirstPredecessor.Kind, FallbackValue={x:Null}}" IsLibrary="{Binding FirstPredecessor.IsLibrary, FallbackValue={x:Null}}" TileSize="14" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Text="{Binding FirstPredecessor.Title, FallbackValue={x:Null}}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <theme:StateMark Grid.Column="2" Width="14" Height="14" VerticalAlignment="Center" State="{Binding FirstPredecessor.State, FallbackValue={x:Null}}" Why="{Binding FirstPredecessor.WaitReason, FallbackValue={x:Null}}" />
+          <TextBlock Grid.Column="3" Classes="caption" Text="{Binding MorePredecessors}" VerticalAlignment="Center" IsVisible="{Binding MorePredecessors, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <PathIcon Grid.Column="4" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" Width="12" Height="12" IsVisible="{Binding MorePredecessors, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </Grid>
+      </Button>
+      <PathIcon Classes="lineageArrow" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" IsVisible="{Binding !HasNoInputs}" />
+
+      <Border x:Name="This" Classes="lineageThis" ToolTip.Tip="{Binding Title}" AutomationProperties.AutomationId="LineageThis">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+          <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="14" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Classes="bodyStrong" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <theme:StateMark Grid.Column="2" Width="14" Height="14" VerticalAlignment="Center" State="{Binding State}" Why="{Binding WaitReason}" />
+        </Grid>
+      </Border>
+
+      <PathIcon Classes="lineageArrow" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" IsVisible="{Binding HasOutputs}" />
+      <Button x:Name="After" Classes="lineageChip" IsVisible="{Binding HasOutputs}" Click="OnNeighbor"
+              ToolTip.Tip="{Binding FirstSuccessor.Title, FallbackValue={x:Null}}"
+              AutomationProperties.AutomationId="LineageAfter"
+              AutomationProperties.Name="{Binding FirstSuccessor.Title, StringFormat='Go to {0}', FallbackValue={x:Null}}">
+        <FlyoutBase.AttachedFlyout>
+          <MenuFlyout Placement="BottomEdgeAlignedLeft" ItemsSource="{Binding Outputs}" ItemContainerTheme="{StaticResource LineageMenuItem}" />
+        </FlyoutBase.AttachedFlyout>
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6">
+          <theme:KindTile Kind="{Binding FirstSuccessor.Kind, FallbackValue={x:Null}}" IsLibrary="{Binding FirstSuccessor.IsLibrary, FallbackValue={x:Null}}" TileSize="14" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Text="{Binding FirstSuccessor.Title, FallbackValue={x:Null}}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <theme:StateMark Grid.Column="2" Width="14" Height="14" VerticalAlignment="Center" State="{Binding FirstSuccessor.State, FallbackValue={x:Null}}" Why="{Binding FirstSuccessor.WaitReason, FallbackValue={x:Null}}" />
+          <TextBlock Grid.Column="3" Classes="caption" Text="{Binding MoreSuccessors}" VerticalAlignment="Center" IsVisible="{Binding MoreSuccessors, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <PathIcon Grid.Column="4" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" Width="12" Height="12" IsVisible="{Binding MoreSuccessors, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </Grid>
+      </Button>
+    </StackPanel>
+  </Border>
+</UserControl>
