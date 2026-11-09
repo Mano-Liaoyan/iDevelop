@@ -92,27 +92,8 @@ public sealed class ProjectViewModel : ObservableObject
     /// <summary>A node of the project runs.</summary>
     public bool IsRunning => Workflows.Any(canvas => canvas.IsRunning);
 
-    /// <summary>A node of the project waits for the person: a reply, a question, or an approval.</summary>
-    public bool IsWaiting => WaitingCount > 0;
-
     /// <summary>How many of the project's nodes wait for the person.</summary>
-    public int WaitingCount => Workflows.Sum(canvas => canvas.WaitingCount);
-
-    /// <summary>How many of the project's nodes failed.</summary>
-    public int FailedCount => Workflows.Sum(canvas => canvas.Counts.Failed);
-
-    public bool HasFailed => FailedCount > 0;
-
-    /// <summary>How many of its nodes run now, which a folded row sums too.</summary>
-    public int RunningCount => Workflows.Sum(canvas => canvas.RunningCount);
-
-    public bool HasRunningNodes => RunningCount > 0;
-
-    public string RunningLabel => RunningCount == 1 ? "1 node runs" : $"{RunningCount} nodes run";
-
-    public string WaitingLabel => WaitingCount == 1 ? "1 node needs you" : $"{WaitingCount} nodes need you";
-
-    public string FailedLabel => FailedCount == 1 ? "1 node failed" : $"{FailedCount} nodes failed";
+    public int WaitingCount => Counts.Waiting;
 
     public bool HasNoWorkflows => Workflows.Count == 0;
 
@@ -155,15 +136,7 @@ public sealed class ProjectViewModel : ObservableObject
             }
             else if (e.PropertyName == nameof(WorkflowCanvasViewModel.Summary))
             {
-                OnPropertyChanged(nameof(IsWaiting));
                 OnPropertyChanged(nameof(WaitingCount));
-                OnPropertyChanged(nameof(FailedCount));
-                OnPropertyChanged(nameof(HasFailed));
-                OnPropertyChanged(nameof(WaitingLabel));
-                OnPropertyChanged(nameof(FailedLabel));
-                OnPropertyChanged(nameof(RunningCount));
-                OnPropertyChanged(nameof(HasRunningNodes));
-                OnPropertyChanged(nameof(RunningLabel));
                 OnPropertyChanged(nameof(Counts));
                 OnPropertyChanged(nameof(Rollup));
                 OnPropertyChanged(nameof(RollupWhy));

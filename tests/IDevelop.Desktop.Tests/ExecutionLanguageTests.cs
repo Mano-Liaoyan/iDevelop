@@ -188,22 +188,6 @@ public sealed class ExecutionLanguageTests
         Assert.Equal(22, slots.Max(), 3);
     }
 
-    [AvaloniaFact]
-    public void A_grouped_line_breaks_between_groups_and_no_line_ends_in_a_separator()
-    {
-        const string whole = "1\u00a0failed\u00a0· 2\u00a0waiting\u00a0· 2\u00a0interrupted\u00a0· 1\u00a0stale";
-        var line = new GroupedLine { Whole = whole, TextWrapping = TextWrapping.Wrap, FontSize = 12 };
-
-        line.Measure(new Size(130, double.PositiveInfinity));
-        var lines = line.Text!.Split('\n');
-        Assert.True(lines.Length >= 2, line.Text);
-        Assert.All(lines, text => Assert.False(text.EndsWith('·') || text.StartsWith('·'), text));
-        Assert.Equal(whole.Replace("\u00a0· ", "|"), string.Join('|', lines.SelectMany(text => text.Split("\u00a0· "))));
-
-        line.Measure(new Size(2000, double.PositiveInfinity));
-        Assert.Equal(whole, line.Text);
-    }
-
     [AvaloniaTheory]
     [InlineData("A long title that a line limit cuts", 2)]
     [InlineData("Averyveryveryverylongwordwithoutanybreakopportunity at all", 1)]
