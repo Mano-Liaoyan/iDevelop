@@ -78,6 +78,7 @@ public sealed class SidebarLayoutTests : IDisposable
 
     [AvaloniaTheory]
     [InlineData(240)]
+    [InlineData(252)]
     [InlineData(320)]
     [InlineData(400)]
     public void A_project_s_and_a_workflow_s_name_show_in_full_at_every_sidebar_width(double width)
@@ -134,6 +135,7 @@ public sealed class SidebarLayoutTests : IDisposable
 
     [AvaloniaTheory]
     [InlineData(240)]
+    [InlineData(252)]
     [InlineData(400)]
     public void Task_titles_show_in_full_with_their_tile_on_the_first_line(double width)
     {
