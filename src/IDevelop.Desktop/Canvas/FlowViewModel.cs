@@ -67,7 +67,14 @@ public sealed class FlowCardViewModel(TaskNodeViewModel node) : ObservableObject
     public bool IsChip
     {
         get;
-        internal set => SetProperty(ref field, value);
+        internal set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(SocketTop));
+                OnPropertyChanged(nameof(SocketBottom));
+            }
+        }
     }
 
     public bool IsDimmed
@@ -118,8 +125,11 @@ public sealed class FlowCardViewModel(TaskNodeViewModel node) : ObservableObject
 
     public bool IsOutputStopped => Output == WireFlow.Stopped;
 
-    /// <summary>The socket's half width past the card's edge.</summary>
-    public const double SocketReach = 4;
+    /// <summary>The input socket's margin: half the socket stands past the card's top edge.</summary>
+    public Thickness SocketTop => new(0, IsChip ? -3 : -4, 0, 0);
+
+    /// <summary>The output socket's margin: half the socket stands past the card's bottom edge.</summary>
+    public Thickness SocketBottom => new(0, 0, 0, IsChip ? -3 : -4);
 
     /// <summary>The input socket's center, in the surface's coordinates.</summary>
     public Point InputPoint => new(X + Width / 2, Y);
@@ -388,7 +398,8 @@ public sealed class FlowViewModel : ObservableObject
             active.Add(hovered.Id);
         }
 
-        var rects = Cards.Select(card => card.Bounds).ToList();
+        // The surface's edges are walls too, so a detour never leaves the Map.
+        List<Rect> rects = [.. Cards.Select(card => card.Bounds), new Rect(-2000, -2000, 2004, 100000), new Rect(_width - 4, -2000, 2000, 100000)];
         var inputs = new Dictionary<FlowCardViewModel, WireFlow>();
         var outputs = new Dictionary<FlowCardViewModel, WireFlow>();
         var wires = new List<FlowWire>();

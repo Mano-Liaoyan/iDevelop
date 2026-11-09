@@ -121,9 +121,9 @@
                          theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Role="{Binding Node.Role}" />
               <Border Classes="flowRing" CornerRadius="9.5" IsHitTestVisible="False" />
               <!-- One input at the top center and one output at the bottom center, on the card's edge. -->
-              <Ellipse Classes="flowSocket" VerticalAlignment="Top" Margin="0,-4,0,0"
+              <Ellipse Classes="flowSocket" VerticalAlignment="Top" Margin="{Binding SocketTop}"
                        Classes.connected="{Binding IsInputConnected}" Classes.feeding="{Binding IsInputFeeding}" Classes.stopped="{Binding IsInputStopped}" />
-              <Ellipse Classes="flowSocket" VerticalAlignment="Bottom" Margin="0,0,0,-4"
+              <Ellipse Classes="flowSocket" VerticalAlignment="Bottom" Margin="{Binding SocketBottom}"
                        Classes.connected="{Binding IsOutputConnected}" Classes.feeding="{Binding IsOutputFeeding}" Classes.stopped="{Binding IsOutputStopped}" />
             </Panel>
           </DataTemplate>

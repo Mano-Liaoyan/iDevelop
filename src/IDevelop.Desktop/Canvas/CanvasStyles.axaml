@@ -752,8 +752,6 @@
   </Style>
   <Style Selector="Border.flowBody">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="Background" Duration="0:0:0.12" Easing="CubicEaseOut" />
@@ -852,5 +850,22 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+  </Style>
+
+  <!-- Flow has no zoom, so a card keeps the ring's true size. These come last, because the Graph tiers on the view set theirs in canvas units. -->
+  <Style Selector="Panel.flowCard Border.stateStroke">
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Panel.flowCard Border.stateStroke.state-running, Panel.flowCard Border.stateStroke.state-inputrequired, Panel.flowCard Border.stateStroke.state-failed">
+    <Setter Property="BorderThickness" Value="1.5" />
+  </Style>
+  <Style Selector="Panel.flowCard Rectangle.staleEdge">
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeDashArray" Value="4,3" />
+  </Style>
+  <!-- Rows of chips stand 8 px apart, so a chip's socket is 6 px and two sockets across a gap keep apart. -->
+  <Style Selector="Panel.flowCard.chip Ellipse.flowSocket">
+    <Setter Property="Width" Value="6" />
+    <Setter Property="Height" Value="6" />
   </Style>
 </Styles>

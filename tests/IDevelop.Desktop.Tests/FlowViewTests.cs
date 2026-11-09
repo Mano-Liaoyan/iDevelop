@@ -210,4 +210,34 @@ public sealed class FlowViewTests
         Assert.False(canvas.Flow.CanStepDown);
         Assert.True(canvas.Flow.CanStepUp);
     }
+
+    [AvaloniaFact]
+    public void The_50_agent_workflow_shows_every_name_as_a_chip_at_1280x800_with_no_overlap()
+    {
+        int[] sizes = [4, 6, 8, 6, 8, 8, 6, 4];
+        var stages = sizes.Select(size => Enumerable.Range(0, size).Select(_ => new TaskId(Guid.NewGuid())).ToList()).ToList();
+        var places = stages.SelectMany((stage, depth) => stage.Select((id, at) => (WorkflowEdit)NodeFixture.Task(id, $"Agent {depth} {at} with a long working name", 105 + depth * 340 + at)));
+        var wires = stages.Zip(stages.Skip(1)).SelectMany(pair => pair.Second.Select(to => (WorkflowEdit)NodeFixture.Dependency(pair.First[0], to)));
+        using var f = new NodeFixture([.. places, .. wires]);
+        var shell = f.Open();
+        shell.Window.Width = 1280;
+        shell.Window.Height = 800;
+        shell.Render();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        ShowFlow(shell);
+
+        Assert.Equal(FlowDensity.Chip, canvas.Flow.Density);
+        var cards = Shell.ById<Control>(Pane(shell), "FlowCard").ToList();
+        Assert.Equal(50, cards.Count);
+        Assert.All(cards, card => Assert.Equal(FlowLayout.ChipHeight, card.Bounds.Height));
+        Assert.All(Shell.ById<Theme.EllipsisText>(Pane(shell), "FlowCardTitle"), title => Assert.False(string.IsNullOrEmpty(title.Text)));
+        var boxes = cards.Select(shell.Bounds).ToList();
+        for (var a = 0; a < boxes.Count; a++)
+        {
+            for (var b = a + 1; b < boxes.Count; b++)
+            {
+                Assert.False(boxes[a].Intersects(boxes[b]), $"{boxes[a]} overlaps {boxes[b]}");
+            }
+        }
+    }
 }
