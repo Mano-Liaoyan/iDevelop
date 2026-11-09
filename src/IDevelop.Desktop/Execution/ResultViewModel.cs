@@ -90,9 +90,6 @@ public sealed class ResultViewModel(NodeResult result, int number, bool current)
     /// <summary>Text without Markdown's code and strong marks, for a line that shows it as plain text.</summary>
     internal static string Plain(string text) => text.Replace("`", "").Replace("**", "");
 
-    /// <summary>Markdown as a reader sees it in one short block: no marks, a bullet for each list item, and no blank lines.</summary>
-    internal static string Reading(string text) => string.Join('\n', Plain(text).Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-        .Select(line => line is ['-' or '*', ' ', ..] ? $"• {line[2..]}" : line));
 
     /// <summary>Reads the commit's changes off the UI thread. A second call and a result with no commit read nothing.</summary>
     internal void ReadChanges(Func<string, ImmutableArray<FileChange>> read, Func<string, string, ImmutableArray<string>> readDiff)

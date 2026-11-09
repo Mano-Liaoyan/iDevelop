@@ -114,7 +114,9 @@ public sealed class BlueprintTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90, execution, "Draft it.", ConversationMode.Chat)));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.ChooseMore("SaveAsBlueprint");
+        shell.Page(Inspector.AgentPage.Task);
+        shell.Fold("Blueprint");
+        shell.Click(shell.Find<Button>("SaveAsBlueprint"));
         Assert.Equal("Design", shell.Find<TextBox>("BlueprintName").Text);
         Assert.Equal(["Draft it.", ""], [.. Rows(shell).Select(row => ById<TextBox>(row, "FieldDefault").Text ?? "")]);
         Assert.Equal("Codex", shell.Picked("BlueprintClient"));
@@ -174,7 +176,7 @@ public sealed class BlueprintTests : IDisposable
         shell.Click(shell.InView<Button>("CancelBlueprint"));
 
         Assert.False(shell.Has<StackPanel>("BlueprintEditor"));
-        Assert.True(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
+        Assert.True(shell.Find<Control>("WorkflowPage").IsEffectivelyVisible);
         Assert.False(Directory.Exists(Path.Combine(project, ".idp", "blueprints")));
     }
 

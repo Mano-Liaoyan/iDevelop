@@ -3,7 +3,7 @@ using IDevelop.Desktop.Canvas;
 
 namespace IDevelop.Desktop.Inspector;
 
-/// <summary>One button of the pinned header's action row. Only the node's next step can be primary.</summary>
+/// <summary>One button of the panel's actions. Only the node's next step can be primary.</summary>
 /// <param name="Id">The button's automation id.</param>
 /// <param name="Label">What the button says, which also names it for UI Automation.</param>
 /// <param name="Glyph">The resource key of the button's glyph.</param>
@@ -12,18 +12,37 @@ namespace IDevelop.Desktop.Inspector;
 /// <param name="Tip">The tooltip, which holds the reason on a button that is off.</param>
 public sealed record NodeAction(string Id, string Label, string Glyph, ICommand Command, bool IsPrimary, string? Tip);
 
-/// <summary>Which actions the pinned header offers a node in each state. Conversation comes first in every state, so it never moves under the pointer, and it goes while the conversation is open.</summary>
+/// <summary>
+/// Which actions the panel offers a node in each state. The header holds the one primary action, and while the node needs a person, failed,
+/// or is stale, the Action Dock (the Chat page, until stage 4) holds them instead, so no action appears twice.
+/// </summary>
 internal static class NodeActions
 {
-    /// <summary>While a proposal is open, accepting it is the one primary action, so the row holds none.</summary>
+    /// <summary>The Chat page's actions. While a proposal is open, accepting it is the one primary action, so the row holds none.</summary>
     public static IReadOnlyList<NodeAction> Of(TaskNodeViewModel node) =>
         node.Proposal is null ? For(node) : [.. For(node).Select(action => action with { IsPrimary = false })];
+
+    /// <summary>The header's slot: Run, Retry, or Stop. It is empty while the Action Dock owns the action.</summary>
+    public static IReadOnlyList<NodeAction> HeaderOf(TaskNodeViewModel node)
+    {
+        if (node.IsAsking || node.IsWaiting || node.State is NodeState.Failed or NodeState.Stale)
+        {
+            return [];
+        }
+
+        return node.State switch
+        {
+            NodeState.Idle => [new NodeAction("RunTask", "Run", "IconRun", node.RunCommand, node.Proposal is null, node.RunRefusal ?? "Runs this node, then each node after it")],
+            NodeState.Running => [Stop(node)],
+            _ => node.ShowsRetry ? [Retry(node, primary: node.Proposal is null && !node.HasAgent)] : [],
+        };
+    }
 
     private static IReadOnlyList<NodeAction> For(TaskNodeViewModel node)
     {
         // The open conversation holds what the state needs next, and the row must not offer it twice. A failed node keeps Retry
-        // in the header, as an interrupted node keeps Continue, so recovery reads in one place in the inspector (ADR 0070). The
-        // Failed card in the conversation holds the primary Retry, so the header's stays quiet while that card shows (ADR 0072).
+        // here, as an interrupted node keeps Continue, so recovery reads in one place (ADR 0070). The Failed card in the
+        // conversation holds the primary Retry, so this one stays quiet while that card shows (ADR 0072).
         if (node is { IsConversationShown: true, Proposal: null, State: NodeState.Running or NodeState.InputRequired or NodeState.Stale })
         {
             return [];
@@ -45,22 +64,21 @@ internal static class NodeActions
 
         if (node.ShowsContinue)
         {
-            // Conversation and Continue take one row, and Retry goes to the More menu.
+            // Conversation and Continue take one row, and Retry goes to the header's menu.
             return Row(Conversation(node, "Conversation", primary: false), new NodeAction("ContinueTask", "Continue", "IconRun", node.ContinueCommand, true, "Resumes the same session where the agent stopped"));
         }
 
         if (node.IsAsking || node.IsWaiting)
         {
-            // Retry would end what the agent waits on, so it stays in the More menu.
+            // Retry would end what the agent waits on, so it stays in the header's menu.
             return Row(Conversation(node, "Reply"), node.ShowsStop ? Stop(node) : null, node.ShowsApprove ? Approve(node, primary: false) : null);
         }
 
         return node.State switch
         {
-            NodeState.Idle => Row(Conversation(node, "Conversation", primary: false), new NodeAction("RunTask", "Run", "IconRun", node.RunCommand, true, node.RunRefusal ?? "Runs this node, then each node after it")),
-            NodeState.Running => Row(Conversation(node, "Conversation"), Stop(node)),
             NodeState.Failed or NodeState.Stale => Row(Conversation(node, "Conversation", primary: false), Retry(node, primary: !node.IsConversationShown)),
-            _ => Row(Conversation(node, "Conversation"), node.ShowsRetry ? Retry(node, primary: !node.HasAgent) : null),
+            NodeState.Idle => Row(Conversation(node, "Conversation", primary: false)),
+            _ => Row(Conversation(node, "Conversation")),
         };
     }
 

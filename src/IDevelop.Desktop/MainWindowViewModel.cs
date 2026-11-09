@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Inspector;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Desktop.Sidebar;
@@ -170,6 +171,9 @@ public sealed class MainWindowViewModel : ObservableObject
     public ICommand ToggleSidebarCommand { get; }
 
     public ICommand ToggleInspectorCommand { get; }
+
+    /// <summary>Which page the Agent panel shows.</summary>
+    public AgentPanelViewModel AgentPanel { get; } = new();
 
     /// <summary>The left area's list of nodes that wait, failed, or run, in every open project.</summary>
     public ActivityViewModel Activity { get; }
@@ -378,10 +382,11 @@ public sealed class MainWindowViewModel : ObservableObject
         TreeReveal?.Invoke(node.Canvas, node);
     }
 
-    /// <summary>Shows the node and what it needs: an agent's conversation, or for an approval, the request in the inspector.</summary>
+    /// <summary>Shows the node and what it needs: an agent's conversation, or for an approval, the request on its Chat page.</summary>
     internal void Attend(TaskNodeViewModel node)
     {
         ShowNode(node);
+        AgentPanel.Show(AgentPage.Chat);
         if (node.HasAgent)
         {
             // A jump to what a node needs keeps its graph in view. A conversation that is already open keeps its layout.
@@ -844,6 +849,9 @@ public sealed class MainWindowViewModel : ObservableObject
                 }
 
                 break;
+            case nameof(WorkflowCanvasViewModel.Inspected) when canvas == Canvas:
+                AgentPanel.Follow(canvas.Inspected as TaskNodeViewModel);
+                break;
             // An open conversation follows the task the person selects, so the sidebar's task list switches it.
             case nameof(WorkflowCanvasViewModel.SelectedNode) when canvas == Canvas && Conversation is { } open
                 && canvas.SelectedNode is { HasAgent: true } node && node.Id != open.Target.Task:
@@ -874,6 +882,7 @@ public sealed class MainWindowViewModel : ObservableObject
             canvas.Blueprints.Reload();
         }
 
+        AgentPanel.Follow(canvas?.Inspected as TaskNodeViewModel);
         OnPropertyChanged(nameof(ProjectName));
         OnPropertyChanged(nameof(WorkflowName));
         OnDocumentChanged();

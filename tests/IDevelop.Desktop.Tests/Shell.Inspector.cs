@@ -1,19 +1,61 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Inspector;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>The inspector's sections, rows, and filter.</summary>
+/// <summary>The Agent panel's pages, fold panels, and rows.</summary>
 internal sealed partial class Shell
 {
     public InspectorSection Section(string key) => Find<InspectorSection>($"Section{key}");
 
-    /// <summary>Whether the section's header shows, which the filter hides when nothing in the section matches.</summary>
-    public bool Shows(string key) => SectionHeader(key).IsEffectivelyVisible;
+    /// <summary>
+    /// Shows the page of the Agent panel that holds the control, as a person does before using it: an item of a hidden page does not
+    /// exist until the page first shows, and it takes no input before that.
+    /// </summary>
+    public void ShowPageOf<T>(string automationId) where T : Control
+    {
+        if (Window.ViewModel.Canvas?.Inspected is not TaskNodeViewModel || ById<T>(Window, automationId).Any(control => control.IsEffectivelyVisible || !InHiddenPage(control)))
+        {
+            return;
+        }
 
-    /// <summary>Clicks the section's header, which folds or unfolds it.</summary>
+        var start = Window.ViewModel.AgentPanel.Page;
+        foreach (var page in Enum.GetValues<AgentPage>())
+        {
+            Window.ViewModel.AgentPanel.Show(page);
+            Render();
+            if (ById<T>(Window, automationId).Any(control => control.IsEffectivelyVisible))
+            {
+                return;
+            }
+        }
+
+        Window.ViewModel.AgentPanel.Show(start);
+        Render();
+    }
+
+    private static bool InHiddenPage(Control control) =>
+        control.GetVisualAncestors().OfType<ScrollViewer>().Any(scroller => !scroller.IsVisible && scroller.Content is StackPanel panel && panel.Classes.Contains("page"));
+
+    /// <summary>Gives the name's box the focus, as a double-click on the name does.</summary>
+    public void EditTitle()
+    {
+        var shown = Find<Control>("InspectorHeader").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("headerTitle"));
+        DoubleClick(Center(shown));
+        Render();
+    }
+
+    /// <summary>Opens the page through its tab, as a click on the strip does.</summary>
+    public void Page(AgentPage page)
+    {
+        Click(ById<Button>(Window, $"Page{page}").Single());
+        Render();
+    }
+
+    /// <summary>Clicks the fold panel's header, which folds or unfolds it.</summary>
     public void Fold(string key)
     {
         var header = SectionHeader(key);
@@ -22,7 +64,7 @@ internal sealed partial class Shell
         Click(header);
     }
 
-    /// <summary>The labels of the labelled rows the inspector shows now, in order.</summary>
+    /// <summary>The labels of the labelled rows the Agent panel shows now, in order.</summary>
     public string[] ShownRows() =>
         [.. Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>().Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons) }).Select(row => row.Label ?? "")];
 
@@ -35,7 +77,7 @@ internal sealed partial class Shell
         return (AutomationProperties.GetName(glyph), ToolTip.GetTip(glyph));
     }
 
-    /// <summary>Sets the inspector's width, as dragging the splitter before it does, within its 280 to 520 px range.</summary>
+    /// <summary>Sets the Agent panel's width, as dragging the splitter before it does.</summary>
     public void SizeInspector(double width)
     {
         // The inspector's frame holds its column.
@@ -44,7 +86,7 @@ internal sealed partial class Shell
         Render();
     }
 
-    /// <summary>Opens the selected node's conversation from the inspector's header.</summary>
+    /// <summary>Opens the selected node's conversation from its Chat page.</summary>
     public void Talk()
     {
         Render();
@@ -74,9 +116,4 @@ internal sealed partial class Shell
         Render();
     }
 
-    public void FilterInspector(string text)
-    {
-        Click(Find<TextBox>("InspectorFilter"));
-        Type(text);
-    }
 }

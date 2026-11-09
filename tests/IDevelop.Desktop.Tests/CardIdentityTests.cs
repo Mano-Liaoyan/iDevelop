@@ -140,24 +140,6 @@ public sealed class CardIdentityTests
     }
 
     [AvaloniaFact]
-    public void The_inspector_keeps_one_section_order_in_every_state()
-    {
-        using var f = new NodeFixture(Task(A, "A", 105));
-        f.Install(Reply("s-1", "Done."));
-        var shell = f.Open();
-        shell.Click(shell.Header(shell.Node("A")));
-        shell.Render();
-        string[] Order() => [.. new[] { "Agent", "Input", "Output" }.OrderBy(section => shell.Bounds(shell.Section(section)).Top)];
-        Assert.Equal(["Agent", "Output", "Input"], Order());
-
-        shell.RunNode("A");
-        shell.WaitForCard("A", "Done");
-        shell.Render();
-
-        Assert.Equal(["Agent", "Output", "Input"], Order());
-    }
-
-    [AvaloniaFact]
     public void The_zoom_label_calls_the_reading_size_100_percent()
     {
         using var f = new NodeFixture(Task(A, "A", 105));

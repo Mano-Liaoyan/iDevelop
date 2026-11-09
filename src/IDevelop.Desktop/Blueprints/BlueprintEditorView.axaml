@@ -12,15 +12,13 @@
   <!-- The form scrolls under its actions, so Save stays in view however long the form is. -->
   <DockPanel>
     <!-- The same pinned header as a node's: a neutral tile, the title, and what saving does. -->
-    <Border DockPanel.Dock="Top" Classes="pinnedHeader">
-      <inspector:InspectorHeader>
-        <Border Classes="neutralTile headerTile">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" />
-        </Border>
-        <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2" Classes="headerName" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
-        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" Classes="kindLine" Margin="0,4,0,0" Text="{Binding Caption}" ToolTip.Tip="{Binding CaptionTip}"
+    <Border DockPanel.Dock="Top" Classes="panelHeader" Height="56">
+      <inspector:AgentPanelHeader>
+        <Border Grid.RowSpan="2" Classes="neutralTile"><PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" /></Border>
+        <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="headerName" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
+        <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Classes="kindLine" Text="{Binding Caption}" ToolTip.Tip="{Binding CaptionTip}"
                    AutomationProperties.AutomationId="BlueprintCaption" />
-      </inspector:InspectorHeader>
+      </inspector:AgentPanelHeader>
     </Border>
     <Border DockPanel.Dock="Bottom" Padding="12,8" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
       <StackPanel Spacing="8">
@@ -38,7 +36,7 @@
     </Border>
     <Panel>
     <ScrollViewer>
-  <StackPanel Margin="8,8,8,16" AutomationProperties.AutomationId="BlueprintEditor">
+  <StackPanel Margin="12,8,12,16" AutomationProperties.AutomationId="BlueprintEditor">
     <inspector:InspectorSection Key="BlueprintAbout" Title="Blueprint">
       <StackPanel>
         <inspector:InspectorRow Label="Library" IsShown="{Binding IsNew}">

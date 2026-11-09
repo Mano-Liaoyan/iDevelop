@@ -1,12 +1,11 @@
 using System.Windows.Input;
-using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// One field of a task's blueprint in the inspector. A node's blueprint never changes, so each task keeps the same
+/// One field of a task's blueprint on the Task page. A node's blueprint never changes, so each task keeps the same
 /// instances, and a box keeps its focus while each keystroke round-trips through the workflow.
 /// </summary>
 public sealed class FieldViewModel : ObservableObject
@@ -42,36 +41,11 @@ public sealed class FieldViewModel : ObservableObject
         set => _node.SetField(Spec.Key, value);
     }
 
-    /// <summary>The text as it reads at rest: its Markdown marks gone, list items as bullets, and no blank lines. The box edits the source.</summary>
-    public string Reading => ResultViewModel.Reading(Text);
-
-    /// <summary>The id of the reading, such as TaskInstructionsReading.</summary>
-    public string ReadingId => $"{AutomationId}Reading";
-
-    /// <summary>The id of the More control under the reading, such as TaskInstructionsMore.</summary>
-    public string ReadingMoreId => $"{AutomationId}More";
-
-    /// <summary>The person opened the whole reading. It stays open while the node keeps the field.</summary>
-    public bool IsReadingOpen
-    {
-        get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(ReadingToggle));
-                OnPropertyChanged(nameof(ReadingToggleName));
-            }
-        }
-    }
-
-    /// <summary>"More" under a cut reading, and "Less" under a whole one.</summary>
-    public string ReadingToggle => IsReadingOpen ? "Less" : "More";
-
-    public string ReadingToggleName => IsReadingOpen ? "Show less of the text" : "Show the whole text";
-
     /// <summary>The text differs from the blueprint's default for the field.</summary>
     public bool CanRevert => Text != Spec.Default;
+
+    /// <summary>The reset glyph's tooltip, which names the default.</summary>
+    public string ResetTip => $"Reset to blueprint default: {(Spec.Default.Length == 0 ? "empty" : CardText.Line(Spec.Default, 80))}";
 
     /// <summary>Puts the blueprint's default back in one edit.</summary>
     public ICommand RevertCommand { get; }
@@ -83,7 +57,6 @@ public sealed class FieldViewModel : ObservableObject
     internal void Refresh()
     {
         OnPropertyChanged(nameof(Text));
-        OnPropertyChanged(nameof(Reading));
         OnPropertyChanged(nameof(CanRevert));
     }
 }

@@ -111,13 +111,13 @@
 
       <GridSplitter Grid.Column="3" Classes="sheetGap" ZIndex="1" IsVisible="{Binding CanResizePanel}" />
 
-      <!-- The Agent panel. Until stage 3 it holds the inspector's sections, and the conversation keeps its own dock and layouts. -->
+      <!-- The Agent panel: its pages and tab strip. The conversation keeps its own dock and layouts until stage 4. -->
       <Border x:Name="InspectorFrame" Grid.Column="4" Classes="sheet panel" IsVisible="{Binding IsInspectorShown}">
         <DockPanel x:Name="InspectorPanel" AutomationProperties.AutomationId="Inspector">
           <ContentControl Content="{Binding Canvas}">
             <ContentControl.DataTemplates>
               <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
-                <inspector:InspectorView />
+                <inspector:AgentPanelView Panel="{Binding $parent[local:MainWindow].ViewModel.AgentPanel}" />
               </DataTemplate>
             </ContentControl.DataTemplates>
           </ContentControl>

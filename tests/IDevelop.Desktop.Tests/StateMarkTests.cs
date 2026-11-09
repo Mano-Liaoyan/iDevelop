@@ -139,7 +139,7 @@ public sealed class StateMarkTests
     [InlineData("Theme/Kinds.axaml")]
     [InlineData("Canvas/CanvasTemplates.axaml")]
     [InlineData("Sidebar/SidebarView.axaml")]
-    [InlineData("Inspector/InspectorView.axaml")]
+    [InlineData("Inspector/AgentPanelView.axaml")]
     [InlineData("Conversation/ConversationView.axaml")]
     public void No_view_keeps_the_old_marks(string file)
     {

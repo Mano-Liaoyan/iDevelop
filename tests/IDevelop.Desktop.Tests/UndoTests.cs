@@ -118,7 +118,7 @@ public sealed class UndoTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.Find<TextBox>("TaskTitle"));
+        shell.EditTitle();
         shell.Press(Key.End);
         shell.Type(" the API");
         Assert.Equal("Design the API", ((TaskNodeViewModel)shell.Node("Design the API").DataContext!).Title);

@@ -117,7 +117,11 @@ internal sealed partial class Shell
         }
     }
 
-    public T Find<T>(string automationId) where T : Control => ById<T>(Window, automationId).Single();
+    public T Find<T>(string automationId) where T : Control
+    {
+        ShowPageOf<T>(automationId);
+        return ById<T>(Window, automationId).Single();
+    }
 
     /// <summary>Scrolls the control into view first, for a control low in the inspector.</summary>
     public T InView<T>(string automationId) where T : Control
@@ -128,7 +132,11 @@ internal sealed partial class Shell
         return control;
     }
 
-    public bool Has<T>(string automationId) where T : Control => ById<T>(Window, automationId).Any();
+    public bool Has<T>(string automationId) where T : Control
+    {
+        ShowPageOf<T>(automationId);
+        return ById<T>(Window, automationId).Any();
+    }
 
     public NodifyEditor Editor => Window.GetVisualDescendants().OfType<NodifyEditor>().Single();
 

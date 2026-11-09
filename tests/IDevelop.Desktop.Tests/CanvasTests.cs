@@ -34,7 +34,7 @@ public sealed class CanvasTests : IDisposable
         shell.AddNode();
 
         Assert.Equal("New task", shell.Find<TextBox>("TaskTitle").Text);
-        shell.Click(shell.Find<TextBox>("TaskTitle"));
+        shell.EditTitle();
         shell.Press(Key.A, RawInputModifiers.Control);
         shell.Type("Plan release");
         Assert.Equal("plan* - iDevelop", shell.Window.Title);
@@ -276,17 +276,16 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_inspector_asks_for_a_selection_until_a_task_is_selected()
+    public void The_Agent_panel_shows_the_workflow_page_until_a_task_is_selected()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
 
-        Assert.True(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
-        Assert.Equal("Select a node to edit it.", shell.Find<TextBlock>("InspectorHint").Text);
+        Assert.True(shell.Find<Control>("WorkflowPage").IsEffectivelyVisible);
         Assert.False(shell.Has<TextBox>("TaskTitle"));
 
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.False(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
+        Assert.False(shell.Has<Control>("WorkflowPage"));
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
     }
 
@@ -332,7 +331,7 @@ public sealed class CanvasTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.Find<TextBox>("TaskTitle"));
+        shell.EditTitle();
         shell.Press(Key.Home);
 
         shell.Press(Key.Delete);

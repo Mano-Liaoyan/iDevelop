@@ -87,6 +87,10 @@
     { "key": "IconIdle", "asset": "Circle", "file": "ic_fluent_circle_16_regular.svg" },
     { "key": "IconExpandAll", "asset": "Arrow Expand All", "file": "ic_fluent_arrow_expand_all_16_regular.svg" },
     { "key": "IconInbox", "asset": "Mail Inbox", "file": "ic_fluent_mail_inbox_16_regular.svg" },
-    { "key": "IconPanelLeft", "asset": "Panel Left", "file": "ic_fluent_panel_left_16_regular.svg" }
+    { "key": "IconPanelLeft", "asset": "Panel Left", "file": "ic_fluent_panel_left_16_regular.svg" },
+    { "key": "IconPageInput", "asset": "Arrow Enter", "file": "ic_fluent_arrow_enter_16_regular.svg" },
+    { "key": "IconPageOutput", "asset": "Arrow Exit", "file": "ic_fluent_arrow_exit_16_regular.svg" },
+    { "key": "IconPageTask", "asset": "Text Description", "file": "ic_fluent_text_description_16_regular.svg" },
+    { "key": "IconPageProposal", "asset": "Drafts", "file": "ic_fluent_drafts_16_regular.svg" }
   ]
 }

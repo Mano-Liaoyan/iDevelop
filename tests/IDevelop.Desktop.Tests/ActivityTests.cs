@@ -290,7 +290,7 @@ public sealed class ActivityTests : IDisposable
         Assert.Equal("TaskModel", Avalonia.Automation.AutomationProperties.GetAutomationId((Control)shell.Window.FocusManager!.GetFocusedElement()!));
 
         shell.Press(Key.F, RawInputModifiers.Control);
-        Assert.Equal("InspectorFilter", Avalonia.Automation.AutomationProperties.GetAutomationId((Control)shell.Window.FocusManager!.GetFocusedElement()!));
+        Assert.Equal("FindBox", Avalonia.Automation.AutomationProperties.GetAutomationId((Control)shell.Window.FocusManager!.GetFocusedElement()!));
 
         shell.Editor.Focus();
         shell.Press(Key.Enter);
@@ -307,7 +307,7 @@ public sealed class ActivityTests : IDisposable
             var focused = (Control)shell.Window.FocusManager!.GetFocusedElement()!;
             return focused.FindAncestorOfType<SidebarView>() is not null ? "left"
                 : shell.Editor.IsKeyboardFocusWithin ? "canvas"
-                : focused.FindAncestorOfType<InspectorView>() is not null ? "inspector" : "other";
+                : focused.FindAncestorOfType<AgentPanelView>() is not null ? "inspector" : "other";
         }
 
         List<string> seen = [];

@@ -21,7 +21,7 @@ public sealed partial class TaskNodeViewModel
         nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(LastReplyAsks), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
-        nameof(Actions), nameof(RetryIsInMenu), nameof(ConversationIsInMenu),
+        nameof(ShowsGoesTo), nameof(Actions), nameof(HeaderActions), nameof(RetryIsInMenu), nameof(ConversationIsInMenu), nameof(HasExtraPage), nameof(ExtraTitle), nameof(ExtraGlyph), nameof(ExtraBadge),
     ];
 
     private EngineState _engineState = new EngineState.Idle();
@@ -261,6 +261,10 @@ public sealed partial class TaskNodeViewModel
             current: index == _history.Count - 1 && State == NodeState.Completed)).Reverse()];
         _findings = Verdict is { } verdict ? [.. verdict.Findings.Select(finding => new FindingViewModel(finding))] : [];
         OnPropertyChanged(nameof(Results));
+        OnPropertyChanged(nameof(CurrentResult));
+        OnPropertyChanged(nameof(EarlierResults));
+        OnPropertyChanged(nameof(HasEarlierResults));
+        OnPropertyChanged(nameof(ExtraBadge));
         OnPropertyChanged(nameof(OutputSummary));
         OnPropertyChanged(nameof(HandsOn));
         OnPropertyChanged(nameof(Findings));

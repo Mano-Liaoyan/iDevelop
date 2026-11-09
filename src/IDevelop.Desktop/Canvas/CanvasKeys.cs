@@ -28,7 +28,6 @@ public static class CanvasKeys
     /// <summary>Shows the next node that failed. A failed node does not wait, so it has its own key.</summary>
     public static KeyGesture NextFailed => new(Key.J, Command | KeyModifiers.Shift);
 
-    /// <summary>Puts the focus in the inspector's model picker.</summary>
     /// <summary>The Model row's tooltip.</summary>
     public static string ModelHint => $"Model ({Hint(ModelPicker)})";
 
@@ -40,8 +39,13 @@ public static class CanvasKeys
 
     public static KeyGesture ModelPicker { get; } = new(Key.M, KeyModifiers.Alt);
 
-    /// <summary>Puts the focus in the inspector's filter, while the focus is in the inspector.</summary>
-    public static KeyGesture FilterInspector => new(Key.F, Command);
+    /// <summary>Also puts the focus in Find.</summary>
+    public static KeyGesture FindAlso => new(Key.F, Command);
+
+    /// <summary>The Agent panel's page for Alt+1 to Alt+6, or null for any other key.</summary>
+    public static Inspector.AgentPage? Page(KeyEventArgs e) => e.KeyModifiers == KeyModifiers.Alt && e.Key is >= Key.D1 and <= Key.D6
+        ? (Inspector.AgentPage)(e.Key - Key.D1)
+        : null;
 
     public static KeyGesture Rename { get; } = new(Key.F2);
 

@@ -150,7 +150,7 @@ public sealed class ShortcutTests : IDisposable
     {
         var shell = OpenTwo();
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.Find<TextBox>("TaskTitle"));
+        shell.EditTitle();
         shell.Press(Key.End);
 
         shell.PressWithText(Key.N, "n");

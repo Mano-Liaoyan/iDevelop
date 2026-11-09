@@ -532,7 +532,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
         shell.RunNode();
-        Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<TextBox>("InspectorFilter")];
+        Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<Control>("ClosePanel")];
 
         shell.Window.Close();
         shell.Render();
@@ -850,6 +850,6 @@ public sealed class WorkspaceTests : IDisposable
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
 
-        Assert.Equal(["Workflow", "1 node"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+        Assert.Equal(["Release", "1 node"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
     }
 }

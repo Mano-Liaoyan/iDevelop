@@ -8,8 +8,12 @@ namespace IDevelop.Desktop.Canvas;
 
 /// <summary>A node at the other end of a connection, in the inspector's Input and Output sections.</summary>
 /// <param name="Node">The node, which a click selects.</param>
-/// <param name="IsContext">The connection is context, so the row draws a dashed link in place of the node's tile.</param>
-public sealed record NodeLink(TaskNodeViewModel Node, bool IsContext);
+/// <param name="Connection">The connection, whose kind the row's two segments set.</param>
+public sealed record NodeLink(TaskNodeViewModel Node, ConnectionViewModel Connection)
+{
+    /// <summary>The connection is context, so the row draws a dashed link.</summary>
+    public bool IsContext => Connection.Kind == ConnectionKind.Context;
+}
 
 /// <summary>What the inspector shows of a node beyond the card: section titles, changed counts, reverts, and Accept and Finish.</summary>
 public sealed partial class TaskNodeViewModel
@@ -19,7 +23,7 @@ public sealed partial class TaskNodeViewModel
 
     public string AgentSectionTitle => IsReview ? "Reviewer" : "Agent";
 
-    /// <summary>The pinned header's buttons for the node's state. A row that came out the same stays the very row, so a button keeps the focus.</summary>
+    /// <summary>The Chat page's buttons for the node's state. A row that came out the same stays the very row, so a button keeps the focus.</summary>
     public IReadOnlyList<NodeAction> Actions
     {
         get
@@ -29,27 +33,70 @@ public sealed partial class TaskNodeViewModel
         }
     } = [];
 
-    /// <summary>The header's row leaves Retry out, so its More menu offers it.</summary>
-    /// <summary>The state's sentence for the inspector's header, which names where Retry is when the header's row has no room for it.</summary>
+    /// <summary>The header's one action, as a list of at most one, so a button keeps the focus while its action stays the same.</summary>
+    public IReadOnlyList<NodeAction> HeaderActions
+    {
+        get
+        {
+            var now = NodeActions.HeaderOf(this);
+            return now.SequenceEqual(field) ? field : field = now;
+        }
+    } = [];
+
+    /// <summary>The state's sentence for the Chat page, which names where Retry is when the page's row has no room for it.</summary>
     public string? InspectorDetail => WaitReason == WaitReason.Interrupted && RetryIsInMenu ? NodeStates.InterruptedDetailInMenu : StateDetail;
 
-    public bool RetryIsInMenu => ShowsRetry && Actions.All(action => action.Command != RetryCommand);
+    /// <summary>Neither the header nor the Chat page offers Retry, so the header's menu does.</summary>
+    public bool RetryIsInMenu => ShowsRetry && Actions.Concat(HeaderActions).All(action => action.Command != RetryCommand);
 
-    /// <summary>The header's row leaves the conversation out, so its More menu offers it.</summary>
+    /// <summary>The Chat page's row leaves the conversation out, so the header's menu offers it.</summary>
     public bool ConversationIsInMenu => HasAgent && Actions.All(action => action.Command != OpenConversationCommand);
 
-    /// <summary>The nodes this node reads, one for each incoming connection.</summary>
-    public IReadOnlyList<NodeLink> Inputs => [.. _canvas.Connections.Where(connection => connection.To == this).Select(connection => new NodeLink(connection.From, connection.Kind == ConnectionKind.Context))];
+    /// <summary>The nodes this node reads, one for each incoming connection, newest wires first.</summary>
+    public IReadOnlyList<NodeLink> Inputs => [.. _canvas.Connections.Where(connection => connection.To == this).Reverse().Select(connection => new NodeLink(connection.From, connection))];
 
     public bool HasNoInputs => Inputs.Count == 0;
 
-    /// <summary>The nodes that read this node's output, one for each outgoing connection.</summary>
-    public IReadOnlyList<NodeLink> Outputs => [.. _canvas.Connections.Where(connection => connection.From == this).Select(connection => new NodeLink(connection.To, connection.Kind == ConnectionKind.Context))];
+    /// <summary>The nodes that read this node's output, one for each outgoing connection, newest wires first.</summary>
+    public IReadOnlyList<NodeLink> Outputs => [.. _canvas.Connections.Where(connection => connection.From == this).Reverse().Select(connection => new NodeLink(connection.To, connection))];
 
     public bool HasOutputs => Outputs.Count > 0;
 
-    /// <summary>The node has no result and no verdict to show yet.</summary>
-    public bool HasNoOutput => !HasResults && ReviewSummary is null;
+    /// <summary>A node with no result shows "No result yet." and nothing else, so the Output page lists its readers only with a result.</summary>
+    public bool ShowsGoesTo => HasOutputs && HasResults;
+
+    /// <summary>The header's second line: " · " and the agent, after the status.</summary>
+    public string PanelAgentLine => HasAgent ? $"  ·  {AgentLabel}" : "";
+
+    /// <summary>The node has no result to show yet.</summary>
+    public bool HasNoOutput => !HasResults;
+
+    /// <summary>The newest result, which the Output page shows in full.</summary>
+    public ResultViewModel? CurrentResult => Results.Count > 0 ? Results[0] : null;
+
+    /// <summary>The results before the newest, newest first.</summary>
+    public IReadOnlyList<ResultViewModel> EarlierResults => [.. Results.Skip(1)];
+
+    public bool HasEarlierResults => Results.Count > 1;
+
+    /// <summary>The node has a conditional page: a review's findings or a planner's proposal.</summary>
+    public bool HasExtraPage => ReviewSummary is not null || Proposal is not null;
+
+    /// <summary>The conditional page's title and its tab's label.</summary>
+    public string ExtraTitle => Proposal is not null ? "Proposal" : "Findings";
+
+    /// <summary>The resource key of the conditional tab's glyph.</summary>
+    public string ExtraGlyph => Proposal is not null ? "IconPageProposal" : "IconChecklist";
+
+    /// <summary>The count on the conditional tab: its open items, or null for none.</summary>
+    public string? ExtraBadge => (Proposal is { } proposal ? proposal.Items.Count : Findings.Count) is > 0 and var count ? count.ToString() : null;
+
+    /// <summary>The count on the Input tab, or null for none.</summary>
+    public string? InputBadge => Inputs.Count > 0 ? Inputs.Count.ToString() : null;
+
+    public bool AgentHasChanges => AgentChanges > 0;
+
+    public bool TaskHasChanges => TaskChanges > 0;
 
     /// <summary>The permission note as one short line, which names the client's info glyph. The glyph's tooltip holds the whole note.</summary>
     public string? PermissionSummary => _task.Execution is { } settings
@@ -59,11 +106,15 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The conversation note as one short line, which names the conversation's info glyph. The glyph's tooltip holds the whole note.</summary>
     public string ConversationSummary => RunText.ConversationSummary(_task.Conversation);
 
-    /// <summary>What the blueprint is for, and what it was derived from, which the header's help glyph shows.</summary>
-    public string Description => string.Join("\n", new[] { _task.Blueprint.Description, DerivedFrom is { } source ? $"Derived from {source}." : null }.Where(line => !string.IsNullOrEmpty(line)));
+    /// <summary>What the blueprint is for.</summary>
+    public string Description => _task.Blueprint.Description;
 
-    /// <summary>The header's help glyph: the blueprint's version, then what it is for.</summary>
-    public string KindTip => string.Join("\n", new[] { TypeVersion, Description }.Where(line => !string.IsNullOrEmpty(line)));
+    public bool HasDescription => !string.IsNullOrEmpty(Description);
+
+    /// <summary>The Blueprint name's tooltip: the version, what the blueprint is for, and what it was derived from.</summary>
+    public string KindTip => string.Join("\n", new[] { TypeVersion, Description, DerivedFrom is { } source ? $"Derived from {source}." : null }.Where(line => !string.IsNullOrEmpty(line)));
+
+    public bool HasDerivedFrom => DerivedFrom is not null;
 
     public bool HasFields => Fields.Count > 0;
 
@@ -100,7 +151,11 @@ public sealed partial class TaskNodeViewModel
         OnPropertyChanged(nameof(ClientChanged));
         OnPropertyChanged(nameof(ModelChanged));
         OnPropertyChanged(nameof(ReasoningChanged));
+        OnPropertyChanged(nameof(ClientResetTip));
+        OnPropertyChanged(nameof(ModelResetTip));
+        OnPropertyChanged(nameof(ReasoningResetTip));
         OnPropertyChanged(nameof(AgentChanges));
+        OnPropertyChanged(nameof(AgentHasChanges));
     }
 
     /// <summary>The client differs from a default that it can go back to.</summary>
@@ -113,6 +168,18 @@ public sealed partial class TaskNodeViewModel
     public bool ReasoningDiffers => Default is { } agent && _task.Execution?.Reasoning != agent.Reasoning;
 
     private ExecutionSettings? Default => _task.Blueprint.Defaults.Execution;
+
+    /// <summary>The Client row's reset tooltip.</summary>
+    public string ClientResetTip => ClientDiffers ? $"Reset to blueprint default: {Default!.Client}" : "Back to the saved client";
+
+    /// <summary>The Model row's reset tooltip.</summary>
+    public string ModelResetTip => ModelDiffers ? $"Reset to blueprint default: {Default!.Model ?? "None"}" : "Back to the saved model";
+
+    /// <summary>The Reasoning row's reset tooltip.</summary>
+    public string ReasoningResetTip => ReasoningDiffers ? $"Reset to blueprint default: {Default!.Reasoning ?? "None"}" : "Back to the saved reasoning";
+
+    /// <summary>The Mode row's reset tooltip.</summary>
+    public string ConversationResetTip => $"Reset to blueprint default: {RunText.ConversationSummary(_task.Blueprint.Defaults.Conversation)}";
 
     /// <summary>
     /// What the blueprint tells the node's agent, with the node's title and fields in place, or null for a node with no agent.
@@ -130,7 +197,7 @@ public sealed partial class TaskNodeViewModel
 
     public bool HasSystemPrompt => !string.IsNullOrEmpty(SystemPrompt);
 
-    /// <summary>The conversation shows this node's agent now, so the header does not offer to open it.</summary>
+    /// <summary>The conversation shows this node's agent now, so the Chat page does not offer to open it.</summary>
     public bool IsConversationShown
     {
         get;
@@ -140,11 +207,13 @@ public sealed partial class TaskNodeViewModel
             {
                 OnPropertyChanged(nameof(Actions));
                 OnPropertyChanged(nameof(ShowsStateDetail));
+                OnPropertyChanged(nameof(RetryIsInMenu));
+                OnPropertyChanged(nameof(ConversationIsInMenu));
             }
         }
     }
 
-    /// <summary>The header states what the node needs, unless the open conversation asks it in full. A failure's reason always shows.</summary>
+    /// <summary>The Chat page states what the node needs, unless the open conversation asks it in full. A failure's reason always shows.</summary>
     public bool ShowsStateDetail => !string.IsNullOrEmpty(StateDetail) && !(IsConversationShown && Proposal is null && State is NodeState.InputRequired or NodeState.Failed or NodeState.Stale);
 
     /// <summary>A blueprint without a default agent has nothing to revert to.</summary>
@@ -158,7 +227,7 @@ public sealed partial class TaskNodeViewModel
     public ICommand RevertConversationCommand { get; private set; } = null!;
 
     /// <summary>The blueprint this one was derived from, such as "Implement, version 1", or null.</summary>
-    private string? DerivedFrom => _task.Blueprint.DerivedFrom is { } key
+    public string? DerivedFrom => _task.Blueprint.DerivedFrom is { } key
         ? $"{_canvas.FindBlueprint(key)?.Name ?? BuiltInBlueprints.Find(key)?.Name ?? key.Id}, version {key.Version}"
         : null;
 
@@ -189,8 +258,10 @@ public sealed partial class TaskNodeViewModel
     {
         OnPropertyChanged(nameof(Inputs));
         OnPropertyChanged(nameof(HasNoInputs));
+        OnPropertyChanged(nameof(InputBadge));
         OnPropertyChanged(nameof(Outputs));
         OnPropertyChanged(nameof(HasOutputs));
+        OnPropertyChanged(nameof(ShowsGoesTo));
     }
 
     private void WatchProposal()

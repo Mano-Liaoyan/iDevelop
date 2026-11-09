@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia;
+using IDevelop.Desktop.Inspector;
 using IDevelop.Desktop.Blueprints;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Clients;
@@ -126,7 +127,12 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         }
     }
 
-    public object? Inspected => (object?)SelectedNode ?? SelectedConnection;
+    /// <summary>What the Agent panel shows: several nodes, one node, a connection, or nothing, which is the Workflow page.</summary>
+    public object? Inspected => _showsSeveral ? Several : (object?)SelectedNode ?? SelectedConnection;
+
+    private bool _showsSeveral;
+
+    private SeveralSelectedViewModel Several => field ??= new SeveralSelectedViewModel(this);
 
     public PendingConnectionViewModel PendingConnection { get; }
 

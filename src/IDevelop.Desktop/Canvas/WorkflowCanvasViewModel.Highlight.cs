@@ -7,7 +7,12 @@ public sealed partial class WorkflowCanvasViewModel
 {
     partial void InitializeHighlight()
     {
-        SelectedNodes.CollectionChanged += (_, _) => Emphasize(Connections);
+        SelectedNodes.CollectionChanged += (_, _) =>
+        {
+            Emphasize(Connections);
+            // A single selection adds the new node before it removes the old one, so Several waits for the selection to settle.
+            Avalonia.Threading.Dispatcher.UIThread.Post(ShowSeveral, Avalonia.Threading.DispatcherPriority.Background);
+        };
         Connections.CollectionChanged += (_, e) =>
         {
             OnConnectionsChanged(e);
@@ -27,6 +32,16 @@ public sealed partial class WorkflowCanvasViewModel
             connection.Emphasis = selected.Count == 0 ? WireEmphasis.Normal
                 : selected.Contains(connection.Key.From) || selected.Contains(connection.Key.To) ? WireEmphasis.Highlighted
                 : WireEmphasis.Dimmed;
+        }
+    }
+
+    private void ShowSeveral()
+    {
+        var several = SelectedNodes.Count > 1;
+        if (several != _showsSeveral)
+        {
+            _showsSeveral = several;
+            OnPropertyChanged(nameof(Inspected));
         }
     }
 }

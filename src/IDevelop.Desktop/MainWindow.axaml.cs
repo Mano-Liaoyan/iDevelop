@@ -10,6 +10,7 @@ using Avalonia;
 using IDevelop.Clients;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Inspector;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Projects;
 
@@ -367,7 +368,7 @@ public partial class MainWindow : Window
             return true;
         }
 
-        if (CanvasKeys.Find.Matches(e))
+        if (CanvasKeys.Find.Matches(e) || CanvasKeys.FindAlso.Matches(e))
         {
             Sidebar.FocusFind();
             return true;
@@ -402,9 +403,11 @@ public partial class MainWindow : Window
             return FocusModelPicker();
         }
 
-        if (CanvasKeys.FilterInspector.Matches(e) && InspectorPanel.IsKeyboardFocusWithin)
+        if (CanvasKeys.Page(e) is { } page && ViewModel.Canvas?.Inspected is TaskNodeViewModel node && AgentPanelViewModel.Has(node, page))
         {
-            return InspectorFilter()?.Focus() == true;
+            ViewModel.ShowInspector();
+            ViewModel.AgentPanel.Show(page);
+            return true;
         }
 
         return false;
@@ -436,20 +439,16 @@ public partial class MainWindow : Window
 
     private void FocusComposer() => Dispatcher.UIThread.Post(() => ShownConversation?.FocusComposer(), DispatcherPriority.Background);
 
-    private TextBox? InspectorFilter() => InspectorPanel.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(box =>
-        box.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(box) == "InspectorFilter");
+    // The panel's first control takes the focus: the first tab, or on a page without tabs its first button.
+    private Control? FirstPanelControl() => InspectorPanel.GetVisualDescendants().OfType<Control>().FirstOrDefault(control =>
+        control is Button or TextBox && control is { Focusable: true, IsEffectivelyVisible: true, IsEffectivelyEnabled: true });
 
-    // The filter shows while something is selected, and otherwise the panel's first control takes the focus.
-    private void FocusInspector()
-    {
-        var target = InspectorFilter() ?? InspectorPanel.GetVisualDescendants().OfType<Control>().FirstOrDefault(control =>
-            control is Button or TextBox && control is { Focusable: true, IsEffectivelyVisible: true, IsEffectivelyEnabled: true });
-        target?.Focus(NavigationMethod.Directional);
-    }
+    private void FocusInspector() => FirstPanelControl()?.Focus(NavigationMethod.Directional);
 
     private bool FocusModelPicker()
     {
         ViewModel.ShowInspector();
+        ViewModel.AgentPanel.Show(Inspector.AgentPage.Agent);
         UpdateLayout();
         var picker = InspectorPanel.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(box =>
             box.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(box) == "TaskModel");
@@ -529,8 +528,8 @@ public partial class MainWindow : Window
     /// <summary>Brings a node's card into view on the canvas, if the canvas does not show it whole.</summary>
     internal void BringIntoViewIfHidden(TaskNodeViewModel node) => CanvasView?.BringIntoViewIfHidden(node);
 
-    /// <summary>The control that takes the canvas's keys, or the inspector's filter while a conversation covers the canvas.</summary>
-    internal IInputElement? CanvasFocusTarget => ViewModel.ShowsCanvas ? CanvasView?.Editor : InspectorFilter();
+    /// <summary>The control that takes the canvas's keys, or the Agent panel's first control while a conversation covers the canvas.</summary>
+    internal IInputElement? CanvasFocusTarget => ViewModel.ShowsCanvas ? CanvasView?.Editor : FirstPanelControl();
 
     private void ShowWorkflowOf(object? source)
     {

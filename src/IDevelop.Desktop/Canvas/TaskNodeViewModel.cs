@@ -23,9 +23,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
         [nameof(StatusLabel)] = [nameof(CardStatus), nameof(MarkTip)],
         [nameof(Proposal)] = [nameof(CardStatus), nameof(ShowsAcceptAndFinish), nameof(Actions)],
         [nameof(EngineState)] = [nameof(ShowsAcceptAndFinish), nameof(Attention), nameof(HasAttention), nameof(AttentionLabel)],
-        [nameof(AgentLabel)] = [nameof(AgentClient), nameof(CardClient), nameof(AgentModel), nameof(CardModel), nameof(HasModel), nameof(CardLine), nameof(ClientMark), nameof(AgentChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
-        [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
-        [nameof(Preview)] = [nameof(TaskChanges), nameof(SystemPrompt), nameof(HasSystemPrompt)],
+        [nameof(AgentLabel)] = [nameof(PanelAgentLine), nameof(AgentClient), nameof(CardClient), nameof(AgentModel), nameof(CardModel), nameof(HasModel), nameof(CardLine), nameof(ClientMark), nameof(AgentChanges), nameof(AgentHasChanges), nameof(ClientDiffers), nameof(ModelDiffers), nameof(ReasoningDiffers), nameof(CanRevertAgent), nameof(PeekAgent)],
+        [nameof(SelectedConversation)] = [nameof(AgentChanges), nameof(AgentHasChanges), nameof(ConversationResetTip), nameof(CanRevertConversation), nameof(ShowsAcceptAndFinish)],
+        [nameof(Preview)] = [nameof(TaskChanges), nameof(TaskHasChanges), nameof(SystemPrompt), nameof(HasSystemPrompt)],
         [nameof(Title)] = [nameof(SystemPrompt), nameof(ExpandName)],
         [nameof(PermissionNote)] = [nameof(PermissionSummary)],
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
@@ -177,6 +177,11 @@ public sealed partial class TaskNodeViewModel : ObservableObject, IAgentPickerHo
             if (SetProperty(ref _proposal, value))
             {
                 ShowState();
+                OnPropertyChanged(nameof(HeaderActions));
+                OnPropertyChanged(nameof(HasExtraPage));
+                OnPropertyChanged(nameof(ExtraTitle));
+                OnPropertyChanged(nameof(ExtraGlyph));
+                OnPropertyChanged(nameof(ExtraBadge));
                 // The planner's reply can come in through its log before the engine says the node changed, so the canvas
                 // draws the proposal's ghosts now and not only at the engine's next change.
                 _canvas.ShowGhosts();

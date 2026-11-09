@@ -8,10 +8,8 @@ using Avalonia.Interactivity;
 namespace IDevelop.Desktop.Inspector;
 
 /// <summary>
-/// A foldable group of inspector rows under a filled Title Case header, such as Agent. The window remembers each key's
-/// fold, whichever node is selected. A section counts its changed values in its header, Left folds it and Right opens it
-/// from the header, and while the filter has text a section shows open, or hides its header when neither its title nor any of its rows match. Its content stays
-/// in the layout then, because rows from a template exist only once laid out, and each row hides itself.
+/// A fold panel of a page, such as one task field, under a header with a chevron and a title. The window remembers each key's
+/// fold, whichever node is selected. Left folds it and Right opens it from the header.
 /// </summary>
 public sealed class InspectorSection : InspectorPart
 {
@@ -22,21 +20,13 @@ public sealed class InspectorSection : InspectorPart
     /// <summary>The automation id of the title's text, for a title that tests and UI Automation read.</summary>
     public static readonly StyledProperty<string?> TitleIdProperty = AvaloniaProperty.Register<InspectorSection, string?>(nameof(TitleId));
 
-    /// <summary>How many of the section's values differ from the blueprint's defaults.</summary>
-    public static readonly StyledProperty<int> ChangesProperty = AvaloniaProperty.Register<InspectorSection, int>(nameof(Changes));
+    /// <summary>The panel starts folded until the person opens it.</summary>
+    public static readonly StyledProperty<bool> StartsFoldedProperty = AvaloniaProperty.Register<InspectorSection, bool>(nameof(StartsFolded));
 
-    /// <summary>The section rests folded for now, whatever the person chose for its key, until the person opens it here.</summary>
-    public static readonly StyledProperty<bool> RestsFoldedProperty = AvaloniaProperty.Register<InspectorSection, bool>(nameof(RestsFolded));
+    /// <summary>A control at the header's right edge, such as Edit.</summary>
+    public static readonly StyledProperty<object?> HeaderActionProperty = AvaloniaProperty.Register<InspectorSection, object?>(nameof(HeaderAction));
 
-    /// <summary>A one-line summary that the header shows while the section is folded, such as the latest result.</summary>
-    public static readonly StyledProperty<string?> SummaryProperty = AvaloniaProperty.Register<InspectorSection, string?>(nameof(Summary));
-
-    public static readonly DirectProperty<InspectorSection, string> BadgeProperty =
-        AvaloniaProperty.RegisterDirect<InspectorSection, string>(nameof(Badge), section => section.Badge);
-
-    private readonly HashSet<InspectorRow> _rows = [];
     private Button? _header;
-    private bool _openedAtRest;
 
     public string Key
     {
@@ -56,59 +46,24 @@ public sealed class InspectorSection : InspectorPart
         set => SetValue(TitleIdProperty, value);
     }
 
-    public bool RestsFolded
+    public bool StartsFolded
     {
-        get => GetValue(RestsFoldedProperty);
-        set => SetValue(RestsFoldedProperty, value);
+        get => GetValue(StartsFoldedProperty);
+        set => SetValue(StartsFoldedProperty, value);
     }
 
-    public string? Summary
+    public object? HeaderAction
     {
-        get => GetValue(SummaryProperty);
-        set => SetValue(SummaryProperty, value);
+        get => GetValue(HeaderActionProperty);
+        set => SetValue(HeaderActionProperty, value);
     }
 
-    public int Changes
-    {
-        get => GetValue(ChangesProperty);
-        set => SetValue(ChangesProperty, value);
-    }
-
-    /// <summary>"2 overrides" while two of the section's values differ from their defaults, otherwise empty.</summary>
-    public string Badge
-    {
-        get;
-        private set => SetAndRaise(BadgeProperty, ref field, value);
-    } = "";
-
-    public bool IsFolded => !IsFiltering && (RestsFolded ? !_openedAtRest : State?.IsFolded(Key) == true);
-
-    /// <summary>While the filter has text, whether it matches the title, which shows every row of the section.</summary>
-    internal bool TitleMatches => !IsFiltering || InspectorFilter.Matches(State!.Query, Title);
-
-    internal void Track(InspectorRow row)
-    {
-        _rows.Add(row);
-        Refresh();
-    }
-
-    internal void Untrack(InspectorRow row)
-    {
-        _rows.Remove(row);
-        Refresh();
-    }
+    public bool IsFolded => State?.IsFolded(Key, StartsFolded) == true;
 
     internal override void Refresh()
     {
-        var folded = IsFolded;
-        PseudoClasses.Set(":folded", folded);
-        Badge = Changes switch { 0 => "", 1 => "1 override", _ => $"{Changes} overrides" };
+        PseudoClasses.Set(":folded", IsFolded);
         IsVisible = IsShown;
-        PseudoClasses.Set(":unmatched", !TitleMatches && !_rows.Any(row => row is { IsShown: true, LabelMatches: true }));
-        foreach (var row in _rows)
-        {
-            row.Refresh();
-        }
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
@@ -136,44 +91,20 @@ public sealed class InspectorSection : InspectorPart
             AutomationProperties.SetAutomationId(this, $"Section{Key}");
             Refresh();
         }
-        else if (change.Property == TitleProperty || change.Property == ChangesProperty)
+        else if (change.Property == StartsFoldedProperty)
         {
-            Refresh();
-        }
-        else if (change.Property == RestsFoldedProperty)
-        {
-            _openedAtRest = false;
             Refresh();
         }
     }
 
     private void OnHeaderKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key is Avalonia.Input.Key.Left or Avalonia.Input.Key.Right && e.KeyModifiers == KeyModifiers.None && State is { IsFiltering: false })
+        if (e.Key is Avalonia.Input.Key.Left or Avalonia.Input.Key.Right && e.KeyModifiers == KeyModifiers.None)
         {
-            Fold(e.Key == Avalonia.Input.Key.Left);
+            State?.Fold(Key, e.Key == Avalonia.Input.Key.Left);
             e.Handled = true;
         }
     }
 
-    private void OnHeaderClick(object? sender, RoutedEventArgs e)
-    {
-        if (State is { IsFiltering: false })
-        {
-            Fold(!IsFolded);
-        }
-    }
-
-    private void Fold(bool folded)
-    {
-        if (RestsFolded)
-        {
-            _openedAtRest = !folded;
-            Refresh();
-        }
-        else
-        {
-            State?.Fold([Key], folded);
-        }
-    }
+    private void OnHeaderClick(object? sender, RoutedEventArgs e) => State?.Fold(Key, !IsFolded);
 }

@@ -13,7 +13,7 @@ using static IDevelop.TestSupport.AgyTurn;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The pinned header's actions for each state, the Input and Output sections, the overview's states, and the inspector's keys.
+/// The panel header's action and the Chat page's actions for each state, the Input and Output pages, and the panel's keys.
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class InspectorHeaderTests : IDisposable
@@ -26,42 +26,30 @@ public sealed class InspectorHeaderTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private static string[] Actions(Shell shell) =>
+    private static string[] Actions(Shell shell, string list = "NodeActions") =>
     [
-        .. shell.Find<ItemsControl>("NodeActions").GetVisualDescendants().OfType<Button>()
+        .. shell.Find<ItemsControl>(list).GetVisualDescendants().OfType<Button>()
             .Select(button => $"{(button.Classes.Contains("primary") ? "*" : "")}{AutomationProperties.GetName(button)}"),
     ];
+
+    private static string[] ChatActions(Shell shell)
+    {
+        shell.Page(AgentPage.Chat);
+        return Actions(shell, "ChatActions");
+    }
 
     private Shell Linked() => Shell.Open(_temp.Seed(
         TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90, Codex),
         new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
 
     [AvaloniaFact]
-    public void A_short_inspector_keeps_its_header_to_the_title_the_state_and_the_actions()
-    {
-        var shell = Linked();
-        shell.Click(shell.Header(shell.Node("Design")));
-        var view = shell.Window.GetVisualDescendants().OfType<InspectorView>().Single();
-
-        foreach (var (height, isShort) in new[] { (600.0, true), (1000.0, false) })
-        {
-            shell.Window.Height = height;
-            shell.Render();
-            Assert.Equal(isShort, view.Classes.Contains("short"));
-            var title = view.GetVisualDescendants().OfType<Theme.EllipsisText>().Single(text => text.Classes.Contains("headerTitle"));
-            Assert.Equal(0, title.MaxLines);
-            var detail = view.GetVisualDescendants().OfType<Panel>().Single(panel => panel.Classes.Contains("stateDetail"));
-            Assert.Equal(!isShort, detail.IsVisible);
-        }
-    }
-
-    [AvaloniaFact]
-    public void An_idle_node_keeps_Conversation_first_and_makes_Run_primary()
+    public void An_idle_node_puts_Run_in_the_header_and_Conversation_on_its_Chat_page()
     {
         var shell = Linked();
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["Conversation", "*Run"], Actions(shell));
+        Assert.Equal(["*Run"], Actions(shell));
+        Assert.Equal(["Conversation"], ChatActions(shell));
     }
 
     [AvaloniaFact]
@@ -93,7 +81,8 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.Completed);
         shell.Render();
 
-        Assert.Equal(["*Conversation", "Run from here"], Actions(shell));
+        Assert.Equal(["Run from here"], Actions(shell));
+        Assert.Equal(["*Conversation"], ChatActions(shell));
     }
 
     [AvaloniaFact]
@@ -107,7 +96,8 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.InputRequired);
         shell.Render();
 
-        Assert.Equal(["*Reply", "Use as result"], Actions(shell));
+        Assert.Empty(Actions(shell));
+        Assert.Equal(["*Reply", "Use as result"], ChatActions(shell));
         Assert.True(shell.NodeModel("Say hi").RetryIsInMenu);
     }
 
@@ -122,7 +112,8 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.InputRequired);
         shell.Render();
 
-        Assert.Equal(["*Reply"], Actions(shell));
+        Assert.Empty(Actions(shell));
+        Assert.Equal(["*Reply"], ChatActions(shell));
         Assert.False(shell.NodeModel("Say hi").ApproveCommand.CanExecute(null));
     }
 
@@ -160,7 +151,7 @@ public sealed class InspectorHeaderTests : IDisposable
 
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
         Assert.True(shell.Find<TextBlock>("NoInput").IsEffectivelyVisible);
-        Assert.Equal("Build", AutomationProperties.GetName(shell.InView<Button>("OutputLink")));
+        Assert.Equal("Build", Assert.Single(shell.NodeModel("Design").Outputs).Node.Title);
     }
 
     [AvaloniaFact]
@@ -192,56 +183,27 @@ public sealed class InspectorHeaderTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Enter_in_the_filter_moves_to_the_first_match_and_Escape_clears_it()
-    {
-        var shell = Linked();
-        shell.Click(shell.Header(shell.Node("Design")));
-        shell.FilterInspector("model");
-
-        shell.Press(Key.Enter);
-
-        Assert.Same(shell.Find<ComboBox>("TaskModel"), shell.Window.FocusManager!.GetFocusedElement());
-
-        shell.Click(shell.Find<TextBox>("InspectorFilter"));
-        shell.Press(Key.Escape);
-
-        Assert.Equal("", shell.Find<TextBox>("InspectorFilter").Text);
-    }
-
-    [AvaloniaFact]
     public void Left_and_Right_fold_and_open_a_section_from_its_header()
     {
         var shell = Linked();
         shell.Click(shell.Header(shell.Node("Design")));
-        var header = shell.Section("Agent").GetVisualDescendants().OfType<Button>().First(button => button.Name == "PART_Header");
+        shell.Page(AgentPage.Task);
+        var header = shell.Section("TaskInstructions").GetVisualDescendants().OfType<Button>().First(button => button.Name == "PART_Header");
         header.Focus();
 
         shell.Press(Key.Left);
-        Assert.True(shell.Section("Agent").IsFolded);
+        Assert.True(shell.Section("TaskInstructions").IsFolded);
 
         shell.Press(Key.Right);
-        Assert.False(shell.Section("Agent").IsFolded);
+        Assert.False(shell.Section("TaskInstructions").IsFolded);
     }
 
     [AvaloniaFact]
-    public void Tab_reaches_the_first_action_right_after_the_filter()
-    {
-        // No client is installed here, so Run is off, and the first action that takes the focus is the conversation.
-        var shell = Linked();
-        shell.Click(shell.Header(shell.Node("Design")));
-        shell.Find<TextBox>("InspectorFilter").Focus();
-
-        shell.Press(Key.Tab);
-
-        Assert.Same(shell.Find<Button>("OpenConversation"), shell.Window.FocusManager!.GetFocusedElement());
-    }
-
-    [AvaloniaFact]
-    public void F2_in_the_inspector_edits_the_title()
+    public void F2_in_the_panel_edits_the_title()
     {
         var shell = Linked();
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Find<TextBox>("InspectorFilter").Focus();
+        shell.Find<Button>("PageAgent").Focus();
 
         shell.Press(Key.F2);
 

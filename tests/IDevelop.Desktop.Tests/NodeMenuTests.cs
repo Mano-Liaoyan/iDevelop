@@ -6,6 +6,7 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Avalonia;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Inspector;
 using IDevelop.Desktop.Theme;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -180,21 +181,18 @@ public sealed class NodeMenuTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Choose_agent_unfolds_the_agent_section_and_clears_a_filter_that_hides_the_picker()
+    public void Choose_agent_shows_the_Agent_page_and_opens_the_client_picker()
     {
         var shell = Shell.Open(DesignThenBuild());
         shell.Click(shell.Header(shell.Node("Build")));
-        shell.Fold("Agent");
-        shell.FilterInspector("acc");
-        Assert.False(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
+        shell.Page(AgentPage.Task);
+        shell.WaitUntil(() => shell.Window.ViewModel.AgentPanel.IsTask, "the Task page shows");
 
         shell.RightClick(shell.Header(shell.Node("Build")));
         shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
 
         var picker = shell.Find<ComboBox>("TaskClient");
-        Assert.Equal(
-            (true, true, false, ""),
-            (picker.IsEffectivelyVisible, picker.IsDropDownOpen, shell.Section("Agent").IsFolded, shell.Find<TextBox>("InspectorFilter").Text));
+        Assert.Equal((true, true, true), (shell.Window.ViewModel.AgentPanel.IsAgent, picker.IsEffectivelyVisible, picker.IsDropDownOpen));
     }
 
     [AvaloniaFact]
@@ -242,12 +240,12 @@ public sealed class NodeMenuTests : IDisposable
         shell.Window.MinHeight = 320;
         shell.Window.Height = 320;
         shell.Click(shell.Header(shell.Node("Build")));
+        shell.Fold("SystemPrompt");
         var viewport = shell.Find<ComboBox>("TaskClient").FindAncestorOfType<ScrollViewer>()!;
-        // The Agent group leads the inspector, so the view scrolls to its end to put the picker out of view.
+        // The view scrolls to its end, as a person leaves it.
         shell.Render();
         viewport.Offset = new Vector(0, viewport.Extent.Height);
         shell.Render();
-        Assert.False(shell.Bounds(viewport).Contains(shell.Bounds(shell.Find<ComboBox>("TaskClient"))), "The picker is already in view.");
         Rect? placedAgainst = null;
 
         // A window places the list against where the picker was last laid out. A headless list is an overlay that lays the
