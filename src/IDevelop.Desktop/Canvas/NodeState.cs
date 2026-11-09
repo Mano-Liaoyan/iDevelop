@@ -90,11 +90,6 @@ public static class NodeStates
         _ => null,
     };
 
-    /// <summary>
-    /// The interrupted state's sentence where Retry is in the More menu, as in the inspector when Continue and Conversation take the header's row.
-    /// </summary>
-    public const string InterruptedDetailInMenu = "Closed mid-turn. Continue resumes the session. Retry, in the More menu, starts a new attempt.";
-
     public static StatusTone Tone(NodeState state) => state switch
     {
         NodeState.Running => StatusTone.Running,

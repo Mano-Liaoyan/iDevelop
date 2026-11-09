@@ -61,8 +61,13 @@ public sealed class MainWindowViewModel : ObservableObject
         _undo = new RelayCommand(() => EditableCanvas?.Document.Undo(), () => EditableCanvas?.Document.CanUndo ?? false);
         _redo = new RelayCommand(() => EditableCanvas?.Document.Redo(), () => EditableCanvas?.Document.CanRedo ?? false);
         _refreshAgents = new RelayCommand(() => UiWork.Start(RefreshAgents, text => Status = text), () => !_refreshingAgents);
-        CloseConversationCommand = new RelayCommand(CloseConversation);
-        ToggleConversationLayoutCommand = new RelayCommand(() => IsConversationDocked = !IsConversationDocked);
+        AgentPanel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AgentPanelViewModel.Page))
+            {
+                SyncConversation();
+            }
+        };
         Activity = new ActivityViewModel(() => Projects, Attend);
         Find = new FindViewModel(() => Projects, Choose);
         Projects.CollectionChanged += (_, _) => RaiseProjects();
@@ -152,9 +157,9 @@ public sealed class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// In the Compact tier a selected node opens the Agent panel on demand, and the Index becomes the Rail. The Index toggle or
-    /// Ctrl+Alt+B closes it for that node, and an open conversation keeps it closed.
+    /// Ctrl+Alt+B closes it for that node.
     /// </summary>
-    public bool IsInspectorSwapped => HasProjects && IsCompact && _inspectorChoice is null && Conversation is null
+    public bool IsInspectorSwapped => HasProjects && IsCompact && _inspectorChoice is null
         && Canvas?.SelectedNode is { } node && node != _swapClosedFor;
 
     /// <summary>The Agent panel shows in its column.</summary>
@@ -234,49 +239,18 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>The open conversation, which the main area or the dock shows, or null.</summary>
+    /// <summary>The conversation that the Chat page shows while the Agent panel shows that page, or null.</summary>
     public ConversationViewModel? Conversation
     {
         get;
         private set
         {
-            var shown = field?.Node;
             if (SetProperty(ref field, value))
             {
-                shown?.IsConversationShown = false;
-                value?.Node.IsConversationShown = true;
-                OnConversationLayoutChanged();
-                RaiseInspector();
+                AgentPanel.Conversation = value;
             }
         }
     }
-
-    /// <summary>The conversation sits in a dock under the canvas instead of taking the main area. The window keeps the choice.</summary>
-    public bool IsConversationDocked
-    {
-        get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnConversationLayoutChanged();
-            }
-        }
-    }
-
-    /// <summary>The conversation that takes the main area, or null while it is docked or closed.</summary>
-    public ConversationViewModel? MainConversation => IsConversationDocked ? null : Conversation;
-
-    /// <summary>The conversation in the dock under the canvas, or null while it takes the main area or is closed.</summary>
-    public ConversationViewModel? DockedConversation => IsConversationDocked ? Conversation : null;
-
-    public bool ShowsCanvas => MainConversation is null;
-
-    public string ConversationLayoutLabel => IsConversationDocked ? "Expand to the main area" : "Dock under the canvas";
-
-    public ICommand CloseConversationCommand { get; }
-
-    public ICommand ToggleConversationLayoutCommand { get; }
 
     // The Generate sheet is modal, so a key or a button under its scrim neither saves nor takes an edit back.
     private WorkflowCanvasViewModel? EditableCanvas => Canvas is { Sheet: null } canvas ? canvas : null;
@@ -382,17 +356,11 @@ public sealed class MainWindowViewModel : ObservableObject
         TreeReveal?.Invoke(node.Canvas, node);
     }
 
-    /// <summary>Shows the node and what it needs: an agent's conversation, or for an approval, the request on its Chat page.</summary>
+    /// <summary>Shows the node and what it needs on its Chat page, with the keys in the composer.</summary>
     internal void Attend(TaskNodeViewModel node)
     {
         ShowNode(node);
-        AgentPanel.Show(AgentPage.Chat);
-        if (node.HasAgent)
-        {
-            // A jump to what a node needs keeps its graph in view. A conversation that is already open keeps its layout.
-            IsConversationDocked |= Conversation is null;
-            node.OpenConversationCommand.Execute(null);
-        }
+        OpenChat(new ConversationTarget(node.Canvas, node.Id));
     }
 
     /// <summary>Selects the next node that waits or failed, after the selected one, in the Activity list's order.</summary>
@@ -490,6 +458,7 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanResizeIndex));
         OnPropertyChanged(nameof(CanResizePanel));
         OnPropertyChanged(nameof(SidebarToggleLabel));
+        SyncConversation();
     }
 
     private void Remember(string folder)
@@ -516,7 +485,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         var after = Canvas?.SelectedNode is { } selected ? nodes.IndexOf(selected) : -1;
         var next = nodes[(after + 1) % nodes.Count];
-        ShowNode(next);
+        Attend(next);
         return next;
     }
 
@@ -552,20 +521,12 @@ public sealed class MainWindowViewModel : ObservableObject
         return canvas;
     }
 
-    /// <summary>
-    /// Shows the node's conversation in the current layout, and its workflow and card with it. The conversation keeps its
-    /// draft and place when it closes.
-    /// </summary>
-    private void OpenConversation(ConversationTarget target)
+    /// <summary>Opens the node's Chat page, in its workflow, with the panel shown and the keys in the composer.</summary>
+    private void OpenChat(ConversationTarget target)
     {
         if (target.Canvas != Canvas)
         {
             Select(target.Canvas);
-        }
-
-        if (Conversation is not { } open || open.Target.Canvas != target.Canvas || open.Target.Task != target.Task)
-        {
-            ShowConversation(target);
         }
 
         if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } found)
@@ -576,6 +537,44 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 target.Canvas.Inspect(found);
             }
+        }
+
+        RevealPanel();
+        AgentPanel.Show(AgentPage.Chat);
+        SyncConversation();
+        ComposerRequested?.Invoke();
+    }
+
+    // The panel shows: as the person last chose, or on demand in the Compact tier.
+    private void RevealPanel()
+    {
+        if (IsInspectorShown)
+        {
+            return;
+        }
+
+        if (IsCompact && _inspectorChoice is null)
+        {
+            _swapClosedFor = null;
+            RaiseInspector();
+        }
+        else
+        {
+            ChooseInspector(true);
+        }
+    }
+
+    // The Chat page reads its node's log only while it shows.
+    private void SyncConversation()
+    {
+        var node = IsInspectorShown && AgentPanel.IsChat ? Canvas?.Inspected as TaskNodeViewModel : null;
+        if (node is null)
+        {
+            CloseConversation();
+        }
+        else if (Conversation is not { } open || open.Target.Canvas != Canvas || open.Node != node)
+        {
+            ShowConversation(new ConversationTarget(Canvas!, node.Id));
         }
     }
 
@@ -775,14 +774,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var project = new ProjectViewModel(identity, windowLock, documents, NewCanvas);
-        project.ConversationRequested += target =>
-        {
-            OpenConversation(target);
-            if (Conversation?.WaitsForWords == true)
-            {
-                ComposerRequested?.Invoke();
-            }
-        };
+        project.ConversationRequested += OpenChat;
         project.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ProjectViewModel.IsExpanded))
@@ -851,11 +843,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 break;
             case nameof(WorkflowCanvasViewModel.Inspected) when canvas == Canvas:
                 AgentPanel.Follow(canvas.Inspected as TaskNodeViewModel);
-                break;
-            // An open conversation follows the task the person selects, so the sidebar's task list switches it.
-            case nameof(WorkflowCanvasViewModel.SelectedNode) when canvas == Canvas && Conversation is { } open
-                && canvas.SelectedNode is { HasAgent: true } node && node.Id != open.Target.Task:
-                OpenConversation(new ConversationTarget(canvas, node.Id));
+                SyncConversation();
                 break;
         }
     }
@@ -870,11 +858,6 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         Canvas = canvas;
-        if (Conversation is not null && Conversation.Target.Canvas != canvas)
-        {
-            CloseConversation();
-        }
-
         if (canvas is not null)
         {
             canvas.IsSelected = true;
@@ -883,17 +866,10 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         AgentPanel.Follow(canvas?.Inspected as TaskNodeViewModel);
+        SyncConversation();
         OnPropertyChanged(nameof(ProjectName));
         OnPropertyChanged(nameof(WorkflowName));
         OnDocumentChanged();
-    }
-
-    private void OnConversationLayoutChanged()
-    {
-        OnPropertyChanged(nameof(MainConversation));
-        OnPropertyChanged(nameof(DockedConversation));
-        OnPropertyChanged(nameof(ShowsCanvas));
-        OnPropertyChanged(nameof(ConversationLayoutLabel));
     }
 
     private void Persist()

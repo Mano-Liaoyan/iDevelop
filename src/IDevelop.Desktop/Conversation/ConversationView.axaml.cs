@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
+using Avalonia.VisualTree;
 
 namespace IDevelop.Desktop.Conversation;
 
@@ -17,14 +18,14 @@ namespace IDevelop.Desktop.Conversation;
 /// </summary>
 public partial class ConversationView : UserControl
 {
-    /// <summary>The column of a message: a person's message is in the second column, next to its copy button.</summary>
+    /// <summary>The column of a message: a person's message is in the second column.</summary>
     public static readonly IValueConverter MessageColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 0);
 
     /// <summary>The columns a message spans: a person's message spans one, and other messages span both.</summary>
     public static readonly IValueConverter MessageColumnSpan = new FuncValueConverter<bool, int>(isPerson => isPerson ? 1 : 2);
 
-    /// <summary>The column of Copy, whose styles place it beside each kind of message.</summary>
-    public static readonly IValueConverter CopyColumn = new FuncValueConverter<bool, int>(isPerson => isPerson ? 0 : 1);
+    /// <summary>The margin of a transcript row: the side gutter and the row's gap above.</summary>
+    public static readonly IValueConverter RowMargin = new FuncValueConverter<double, Thickness>(gap => new Thickness(16, gap, 16, 0));
 
     // Text softens at the view's top edge, so a block under the header reads as scrolled, and a whole line resting there stays whole. A mask reads only
     // each stop's alpha, so these stops are opacities and no part of the palette.
@@ -35,18 +36,18 @@ public partial class ConversationView : UserControl
         GradientStops = { new GradientStop(default, 0), new GradientStop(new Color(255, 0, 0, 0), 1) },
     };
 
-    /// <summary>The attention card's row of its actions: under its text, or on its header's line.</summary>
-    public static readonly IValueConverter ActionsRow = new FuncValueConverter<bool, int>(compact => compact ? 0 : 2);
-
-    public static readonly IValueConverter ActionsColumn = new FuncValueConverter<bool, int>(compact => compact ? 1 : 0);
-
-    public static readonly IValueConverter ActionsSpan = new FuncValueConverter<bool, int>(compact => compact ? 1 : 2);
-
-    // Under this width the transcript's and the composer's side padding shrinks.
-    private const double NarrowWidth = 600;
-
     // Within this many pixels of the end, the view counts as at the end and follows new output.
     private const double EndSlack = 24;
+
+    // The composer's hint needs this much room for the composer's tool row.
+    private const double HintWidth = 340;
+
+    /// <summary>The least transcript the Chat page keeps in a short window.</summary>
+    internal const double MinTranscriptHeight = 180;
+
+    // The dock's share of the page, and the least it keeps for its heading and a line while the page is short.
+    private const double DockShare = 0.4;
+    private const double MinDockHeight = 72;
 
     private ConversationViewModel? _model;
     private bool _follow = true;
@@ -58,6 +59,10 @@ public partial class ConversationView : UserControl
     private bool _pressed;
     private bool _restQueued;
     private bool _movedDown;
+
+    // The extent where the view last moved above the end to rest on a whole line, and the extent where such a move changed the end.
+    private double? _restedAt;
+    private double? _restMovedEnd;
 
     public ConversationView()
     {
@@ -86,64 +91,19 @@ public partial class ConversationView : UserControl
         }, RoutingStrategies.Tunnel, handledEventsToo: true);
         Transcript.LayoutUpdated += OnTranscriptLaidOut;
         Transcript.AddHandler(KeyDownEvent, OnStepKey, RoutingStrategies.Bubble);
-        Composer.AddHandler(KeyDownEvent, OnComposerDigit, RoutingStrategies.Tunnel);
-        Strip.SizeChanged += (_, e) => _model?.FitChips(e.NewSize.Width - Strip.Padding.Left - Strip.Padding.Right);
-        SizeChanged += (_, e) =>
-        {
-            Rows.Classes.Set("narrow", e.NewSize.Width < NarrowWidth);
-            LimitCard();
-        };
+        Composer.AddHandler(KeyDownEvent, OnComposerKey, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnEscape, RoutingStrategies.Bubble);
+        ComposerBar.SizeChanged += (_, e) => KeyHint.IsVisible = e.NewSize.Width >= HintWidth;
+        ComposerFrame.SizeChanged += (_, _) => LimitDock();
+        SizeChanged += (_, _) => LimitDock();
     }
 
-    // The row of Rows that holds the transcript.
-    private const int TranscriptRow = 2;
-
-    /// <summary>The least transcript a docked conversation keeps: a few lines of messages.</summary>
-    internal const double MinTranscriptHeight = 96;
-
-    // What the view keeps for the attention card in a short dock, and its largest share of the view.
-    private const double MinCardHeight = 96;
-    private const double MinCompactCardHeight = 36;
-    private const double CardShare = 0.45;
-
-    private double _aroundCard;
-
-    // The extent where the view last moved above the end to rest on a whole line, and the extent where such a move changed the end.
-    private double? _restedAt;
-    private double? _restMovedEnd;
-
-    /// <summary>Raised, after a layout, when <see cref="RequiredHeight"/> changed.</summary>
-    public static readonly RoutedEvent<RoutedEventArgs> RequiredHeightChangedEvent =
-        RoutedEvent.Register<ConversationView, RoutedEventArgs>("RequiredHeightChanged", RoutingStrategies.Bubble);
-
-    /// <summary>
-    /// The height the view needs: its header, the strip, the status line, and the composer as tall as they lay out at
-    /// its width, what the attention card keeps while its own content scrolls, and <see cref="MinTranscriptHeight"/> of transcript.
-    /// </summary>
-    internal double RequiredHeight { get; private set; }
-
-    // The grid gives each row but the transcript's the height it asks for, however short the view, so their sum is what the
-    // view needs. The window learns of a change after the layout, where it may resize the dock.
-    protected override Size ArrangeOverride(Size finalSize)
+    // The dock takes at most 40% of the page, and the transcript keeps its least height after the dock and the composer. The dock's own content scrolls.
+    private void LimitDock()
     {
-        var size = base.ArrangeOverride(finalSize);
-        var card = AttentionCard.IsVisible ? AttentionCard.Bounds.Height + AttentionCard.Margin.Top + AttentionCard.Margin.Bottom : 0;
-        _aroundCard = Rows.RowDefinitions.Where((_, index) => index != TranscriptRow).Sum(row => row.ActualHeight) - card;
-        var required = _aroundCard + Math.Min(card, LeastCard) + MinTranscriptHeight;
-        if (Math.Abs(required - RequiredHeight) >= 0.5)
-        {
-            RequiredHeight = required;
-            Dispatcher.UIThread.Post(() => RaiseEvent(new RoutedEventArgs(RequiredHeightChangedEvent)));
-        }
-
-        return size;
+        var composer = ComposerFrame.IsVisible ? ComposerFrame.Bounds.Height + ComposerFrame.Margin.Top + ComposerFrame.Margin.Bottom : 0;
+        DockView.MaxHeight = Math.Max(MinDockHeight, Math.Min(Bounds.Height * DockShare, Bounds.Height - composer - DockView.Margin.Top - DockView.Margin.Bottom - MinTranscriptHeight));
     }
-
-    // A compact card keeps its action on its header's line, so the header alone is enough in a short dock.
-    private double LeastCard => _model?.IsCompactCard == true ? MinCompactCardHeight : MinCardHeight;
-
-    // The attention card takes at most 45% of the view and always leaves the transcript its least height. Its own content scrolls.
-    private void LimitCard() => AttentionCard.MaxHeight = Math.Max(LeastCard, Math.Min(Bounds.Height * CardShare, Bounds.Height - _aroundCard - MinTranscriptHeight));
 
     /// <summary>The entry at the top of the view and how far it scrolled into it, or null at the end.</summary>
     internal (int Entry, double Offset)? Anchor => _follow ? null : _anchor;
@@ -169,27 +129,17 @@ public partial class ConversationView : UserControl
         }
     }
 
-    /// <summary>Puts the keys in the transcript, where Esc and the arrows still work and the composer waits for a click.</summary>
-    internal void FocusTranscript() => Scroller.Focus();
-
-    /// <summary>Puts the keys in the composer.</summary>
-    internal void FocusComposer() => Composer.Focus();
-
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    /// <summary>Puts the keys in the composer, or in the transcript while no message can go.</summary>
+    internal void FocusComposer()
     {
-        base.OnAttachedToVisualTree(e);
-        // The composer takes the keys when the conversation opens, by mouse or by Enter, and its 2 px line shows where they are.
-        Dispatcher.UIThread.Post(() =>
+        if (Composer.IsEffectivelyVisible && Composer.IsEffectivelyEnabled)
         {
-            if (Composer.IsEffectivelyVisible)
-            {
-                Composer.Focus(NavigationMethod.Tab);
-            }
-            else
-            {
-                FocusTranscript();
-            }
-        }, DispatcherPriority.Background);
+            Composer.Focus(NavigationMethod.Tab);
+        }
+        else
+        {
+            Scroller.Focus(NavigationMethod.Tab);
+        }
     }
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -252,7 +202,7 @@ public partial class ConversationView : UserControl
 
     private double End => Scroller.Extent.Height - Scroller.Viewport.Height;
 
-    // The list estimates a row that left the view, and a row the card holds has no height, so a small move up can change the
+    // The list estimates a row that left the view, and a row the dock holds has no height, so a small move up can change the
     // extent and the end with it. A move to that new end brings the old extent back, and the two would repeat until the layout
     // aborts. An extent where this happened keeps the end itself.
     private void RestAtEnd()
@@ -379,29 +329,44 @@ public partial class ConversationView : UserControl
 
     private void OnJumpToLatest(object? sender, RoutedEventArgs e) => Follow();
 
-    // A digit picks a choice while the composer is empty. The tunnel comes before the box, which would type the digit.
-    private void OnComposerDigit(object? sender, KeyEventArgs e)
+    // Enter sends and Ctrl+Enter also sends. Shift+Enter is the box's new line. A digit picks a choice while the composer is empty. The tunnel comes before the box, which would take the key.
+    private void OnComposerKey(object? sender, KeyEventArgs e)
     {
-        if (e.KeyModifiers == KeyModifiers.None && e.Key is >= Key.D1 and <= Key.D9 or >= Key.NumPad1 and <= Key.NumPad9
+        if (e.Key == Key.Enter && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Control or KeyModifiers.Meta)
+        {
+            if (_model?.Node.SendCommand is { } send && send.CanExecute(null))
+            {
+                send.Execute(null);
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && e.KeyModifiers is (KeyModifiers.Control | KeyModifiers.Shift) or (KeyModifiers.Meta | KeyModifiers.Shift))
+        {
+            if (_model?.Node.StopAndSendCommand is { } stopAndSend && stopAndSend.CanExecute(null))
+            {
+                stopAndSend.Execute(null);
+            }
+
+            e.Handled = true;
+        }
+        else if (e.KeyModifiers == KeyModifiers.None && e.Key is >= Key.D1 and <= Key.D9 or >= Key.NumPad1 and <= Key.NumPad9
             && _model?.PickChoice(e.Key >= Key.NumPad1 ? e.Key - Key.NumPad0 : e.Key - Key.D0) == true)
         {
             e.Handled = true;
-            CaretToEnd();
+            Composer.CaretIndex = Composer.Text?.Length ?? 0;
         }
     }
 
-    // An option goes into the composer, which takes the keys, so the person can add to it or press Send.
-    private void OnQuickReply(object? sender, RoutedEventArgs e)
+    // Esc moves one distance back: from the Chat page to the node's card on the Map.
+    private void OnEscape(object? sender, KeyEventArgs e)
     {
-        if (sender is Button { DataContext: QuickReplyViewModel reply })
+        if (e is { Key: Key.Escape, KeyModifiers: KeyModifiers.None } && TopLevel.GetTopLevel(this) is MainWindow window)
         {
-            _model?.FillReply(reply);
-            Composer.Focus();
-            CaretToEnd();
+            window.FocusMap();
+            e.Handled = true;
         }
     }
-
-    private void CaretToEnd() => Composer.CaretIndex = Composer.Text?.Length ?? 0;
 
     // Left and Right fold and open a group of steps, as they do a tree's row.
     private static void OnStepKey(object? sender, KeyEventArgs e)
@@ -413,39 +378,47 @@ public partial class ConversationView : UserControl
         }
     }
 
-    private void OnOpenSendBack(object? sender, RoutedEventArgs e)
-    {
-        if (_model is { } model)
-        {
-            model.IsSendBackOpen = !model.IsSendBackOpen;
-            if (model.IsSendBackOpen)
-            {
-                Dispatcher.UIThread.Post(() => SendBackNote.Focus(), DispatcherPriority.Background);
-            }
-        }
-    }
-
-    private void OnChangeModel(object? sender, RoutedEventArgs e) => ModelChip.Flyout?.ShowAt(ModelChip);
-
     private void OnCloseModel(object? sender, RoutedEventArgs e) => ModelChip.Flyout?.Hide();
 
     private void OnAgentChosen(object? sender, SelectionChangedEventArgs e) => AgentPicker.OnChosen(sender);
 
-    private void OnOpenFile(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is Execution.ChangeRow row)
-        {
-            _model?.Node.OpenFile(row.Path);
-        }
-    }
+    private void OnShowResult(object? sender, RoutedEventArgs e) =>
+        (TopLevel.GetTopLevel(this) as MainWindow)?.ViewModel.AgentPanel.Show(Inspector.AgentPage.Output);
 
-    private void OnShowResult(object? sender, RoutedEventArgs e)
+    private void OnRowEntered(object? sender, PointerEventArgs e) => PlaceCopy(sender as Panel);
+
+    private void OnCopyFocused(object? sender, GotFocusEventArgs e) => PlaceCopy((sender as Control)?.Parent as Panel);
+
+    // Copy sits at the end of an agent's last line, next to the text, or beside a person's bubble. A line with no room left puts it under the line.
+    private static void PlaceCopy(Panel? row)
     {
-        if (_model?.Node.SelectCommand is { } select && select.CanExecute(null))
+        var copy = row?.Children.OfType<Button>().FirstOrDefault(button => button.Classes.Contains("copy"));
+        var message = row?.GetVisualDescendants().OfType<Border>().FirstOrDefault(border => border.Classes.Contains("message"));
+        if (row is null || copy is null || message is null)
         {
-            select.Execute(null);
+            return;
         }
 
-        (TopLevel.GetTopLevel(this) as MainWindow)?.ViewModel.ShowInspector();
+        var size = copy.Width + 4;
+        Point at;
+        if (copy.Classes.Contains("person"))
+        {
+            at = message.TranslatePoint(new Point(-size, message.Bounds.Height - copy.Height), row) ?? default;
+        }
+        else if (message.GetVisualDescendants().OfType<TextBlock>().LastOrDefault(text => text.IsEffectivelyVisible && text.TextLayout.TextLines.Count > 0) is { } text)
+        {
+            var last = text.TextLayout.TextLines[^1];
+            var top = text.TextLayout.TextLines.SkipLast(1).Sum(line => line.Height);
+            var end = text.TranslatePoint(new Point(last.Start + last.WidthIncludingTrailingWhitespace + text.Padding.Left, top + text.Padding.Top), row) ?? default;
+            at = end.X + size > row.Bounds.Width
+                ? new Point(row.Bounds.Width - copy.Width, end.Y + last.Height)
+                : new Point(end.X + 4, end.Y + (last.Height - copy.Height) / 2);
+        }
+        else
+        {
+            return;
+        }
+
+        copy.Margin = new Thickness(Math.Max(0, at.X), Math.Max(0, at.Y), 0, 0);
     }
 }

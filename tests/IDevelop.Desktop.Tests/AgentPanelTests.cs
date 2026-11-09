@@ -125,13 +125,13 @@ public sealed class AgentPanelTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void An_approval_node_has_no_Agent_page_and_falls_back_to_its_Task_page()
+    public void An_approval_node_has_no_Agent_page_and_falls_back_to_Chat()
     {
         var shell = Shell.Open(_temp.Seed(new WorkflowEdit.PlaceNode(Build, BuiltInBlueprints.Approval, new CanvasPoint(465, 90)) { Title = "Check it" }));
 
         shell.Click(shell.Header(shell.Node("Check it")));
 
-        Assert.True(Panel(shell).IsTask);
+        Assert.True(Panel(shell).IsChat);
         Assert.False(shell.Find<PageTab>("PageAgent").IsVisible);
     }
 

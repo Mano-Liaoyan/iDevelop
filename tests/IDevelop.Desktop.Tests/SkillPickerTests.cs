@@ -1,3 +1,4 @@
+using IDevelop.Desktop.Inspector;
 using Avalonia.Automation;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
@@ -289,6 +290,7 @@ public sealed class SkillPickerTests : IDisposable
         var shell = Shell.Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["verify-idevelop"] }, instructions: "Design it.")),
             _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         shell.Click(shell.Find<ToggleButton>("TaskSkills"));
         shell.WaitUntil(() => shell.Find<TextBlock>("SkillListNote").Text?.StartsWith("iDevelop could not", StringComparison.Ordinal) == true, "the listing's failure");
@@ -298,6 +300,7 @@ public sealed class SkillPickerTests : IDisposable
         Assert.Empty(Ticks(shell));
         // The task is not refused: it runs with its choice as it is, and the row says the list couldn't be checked.
         Assert.Equal("Claude Code's skill list couldn't be read, so it gets the chosen skills as they are, unchecked.", shell.Find<TextBlock>("SkillsNote").Text);
+        shell.Page(AgentPage.Chat);
         Assert.False(shell.ShowsAny("StartProblem"), shell.Text("StartProblem"));
         Assert.Equal("verify-idevelop", Summary(shell));
 

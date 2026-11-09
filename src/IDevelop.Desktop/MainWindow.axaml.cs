@@ -48,12 +48,7 @@ public partial class MainWindow : Window
         ViewModel.ComposerRequested += FocusComposer;
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainWindowViewModel.DockedConversation) && (ViewModel.DockedConversation is not null) != _docked)
-            {
-                _docked = !_docked;
-                SizeDock();
-            }
-            else if (e.PropertyName is nameof(MainWindowViewModel.IsSidebarShown) or nameof(MainWindowViewModel.IsInspectorShown) or nameof(MainWindowViewModel.IsIndexFlyoutOpen))
+            if (e.PropertyName is nameof(MainWindowViewModel.IsSidebarShown) or nameof(MainWindowViewModel.IsInspectorShown) or nameof(MainWindowViewModel.IsIndexFlyoutOpen))
             {
                 ShowPanels();
             }
@@ -66,8 +61,6 @@ public partial class MainWindow : Window
         Shell.SizeChanged += (_, e) => ApplyTier(e.NewSize.Width);
         Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
         Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
-        MainArea.SizeChanged += (_, _) => LimitDock();
-        DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
     }
 
     // The widths the Index and the Agent panel have now: their tier's, or what the person dragged them to since the tier began.
@@ -218,62 +211,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // The dock opens at its default height, keeps the height the person drags it to while it stays open, and gives the
-    // space back when it closes. It is never shorter than the conversation needs for its header, its composer, and a few
-    // lines of transcript, and while it can be, it leaves the canvas above it CanvasMinHeight. Its splitter keeps to both.
-    private const double DockHeight = 400;
-
-    // A taller window gives the dock more, so the transcript reads as more than a few lines.
-    private const double TallDockHeight = 460;
-    private const double TallWindow = 760;
-
-    /// <summary>The canvas's least height above the docked conversation, while the conversation keeps what it needs.</summary>
-    internal const double CanvasMinHeight = 280;
-
-    private bool _docked;
-
-    private void SizeDock()
-    {
-        var dock = MainArea.RowDefinitions[2];
-        if (ViewModel.DockedConversation is null)
-        {
-            dock.MinHeight = 0;
-            dock.MaxHeight = double.PositiveInfinity;
-            dock.Height = GridLength.Auto;
-            MainArea.RowDefinitions[0].Height = GridLength.Star;
-        }
-        else
-        {
-            dock.Height = new GridLength(MainArea.Bounds.Height >= TallWindow ? TallDockHeight : DockHeight);
-            LimitDock();
-            // Once the dock has its height, the canvas above it keeps the conversation's node and its direct neighbours in view.
-            // Resizing later never moves the person's view.
-            var shown = CanvasView?.CardsInView() ?? [];
-            var node = ViewModel.Canvas?.SelectedNode ?? ViewModel.DockedConversation.Node;
-            Dispatcher.UIThread.Post(() => CanvasView?.KeepBranchInView(node, shown), DispatcherPriority.Background);
-        }
-    }
-
-    private void LimitDock()
-    {
-        if (ViewModel.DockedConversation is null || MainArea.Bounds.Height <= 0)
-        {
-            return;
-        }
-
-        var dock = MainArea.RowDefinitions[2];
-        if (MainArea.Bounds.Height < TallWindow && dock.Height.Value == TallDockHeight)
-        {
-            dock.Height = new GridLength(DockHeight);
-        }
-
-        // The dock's border adds its top line to what the conversation needs.
-        var needed = DockedHost.Presenter?.Child is ConversationView { RequiredHeight: > 0 } view ? view.RequiredHeight + 1 : 160;
-        dock.MinHeight = Math.Max(160, needed);
-        dock.MaxHeight = Math.Max(dock.MinHeight, MainArea.Bounds.Height - MainArea.RowDefinitions[1].ActualHeight - CanvasMinHeight);
-    }
-
-
     public MainWindowViewModel ViewModel { get; }
 
     /// <summary>Asks for a project folder and returns its path, or null when the user cancels.</summary>
@@ -413,27 +350,11 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private void GoNext(NodeState state)
-    {
-        if (ViewModel.ShowNext(state) is not null)
-        {
-            FocusNode();
-        }
-    }
+    // The next node's Chat page takes the keys, so a person can reply at once.
+    private void GoNext(NodeState state) => ViewModel.ShowNext(state);
 
-    // Enter on the canvas opens the node's conversation. An open conversation has followed the selection, so its composer
-    // takes the keys instead.
-    private void FocusNode()
-    {
-        if (ViewModel.Conversation is not null)
-        {
-            FocusComposer();
-        }
-        else
-        {
-            CanvasFocusTarget?.Focus();
-        }
-    }
+    /// <summary>Esc from the Chat page puts the keys back on the Map, on the node's card.</summary>
+    internal void FocusMap() => CanvasView?.Editor.Focus(NavigationMethod.Directional);
 
     private ConversationView? ShownConversation => this.GetVisualDescendants().OfType<ConversationView>().FirstOrDefault(view => view.IsEffectivelyVisible);
 
@@ -443,7 +364,18 @@ public partial class MainWindow : Window
     private Control? FirstPanelControl() => InspectorPanel.GetVisualDescendants().OfType<Control>().FirstOrDefault(control =>
         control is Button or TextBox && control is { Focusable: true, IsEffectivelyVisible: true, IsEffectivelyEnabled: true });
 
-    private void FocusInspector() => FirstPanelControl()?.Focus(NavigationMethod.Directional);
+    // The Chat page takes the keys in its composer, and any other page in its first control.
+    private void FocusInspector()
+    {
+        if (ViewModel.AgentPanel.IsChat && ShownConversation is { } conversation)
+        {
+            conversation.FocusComposer();
+        }
+        else
+        {
+            FirstPanelControl()?.Focus(NavigationMethod.Directional);
+        }
+    }
 
     private bool FocusModelPicker()
     {
@@ -456,10 +388,9 @@ public partial class MainWindow : Window
         return picker?.Focus(NavigationMethod.Tab) == true;
     }
 
-    // F6 moves through the regions a person can see: the left area, the canvas, the conversation, and the inspector.
+    // F6 moves through the regions a person can see: the Index, the Map, and the Agent panel.
     private void MoveRegion(int step)
     {
-        var conversation = ShownConversation;
         IEnumerable<(Control Region, Action Enter)> Regions()
         {
             if (ViewModel.IsSidebarShown)
@@ -471,14 +402,9 @@ public partial class MainWindow : Window
                 yield return (Rail, () => Rail.GetVisualDescendants().OfType<Button>().FirstOrDefault()?.Focus(NavigationMethod.Directional));
             }
 
-            if (ViewModel.ShowsCanvas && CanvasView is { } canvas)
+            if (CanvasView is { } canvas)
             {
                 yield return (canvas, () => canvas.Editor.Focus(NavigationMethod.Directional));
-            }
-
-            if (conversation is not null)
-            {
-                yield return (conversation, conversation.FocusComposer);
             }
 
             if (ViewModel.IsInspectorShown)
@@ -528,8 +454,8 @@ public partial class MainWindow : Window
     /// <summary>Brings a node's card into view on the canvas, if the canvas does not show it whole.</summary>
     internal void BringIntoViewIfHidden(TaskNodeViewModel node) => CanvasView?.BringIntoViewIfHidden(node);
 
-    /// <summary>The control that takes the canvas's keys, or the Agent panel's first control while a conversation covers the canvas.</summary>
-    internal IInputElement? CanvasFocusTarget => ViewModel.ShowsCanvas ? CanvasView?.Editor : FirstPanelControl();
+    /// <summary>The control that takes the canvas's keys.</summary>
+    internal IInputElement? CanvasFocusTarget => CanvasView?.Editor;
 
     private void ShowWorkflowOf(object? source)
     {

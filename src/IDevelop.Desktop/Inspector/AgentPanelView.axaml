@@ -109,10 +109,10 @@
                       <MenuFlyout Placement="BottomEdgeAlignedRight">
                         <MenuItem Header="Rename" Click="OnRenameTitle" InputGesture="F2"
                                   AutomationProperties.AutomationId="InspectorMoreRename" theme:MenuGlyph.Data="{StaticResource IconRename}" />
-                        <MenuItem Header="Open Conversation" Command="{Binding OpenConversationCommand}" IsVisible="{Binding ConversationIsInMenu}"
-                                  AutomationProperties.AutomationId="InspectorMoreConversation" theme:MenuGlyph.Data="{StaticResource IconChat}" />
-                        <MenuItem Header="Retry" Command="{Binding RetryCommand}" IsVisible="{Binding RetryIsInMenu}"
+                        <MenuItem Header="{Binding RetryLabel}" Command="{Binding RetryCommand}" IsVisible="{Binding RetryIsInMenu}"
                                   AutomationProperties.AutomationId="InspectorMoreRetry" theme:MenuGlyph.Data="{StaticResource IconRefresh}" />
+                        <MenuItem Header="Stop" Command="{Binding StopCommand}" IsVisible="{Binding StopIsInMenu}"
+                                  AutomationProperties.AutomationId="InspectorMoreStop" theme:MenuGlyph.Data="{StaticResource IconStop}" />
                       </MenuFlyout>
                     </Button.Flyout>
                   </Button>
@@ -203,48 +203,17 @@
               </Border>
 
               <Panel>
-                <!-- The Chat page: what the node needs and the actions for it, until stage 4 brings the conversation and the Action Dock here. -->
-                <ScrollViewer IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsChat}">
-                  <StackPanel Classes="page" AutomationProperties.AutomationId="ChatPage">
-                    <Border Classes="pageTitle"><TextBlock Classes="bodyStrong" Text="Chat" /></Border>
-                    <ItemsControl ItemsSource="{Binding Actions}" Margin="0,0,0,8" AutomationProperties.AutomationId="ChatActions">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" />
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="inspector:NodeAction">
-                          <Button Classes.primary="{Binding IsPrimary}" Classes.action="{Binding !IsPrimary}" Command="{Binding Command}"
-                                  ToolTip.Tip="{Binding Tip}" ToolTip.ShowOnDisabled="True" Height="28" Padding="10,0" FontSize="{StaticResource TypeBodySize}"
-                                  AutomationProperties.AutomationId="{Binding Id}"
-                                  AutomationProperties.Name="{Binding Label}">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                              <PathIcon Theme="{StaticResource Glyph}" Data="{Binding Glyph, Converter={x:Static inspector:InspectorConverters.Icon}}" Width="14" Height="14" />
-                              <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
-                            </StackPanel>
-                          </Button>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <Border Classes="detailRule" IsVisible="{Binding ShowsStateDetail}"
-                            Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                            Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                            Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                            Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
-                            Classes.warning="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
-                      <TextBlock Classes="detail" Text="{Binding InspectorDetail}" AutomationProperties.AutomationId="RunTaskDetail" />
-                    </Border>
-                    <Border Classes="detailRule warning" IsVisible="{Binding RunRefusal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                      <TextBlock Classes="detail" Text="{Binding RunRefusal}" AutomationProperties.AutomationId="StartProblem" />
-                    </Border>
-                    <TextBox Classes="sendBackNote" Text="{Binding SendBackNote}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
-                             IsVisible="{Binding ShowsSendBack}"
-                             Watermark="Why send it back? The note goes to the nodes before it."
-                             AutomationProperties.AutomationId="SendBackNote"
-                             AutomationProperties.Name="Note to send back" />
-                  </StackPanel>
-                </ScrollViewer>
+                <!-- The Chat page: the node's conversation, its Action Dock, and its composer. -->
+                <ContentControl IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsChat}"
+                                Content="{Binding $parent[inspector:AgentPanelView].Panel.Conversation}"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                AutomationProperties.AutomationId="ChatPage">
+                  <ContentControl.DataTemplates>
+                    <DataTemplate DataType="conversation:ConversationViewModel">
+                      <conversation:ConversationView />
+                    </DataTemplate>
+                  </ContentControl.DataTemplates>
+                </ContentControl>
 
                 <ScrollViewer IsVisible="{Binding $parent[inspector:AgentPanelView].Panel.IsAgent}">
                   <StackPanel Classes="page" AutomationProperties.AutomationId="AgentPage">

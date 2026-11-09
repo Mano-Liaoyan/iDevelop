@@ -104,7 +104,7 @@ public sealed class NodeMenuTests : IDisposable
 
         shell.RightClick(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["Retry", "Rename", "Duplicate", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"], shell.MenuHeaders());
+        Assert.Equal(["Run from here", "Rename", "Duplicate", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"], shell.MenuHeaders());
     }
 
     [AvaloniaFact]

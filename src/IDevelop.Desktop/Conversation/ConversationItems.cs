@@ -13,11 +13,15 @@ public abstract class ConversationItemViewModel(int id) : ObservableObject
     /// <summary>The line's place in the node's conversation, oldest first. A group of steps takes its first line's place.</summary>
     public int Id { get; } = id;
 
-    /// <summary>A group of steps follows the row, so the row keeps close to it.</summary>
-    public bool IsBeforeSteps
+    internal const double StepGap = 8;
+    internal const double TurnGap = 16;
+    internal const double AttemptGap = 24;
+
+    /// <summary>The gap over the row: 8 px inside an agent's turn, 16 px at a person's message, and 24 px over a new attempt.</summary>
+    public double GapAbove
     {
         get;
-        set => SetProperty(ref field, value);
+        internal set => SetProperty(ref field, value);
     }
 }
 
@@ -26,7 +30,6 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     private readonly string _text;
     private readonly ConversationLine.Agent? _agent;
     private readonly ConversationViewModel _owner;
-    private bool _showsAuthor;
     private ResultViewModel? _result;
 
     /// <param name="id">The line's place in the conversation.</param>
@@ -39,7 +42,6 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
         _agent = agent;
         _owner = owner;
         CopyCommand = new RelayCommand(() => _ = _owner.CopyAsync(_text));
-        CopyCommitCommand = new RelayCommand(() => _ = _owner.CopyAsync(Result?.CommitId ?? ""));
     }
 
     public bool IsPerson => _agent is null;
@@ -48,34 +50,6 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 
     /// <summary>A subagent of the node's agent wrote it, so it shows as the subagent's own.</summary>
     public bool IsSubagent => _agent?.Subagent is not null;
-
-    /// <summary>A person's message always names its sender. The first agent line after a person's message or a marker names its author, and a subagent's line always does.</summary>
-    public bool ShowsAuthor
-    {
-        get => _showsAuthor || IsAsking || IsPerson;
-        internal set => SetProperty(ref _showsAuthor, value);
-    }
-
-    /// <summary>The message as it shows. While it asks, its option list shows only as the rows over the composer (ADR 0073).</summary>
-    public string ShownText => IsAsking ? QuickReplies.WithoutOptions(Text) ?? Text : Text;
-
-    /// <summary>The node waits for the person's reply to this message, so it reads as a question and not as narration.</summary>
-    public bool IsAsking
-    {
-        get;
-        internal set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(ShowsAuthor));
-                OnPropertyChanged(nameof(AuthorLine));
-                OnPropertyChanged(nameof(ShownText));
-            }
-        }
-    }
-
-    /// <summary>The line over the message.</summary>
-    public string AuthorLine => IsAsking ? $"{AuthorLabel} · Needs you" : AuthorLabel;
 
     /// <summary>The node's result that this message reported, which shows as a card under it, or null.</summary>
     public ResultViewModel? Result
@@ -90,10 +64,11 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
         }
     }
 
+    /// <summary>The message's author, which names it for a screen reader. The panel's header names the agent, so only a subagent's message shows this.</summary>
     public string AuthorLabel => _agent switch
     {
         null => "You",
-        { Subagent: { } subagent } => $"Subagent: {subagent}",
+        { Subagent: { } subagent } => $"Subagent · {subagent}",
         _ => _owner.AgentName,
     };
 
@@ -112,9 +87,6 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 
     /// <summary>Copies the whole message source, result block included.</summary>
     public ICommand CopyCommand { get; }
-
-    /// <summary>Copies the whole id of the commit that the message's result names.</summary>
-    public ICommand CopyCommitCommand { get; }
 }
 
 /// <summary>A notice from the client, which stands alone, or one step of a group.</summary>

@@ -274,10 +274,10 @@
         </Button>
         <Button Classes="cardAction" Command="{Binding RetryCommand}" IsVisible="{Binding ShowsRetry}"
                 ToolTip.Tip="{Binding RunRefusal, FallbackValue='Runs it again in a fresh session'}" ToolTip.ShowOnDisabled="True"
-                AutomationProperties.AutomationId="CardRetry" AutomationProperties.Name="Retry">
+                AutomationProperties.AutomationId="CardRetry" AutomationProperties.Name="{Binding RetryLabel}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" />
-            <TextBlock Text="Retry" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding RetryLabel}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
         <Button Classes="cardAction" Command="{Binding StopCommand}" IsVisible="{Binding ShowsStop}"

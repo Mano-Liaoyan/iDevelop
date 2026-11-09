@@ -270,7 +270,7 @@ public sealed class WorkspaceTests : IDisposable
         shell.Render();
         Assert.Equal("Needs you", shell.CardText("Design", "CardStatus"));
         var reopened = shell.Window.ViewModel.Canvas!;
-        Assert.Equal(NodeStates.InterruptedDetailInMenu, shell.NodeModel("Design").InspectorDetail);
+        Assert.Contains("Continue resumes the session", shell.NodeModel("Design").StateDetail);
         Assert.Equal(1, reopened.Counts.Waiting);
         Assert.Equal("1\u00a0needs\u00a0you", Assert.Single(reopened.RowChips).Label);
         Assert.Equal(1, shell.Window.ViewModel.Activity.WaitingCount);

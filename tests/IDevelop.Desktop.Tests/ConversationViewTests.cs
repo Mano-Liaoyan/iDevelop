@@ -69,7 +69,7 @@ public sealed class ConversationViewTests : IDisposable
         var prose = texts.Except(cells).ToList();
         Assert.Equal(3, prose.Count);
         Assert.All(prose, text => Assert.True(double.IsPositiveInfinity(text.MaxWidth)));
-        Assert.Equal(640, view.GetVisualDescendants().OfType<MarkdownView>().First().MaxWidth);
+        Assert.Equal(680, view.GetVisualDescendants().OfType<MarkdownView>().First().MaxWidth);
     }
 
     [AvaloniaFact]
@@ -123,7 +123,7 @@ public sealed class ConversationViewTests : IDisposable
         _conversation.Add(new ConversationLine.Agent("Reading."), new ConversationLine.Activity("Read a.cs\nall of it", IsTool: true), new ConversationLine.Activity("Bash ls", IsTool: true));
         var model = Open();
         var group = Assert.IsType<StepGroupItemViewModel>(model.Items[1]);
-        Assert.True(model.Items[0].IsBeforeSteps);
+        Assert.Equal(ConversationItemViewModel.StepGap, model.Items[1].GapAbove);
 
         _conversation.Add(new ConversationLine.Activity("Bash test", IsTool: true), new ConversationLine.Activity("Rate limit reached.", IsTool: false), new ConversationLine.Activity("Bash again", IsTool: true));
         Render();
@@ -152,22 +152,20 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void An_author_names_only_the_first_agent_line_after_a_person_or_a_marker_and_every_subagent_line()
+    public void Only_a_subagent_s_message_shows_its_author_and_the_gaps_follow_the_turns()
     {
         _conversation.Add(
             new ConversationLine.Marker(MarkerKind.Fresh, null),
             new ConversationLine.Agent("One."),
-            new ConversationLine.Activity("Read a.cs", IsTool: true),
-            new ConversationLine.Agent("Two."),
             new ConversationLine.Agent("Inner.") { Subagent = "explore" },
-            new ConversationLine.Agent("Three."),
             new ConversationLine.Person("Go on."),
-            new ConversationLine.Agent("Four."));
+            new ConversationLine.Agent("Two."),
+            new ConversationLine.Marker(MarkerKind.Fresh, null));
         var model = Open();
 
-        Assert.Equal(
-            [("Codex", true), ("Codex", false), ("Subagent: explore", true), ("Codex", true), ("You", true), ("Codex", true)],
-            model.Items.OfType<MessageItemViewModel>().Select(message => (message.AuthorLabel, message.ShowsAuthor)));
+        Assert.Equal(["Subagent · explore"], model.Items.OfType<MessageItemViewModel>().Where(message => message.IsSubagent).Select(message => message.AuthorLabel));
+        Assert.Equal([0d, ConversationItemViewModel.StepGap, ConversationItemViewModel.StepGap, ConversationItemViewModel.TurnGap, ConversationItemViewModel.TurnGap, ConversationItemViewModel.AttemptGap],
+            model.Items.Select(item => item.GapAbove));
     }
 
     [AvaloniaFact]
@@ -187,7 +185,7 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_node_that_has_not_run_offers_its_Run_until_a_line_arrives()
+    public void A_node_that_has_not_run_shows_its_empty_line_until_a_line_arrives()
     {
         var model = Open();
         Assert.True(model.ShowsEmpty);
@@ -213,23 +211,6 @@ public sealed class ConversationViewTests : IDisposable
 
         Assert.Equal(fields.Count > 0, model.ShowsTask);
         Assert.Equal(fields.FirstOrDefault()?.Text.Split('\n')[0], model.TaskPreview);
-    }
-
-    [AvaloniaTheory]
-    [InlineData(678, 2)]
-    [InlineData(356, 1)]
-    public void The_strip_shows_the_chips_that_fit_and_the_rest_behind_its_more_chip(double width, int shown)
-    {
-        var other = IDevelop.Workflows.TaskId.New();
-        var shell = Shell.Open(_temp.Seed(
-            TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it."),
-            TaskAt(TestTasks.Build, "A", 405, 90), TaskAt(TestTasks.Review, "B", 405, 190), TaskAt(other, "C", 405, 290),
-            NodeFixture.Dependency(TestTasks.Design, TestTasks.Build), NodeFixture.Dependency(TestTasks.Design, TestTasks.Review), NodeFixture.Dependency(TestTasks.Design, other)));
-        var canvas = shell.Window.ViewModel.Canvas!;
-        var model = new ConversationViewModel(new ConversationTarget(canvas, TestTasks.Design), new ConversationState(), _conversation, _ => Task.CompletedTask);
-        model.FitChips(width);
-
-        Assert.Equal((shown, 3 - shown, $"+{3 - shown}"), (model.ShownOutputs.Count, model.MoreOutputs.Count, model.MoreOutputsLabel));
     }
 
     [AvaloniaFact]

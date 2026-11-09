@@ -271,7 +271,7 @@ public sealed class ActivityTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_window_s_keys_reach_the_next_waiting_node_its_conversation_and_the_inspector()
+    public void The_window_s_keys_reach_the_next_waiting_node_on_Chat_and_the_inspector()
     {
         using var f = FanOut.Fixture();
         var shell = f.Open();
@@ -284,7 +284,8 @@ public sealed class ActivityTests : IDisposable
         var view = shell.Window.ViewModel;
         shell.Press(Key.J, RawInputModifiers.Control);
         Assert.Equal("Write docs", view.Canvas!.SelectedNode?.Title);
-        Assert.True(shell.Editor.IsKeyboardFocusWithin, "The canvas does not take the keys after Ctrl+J.");
+        shell.Render();
+        Assert.True(view.AgentPanel.IsChat);
 
         shell.Press(Key.M, RawInputModifiers.Alt);
         Assert.Equal("TaskModel", Avalonia.Automation.AutomationProperties.GetAutomationId((Control)shell.Window.FocusManager!.GetFocusedElement()!));

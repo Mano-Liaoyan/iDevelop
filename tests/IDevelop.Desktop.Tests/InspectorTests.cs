@@ -234,7 +234,7 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal((false, true), (Shows(shell, "RunTask"), Shows(shell, "RetryTask")));
         shell.Page(AgentPage.Chat);
-        Assert.Equal(["OpenConversation"], PrimaryButtons(shell));
+        Assert.Empty(PrimaryButtons(shell));
     }
 
     [AvaloniaFact]

@@ -13,7 +13,7 @@ using static IDevelop.TestSupport.AgyTurn;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The panel header's action and the Chat page's actions for each state, the Input and Output pages, and the panel's keys.
+/// The panel header's action for each state, the Input and Output pages, and the panel's keys.
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class InspectorHeaderTests : IDisposable
@@ -32,24 +32,17 @@ public sealed class InspectorHeaderTests : IDisposable
             .Select(button => $"{(button.Classes.Contains("primary") ? "*" : "")}{AutomationProperties.GetName(button)}"),
     ];
 
-    private static string[] ChatActions(Shell shell)
-    {
-        shell.Page(AgentPage.Chat);
-        return Actions(shell, "ChatActions");
-    }
-
     private Shell Linked() => Shell.Open(_temp.Seed(
         TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90, Codex),
         new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
 
     [AvaloniaFact]
-    public void An_idle_node_puts_Run_in_the_header_and_Conversation_on_its_Chat_page()
+    public void An_idle_node_puts_Run_in_the_header()
     {
         var shell = Linked();
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal(["*Run"], Actions(shell));
-        Assert.Equal(["Conversation"], ChatActions(shell));
     }
 
     [AvaloniaFact]
@@ -71,7 +64,7 @@ public sealed class InspectorHeaderTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_completed_node_leads_with_its_conversation_and_offers_Retry()
+    public void A_completed_node_offers_Run_from_here_on_the_same_retry_action_and_never_says_Retry()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105));
         f.Install(Reply("s-1", "Hello."));
@@ -81,12 +74,12 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.WaitForState("Say hi", NodeState.Completed);
         shell.Render();
 
-        Assert.Equal(["Retry"], Actions(shell));
-        Assert.Equal(["*Conversation"], ChatActions(shell));
+        Assert.Equal(["Run from here"], Actions(shell));
+        Assert.Same(shell.NodeModel("Say hi").RetryCommand, shell.NodeModel("Say hi").HeaderActions.Single().Command);
     }
 
     [AvaloniaFact]
-    public void A_node_that_waits_for_a_reply_leads_with_Reply_and_offers_the_message_as_its_result()
+    public void A_node_that_waits_for_a_reply_leaves_the_header_empty_and_keeps_Retry_in_its_menu()
     {
         using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105, ConversationMode.Chat));
         f.Install(Reply("s-1", "Pears are ripe."));
@@ -97,43 +90,7 @@ public sealed class InspectorHeaderTests : IDisposable
         shell.Render();
 
         Assert.Empty(Actions(shell));
-        Assert.Equal(["*Reply", "Use as result"], ChatActions(shell));
         Assert.True(shell.NodeModel("Say hi").RetryIsInMenu);
-    }
-
-    [AvaloniaFact]
-    public void An_open_question_is_no_result_so_the_header_offers_only_Reply()
-    {
-        using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105, ConversationMode.Chat));
-        f.Install(Reply("s-1", "Which **fruit?**"));
-        var shell = f.Open();
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.RunNode("Say hi");
-        shell.WaitForState("Say hi", NodeState.InputRequired);
-        shell.Render();
-
-        Assert.Empty(Actions(shell));
-        Assert.Equal(["*Reply"], ChatActions(shell));
-        Assert.False(shell.NodeModel("Say hi").ApproveCommand.CanExecute(null));
-    }
-
-    [AvaloniaFact]
-    public void An_open_conversation_leaves_the_header_no_action_and_a_question_stays_in_it()
-    {
-        using var f = new NodeFixture(NodeFixture.Task(Design, "Say hi", 105, ConversationMode.Chat));
-        f.Install(Reply("s-1", "Which fruit?"));
-        var shell = f.Open();
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.RunNode("Say hi");
-        shell.WaitForState("Say hi", NodeState.InputRequired);
-        var node = shell.NodeModel("Say hi");
-        Assert.True(node.ShowsStateDetail);
-
-        node.OpenConversationCommand.Execute(null);
-        shell.Render();
-
-        Assert.Empty(node.Actions);
-        Assert.False(node.ShowsStateDetail);
     }
 
     [AvaloniaFact]

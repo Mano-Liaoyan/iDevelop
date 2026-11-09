@@ -40,7 +40,7 @@ public sealed class RunRetryTests
     }
 
     [AvaloniaFact]
-    public void A_failed_node_keeps_Retry_in_the_inspector_header_while_its_conversation_is_open()
+    public void A_failed_node_offers_Retry_in_its_Action_Dock_and_not_in_the_header()
     {
         using var f = new NodeFixture(Plan(A, "A", 105));
         f.Install(On().Choose((Fresh("A"), On().Stderr("The model is busy.").Exit(2))));
@@ -51,8 +51,9 @@ public sealed class RunRetryTests
         shell.NodeModel("A").OpenConversationCommand.Execute(null);
         shell.Render();
 
-        Assert.True(shell.NodeModel("A").IsConversationShown);
-        Assert.Contains(shell.NodeModel("A").Actions, action => action is { Id: "RetryTask", IsPrimary: false });
+        Assert.Empty(shell.NodeModel("A").HeaderActions);
+        Assert.True(shell.Find<Avalonia.Controls.Button>("RetryTask").IsEffectivelyVisible);
+        Assert.Contains("primary", shell.Find<Avalonia.Controls.Button>("RetryTask").Classes);
     }
 
     [AvaloniaFact]

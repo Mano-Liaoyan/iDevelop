@@ -3,7 +3,6 @@
         xmlns:local="using:IDevelop.Desktop"
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:chrome="using:IDevelop.Desktop.Chrome"
-        xmlns:conversation="using:IDevelop.Desktop.Conversation"
         xmlns:inspector="using:IDevelop.Desktop.Inspector"
         xmlns:sidebar="using:IDevelop.Desktop.Sidebar"
         xmlns:theme="using:IDevelop.Desktop.Theme"
@@ -57,16 +56,14 @@
         <Border.Background>
           <SolidColorBrush Color="{DynamicResource CanvasGrid.BackgroundColor}" />
         </Border.Background>
-        <!-- The conversation takes the Map over the canvas by default, or sits in a dock under it. -->
-        <Grid x:Name="MainArea" RowDefinitions="*,Auto,Auto">
-          <Grid x:Name="CanvasArea" RowDefinitions="Auto,*">
-            <Border Classes="mapNotice" IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-              <theme:EllipsisText Classes="caption" Whole="{Binding Status}" TextWrapping="Wrap" MaxLines="10"
-                                  ToolTip.Tip="{Binding Status}"
-                                  AutomationProperties.AutomationId="Status"
-                                  AutomationProperties.Name="Status" />
-            </Border>
-        <Panel Grid.Row="1">
+        <Grid x:Name="CanvasArea" RowDefinitions="Auto,*">
+          <Border Classes="mapNotice" IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <theme:EllipsisText Classes="caption" Whole="{Binding Status}" TextWrapping="Wrap" MaxLines="10"
+                                ToolTip.Tip="{Binding Status}"
+                                AutomationProperties.AutomationId="Status"
+                                AutomationProperties.Name="Status" />
+          </Border>
+          <Panel Grid.Row="1">
             <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center"
                         IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}">
               <Button Classes="primary" HorizontalAlignment="Center" Click="OnOpenFolder"
@@ -79,39 +76,18 @@
               </Button>
               <TextBlock Classes="caption" Text="Open a project folder to start." HorizontalAlignment="Center" />
             </StackPanel>
-            <ContentControl x:Name="CanvasHost" Content="{Binding Canvas}" IsVisible="{Binding ShowsCanvas}">
+            <ContentControl x:Name="CanvasHost" Content="{Binding Canvas}">
               <ContentControl.ContentTemplate>
                 <canvas:CanvasViewTemplate />
               </ContentControl.ContentTemplate>
             </ContentControl>
-
-            <ContentControl Content="{Binding MainConversation}">
-              <ContentControl.DataTemplates>
-                <DataTemplate DataType="conversation:ConversationViewModel">
-                  <conversation:ConversationView />
-                </DataTemplate>
-              </ContentControl.DataTemplates>
-            </ContentControl>
-            </Panel>
-          </Grid>
-          <GridSplitter x:Name="DockSplitter" Grid.Row="1" Height="8" Margin="0,-3.5" ZIndex="1"
-                        IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}"
-                  IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <ContentControl x:Name="DockedHost" Content="{Binding DockedConversation}">
-              <ContentControl.DataTemplates>
-                <DataTemplate DataType="conversation:ConversationViewModel">
-                  <conversation:ConversationView />
-                </DataTemplate>
-              </ContentControl.DataTemplates>
-            </ContentControl>
-          </Border>
+          </Panel>
         </Grid>
       </Border>
 
       <GridSplitter Grid.Column="3" Classes="sheetGap" ZIndex="1" IsVisible="{Binding CanResizePanel}" />
 
-      <!-- The Agent panel: its pages and tab strip. The conversation keeps its own dock and layouts until stage 4. -->
+      <!-- The Agent panel: its pages and tab strip. -->
       <Border x:Name="InspectorFrame" Grid.Column="4" Classes="sheet panel" IsVisible="{Binding IsInspectorShown}">
         <DockPanel x:Name="InspectorPanel" AutomationProperties.AutomationId="Inspector">
           <ContentControl Content="{Binding Canvas}">

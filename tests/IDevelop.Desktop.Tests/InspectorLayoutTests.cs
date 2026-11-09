@@ -141,6 +141,7 @@ public sealed class InspectorLayoutTests : IDisposable
             _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         Assert.Equal("actions at 12, values at 36", Edges(shell));
         AssertNothingCutShort(shell);
@@ -182,6 +183,7 @@ public sealed class InspectorLayoutTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
             .Where(row => row is { IsEffectivelyVisible: true, Layout: not (RowLayout.Full or RowLayout.Buttons) }).ToArray();
@@ -239,6 +241,7 @@ public sealed class InspectorLayoutTests : IDisposable
         var margins = entries.Select(row => row.Margin).ToList();
 
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         var lines = BesideRows(shell).Where(row => row.Label is "Client" or "Model" or "Reasoning" or "Skills").ToArray();
         Assert.Equal(4, lines.Length);
@@ -256,6 +259,7 @@ public sealed class InspectorLayoutTests : IDisposable
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Permissions"], BesideRows(shell).Select(row => row.Label));
         Assert.Equal("labels at 12, values at 108", Columns(shell));
@@ -294,6 +298,7 @@ public sealed class InspectorLayoutTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Page(AgentPage.Agent);
 
         var rows = BesideRows(shell);
         Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Mode", "Permissions"], rows.Select(row => row.Label));

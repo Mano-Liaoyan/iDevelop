@@ -19,9 +19,8 @@ public enum AgentPage
 }
 
 /// <summary>
-/// Which page the window's Agent panel shows. Selecting another node keeps the current page. Coming from the Workflow page
-/// or a connection, the panel returns to the page last used for that kind of node. A page that the node does not have falls
-/// back to the node's first page.
+/// Which page the window's Agent panel shows. Chat is first and the default. Selecting another node keeps the current page. Coming from the Workflow
+/// page or a connection, the panel returns to the page last used for that kind of node. A page that the node does not have falls back to Chat.
 /// </summary>
 public sealed class AgentPanelViewModel : ObservableObject
 {
@@ -45,7 +44,7 @@ public sealed class AgentPanelViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsExtra));
             }
         }
-    } = AgentPage.Agent;
+    } = AgentPage.Chat;
 
     public bool IsChat => Page == AgentPage.Chat;
 
@@ -58,6 +57,13 @@ public sealed class AgentPanelViewModel : ObservableObject
     public bool IsOutput => Page == AgentPage.Output;
 
     public bool IsExtra => Page == AgentPage.Extra;
+
+    /// <summary>The Chat page's conversation, which the window opens while the page shows, or null.</summary>
+    public Conversation.ConversationViewModel? Conversation
+    {
+        get;
+        internal set => SetProperty(ref field, value);
+    }
 
     public ICommand ShowCommand { get; }
 
@@ -106,7 +112,7 @@ public sealed class AgentPanelViewModel : ObservableObject
         }
     }
 
-    private static AgentPage FirstPage(TaskNodeViewModel node) => node.HasAgent ? AgentPage.Agent : AgentPage.Task;
+    private static AgentPage FirstPage(TaskNodeViewModel node) => AgentPage.Chat;
 
     private void Watch(TaskNodeViewModel? node)
     {

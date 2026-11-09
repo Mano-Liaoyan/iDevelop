@@ -86,13 +86,8 @@ internal sealed partial class Shell
         Render();
     }
 
-    /// <summary>Opens the selected node's conversation from its Chat page.</summary>
-    public void Talk()
-    {
-        Render();
-        Invoke(InView<Button>("OpenConversation"));
-        Render();
-    }
+    /// <summary>Shows the selected node's Chat page.</summary>
+    public void Talk() => Page(Inspector.AgentPage.Chat);
 
     /// <summary>Opens the header's More menu and chooses the entry. A headless popup takes no clicks, so the entry raises its own.</summary>
     public void ChooseMore(string automationId)

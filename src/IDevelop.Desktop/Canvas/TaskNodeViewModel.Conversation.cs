@@ -16,25 +16,15 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The name of the node's agent client, or null while it has none.</summary>
     public string? AgentClientName => Definition.Execution?.Client is { } client ? IDevelop.Clients.ClientCatalog.Name(client) : null;
 
-    /// <summary>The files a commit of this node changed.</summary>
-    internal System.Collections.Immutable.ImmutableArray<IDevelop.Git.FileChange> ReadChanges(string commit) =>
-        IDevelop.Git.CommitChanges.Read(_canvas.Project.Folder, commit, _canvas.GitEnvironment);
-
-    /// <summary>The lines a commit of this node changed in one file, as many as a result's card shows.</summary>
-    internal System.Collections.Immutable.ImmutableArray<string> ReadDiff(string commit, string path) =>
-        IDevelop.Git.CommitChanges.ReadDiff(_canvas.Project.Folder, commit, path, DiffLineLimit, _canvas.GitEnvironment);
-
-    private const int DiffLineLimit = 200;
-
     public bool HasAttention => Attention is not null;
 
     public string? AttentionLabel => Attention?.Label;
 
-    /// <summary>Opens the node's conversation.</summary>
+    /// <summary>Opens the node's Chat page.</summary>
     public ICommand OpenConversationCommand => _openConversation;
 
-    /// <summary>What the card's attention glyph does: it opens an agent's conversation, or selects an approval, whose request the inspector shows.</summary>
-    public ICommand AttendCommand => HasAgent ? _openConversation : SelectCommand;
+    /// <summary>What the card's attention glyph does: it opens the node's Chat page.</summary>
+    public ICommand AttendCommand => _openConversation;
 
     public string AttendHelp => HasAgent ? "Opens the conversation" : "Shows the approval request";
 
@@ -54,7 +44,7 @@ public sealed partial class TaskNodeViewModel
 
     partial void InitializeConversation()
     {
-        _openConversation = new RelayCommand(() => _canvas.Project.OpenConversation(new ConversationTarget(_canvas, Id)), () => HasAgent);
+        _openConversation = new RelayCommand(() => _canvas.Project.OpenConversation(new ConversationTarget(_canvas, Id)));
     }
 
     private void OnConversationStateChanged(object? sender, PropertyChangedEventArgs e)

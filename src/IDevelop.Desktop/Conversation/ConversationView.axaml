@@ -1,422 +1,57 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="using:IDevelop.Desktop"
              xmlns:conversation="using:IDevelop.Desktop.Conversation"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
-             xmlns:execution="using:IDevelop.Desktop.Execution"
-             xmlns:git="using:IDevelop.Git"
+             xmlns:inspector="using:IDevelop.Desktop.Inspector"
              xmlns:theme="using:IDevelop.Desktop.Theme"
              x:Class="IDevelop.Desktop.Conversation.ConversationView"
              x:DataType="conversation:ConversationViewModel"
-             Background="{DynamicResource AppShellBrush}"
              AutomationProperties.AutomationId="ConversationView"
              AutomationProperties.Name="{Binding Node.Title, StringFormat='Conversation with {0}'}">
-  <UserControl.Resources>
-    <!-- A node on the strip. It opens that node's conversation, or for an approval shows its request. -->
-    <DataTemplate x:Key="NodeChip" x:DataType="canvas:NodeLink">
-      <Button Classes="chip" Command="{Binding Node.AttendCommand}"
-              AutomationProperties.AutomationId="ConversationChip" AutomationProperties.Name="{Binding Node.Title}">
-        <ToolTip.Tip>
-          <MultiBinding StringFormat="{}{0}&#10;{1}">
-            <Binding Path="Node.Title" />
-            <Binding Path="Node.StatusLabel" />
-          </MultiBinding>
-        </ToolTip.Tip>
-        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-          <theme:StateMark Width="14" Height="14" VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
-          <TextBlock Grid.Column="1" Text="{Binding Node.Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-        </Grid>
-      </Button>
-    </DataTemplate>
-    <ItemsPanelTemplate x:Key="ChipPanel">
-      <theme:FairRow Spacing="4" />
-    </ItemsPanelTemplate>
-  </UserControl.Resources>
-  <UserControl.KeyBindings>
-    <KeyBinding Gesture="Escape" Command="{Binding $parent[local:MainWindow].ViewModel.CloseConversationCommand, FallbackValue={x:Null}}" />
-  </UserControl.KeyBindings>
-  <!-- The header, the input and output strip, and what sits over the composer take the height they need, and the
-       transcript takes the rest. The window keeps the docked conversation tall enough for a few lines of the transcript. -->
-  <Grid x:Name="Rows" RowDefinitions="Auto,Auto,*,Auto"
-        Classes.docked="{Binding $parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=False}">
-    <Border Classes="conversationHeader">
-      <!-- The node on one line, where it is on the line under it, and the glyph buttons at the end. While the inspector shows the node, the inspector
-           holds its state and its neighbours, so the header leaves them out. The dock leaves the canvas in view, so it leaves out the workflow's place too. -->
-      <theme:SpillRow MinLeadWidth="186" Spacing="4" ItemsAlignment="Start" SpillIndent="28">
-        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-          <!-- The header names the node in every layout, so the conversation says whose it is without the inspector (ADR 0063). -->
-          <theme:KindTile Kind="{Binding Node.Kind}" TileSize="20" VerticalAlignment="Top" />
-          <StackPanel Grid.Column="1" VerticalAlignment="Center">
-            <theme:EllipsisText Classes="conversationTitle" Whole="{Binding Node.Title}" ToolTip.Tip="{Binding Node.Title}"
-                                AutomationProperties.AutomationId="ConversationTitle" />
-            <TextBlock Classes="caption" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
-                       IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
-                       ToolTip.Tip="{Binding BreadcrumbTip}" AutomationProperties.AutomationId="ConversationBreadcrumb"
-                       />
-          </StackPanel>
-        </Grid>
-        <Button theme:SpillRow.Pinned="True" Classes="icon"
-                Command="{Binding $parent[local:MainWindow].ViewModel.ToggleConversationLayoutCommand, FallbackValue={x:Null}}"
-                ToolTip.Tip="{Binding $parent[local:MainWindow].ViewModel.ConversationLayoutLabel, FallbackValue={x:Null}}"
-                AutomationProperties.AutomationId="ConversationLayout"
-                AutomationProperties.Name="{Binding $parent[local:MainWindow].ViewModel.ConversationLayoutLabel, FallbackValue={x:Null}}">
-          <Panel>
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconPanelBottom}"
-                      IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}" />
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMaximize}"
-                      IsVisible="{Binding $parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=False}" />
-          </Panel>
-        </Button>
-        <Button theme:SpillRow.Pinned="True" Classes="icon"
-                Command="{Binding $parent[local:MainWindow].ViewModel.CloseConversationCommand, FallbackValue={x:Null}}"
-                ToolTip.Tip="Close the conversation (Esc)"
-                AutomationProperties.AutomationId="CloseConversation"
-                AutomationProperties.Name="Close conversation">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
-        </Button>
-        <!-- The node's state, as its card names it, while the inspector does not show it. -->
-        <Border Classes="pill" VerticalAlignment="Center" theme:SpillRow.BesideOnly="True"
-                IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=False}"
-                Classes.running="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                Classes.complete="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                Classes.problem="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                Classes.waiting="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
-                Classes.warning="{Binding Node.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <theme:StateMark Width="14" Height="14" VerticalAlignment="Center" State="{Binding Node.State}" Why="{Binding Node.WaitReason}" />
-            <TextBlock Text="{Binding Node.StatusLabel}" AutomationProperties.AutomationId="ConversationStatus" />
-          </StackPanel>
-        </Border>
-      </theme:SpillRow>
-    </Border>
-
-    <!-- What the node read and which nodes read its result, while the inspector does not show them. Each chip opens that node's
-         conversation, so a person walks the graph from here. The result itself has its card in the transcript. -->
-    <Border x:Name="Strip" Grid.Row="1" Classes="ioStrip"
-            AutomationProperties.AutomationId="ConversationStrip">
-      <Border.IsVisible>
-        <MultiBinding Converter="{x:Static BoolConverters.And}">
-          <Binding Path="ShowsStrip" />
-          <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
-        </MultiBinding>
-      </Border.IsVisible>
-      <theme:FairRow Spacing="12">
-        <theme:FairRow Spacing="4" IsVisible="{Binding HasInputs}"
-                       AutomationProperties.AutomationId="ConversationInputs">
-          <TextBlock Classes="stripLabel" Text="Input" />
-          <ItemsControl ItemsSource="{Binding ShownInputs}" ItemsPanel="{StaticResource ChipPanel}" ItemTemplate="{StaticResource NodeChip}" />
-          <Button Classes="chip more" Content="{Binding MoreInputsLabel}" IsVisible="{Binding HasMoreInputs}"
-                  ToolTip.Tip="The other nodes it reads"
-                  AutomationProperties.AutomationId="ConversationMoreInputs" AutomationProperties.Name="More inputs">
-            <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedLeft">
-                <ItemsControl ItemsSource="{Binding MoreInputs}" ItemTemplate="{StaticResource NodeChip}" />
-              </Flyout>
-            </Button.Flyout>
+  <!-- The Chat page: the transcript takes the height the Action Dock and the composer leave. The dock and the composer never scroll away. -->
+  <Grid x:Name="Rows" RowDefinitions="*,Auto,Auto">
+    <Panel>
+      <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding Node.HasAgent}"
+                    AutomationProperties.AutomationId="TranscriptScroller">
+        <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
+        <StackPanel Margin="0,8,0,12">
+          <Button Classes="ghost" HorizontalAlignment="Center" Height="24" Margin="0,0,0,8"
+                  Command="{Binding LoadEarlierCommand}" IsVisible="{Binding HasEarlier}"
+                  AutomationProperties.AutomationId="LoadEarlier"
+                  AutomationProperties.Name="Load earlier messages">
+            <TextBlock Text="Earlier messages" />
           </Button>
-        </theme:FairRow>
-        <theme:FairRow theme:FairRow.End="True" Spacing="4" IsVisible="{Binding HasOutputs}"
-                       AutomationProperties.AutomationId="ConversationOutputs">
-          <TextBlock Classes="stripLabel" Text="Goes to" />
-          <ItemsControl ItemsSource="{Binding ShownOutputs}" ItemsPanel="{StaticResource ChipPanel}" ItemTemplate="{StaticResource NodeChip}" />
-          <Button Classes="chip more" Content="{Binding MoreOutputsLabel}" IsVisible="{Binding HasMoreOutputs}"
-                  ToolTip.Tip="The other nodes that read it"
-                  AutomationProperties.AutomationId="ConversationMoreOutputs" AutomationProperties.Name="More outputs">
-            <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedRight">
-                <ItemsControl ItemsSource="{Binding MoreOutputs}" ItemTemplate="{StaticResource NodeChip}" />
-              </Flyout>
-            </Button.Flyout>
-          </Button>
-        </theme:FairRow>
-      </theme:FairRow>
-    </Border>
-
-    <!-- The status line, the attention card, and the composer share the transcript's column. -->
-    <StackPanel x:Name="Bottom" Grid.Row="3" Classes="bottomColumn">
-      <Border Classes="workingLine" IsVisible="{Binding ShowsWorking}" AutomationProperties.AutomationId="ConversationWorking">
-        <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6">
-          <theme:StateMark Width="14" Height="14" State="Running" />
-          <TextBlock Grid.Column="1" Classes="caption" Text="{Binding WorkingLabel}" VerticalAlignment="Center"
-                     AutomationProperties.AutomationId="ConversationWorkingLabel" />
-          <TextBlock Grid.Column="2" Classes="caption" Text="{Binding WorkingLine}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                     ToolTip.Tip="{Binding WorkingLine}" AutomationProperties.AutomationId="ConversationWorkingLine" />
-        </Grid>
-      </Border>
-
-      <!-- What the node needs now. It holds the request, so the transcript's last marker gives way to it. -->
-      <Border x:Name="AttentionCard" Classes="attentionCard" Classes.compact="{Binding IsCompactCard}" Classes.problem="{Binding IsProblemCard}" Classes.warning="{Binding IsWarningCard}"
-              IsVisible="{Binding ShowsCard}"
-              AutomationProperties.AutomationId="ConversationAttention" AutomationProperties.Name="{Binding CardTitle}">
-        <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,Auto">
-          <Border Grid.ColumnSpan="2" Classes="attentionHeader">
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" VerticalAlignment="Center">
-              <theme:StateMark Width="16" Height="16" VerticalAlignment="Center" State="{Binding CardState}" Why="{Binding CardWhy}"
-                               AutomationProperties.AutomationId="ConversationAttentionMark" />
-              <TextBlock Grid.Column="1" Classes="attentionTitle" Text="{Binding CardTitle}" AutomationProperties.AutomationId="ConversationAttentionTitle" />
-            </Grid>
-          </Border>
-          <ScrollViewer Grid.Row="1" Grid.ColumnSpan="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
-                        IsVisible="{Binding ShowsCardBody}">
-            <StackPanel Classes="attentionBody" Classes.compact="{Binding IsCompactCard}" Spacing="8">
-              <SelectableTextBlock Classes="attentionText" Text="{Binding CardBody}"
-                                   IsVisible="{Binding CardBody, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                   AutomationProperties.AutomationId="ConversationAttentionBody" />
-              <SelectableTextBlock Classes="attentionText" Text="{Binding CardOffered}" MaxLines="6"
-                                   IsVisible="{Binding CardOffered, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                   AutomationProperties.AutomationId="ConversationAttentionOffered" />
-              <TextBlock Classes="caption" Text="{Binding CardHint}" TextWrapping="Wrap"
-                         IsVisible="{Binding CardHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                         AutomationProperties.AutomationId="ConversationAttentionHint" />
-              <!-- The choices of a question the running turn waits on, which Send answers with the draft. -->
-              <ItemsControl ItemsSource="{Binding Node.Questions}" IsVisible="{Binding Node.IsAsking}" AutomationProperties.AutomationId="ConversationQuestions">
+          <!-- What the agent received, which opens the conversation as a prompt opens a chat. -->
+          <Panel Classes="row" Margin="16,0,16,8" IsVisible="{Binding ShowsTask}" AutomationProperties.AutomationId="ConversationTask">
+            <StackPanel>
+              <ToggleButton Classes="steps" IsChecked="{Binding IsTaskOpen}"
+                            AutomationProperties.AutomationId="ConversationTaskToggle" AutomationProperties.Name="Task">
+                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6">
+                  <PathIcon Theme="{StaticResource Glyph}" />
+                  <TextBlock Grid.Column="1" Classes="stepTool" Text="Task" />
+                  <theme:EllipsisText Grid.Column="2" Classes="stepPreview" Whole="{Binding TaskPreview}" MaxLines="1" VerticalAlignment="Center"
+                                      IsVisible="{Binding !IsTaskOpen}" AutomationProperties.AutomationId="ConversationTaskPreview" />
+                </Grid>
+              </ToggleButton>
+              <ItemsControl ItemsSource="{Binding TaskFields}" IsVisible="{Binding IsTaskOpen}" Margin="18,4,0,4">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Spacing="8" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="canvas:QuestionViewModel">
-                    <StackPanel Spacing="4">
-                      <TextBlock Classes="attentionTitle" Text="{Binding Header}" IsVisible="{Binding ShowsHeader}" TextWrapping="Wrap" />
-                      <TextBlock Classes="attentionText" Text="{Binding Prompt}" TextWrapping="Wrap"
-                                 IsVisible="{Binding Prompt, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                      <ItemsControl ItemsSource="{Binding Choices}">
-                        <ItemsControl.ItemsPanel>
-                          <ItemsPanelTemplate>
-                            <StackPanel Spacing="2" />
-                          </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="canvas:ChoiceViewModel">
-                            <ToggleButton Classes="choice" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Detail}"
-                                          AutomationProperties.AutomationId="ConversationChoice" AutomationProperties.Name="{Binding Label}">
-                              <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="4">
-                                <TextBlock Classes="choiceDigit" Text="{Binding Digit}" />
-                                <TextBlock Grid.Column="1" Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                                <PathIcon Grid.Column="2" Classes="choiceCheck" Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
-                              </Grid>
-                            </ToggleButton>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
+                  <DataTemplate x:DataType="canvas:FieldViewModel">
+                    <StackPanel Spacing="2">
+                      <TextBlock Classes="caption" Text="{Binding Label}" />
+                      <SelectableTextBlock Classes="dockText" Text="{Binding Text}"
+                                           AutomationProperties.AutomationId="ConversationTaskField" />
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
             </StackPanel>
-          </ScrollViewer>
-          <!-- A reply's card keeps its action on its header's line. -->
-          <StackPanel Grid.Row="{Binding IsCompactCard, Converter={x:Static conversation:ConversationView.ActionsRow}}"
-                      Grid.Column="{Binding IsCompactCard, Converter={x:Static conversation:ConversationView.ActionsColumn}}"
-                      Grid.ColumnSpan="{Binding IsCompactCard, Converter={x:Static conversation:ConversationView.ActionsSpan}}"
-                      Classes="attentionActions" Classes.compact="{Binding IsCompactCard}" Spacing="8">
-            <!-- Send back's note. It opens from the button below, so a plain Approve has no empty box beside it. -->
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsSendBackOpen}">
-              <TextBox x:Name="SendBackNote" Text="{Binding Node.SendBackNote}" Watermark="What should change?"
-                       AutomationProperties.AutomationId="ConversationSendBackNote" AutomationProperties.Name="Send back note">
-                <TextBox.KeyBindings>
-                  <KeyBinding Gesture="Enter" Command="{Binding Node.SendBackCommand}" />
-                </TextBox.KeyBindings>
-              </TextBox>
-              <Button Grid.Column="1" Classes="primary" Height="28" Command="{Binding Node.SendBackCommand}"
-                      AutomationProperties.AutomationId="ConversationSendBack" AutomationProperties.Name="Send back">
-                <TextBlock Text="Send back" />
-              </Button>
-            </Grid>
-            <WrapPanel ItemSpacing="8" LineSpacing="8" HorizontalAlignment="Right">
-              <Button Classes="action" Height="28" Click="OnOpenSendBack" IsVisible="{Binding Node.ShowsSendBack}"
-                      ToolTip.Tip="Returns your note to the nodes before this one"
-                      AutomationProperties.AutomationId="ConversationSendBackOpen" AutomationProperties.Name="Send back with a note">
-                <TextBlock Text="Send back" />
-              </Button>
-              <Button Classes.primary="{Binding IsChangeModelPrimary}" Classes.action="{Binding !IsChangeModelPrimary}" Height="28" Click="OnChangeModel" IsVisible="{Binding ShowsChangeModel}"
-                      ToolTip.Tip="Choose another model before you retry"
-                      AutomationProperties.AutomationId="ConversationChangeModel" AutomationProperties.Name="Change model">
-                <TextBlock Text="Change model" />
-              </Button>
-              <Button Classes="action" Height="28" Command="{Binding Node.OpenWorktreeCommand}" IsVisible="{Binding Node.ShowsMarkResolved}"
-                      AutomationProperties.AutomationId="ConversationOpenWorktree" AutomationProperties.Name="Open worktree">
-                <TextBlock Text="Open worktree" />
-              </Button>
-              <Button Classes.primary="{Binding IsRetryPrimary}" Classes.action="{Binding !IsRetryPrimary}" Height="28"
-                      Command="{Binding Node.RetryCommand}" IsVisible="{Binding ShowsCardRetry}"
-                      ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding Node.RunRefusal}"
-                      AutomationProperties.AutomationId="ConversationRetry" AutomationProperties.Name="Retry">
-                <TextBlock Text="Retry" />
-              </Button>
-              <Button Classes="primary" Height="28" Command="{Binding Node.ContinueCommand}" IsVisible="{Binding Node.ShowsContinue}"
-                      AutomationProperties.AutomationId="ConversationContinue" AutomationProperties.Name="Continue">
-                <TextBlock Text="Continue" />
-              </Button>
-              <Button Classes="primary" Height="28" Command="{Binding Node.MarkResolvedCommand}" IsVisible="{Binding Node.ShowsMarkResolved}"
-                      AutomationProperties.AutomationId="ConversationMarkResolved" AutomationProperties.Name="Mark resolved">
-                <TextBlock Text="Mark resolved" />
-              </Button>
-              <Button Classes.primary="{Binding IsApprovalCard}" Classes.action="{Binding !IsApprovalCard}" Height="28"
-                      Command="{Binding Node.ApproveCommand}" IsVisible="{Binding ShowsCardApprove}"
-                      ToolTip.Tip="{Binding ApproveHelp}"
-                      AutomationProperties.AutomationId="ConversationApprove"
-                      AutomationProperties.Name="{Binding ApproveLabel}">
-                <TextBlock Text="{Binding ApproveLabel}" />
-              </Button>
-            </WrapPanel>
-          </StackPanel>
-        </Grid>
-      </Border>
-
-      <!-- The options a question lists in its text. One fills the composer, and the person presses Send. Past three rows they scroll. -->
-      <ScrollViewer Classes="quickReplies" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasQuickReplies}">
-        <ItemsControl Classes.scrolls="{Binding QuickRepliesScroll}" ItemsSource="{Binding QuickReplies}" AutomationProperties.AutomationId="ConversationQuickReplies">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Spacing="2" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="conversation:QuickReplyViewModel">
-              <Button Classes="choice" Click="OnQuickReply" ToolTip.Tip="{Binding Text}"
-                      AutomationProperties.AutomationId="ConversationQuickReply" AutomationProperties.Name="{Binding Text}">
-                <Grid ColumnDefinitions="16,*" ColumnSpacing="4">
-                  <TextBlock Classes="choiceDigit" Text="{Binding Digit}" />
-                  <TextBlock Grid.Column="1" Text="{Binding Text}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                </Grid>
-              </Button>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
-
-      <Border Classes="composer" IsVisible="{Binding Node.HasAgent}">
-        <StackPanel>
-          <TextBox x:Name="Composer" Classes="composerBox" Text="{Binding Draft}"
-                   AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
-                   Watermark="{Binding Watermark}"
-                   AutomationProperties.AutomationId="ConversationComposer"
-                   AutomationProperties.Name="Message">
-            <TextBox.KeyBindings>
-              <KeyBinding Gesture="Ctrl+Enter" Command="{Binding Node.SendCommand}" />
-              <KeyBinding Gesture="Meta+Enter" Command="{Binding Node.SendCommand}" />
-              <KeyBinding Gesture="Ctrl+Shift+Enter" Command="{Binding Node.StopAndSendCommand}" />
-              <KeyBinding Gesture="Meta+Shift+Enter" Command="{Binding Node.StopAndSendCommand}" />
-            </TextBox.KeyBindings>
-          </TextBox>
-          <Grid Classes="composerBar" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
-            <Button x:Name="ModelChip" Classes="modelChip"
-                    ToolTip.Tip="{Binding ModelChip, StringFormat='The agent, its terminal, and what its client can do: {0}'}"
-                    AutomationProperties.AutomationId="ConversationModel" AutomationProperties.Name="{Binding ModelChip, StringFormat='Agent: {0}'}">
-              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
-                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" Width="12" Height="12" />
-                <TextBlock Grid.Column="1" Text="{Binding ModelChip}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                           AutomationProperties.AutomationId="ConversationModelLabel" />
-                <PathIcon Grid.Column="2" Classes="chipChevron" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronUp}" Width="10" Height="10" />
-              </Grid>
-              <Button.Flyout>
-                <Flyout Placement="TopEdgeAlignedLeft">
-                  <StackPanel Classes="modelFlyout" Spacing="8">
-                    <ComboBox ItemsSource="{Binding Node.Picker.ClientChoices}" SelectedItem="{Binding Node.Picker.SelectedClient, Mode=OneWay}"
-                              SelectionChanged="OnAgentChosen" HorizontalAlignment="Stretch"
-                              AutomationProperties.AutomationId="ConversationPickClient" AutomationProperties.Name="Client" ItemTemplate="{StaticResource WrappedChoice}" />
-                    <ComboBox ItemsSource="{Binding Node.Picker.ModelChoices}" SelectedItem="{Binding Node.Picker.SelectedModel, Mode=OneWay}"
-                              SelectionChanged="OnAgentChosen" PlaceholderText="Choose a model" HorizontalAlignment="Stretch"
-                              IsVisible="{Binding Node.HasClient}"
-                              AutomationProperties.AutomationId="ConversationPickModel" AutomationProperties.Name="Model" ItemTemplate="{StaticResource WrappedChoice}" />
-                    <ComboBox ItemsSource="{Binding Node.Picker.ReasoningChoices}" SelectedItem="{Binding Node.Picker.SelectedReasoning, Mode=OneWay}"
-                              SelectionChanged="OnAgentChosen" PlaceholderText="Choose a level" HorizontalAlignment="Stretch"
-                              IsVisible="{Binding Node.Picker.HasReasoning}"
-                              AutomationProperties.AutomationId="ConversationPickReasoning" AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource WrappedChoice}" />
-                    <TextBlock Classes="caption" Text="A change stops the running turn, and the node waits for your Run." TextWrapping="Wrap"
-                               IsVisible="{Binding Node.ShowsNextRunNote}" AutomationProperties.AutomationId="ConversationNextRunNote" />
-                    <!-- What a person seldom needs: the session in a terminal, and what this client can do. -->
-                    <Button Classes="ghost terminal" Height="28" Command="{Binding Node.OpenInTerminalCommand}" Click="OnCloseModel"
-                            ToolTip.Tip="Copies the command that continues the session in a terminal"
-                            AutomationProperties.AutomationId="ConversationTerminal" AutomationProperties.Name="Open in terminal">
-                      <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCopy}" Width="12" Height="12" />
-                        <TextBlock Text="Open in terminal" VerticalAlignment="Center" />
-                      </StackPanel>
-                    </Button>
-                    <TextBlock Classes="limitsText" Text="{Binding Limitations}" AutomationProperties.AutomationId="ClientLimitations" />
-                  </StackPanel>
-                </Flyout>
-              </Button.Flyout>
-            </Button>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
-              <TextBlock Classes="keyHint" Text="Ctrl+Enter to send" VerticalAlignment="Center" Margin="0,0,4,0" IsVisible="{Binding !ShowsComposerStop}"
-                         AutomationProperties.AutomationId="ComposerKeyHint" />
-              <!-- A draft during a turn waits for the turn's end unless the person ends the turn first. -->
-              <Button Classes="ghost" Height="24" Command="{Binding Node.StopAndSendCommand}" IsVisible="{Binding ShowsStopAndSend}"
-                      ToolTip.Tip="Ends the turn, then sends (Ctrl+Shift+Enter)"
-                      AutomationProperties.AutomationId="ConversationStopAndSend" AutomationProperties.Name="Stop and send">
-                <TextBlock Text="Stop and send" VerticalAlignment="Center" />
-              </Button>
-              <Button Classes="round stop" Command="{Binding Node.StopCommand}" IsVisible="{Binding ShowsComposerStop}"
-                      ToolTip.Tip="Stop"
-                      AutomationProperties.AutomationId="ConversationStop"
-                      AutomationProperties.Name="Stop">
-                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-              </Button>
-              <Button Classes="round send" Command="{Binding Node.SendCommand}" IsVisible="{Binding ShowsSend}"
-                      ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True" ToolTip.Placement="Top"
-                      AutomationProperties.AutomationId="ConversationSend"
-                      AutomationProperties.Name="Send">
-                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
-              </Button>
-            </StackPanel>
-          </Grid>
-        </StackPanel>
-      </Border>
-    </StackPanel>
-
-    <Panel Grid.Row="2">
-      <ScrollViewer x:Name="Scroller" Classes="transcript" Focusable="True" HorizontalScrollBarVisibility="Disabled"
-                    AutomationProperties.AutomationId="TranscriptScroller">
-        <!-- The room under the last row lets the end of the view rest on a whole line at its top. -->
-        <StackPanel Margin="0,0,0,12">
-          <Button Classes="action" HorizontalAlignment="Center" Height="28" Margin="0,12,0,0"
-                  Command="{Binding LoadEarlierCommand}" IsVisible="{Binding HasEarlier}"
-                  AutomationProperties.AutomationId="LoadEarlier"
-                  AutomationProperties.Name="Load earlier messages">
-            <TextBlock Text="Load earlier messages" />
-          </Button>
-          <!-- What the agent received, which opens the conversation as a prompt opens a chat. -->
-          <Panel Classes="row taskTurn" IsVisible="{Binding ShowsTask}" AutomationProperties.AutomationId="ConversationTask">
-            <Border Classes="taskTurn">
-              <StackPanel>
-                <ToggleButton Classes="steps" IsChecked="{Binding IsTaskOpen}"
-                              AutomationProperties.AutomationId="ConversationTaskToggle" AutomationProperties.Name="Task">
-                  <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
-                    <PathIcon Theme="{StaticResource Glyph}" />
-                    <TextBlock Grid.Column="1" Classes="taskLabel" Text="Task" VerticalAlignment="Center" />
-                    <!-- The task leads: it wraps to two lines before it ends in an ellipsis. -->
-                    <theme:EllipsisText Grid.Column="2" Whole="{Binding TaskPreview}" MaxLines="2" TextWrapping="Wrap" VerticalAlignment="Center"
-                                        IsVisible="{Binding !IsTaskOpen}" AutomationProperties.AutomationId="ConversationTaskPreview" />
-                    <!-- Where the agent's input came from: the first earlier node by its full name, as a muted part after a divider, which
-                         wraps rather than cuts the name (ADR 0064). Opening the task names them all. -->
-                    <Border Grid.Column="3" Classes="taskSource" VerticalAlignment="Center" Margin="0,0,10,0" IsVisible="{Binding ShowsTaskInputCount}">
-                      <TextBlock Classes="caption" Text="{Binding TaskInputCount}" MaxWidth="180" TextWrapping="Wrap"
-                                 ToolTip.Tip="{Binding TaskInputLine}"
-                                 AutomationProperties.AutomationId="ConversationTaskInputCount" />
-                    </Border>
-                  </Grid>
-                </ToggleButton>
-                <TextBlock Classes="caption" Text="{Binding TaskInputLine}" IsVisible="{Binding ShowsTaskInputLine}" TextWrapping="Wrap" Margin="24,2,8,0"
-                           AutomationProperties.AutomationId="ConversationTaskInput" />
-                <ItemsControl ItemsSource="{Binding TaskFields}" IsVisible="{Binding IsTaskOpen}" Margin="24,4,8,6">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <StackPanel Spacing="8" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="canvas:FieldViewModel">
-                      <StackPanel Spacing="2">
-                        <TextBlock Classes="taskLabel" Text="{Binding Label}" />
-                        <SelectableTextBlock Classes="attentionText" Text="{Binding Text}"
-                                             AutomationProperties.AutomationId="ConversationTaskField" />
-                      </StackPanel>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-              </StackPanel>
-            </Border>
           </Panel>
-          <ItemsControl x:Name="Transcript" ItemsSource="{Binding Items}" Margin="0,16,0,0"
+          <ItemsControl x:Name="Transcript" ItemsSource="{Binding Items}"
                         AutomationProperties.AutomationId="Transcript"
                         AutomationProperties.Name="Conversation history">
             <ItemsControl.ItemsPanel>
@@ -426,110 +61,51 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.DataTemplates>
               <DataTemplate DataType="conversation:MessageItemViewModel">
-                <Panel Classes="row" Classes.tight="{Binding IsBeforeSteps}">
+                <Panel Classes="row" Margin="{Binding GapAbove, Converter={x:Static conversation:ConversationView.RowMargin}}" PointerEntered="OnRowEntered">
                   <StackPanel Spacing="4">
-                    <TextBlock Classes="author" Classes.asking="{Binding IsAsking}" Classes.person="{Binding IsPerson}" Text="{Binding AuthorLine}" IsVisible="{Binding ShowsAuthor}"
-                               AutomationProperties.AutomationId="MessageAuthor" />
-                    <Grid ColumnDefinitions="*,4*">
+                    <TextBlock Classes="caption" Text="{Binding AuthorLabel}" IsVisible="{Binding IsSubagent}" AutomationProperties.AutomationId="MessageAuthor" />
+                    <Grid ColumnDefinitions="15*,85*">
                       <Border Grid.Column="{Binding IsPerson, Converter={x:Static conversation:ConversationView.MessageColumn}}"
                               Grid.ColumnSpan="{Binding IsPerson, Converter={x:Static conversation:ConversationView.MessageColumnSpan}}"
-                              Classes="message" Classes.person="{Binding IsPerson}" Classes.subagent="{Binding IsSubagent}" Classes.asking="{Binding IsAsking}"
+                              Classes="message" Classes.person="{Binding IsPerson}"
                               AutomationProperties.AutomationId="Message"
                               AutomationProperties.Name="{Binding AuthorLabel}">
-                        <conversation:MarkdownView Markdown="{Binding ShownText}" />
+                        <conversation:MarkdownView Markdown="{Binding Text}" />
                       </Border>
-                      <!-- Copy floats on the message's top right edge, or beside a person's message, while the pointer is on the row. -->
-                      <Button Grid.Column="{Binding IsPerson, Converter={x:Static conversation:ConversationView.CopyColumn}}"
-                              Classes="icon small copy" Classes.person="{Binding IsPerson}" Command="{Binding CopyCommand}"
-                              ToolTip.Tip="Copy message"
-                              AutomationProperties.AutomationId="CopyMessage"
-                              AutomationProperties.Name="Copy message">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCopy}" Width="14" Height="14" />
-                      </Button>
                     </Grid>
                     <Border Classes="resultNote" IsVisible="{Binding ResultNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                       <TextBlock Classes="caption" Text="{Binding ResultNote}" TextWrapping="Wrap"
                                  AutomationProperties.AutomationId="ResultNote" />
                     </Border>
-                    <!-- With the inspector open it holds the result, so a card with nothing more to say gives way to it. -->
-                    <Panel IsVisible="{Binding Result, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <Border Classes="resultCard" AutomationProperties.AutomationId="ResultCard">
-                      <Border.IsVisible>
-                        <MultiBinding Converter="{x:Static BoolConverters.Or}">
-                          <Binding Path="Result.HasDetail" FallbackValue="False" />
-                          <Binding Path="!$parent[local:MainWindow].ViewModel.IsInspectorOpen" FallbackValue="True" />
-                        </MultiBinding>
-                      </Border.IsVisible>
-                      <!-- The message above the card is the result's whole report, so the card names it and says what it changed. -->
-                      <StackPanel>
-                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                    <Border Classes="resultCard" IsVisible="{Binding Result, Converter={x:Static ObjectConverters.IsNotNull}}" AutomationProperties.AutomationId="ResultCard">
+                      <StackPanel Spacing="4">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                           <TextBlock Classes="resultHeading" Text="{Binding Result.Heading, FallbackValue={x:Null}}" AutomationProperties.AutomationId="ResultCardHeading" />
-                          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" IsVisible="{Binding Result.HasDetail, FallbackValue=False}">
-                            <TextBlock Classes="resultCommit" Text="{Binding Result.Commit, FallbackValue={x:Null}}" />
-                            <Button Classes="icon small" Command="{Binding CopyCommitCommand}" ToolTip.Tip="Copy the commit's id"
-                                    AutomationProperties.AutomationId="ResultCopyCommit" AutomationProperties.Name="Copy the commit's id">
-                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCopy}" Width="14" Height="14" />
-                            </Button>
-                          </StackPanel>
-                          <Button Grid.Column="3" Classes="ghost" Height="24" Click="OnShowResult"
-                                  IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsInspectorOpen, FallbackValue=True}"
-                                  ToolTip.Tip="Selects the node, whose Output section holds the result"
-                                  AutomationProperties.AutomationId="ResultCardShow" AutomationProperties.Name="Show in inspector">
-                            <TextBlock Text="Show in inspector" />
-                          </Button>
+                          <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Result.Commit, FallbackValue={x:Null}}" ToolTip.Tip="{Binding Result.CommitTip, FallbackValue={x:Null}}"
+                                     IsVisible="{Binding Result.Commit, FallbackValue={x:Null}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                     AutomationProperties.AutomationId="ResultCardCommit" />
                         </Grid>
-                        <ToggleButton Classes="steps" IsChecked="{Binding Result.IsChangesOpen, FallbackValue=False}" IsVisible="{Binding Result.HasSeveralChanges, FallbackValue=False}"
-                                      AutomationProperties.AutomationId="ResultChanges" AutomationProperties.Name="{Binding Result.ChangeLabel, FallbackValue={x:Null}}">
-                          <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Theme="{StaticResource Glyph}" />
-                            <TextBlock Text="{Binding Result.ChangeLabel, FallbackValue={x:Null}}" VerticalAlignment="Center" />
-                            <TextBlock Classes="lineCount added" Text="{Binding Result.Added, FallbackValue={x:Null}}" />
-                            <TextBlock Classes="lineCount deleted" Text="{Binding Result.Deleted, FallbackValue={x:Null}}" />
-                          </StackPanel>
-                        </ToggleButton>
-                        <ItemsControl ItemsSource="{Binding Result.ChangeRows, FallbackValue={x:Null}}" IsVisible="{Binding Result.IsChangesOpen, FallbackValue=False}" Margin="0,2,0,0"
-                                      AutomationProperties.AutomationId="ResultFiles">
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="execution:ChangeRow">
-                              <StackPanel>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                                  <ToggleButton Classes="steps" IsChecked="{Binding IsOpen}" IsEnabled="{Binding HasDiff}" ToolTip.Tip="{Binding OpenLabel}"
-                                                AutomationProperties.AutomationId="ResultFile" AutomationProperties.Name="{Binding OpenLabel}">
-                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
-                                      <PathIcon Theme="{StaticResource Glyph}" />
-                                      <TextBlock Grid.Column="1" Classes="resultCommit" Text="{Binding Path}" TextTrimming="PrefixCharacterEllipsis" />
-                                      <TextBlock Grid.Column="2" Classes="lineCount added" Text="{Binding Added}" />
-                                      <TextBlock Grid.Column="3" Classes="lineCount deleted" Text="{Binding Deleted}" />
-                                    </Grid>
-                                  </ToggleButton>
-                                  <Button Grid.Column="1" Classes="icon small" VerticalAlignment="Center" Click="OnOpenFile" ToolTip.Tip="Open the file in the node's folder"
-                                          AutomationProperties.AutomationId="ResultOpenFile" AutomationProperties.Name="Open the file">
-                                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" />
-                                  </Button>
-                                </Grid>
-                                <!-- The file's own lines, in the same mono face as the code in the transcript. -->
-                                <ItemsControl Classes="diff" ItemsSource="{Binding Lines}" IsVisible="{Binding IsOpen}"
-                                              AutomationProperties.AutomationId="ResultDiff">
-                                  <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="execution:DiffLine">
-                                      <Border Classes="diffLine" Classes.added="{Binding IsAdded}" Classes.deleted="{Binding IsDeleted}" Classes.hunk="{Binding IsHunk}">
-                                        <TextBlock Classes="diffText" Text="{Binding Text}" />
-                                      </Border>
-                                    </DataTemplate>
-                                  </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                              </StackPanel>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <TextBlock Classes="dockText" Text="{Binding Result.PlainSummary, FallbackValue={x:Null}}" MaxLines="3" TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.AutomationId="ResultCardSummary" />
+                        <Button Classes="ghost" Height="24" HorizontalAlignment="Left" Click="OnShowResult"
+                                ToolTip.Tip="Opens the Output page"
+                                AutomationProperties.AutomationId="ResultOpenOutput" AutomationProperties.Name="Open output">
+                          <TextBlock Text="Open output" />
+                        </Button>
                       </StackPanel>
                     </Border>
-                    </Panel>
                   </StackPanel>
+                  <!-- Copy shows on hover at the end of the message's last line, or beside a person's bubble. -->
+                  <Button Classes="icon small copy" Classes.person="{Binding IsPerson}" Command="{Binding CopyCommand}"
+                          ToolTip.Tip="Copy message" GotFocus="OnCopyFocused"
+                          AutomationProperties.AutomationId="CopyMessage"
+                          AutomationProperties.Name="Copy message">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCopy}" Width="14" Height="14" />
+                  </Button>
                 </Panel>
               </DataTemplate>
               <DataTemplate DataType="conversation:ActivityItemViewModel">
-                <Panel Classes="row">
+                <Panel Classes="row" Margin="{Binding GapAbove, Converter={x:Static conversation:ConversationView.RowMargin}}">
                   <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding Text}" Background="Transparent">
                     <PathIcon Theme="{StaticResource Glyph}" Width="12" Height="12" Foreground="{DynamicResource TextMutedBrush}"
                               Data="{StaticResource IconInfo}" />
@@ -539,13 +115,13 @@
                 </Panel>
               </DataTemplate>
               <DataTemplate DataType="conversation:StepGroupItemViewModel">
-                <Panel Classes="row afterSteps">
+                <Panel Classes="row" Margin="{Binding GapAbove, Converter={x:Static conversation:ConversationView.RowMargin}}">
                   <StackPanel>
                     <ToggleButton Classes="steps" IsChecked="{Binding IsOpen}"
                                   AutomationProperties.AutomationId="ActivityGroup" AutomationProperties.Name="{Binding Summary}">
-                      <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
+                      <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
                         <PathIcon Theme="{StaticResource Glyph}" />
-                        <TextBlock Grid.Column="1" Text="{Binding CountLabel}" VerticalAlignment="Center" AutomationProperties.AutomationId="ActivityCount" />
+                        <TextBlock Grid.Column="1" Classes="stepCount" Text="{Binding CountLabel}" AutomationProperties.AutomationId="ActivityCount" />
                         <TextBlock Grid.Column="2" Classes="stepTool" Text="{Binding Last.Tool}" IsVisible="{Binding !IsOpen}" />
                         <TextBlock Grid.Column="3" Classes="stepLast" Text="{Binding Last.Command}" IsVisible="{Binding !IsOpen}"
                                    ToolTip.Tip="{Binding LastLine}" AutomationProperties.AutomationId="ActivityLast" />
@@ -568,11 +144,11 @@
                 </Panel>
               </DataTemplate>
               <DataTemplate DataType="conversation:MarkerItemViewModel">
-                <Panel Classes="row" Classes.held="{Binding IsHeldByCard}">
+                <Panel Classes="row" Classes.held="{Binding IsHeldByCard}" Margin="{Binding GapAbove, Converter={x:Static conversation:ConversationView.RowMargin}}">
                   <StackPanel Spacing="2" AutomationProperties.AutomationId="Marker" AutomationProperties.Name="{Binding Title}">
                     <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8" IsVisible="{Binding IsSessionStart}">
                       <Border Classes="mdRule" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="1" Classes="sessionTitle" Text="{Binding Heading}" />
+                      <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Heading}" />
                       <Border Grid.Column="2" Classes="mdRule" VerticalAlignment="Center" />
                     </Grid>
                     <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsSessionStart}">
@@ -587,22 +163,33 @@
               </DataTemplate>
             </ItemsControl.DataTemplates>
           </ItemsControl>
+          <!-- Below the Working row nothing shows. -->
+          <Panel Classes="row" Margin="16,8,16,0" IsVisible="{Binding ShowsWorking}" AutomationProperties.AutomationId="ConversationWorking">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <theme:StateMark Width="14" Height="14" State="Running" />
+              <TextBlock Classes="small" Text="{Binding WorkingLabel}" VerticalAlignment="Center"
+                         AutomationProperties.AutomationId="ConversationWorkingLabel" />
+            </StackPanel>
+          </Panel>
         </StackPanel>
       </ScrollViewer>
-      <!-- A node with no turn has nothing to read yet. -->
-      <StackPanel Spacing="12" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding ShowsEmpty}"
-                  AutomationProperties.AutomationId="ConversationEmptyState">
-        <TextBlock Classes="emptyText" Text="Run the node first. A message continues its session."
-                   AutomationProperties.AutomationId="ConversationEmpty" />
-        <Button Classes="primary" HorizontalAlignment="Center" Command="{Binding Node.RunCommand}"
-                ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding Node.RunRefusal}"
-                AutomationProperties.AutomationId="ConversationRunNode" AutomationProperties.Name="Run">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-            <TextBlock Text="Run" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
-      </StackPanel>
+
+      <!-- A person's Approval node has no conversation, so the transcript area shows what it reviews. -->
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !Node.HasAgent}">
+        <StackPanel Margin="16,12,16,12" AutomationProperties.AutomationId="ChatInputs">
+          <TextBlock Classes="caption" Text="This agent reads no input." IsVisible="{Binding Node.HasNoInputs}" />
+          <ItemsControl ItemsSource="{Binding Node.Inputs}" AutomationProperties.AutomationId="ChatInputLinks">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="canvas:NodeLink">
+                <inspector:NodeLinkRow LinkId="ChatInputLink" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <TextBlock Classes="caption" Text="No messages yet." HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding ShowsEmpty}"
+                 AutomationProperties.AutomationId="ConversationEmpty" />
       <Button x:Name="JumpToLatest" Classes="jump" IsVisible="False"
               HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"
               Click="OnJumpToLatest"
@@ -614,5 +201,85 @@
         </StackPanel>
       </Button>
     </Panel>
+
+    <conversation:ActionDock x:Name="DockView" Grid.Row="1" Margin="16,8,16,0" DataContext="{Binding Dock}" />
+
+    <Border x:Name="ComposerFrame" Grid.Row="2" Classes="composer" IsVisible="{Binding Node.HasAgent}">
+      <StackPanel>
+        <TextBox x:Name="Composer" Classes="composerBox" Text="{Binding Draft}" IsEnabled="{Binding CanCompose}"
+                 AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
+                 Watermark="{Binding Watermark}"
+                 ToolTip.Tip="{Binding SendProblem}" ToolTip.ShowOnDisabled="True"
+                 AutomationProperties.AutomationId="ConversationComposer"
+                 AutomationProperties.Name="Message" />
+        <Grid x:Name="ComposerBar" Classes="composerBar" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
+          <Button x:Name="ModelChip" Classes="modelChip" HorizontalAlignment="Left"
+                  ToolTip.Tip="{Binding Node.AgentLabel, StringFormat='The agent: {0}'}"
+                  AutomationProperties.AutomationId="ConversationModel" AutomationProperties.Name="{Binding Node.AgentLabel, StringFormat='Agent: {0}'}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" Width="12" Height="12" />
+              <TextBlock Grid.Column="1" Text="{Binding Node.AgentLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                         AutomationProperties.AutomationId="ConversationModelLabel" />
+              <PathIcon Grid.Column="2" Classes="chipChevron" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronUp}" Width="10" Height="10" />
+            </Grid>
+            <Button.Flyout>
+              <Flyout Placement="TopEdgeAlignedLeft">
+                <StackPanel Classes="modelFlyout" Spacing="8">
+                  <ComboBox ItemsSource="{Binding Node.Picker.ClientChoices}" SelectedItem="{Binding Node.Picker.SelectedClient, Mode=OneWay}"
+                            SelectionChanged="OnAgentChosen" HorizontalAlignment="Stretch"
+                            AutomationProperties.AutomationId="ConversationPickClient" AutomationProperties.Name="Client" ItemTemplate="{StaticResource WrappedChoice}" />
+                  <ComboBox ItemsSource="{Binding Node.Picker.ModelChoices}" SelectedItem="{Binding Node.Picker.SelectedModel, Mode=OneWay}"
+                            SelectionChanged="OnAgentChosen" PlaceholderText="Choose a model" HorizontalAlignment="Stretch"
+                            IsVisible="{Binding Node.HasClient}"
+                            AutomationProperties.AutomationId="ConversationPickModel" AutomationProperties.Name="Model" ItemTemplate="{StaticResource WrappedChoice}" />
+                  <ComboBox ItemsSource="{Binding Node.Picker.ReasoningChoices}" SelectedItem="{Binding Node.Picker.SelectedReasoning, Mode=OneWay}"
+                            SelectionChanged="OnAgentChosen" PlaceholderText="Choose a level" HorizontalAlignment="Stretch"
+                            IsVisible="{Binding Node.Picker.HasReasoning}"
+                            AutomationProperties.AutomationId="ConversationPickReasoning" AutomationProperties.Name="Reasoning" ItemTemplate="{StaticResource WrappedChoice}" />
+                  <TextBlock Classes="caption" Text="A change stops the running turn, and the node waits for your Run." TextWrapping="Wrap"
+                             IsVisible="{Binding Node.ShowsNextRunNote}" AutomationProperties.AutomationId="ConversationNextRunNote" />
+                  <Button Classes="ghost terminal" Height="28" Command="{Binding Node.OpenInTerminalCommand}" Click="OnCloseModel"
+                          ToolTip.Tip="Copies the command that continues the session in a terminal"
+                          AutomationProperties.AutomationId="ConversationTerminal" AutomationProperties.Name="Open in terminal">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCopy}" Width="12" Height="12" />
+                      <TextBlock Text="Open in terminal" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+          <TextBlock x:Name="KeyHint" Grid.Column="1" Classes="caption keyHint" Text="Enter to send" VerticalAlignment="Center" Margin="0,0,4,0"
+                     AutomationProperties.AutomationId="ComposerKeyHint" />
+          <Border Grid.Column="2" Classes="composerInfo" Background="Transparent" ToolTip.Tip="{Binding Limitations}"
+                  AutomationProperties.AutomationId="ClientLimitationsInfo" AutomationProperties.Name="{Binding Limitations}">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" Width="14" Height="14" />
+          </Border>
+          <Panel Grid.Column="3" Width="28" Height="28">
+            <Button Classes="round send" Command="{Binding Node.RunCommand}" IsVisible="{Binding ShowsRun}"
+                    ToolTip.Tip="{Binding Node.RunRefusal, FallbackValue='Run'}" ToolTip.ShowOnDisabled="True"
+                    AutomationProperties.AutomationId="ConversationRunNode" AutomationProperties.Name="Run">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="round stop" Command="{Binding Node.StopCommand}" IsVisible="{Binding ShowsComposerStop}"
+                    ToolTip.Tip="Stop"
+                    AutomationProperties.AutomationId="ConversationStop" AutomationProperties.Name="Stop">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="round send" Command="{Binding Node.StopAndSendCommand}" IsVisible="{Binding ShowsStopAndSend}"
+                    ToolTip.Tip="Stop and send (Ctrl+Shift+Enter)"
+                    AutomationProperties.AutomationId="ConversationStopAndSend" AutomationProperties.Name="Stop and send">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="round send" Command="{Binding Node.SendCommand}" IsVisible="{Binding ShowsSend}"
+                    ToolTip.Tip="{Binding SendHelp}" ToolTip.ShowOnDisabled="True" ToolTip.Placement="Top"
+                    AutomationProperties.AutomationId="ConversationSend" AutomationProperties.Name="Send">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
+            </Button>
+          </Panel>
+        </Grid>
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

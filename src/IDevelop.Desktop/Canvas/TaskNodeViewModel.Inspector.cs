@@ -23,16 +23,6 @@ public sealed partial class TaskNodeViewModel
 
     public string AgentSectionTitle => IsReview ? "Reviewer" : "Agent";
 
-    /// <summary>The Chat page's buttons for the node's state. A row that came out the same stays the very row, so a button keeps the focus.</summary>
-    public IReadOnlyList<NodeAction> Actions
-    {
-        get
-        {
-            var now = NodeActions.Of(this);
-            return now.SequenceEqual(field) ? field : field = now;
-        }
-    } = [];
-
     /// <summary>The header's one action, as a list of at most one, so a button keeps the focus while its action stays the same.</summary>
     public IReadOnlyList<NodeAction> HeaderActions
     {
@@ -43,14 +33,11 @@ public sealed partial class TaskNodeViewModel
         }
     } = [];
 
-    /// <summary>The state's sentence for the Chat page, which names where Retry is when the page's row has no room for it.</summary>
-    public string? InspectorDetail => WaitReason == WaitReason.Interrupted && RetryIsInMenu ? NodeStates.InterruptedDetailInMenu : StateDetail;
+    /// <summary>Neither the header nor the Action Dock offers Retry, so the header's menu does.</summary>
+    public bool RetryIsInMenu => ShowsRetry && State is not (NodeState.Failed or NodeState.Stale) && !ShowsContinue && HeaderActions.All(action => action.Command != RetryCommand);
 
-    /// <summary>Neither the header nor the Chat page offers Retry, so the header's menu does.</summary>
-    public bool RetryIsInMenu => ShowsRetry && Actions.Concat(HeaderActions).All(action => action.Command != RetryCommand);
-
-    /// <summary>The Chat page's row leaves the conversation out, so the header's menu offers it.</summary>
-    public bool ConversationIsInMenu => HasAgent && Actions.All(action => action.Command != OpenConversationCommand);
+    /// <summary>While the Action Dock answers a question, the composer's button sends, so Stop waits in the header's menu.</summary>
+    public bool StopIsInMenu => IsAsking;
 
     /// <summary>The nodes this node reads, one for each incoming connection, newest wires first.</summary>
     public IReadOnlyList<NodeLink> Inputs => [.. _canvas.Connections.Where(connection => connection.To == this).Reverse().Select(connection => new NodeLink(connection.From, connection))];
@@ -196,25 +183,6 @@ public sealed partial class TaskNodeViewModel
         : $"[{name}]").Trim();
 
     public bool HasSystemPrompt => !string.IsNullOrEmpty(SystemPrompt);
-
-    /// <summary>The conversation shows this node's agent now, so the Chat page does not offer to open it.</summary>
-    public bool IsConversationShown
-    {
-        get;
-        internal set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(Actions));
-                OnPropertyChanged(nameof(ShowsStateDetail));
-                OnPropertyChanged(nameof(RetryIsInMenu));
-                OnPropertyChanged(nameof(ConversationIsInMenu));
-            }
-        }
-    }
-
-    /// <summary>The Chat page states what the node needs, unless the open conversation asks it in full. A failure's reason always shows.</summary>
-    public bool ShowsStateDetail => !string.IsNullOrEmpty(StateDetail) && !(IsConversationShown && Proposal is null && State is NodeState.InputRequired or NodeState.Failed or NodeState.Stale);
 
     /// <summary>A blueprint without a default agent has nothing to revert to.</summary>
     public bool CanRevertAgent => _task.Blueprint.Defaults.Execution is { } agent && _task.Execution != agent;

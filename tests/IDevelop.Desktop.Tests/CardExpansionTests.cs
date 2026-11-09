@@ -411,7 +411,6 @@ public sealed class CardExpansionTests : IDisposable
         shell.WaitUntil(() => shell.NodeModel("A").State == NodeState.InputRequired && shell.CardText("A", "CardNowText") == "Done.", "the answer's turn ends");
         Assert.Equal("Use the fixture", File.ReadAllText(Path.Combine(f.Evidence, "answer.txt")).Trim());
         Assert.Equal("", shell.InCard<TextBox>("A", "CardAnswer").Text);
-        Assert.Null(shell.Window.ViewModel.Conversation);
         Assert.Single(canvas.Nodes);
     }
 

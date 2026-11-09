@@ -17,11 +17,11 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StatusTip), nameof(StateDetail), nameof(InspectorDetail), nameof(ShowsStateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
-        nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(LastReplyAsks), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
+        nameof(EngineState), nameof(WaitReason), nameof(IsIdle), nameof(IsRunningNow), nameof(StatusLabel), nameof(StatusTip), nameof(StateDetail), nameof(Tone), nameof(IsWaiting), nameof(RunRefusal), nameof(ShowsRun),
+        nameof(ShowsRetry), nameof(ShowsStop), nameof(ShowsApprove), nameof(ApproveLabel), nameof(ShowsSendBack), nameof(ShowsContinue), nameof(ShowsMarkResolved),
         nameof(CanStopAndSend), nameof(HasResults), nameof(HasNoOutput), nameof(OutputLine), nameof(LastReply), nameof(ReviewSummary),
         nameof(Preview), nameof(Latest), nameof(Questions), nameof(IsAsking),
-        nameof(ShowsGoesTo), nameof(Actions), nameof(HeaderActions), nameof(RetryIsInMenu), nameof(ConversationIsInMenu), nameof(HasExtraPage), nameof(ExtraTitle), nameof(ExtraGlyph), nameof(ExtraBadge),
+        nameof(ShowsGoesTo), nameof(HeaderActions), nameof(RetryIsInMenu), nameof(StopIsInMenu), nameof(RetryLabel), nameof(HasExtraPage), nameof(ExtraTitle), nameof(ExtraGlyph), nameof(ExtraBadge),
     ];
 
     private EngineState _engineState = new EngineState.Idle();
@@ -88,6 +88,9 @@ public sealed partial class TaskNodeViewModel
 
     public bool ShowsStop => State == NodeState.Running || IsAsking;
 
+    /// <summary>What Retry says: a node that has not failed runs again from here.</summary>
+    public string RetryLabel => State == NodeState.Completed ? "Run from here" : "Retry";
+
     /// <summary>The running turn waits for the person's answer to the agent's question, which Send gives.</summary>
     public bool IsAsking => _asked is not null;
 
@@ -98,13 +101,10 @@ public sealed partial class TaskNodeViewModel
     /// Approve accepts what an Approval node or a reviewer at its round limit offers, or a Chat node's last reply. While a
     /// planner's proposal is open, Accept and Finish approves it instead.
     /// </summary>
-    public bool ShowsApprove => (Waits(EngineState.Approval, EngineState.RoundLimit) || Waits(EngineState.Reply) && !LastReplyAsks) && Role != NodeRole.Proposing;
-
-    /// <summary>The agent's last message ends in a question, so it waits for an answer and is no result yet.</summary>
-    public bool LastReplyAsks => LastReply is { } reply && ResultViewModel.Plain(reply).TrimEnd(' ', '\n', '\r', '\t', ')', '"', '\'', '_').EndsWith('?');
+    public bool ShowsApprove => (Waits(EngineState.Approval, EngineState.RoundLimit) || Waits(EngineState.Reply)) && Role != NodeRole.Proposing;
 
     /// <summary>What Approve does in words: on a wait for a reply it makes the agent's message the node's result.</summary>
-    public string ApproveLabel => Waits(EngineState.Reply) ? "Use as result" : "Approve";
+    public string ApproveLabel => Waits(EngineState.Reply) ? "Accept as result" : "Approve";
 
     /// <summary>Send back returns the person's note to the nodes before an Approval node or a reviewer at its round limit.</summary>
     public bool ShowsSendBack => Waits(EngineState.Approval, EngineState.RoundLimit);
@@ -425,15 +425,6 @@ public sealed partial class TaskNodeViewModel
             _canvas.Notice("Couldn't open the node's worktree.");
         }
     }
-
-    /// <summary>Opens a file of the node's result from the folder the node works in.</summary>
-    internal void OpenFile(string path) => UiWork.Start(async () =>
-    {
-        if (_canvas.Engine.Folder(Id) is not { } folder || !File.Exists(Path.Combine(folder, path)) || !await _canvas.OpenFile(Path.Combine(folder, path)))
-        {
-            _canvas.Notice($"Couldn't open {path}. The node's folder may no longer hold it.");
-        }
-    }, _canvas.Notice);
 
     private async Task OpenInTerminal()
     {

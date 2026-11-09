@@ -27,10 +27,8 @@ public sealed class ConversationViewportTests : IDisposable
 
     private static Point ExpectedCard(Shell shell, TaskNodeViewModel node) => (Point)((node.DisplayRect.TopLeft - shell.Editor.ViewportLocation) * shell.Editor.ViewportZoom);
 
-    [AvaloniaTheory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void A_workflow_that_comes_back_draws_its_cards_at_its_view_at_a_fit_for_the_canvas(bool docked)
+    [AvaloniaFact]
+    public void A_workflow_that_comes_back_draws_its_cards_at_its_view_at_a_fit_for_the_canvas()
     {
         var shell = TwoWorkflows();
         var window = shell.Window.ViewModel;
@@ -38,11 +36,8 @@ public sealed class ConversationViewportTests : IDisposable
         var second = window.Projects.Single().Workflows.Single(canvas => canvas != first);
         var fit = first.ViewportZoom;
         Assert.NotEqual(1, fit);
-        window.IsConversationDocked = docked;
-
         first.Nodes[0].OpenConversationCommand.Execute(null);
         shell.Render();
-        window.CloseConversationCommand.Execute(null);
         window.Select(second);
         shell.Render();
         window.Select(first);

@@ -90,7 +90,7 @@ public sealed class CardIdentityTests
         var node = shell.NodeModel("A");
         node.OpenConversationCommand.Execute(null);
         shell.Render();
-        var action = shell.Find<Button>("ConversationApprove");
+        var action = shell.Find<Button>("Approve");
         var empty = shell.Bounds(action);
 
         node.Draft = "Pears.";
@@ -99,14 +99,14 @@ public sealed class CardIdentityTests
         Assert.True(action.IsEffectivelyVisible);
         Assert.Equal(empty, shell.Bounds(action));
         Assert.Contains("action", action.Classes);
-        Assert.Equal("Use this message as the result", shell.Window.ViewModel.Conversation!.ApproveLabel);
+        Assert.Equal("Accept as result", shell.Window.ViewModel.Conversation!.Dock.ApproveLabel);
     }
 
     [AvaloniaFact]
-    public void An_open_question_takes_no_card_and_the_composer_answers_it()
+    public void A_question_in_plain_prose_gives_no_choices_and_the_dock_offers_Accept_beside_the_composer()
     {
         using var f = new NodeFixture(Task(A, "A", 105, ConversationMode.Chat));
-        f.Install(Reply("s-1", "Which fruit?"));
+        f.Install(Reply("s-1", "Which fruit?\n1. Pears\n2. Plums"));
         var shell = f.Open();
         shell.RunNode("A");
         shell.WaitForState("A", NodeState.InputRequired);
@@ -114,11 +114,8 @@ public sealed class CardIdentityTests
         shell.Render();
         var model = shell.Window.ViewModel.Conversation!;
 
-        Assert.Equal((AttentionCard.Reply, false, false), (model.Card, model.ShowsCard, model.ShowsCardApprove));
-        Assert.True(model.WaitsForWords);
-        var question = Assert.Single(model.Items.OfType<Conversation.MessageItemViewModel>(), message => message.IsAsking);
-        Assert.True(question.ShowsAuthor);
-        Assert.EndsWith("Needs you", question.AuthorLine);
+        Assert.Equal((ActionDockKind.Reply, true), (model.Dock.Kind, model.Dock.ShowsApprove));
+        Assert.DoesNotContain(shell.Window.GetVisualDescendants().OfType<Avalonia.Controls.Control>(), control => Avalonia.Automation.AutomationProperties.GetAutomationId(control) == "ConversationChoice");
         Assert.True(shell.Find<Avalonia.Controls.Control>("ConversationModel").IsEffectivelyVisible);
     }
 
@@ -167,13 +164,6 @@ public sealed class CardIdentityTests
         shell.Render();
         Assert.True(Shows("CardLine"), "A card at 100% shows its model.");
     }
-
-    [Theory]
-    [InlineData("@@ -1 +1 @@", DiffLineKind.Hunk)]
-    [InlineData("+added", DiffLineKind.Added)]
-    [InlineData("-gone", DiffLineKind.Deleted)]
-    [InlineData(" kept", DiffLineKind.Context)]
-    public void A_diff_line_says_what_it_is(string text, DiffLineKind kind) => Assert.Equal(kind, DiffLine.Of(text).Kind);
 
     /// <summary>Each model in the app's model lists, and the card's text for it.</summary>
     [Theory]

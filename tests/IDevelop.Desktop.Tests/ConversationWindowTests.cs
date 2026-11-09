@@ -37,7 +37,6 @@ public sealed class ConversationWindowTests : IDisposable
     private static void OpenFromInspector(Shell shell, string title)
     {
         shell.Click(shell.Header(shell.Node(title)));
-        Shell.Invoke(shell.InView<Button>("OpenConversation"));
         shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Items.Count > 0, "the conversation shows its history");
         shell.Render();
     }
@@ -53,7 +52,7 @@ public sealed class ConversationWindowTests : IDisposable
         OpenFromInspector(shell, "Design");
         shell.Find<TextBox>("ConversationComposer").Focus();
         shell.Type("banana");
-        shell.Press(Key.Enter, RawInputModifiers.Control);
+        shell.Press(Key.Enter);
         shell.WaitUntil(() => Lines(shell).Contains("Antigravity CLI: Wrote banana."), "the second turn ends");
         string[] expected = ["[New session]", "Antigravity CLI: Which fruit?", "[Needs you]", "You: banana", "Antigravity CLI: Wrote banana.", "[Needs you]"];
         shell.WaitUntil(() => Lines(shell).SequenceEqual(expected), "the turns read in order", () => string.Join(" | ", Lines(shell)));
@@ -101,7 +100,7 @@ public sealed class ConversationWindowTests : IDisposable
         shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Items.Count > 1, "the conversation opens");
         shell.Render();
 
-        Assert.Equal("Failed", shell.Find<TextBlock>("ConversationStatus").Text);
+        Assert.Equal("Failed", shell.Find<TextBlock>("ActionDockTitle").Text);
         Assert.Contains(Conversation(shell).Items.OfType<MarkerItemViewModel>(), marker => marker.Title == "Failed" && marker.Detail.Contains("exited with code 2"));
     }
 
@@ -120,7 +119,7 @@ public sealed class ConversationWindowTests : IDisposable
         build.OpenConversationCommand.Execute(null);
         shell.WaitUntil(() => Conversation(shell) != opened, "the conversation switches");
         shell.Render();
-        Assert.Equal("Build", shell.Find<TextBlock>("ConversationTitle").Text);
+        Assert.Equal("Build", shell.Window.ViewModel.Canvas!.SelectedNode!.Title);
 
         design.Title = "Sketch";
         build.Title = "Assemble";
@@ -128,12 +127,12 @@ public sealed class ConversationWindowTests : IDisposable
         shell.WaitForState("Assemble", NodeState.Failed);
         shell.Render();
 
-        Assert.Equal("Assemble", shell.Find<TextBlock>("ConversationTitle").Text);
-        Assert.Equal("Failed", shell.Find<TextBlock>("ConversationStatus").Text);
+        Assert.Equal("Assemble", Conversation(shell).Node.Title);
+        Assert.Equal("Failed", shell.Find<TextBlock>("ActionDockTitle").Text);
     }
 
     [AvaloniaFact]
-    public void A_task_that_never_ran_names_its_chosen_agent_in_the_composer()
+    public void A_task_that_never_ran_says_in_its_composer_that_it_must_run_first()
     {
         var shell = Shell.Open(Project(
             TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it."),
@@ -141,98 +140,58 @@ public sealed class ConversationWindowTests : IDisposable
         string Watermark(string title)
         {
             shell.Click(shell.Header(shell.Node(title)));
-            Shell.Invoke(shell.InView<Button>("OpenConversation"));
             shell.Render();
-            var watermark = shell.Find<TextBox>("ConversationComposer").Watermark ?? "";
-            Shell.Invoke(shell.Find<Button>("CloseConversation"));
-            shell.Render();
-            return watermark;
+            return shell.Find<TextBox>("ConversationComposer").Watermark ?? "";
         }
 
-        Assert.Equal(("Message Codex", "Message the agent"), (Watermark("Design"), Watermark("Build")));
+        const string first = "Run the node first. A message continues its session.";
+        Assert.Equal((first, first), (Watermark("Design"), Watermark("Build")));
     }
 
     [AvaloniaFact]
-    public void A_double_click_on_a_card_opens_its_conversation_with_the_keys_in_the_composer()
+    public void A_double_click_on_a_card_lands_on_the_Chat_page()
     {
         var shell = Shell.Open(Project());
+        shell.Window.ViewModel.AgentPanel.Show(Inspector.AgentPage.Task);
 
         shell.DoubleClick(shell.Header(shell.Node("Design")));
-        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView"), "the conversation opens");
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView"), "the Chat page opens");
         shell.Render();
 
         Assert.Equal("Design", Conversation(shell).Node.Title);
-        Assert.True(shell.Find<TextBox>("ConversationComposer").IsFocused);
+        Assert.True(shell.Window.ViewModel.AgentPanel.IsChat);
     }
 
     [AvaloniaFact]
-    public void Enter_on_a_selected_card_opens_its_conversation_with_the_keys_in_the_composer()
+    public void Enter_on_a_selected_card_lands_on_the_Chat_page_and_Esc_goes_back_to_the_Map()
     {
         var shell = Shell.Open(Project());
         shell.Click(shell.Header(shell.Node("Design")));
+        shell.Window.ViewModel.AgentPanel.Show(Inspector.AgentPage.Task);
+        shell.Render();
 
+        shell.Editor.Focus();
         shell.Press(Key.Enter);
-        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView"), "the conversation opens");
+        shell.WaitUntil(() => shell.Window.ViewModel.AgentPanel.IsChat && shell.Has<ConversationView>("ConversationView"), "the Chat page opens");
         shell.Render();
+        Assert.False(shell.Editor.IsFocused);
 
-        Assert.True(shell.Find<TextBox>("ConversationComposer").IsFocused);
+        shell.Press(Key.Escape);
+        shell.Render();
+        Assert.True(shell.Editor.IsKeyboardFocusWithin);
     }
 
     [AvaloniaFact]
-    public void The_docked_header_shows_a_title_whole_while_the_row_has_room()
+    public void Each_task_keeps_its_draft_across_task_switches_and_pages()
     {
-        const string title = "Route poison events to the DLQ";
-        var shell = Shell.Open(Project(TaskAt(TestTasks.Design, title, 105, 90, CodexHigh, "Draft it.")));
-        shell.Click(shell.Header(shell.Node(title)));
-        Shell.Invoke(shell.InView<Button>("OpenConversation"));
-        shell.Render();
-        if (!shell.Window.ViewModel.IsConversationDocked)
-        {
-            Shell.Invoke(shell.Find<Button>("ConversationLayout"));
-            shell.Render();
-        }
-
-        // The title is measured at its natural width, and the cut keeps a pixel of slack, so the row gives that pixel back.
-        var shown = shell.Find<EllipsisText>("ConversationTitle");
-        Assert.Equal(title, shown.Text);
-    }
-
-    [AvaloniaFact]
-    public void Expanding_or_closing_the_dock_gives_its_height_back_to_the_main_area()
-    {
-        var shell = Shell.Open(Project());
-        var canvas = shell.Window.CanvasArea.Bounds.Height;
+        using var f = new NodeFixture(NodeFixture.Task(TestTasks.Design, "Design", 105, ConversationMode.Chat), NodeFixture.Task(TestTasks.Build, "Build", 405, ConversationMode.Chat));
+        f.Install(Reply("s-1", "Done."));
+        var shell = f.Open();
+        shell.NodeModel("Design").RunCommand.Execute(null);
+        shell.NodeModel("Build").RunCommand.Execute(null);
+        shell.WaitForState("Design", NodeState.InputRequired);
+        shell.WaitForState("Build", NodeState.InputRequired);
         shell.Click(shell.Header(shell.Node("Design")));
-        Shell.Invoke(shell.InView<Button>("OpenConversation"));
-        shell.Render();
-        var expanded = shell.Find<ConversationView>("ConversationView").Bounds.Height;
-
-        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
-        shell.Render();
-        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
-        shell.Render();
-        var again = shell.Find<ConversationView>("ConversationView").Bounds.Height;
-        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
-        shell.Render();
-        Shell.Invoke(shell.Find<Button>("CloseConversation"));
-        shell.Render();
-
-        Assert.Equal((canvas, canvas, canvas), (expanded, again, shell.Window.CanvasArea.Bounds.Height));
-    }
-
-    [AvaloniaFact]
-    public void Each_task_keeps_its_draft_across_task_switches_and_the_dock()
-    {
-        var shell = Shell.Open(Project(
-            TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it."),
-            TaskAt(TestTasks.Build, "Build", 105, 300, CodexHigh, "Build it.")));
-        shell.Click(shell.Header(shell.Node("Design")));
-        Shell.Invoke(shell.InView<Button>("OpenConversation"));
-        shell.Render();
-        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
-        shell.Render();
-        Assert.True(shell.Window.ViewModel.IsConversationDocked);
-
         shell.Find<TextBox>("ConversationComposer").Focus();
         shell.Type("Check edge cases");
         shell.Click(shell.Header(shell.Node("Build")));
@@ -241,17 +200,11 @@ public sealed class ConversationWindowTests : IDisposable
         shell.Find<TextBox>("ConversationComposer").Focus();
         shell.Type("Review output");
         shell.Click(shell.Header(shell.Node("Design")));
+        Assert.Equal("Check edge cases", shell.Find<TextBox>("ConversationComposer").Text);
 
-        Assert.Equal("Check edge cases", shell.Find<TextBox>("ConversationComposer").Text);
-        Shell.Invoke(shell.Find<Button>("ConversationLayout"));
-        shell.Render();
-        Assert.False(shell.Window.ViewModel.IsConversationDocked);
-        Assert.Equal("Check edge cases", shell.Find<TextBox>("ConversationComposer").Text);
-        shell.Press(Key.Escape);
+        shell.Page(Inspector.AgentPage.Output);
         Assert.Null(shell.Window.ViewModel.Conversation);
-        shell.Click(shell.Header(shell.Node("Build")));
-        Shell.Invoke(shell.InView<Button>("OpenConversation"));
-        shell.Render();
-        Assert.Equal("Review output", shell.Find<TextBox>("ConversationComposer").Text);
+        shell.Page(Inspector.AgentPage.Chat);
+        Assert.Equal("Check edge cases", shell.Find<TextBox>("ConversationComposer").Text);
     }
 }

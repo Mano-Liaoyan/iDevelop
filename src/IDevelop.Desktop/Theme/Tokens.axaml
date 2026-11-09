@@ -241,6 +241,7 @@
   <CornerRadius x:Key="RadiusSm">6</CornerRadius>
   <CornerRadius x:Key="RadiusMd">8</CornerRadius>
   <CornerRadius x:Key="RadiusLg">10</CornerRadius>
+  <CornerRadius x:Key="RadiusXl">14</CornerRadius>
   <x:Double x:Key="TypeCaptionSize">11.5</x:Double>
   <x:Double x:Key="TypeCaptionLine">14</x:Double>
   <x:Double x:Key="TypeSmallSize">12.5</x:Double>

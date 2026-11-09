@@ -38,7 +38,8 @@ public sealed class ConversationTests
 
         shell.Talk();
         shell.InView<TextBox>("ConversationComposer").Text = "Also write hi.";
-        Shell.Invoke(shell.InView<Button>("ConversationSend"));
+        shell.Find<TextBox>("ConversationComposer").Focus();
+        shell.Press(Key.Enter);
         Assert.Equal("", shell.Find<TextBox>("ConversationComposer").Text);
         f.Release("go");
 
@@ -63,7 +64,8 @@ public sealed class ConversationTests
         shell.InView<TextBox>("ConversationComposer").Text = "Stop and write hi.";
         shell.Render();
         Assert.False(shell.InView<Button>("ConversationStop").IsEffectivelyVisible);
-        Assert.True(shell.InView<Button>("ConversationSend").IsEffectivelyVisible);
+        Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyVisible);
+        Assert.True(shell.InView<Button>("ConversationStopAndSend").IsEffectivelyVisible);
         shell.Click(shell.InView<Button>("ConversationStopAndSend"));
 
         var resumed = Path.Combine(f.Evidence, "resumed.txt");
@@ -72,7 +74,7 @@ public sealed class ConversationTests
     }
 
     [AvaloniaFact]
-    public void Ctrl_Enter_in_the_composer_continues_a_finished_session_and_Enter_starts_a_new_line()
+    public void Enter_in_the_composer_continues_a_finished_session_and_Shift_Enter_starts_a_new_line()
     {
         using var f = new NodeFixture(NodeFixture.Task(SayHi, "Say hi", 105));
         f.Install(Resumed(f, "Wrote both."), Reply("s-1", "Hello."));
@@ -83,11 +85,11 @@ public sealed class ConversationTests
         var composer = shell.InView<TextBox>("ConversationComposer");
         composer.Focus();
         shell.Type("one");
-        shell.Press(Key.Enter);
+        shell.Press(Key.Enter, RawInputModifiers.Shift);
         shell.Type("two");
         Assert.Equal("one\ntwo", composer.Text);
 
-        shell.Press(Key.Enter, RawInputModifiers.Control);
+        shell.Press(Key.Enter);
 
         // The reply comes in through the log before the engine records the turn's result.
         shell.WaitUntil(() => shell.NodeModel("Say hi") is { LastReply: "Wrote both.", Results.Count: 2 }, "the continued turn ends");
@@ -102,11 +104,11 @@ public sealed class ConversationTests
         f.Install();
         var shell = OpenSayHi(f);
         shell.Talk();
-        shell.InView<TextBox>("ConversationComposer").Text = "Hello?";
 
-        Assert.Equal("Run the node first. A message continues its session.", shell.InView<TextBlock>("ConversationEmpty").Text);
-        Assert.True(shell.Find<Button>("ConversationRunNode").IsEffectivelyEnabled);
-        Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyEnabled);
+        Assert.Equal("Run the node first. A message continues its session.", shell.InView<TextBox>("ConversationComposer").Watermark);
+        Assert.False(shell.InView<TextBox>("ConversationComposer").IsEffectivelyEnabled);
+        Assert.True(shell.Find<Button>("ConversationRunNode").IsEffectivelyVisible);
+        Assert.False(shell.InView<Button>("ConversationSend").IsEffectivelyVisible);
         Assert.False(shell.NodeModel("Say hi").OpenInTerminalCommand.CanExecute(null));
     }
 
@@ -120,11 +122,7 @@ public sealed class ConversationTests
         shell.WaitForState("Say hi", NodeState.Completed);
 
         shell.Talk();
-        var more = shell.Find<Button>("ConversationModel");
-        shell.Click(more);
-        Assert.True(shell.Has<Control>("ClientLimitations"));
-        more.Flyout!.Hide();
-        shell.Render();
+        Assert.NotNull(ToolTip.GetTip(shell.Find<Control>("ClientLimitationsInfo")));
         shell.NodeModel("Say hi").OpenInTerminalCommand.Execute(null);
 
         shell.WaitUntil(() => shell.Status.StartsWith("Copied the command", StringComparison.Ordinal), "the command is copied");

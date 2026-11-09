@@ -198,6 +198,7 @@ const radii = [
   ['RadiusSm', 0.6],
   ['RadiusMd', 0.8],
   ['RadiusLg', 1],
+  ['RadiusXl', 1.4],
 ];
 
 // The type ramp: name, font size, and line height. Body strong is Body at weight 600. No other size is allowed.
