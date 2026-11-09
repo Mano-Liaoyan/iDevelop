@@ -166,6 +166,7 @@
                       x:DataType="canvas:Ghost">
           <Setter Property="Location" Value="{Binding Location}" />
           <Setter Property="IsHitTestVisible" Value="{Binding TakesPointer}" />
+          <Setter Property="ClipToBounds" Value="False" />
           <!-- NodifyAvalonia 6.6.0 undoes the editor's zoom on each decorator, so a ghost would keep its size as the cards
                shrink and cover its neighbours. Without that transform, a ghost takes the zoom as the cards do. -->
           <Setter Property="RenderTransform" Value="{x:Null}" />

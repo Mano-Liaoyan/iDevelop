@@ -163,6 +163,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
                         connection.OnStrokeChanged();
                     }
                 }
+
+                ShowPills();
             }
         }
     } = 1;

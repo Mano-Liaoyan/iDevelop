@@ -109,7 +109,7 @@ public sealed class GraphSpaceTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(TestTasks.Design, "Design", 100, 90),
-            TaskAt(TestTasks.Build, "Build", 460, 90),
+            TaskAt(TestTasks.Build, "Build", 460, 400),
             new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Design, TestTasks.Build), ConnectionKind.Dependency)));
         var canvas = shell.Window.ViewModel.Canvas!;
         Assert.DoesNotContain(canvas.Decorations, decoration => decoration is WirePillViewModel);
@@ -120,6 +120,21 @@ public sealed class GraphSpaceTests : IDisposable
         var pill = Assert.Single(canvas.Decorations.OfType<WirePillViewModel>());
         Assert.Equal(("Result", "Result for Build"), (pill.Label, pill.Tip));
         Assert.True(shell.Has<Border>("WirePill"), "The label draws on the Map.");
+    }
+
+    [AvaloniaFact]
+    public void A_wire_too_short_for_its_label_goes_without_one()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(TestTasks.Design, "Design", 100, 90),
+            TaskAt(TestTasks.Build, "Build", 460, 90),
+            new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Design, TestTasks.Build), ConnectionKind.Dependency)));
+        var canvas = shell.Window.ViewModel.Canvas!;
+
+        canvas.Select(shell.NodeModel("Design"));
+        shell.Render();
+
+        Assert.DoesNotContain(canvas.Decorations, decoration => decoration is WirePillViewModel);
     }
 
     [AvaloniaFact]

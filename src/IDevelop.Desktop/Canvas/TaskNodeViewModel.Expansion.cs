@@ -1,4 +1,5 @@
 using Avalonia;
+using IDevelop.Desktop.Conversation;
 
 namespace IDevelop.Desktop.Canvas;
 
@@ -95,6 +96,13 @@ public sealed partial class TaskNodeViewModel
         private set => SetProperty(ref _detail, value);
     }
 
+    /// <summary>The Action Dock the expanded card shows, the same one as the Chat page's, while the card is expanded or its peek shows.</summary>
+    public ActionDockViewModel? CardDock
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
     /// <summary>The peek's line under the title, such as "Implement · Codex · GPT-5.5 · high".</summary>
     public string PeekAgent => HasAgent ? $"{TypeName} · {AgentLabel}" : TypeName;
 
@@ -141,12 +149,18 @@ public sealed partial class TaskNodeViewModel
         CloseDetail();
     }
 
-    private void OpenDetail() => Detail = new CardDetailViewModel(this);
+    private void OpenDetail()
+    {
+        Detail = new CardDetailViewModel(this);
+        CardDock = new ActionDockViewModel(this);
+    }
 
     private void CloseDetail()
     {
-        var detail = Detail;
+        var (detail, dock) = (Detail, CardDock);
         Detail = null;
+        CardDock = null;
         detail?.Dispose();
+        dock?.Dispose();
     }
 }

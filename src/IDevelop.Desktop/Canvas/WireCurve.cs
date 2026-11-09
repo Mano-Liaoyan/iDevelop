@@ -73,6 +73,13 @@ internal static class WireCurve
         return Pieces(Corners([source, new Point(middle, source.Y), new Point(middle, target.Y), target]), double.PositiveInfinity);
     }
 
+    /// <summary>The curve's length in canvas units.</summary>
+    public static double Length(IReadOnlyList<WirePiece> curve)
+    {
+        Point[] points = [.. curve.SelectMany(piece => Enumerable.Range(0, Samples).Select(step => piece.At((double)step / Samples))), curve[^1].End];
+        return points.Zip(points.Skip(1)).Sum(run => Point.Distance(run.First, run.Second));
+    }
+
     /// <summary>The point halfway along the curve, which a highlighted wire's label stands on.</summary>
     public static Point Middle(IReadOnlyList<WirePiece> curve)
     {

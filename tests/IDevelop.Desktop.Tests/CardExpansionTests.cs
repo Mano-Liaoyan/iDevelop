@@ -361,7 +361,7 @@ public sealed class CardExpansionTests : IDisposable
 
         shell.WaitForState("A", NodeState.Stale);
         Assert.Equal("Stale", shell.CardStatus("A"));
-        Assert.True(shell.InCard<Button>("A", "CardRetry").IsEffectivelyVisible);
+        Assert.True(shell.InCard<Button>("A", "RetryTask").IsEffectivelyVisible);
         Assert.False(shell.InCard<TextBlock>("A", "CardNextRunNote").IsEffectivelyVisible);
     }
 
@@ -373,20 +373,20 @@ public sealed class CardExpansionTests : IDisposable
         var shell = f.Open();
         shell.Click(shell.InCard<ToggleButton>("Approve", "CardExpand"));
         Assert.False(shell.InCard<Button>("Approve", "CardShowInspector").IsEffectivelyVisible);
-        Assert.False(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
+        Assert.False(shell.InCard<Button>("Approve", "Approve").IsEffectivelyVisible);
         shell.Click(shell.Find<Button>("RunWorkflow"));
         shell.WaitForState("Approve", NodeState.InputRequired);
 
         Assert.Equal("Needs you", shell.CardStatus("Approve"));
         Assert.Equal("Approval", shell.CardText("Approve", "CardNowHeading"));
-        Assert.True(shell.InCard<Button>("Approve", "CardApprove").IsEffectivelyVisible);
-        Assert.True(shell.InCard<Button>("Approve", "CardSendBack").IsEffectivelyVisible);
+        Assert.True(shell.InCard<Button>("Approve", "Approve").IsEffectivelyVisible);
+        Assert.True(shell.InCard<Button>("Approve", "SendBack").IsEffectivelyVisible);
         shell.Click(shell.InCard<Button>("Approve", "CardShowInspector"));
 
         Assert.Equal("Approve", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
         Assert.True(shell.InView<TextBox>("SendBackNote").IsEffectivelyVisible);
 
-        shell.Click(shell.InCard<Button>("Approve", "CardApprove"));
+        shell.Click(shell.InCard<Button>("Approve", "Approve"));
         shell.WaitForState("Approve", NodeState.Completed);
     }
 

@@ -67,7 +67,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>A highlighted wire's label stands on its curve's midpoint.</summary>
     private void ShowPills()
     {
-        var pills = Connections.Where(wire => wire.IsHighlighted && wire.Curve.Count > 0)
+        var pills = Connections.Where(wire => wire.IsHighlighted && wire.Curve.Count > 0 && WireCurve.Length(wire.Curve) * ViewportZoom >= LeastPillRoom)
             .Select(wire => new WirePillViewModel(WireCurve.Middle(wire.Curve), wire.PillText, wire.PillTip, wire)).ToArray();
         if (!pills.SequenceEqual(_pills))
         {
@@ -75,6 +75,9 @@ public sealed partial class WorkflowCanvasViewModel
             ShowDecorations();
         }
     }
+
+    // The screen length a wire needs for its label to stand clear of its two sockets. A shorter wire goes without one.
+    private const double LeastPillRoom = 76;
 
     private WirePillViewModel[] _pills = [];
 
