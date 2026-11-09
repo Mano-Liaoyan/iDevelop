@@ -53,6 +53,22 @@ public sealed class MarkdownViewTests
     }
 
     [AvaloniaFact]
+    public void A_table_wider_than_its_column_wraps_and_a_link_paragraph_spaces_its_lines()
+    {
+        var (window, view) = Show("| Path | What |\n| --- | --- |\n| db/migrations/0147_ledger_entries_for_account.sql | New function and index over the ledger entries partitioned table |\n\nSee the [partitioning design](https://example.com) for the month boundaries and some more words that wrap onto one more line here and there too and more");
+        window.Width = 420;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var scroller = view.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var linked = view.GetVisualDescendants().OfType<SelectableTextBlock>().First(text => text.Inlines?.OfType<Avalonia.Controls.Documents.InlineUIContainer>().Any() == true);
+
+        Assert.True(scroller.Extent.Width <= scroller.Viewport.Width + 1, $"{scroller.Extent.Width} > {scroller.Viewport.Width}");
+        Assert.Equal(6, linked.LineSpacing);
+    }
+
+    [AvaloniaFact]
     public void Headings_lists_quotes_code_and_tables_render_as_their_text()
     {
         var (window, view) = Show("# Plan\n\nSome *emphasis* and **strong** and `code`.\n\n1. First\n2. Second\n\n> Quoted\n\n```csharp\nvar x = 1;\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n");

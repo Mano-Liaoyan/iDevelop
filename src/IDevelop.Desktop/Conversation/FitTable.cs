@@ -15,7 +15,7 @@ internal sealed class FitTable : Decorator
     private const double Edge = 1;
 
     private readonly Grid _grid;
-    private double _fittedTo = double.NaN;
+    private double _fittedTo = -1;
 
     public FitTable(Grid grid)
     {

@@ -41,6 +41,9 @@ public sealed class MarkdownView : StackPanel
     private const char BreakHere = '\u00AD';
     private const int LongSpan = 24;
 
+    // The prose line of 22 px, less the 16 px line that the shaper gives a run of prose beside an inline control.
+    private const double LinkLineSpacing = 6;
+
     // A span this long takes a line or more by itself, so it leaves the paragraph.
     private const int BlockSpan = 60;
     private static readonly char[] SpanBreaks = ['/', '\\', '_', '.', ',', ':', '=', '-'];
@@ -307,6 +310,13 @@ public sealed class MarkdownView : StackPanel
             text.Classes.Add(style);
         }
 
+        // The text shaper takes a line's height from its inline control and ignores a fixed line height, so a line with a link gets the same pitch from spacing.
+        if (inline?.Descendants<Markdig.Syntax.Inlines.Inline>().Any(child => child is LinkInline { IsImage: false } or AutolinkInline) == true)
+        {
+            text.LineHeight = double.NaN;
+            text.LineSpacing = LinkLineSpacing;
+        }
+
         if (inline is not null)
         {
             foreach (var child in inline)
@@ -408,7 +418,7 @@ public sealed class MarkdownView : StackPanel
             }
         };
         link.ContextMenu = new ContextMenu { Items = { open, copy } };
-        return new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.TextBottom };
+        return new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Baseline };
     }
 
     private static Task Activate(Control link, string destination) =>

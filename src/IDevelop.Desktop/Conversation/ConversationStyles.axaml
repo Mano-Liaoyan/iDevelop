@@ -139,9 +139,10 @@
   <Style Selector="Button.mdLink:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Accent10Brush}" />
   </Style>
+  <!-- A control in a line stands on the line's baseline, so its text sits high. The move puts the link's text on the baseline of the words beside it. -->
   <Style Selector="TextBlock.mdLinkText">
+    <Setter Property="RenderTransform" Value="translateY(6px)" />
     <Setter Property="FontSize" Value="{StaticResource TypeProseSize}" />
-    <Setter Property="LineHeight" Value="{StaticResource TypeProseLine}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
     <Setter Property="TextDecorations" Value="Underline" />
   </Style>
